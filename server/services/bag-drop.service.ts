@@ -12,6 +12,7 @@ import {
   passengers,
   flights,
   airports,
+  baggageItems,
   bagDropUnits as unitsTable,
   bagDropSessions as sessionsTable,
   bagDropTags as tagsTable,
@@ -21,6 +22,11 @@ import {
   computeBaggageEntitlement,
   MAX_BAG_WEIGHT_GRAMS,
 } from "./baggage-entitlement.service";
+import {
+  LICENSE_PLATE_PATTERN,
+  recordBagTrackingEvent,
+  tryAllocateLicensePlate,
+} from "./baggage-tracking.service";
 
 // ============================================================================
 // Automated Bag Drop Service
@@ -473,10 +479,14 @@ export async function printBagTag(
         code: "NOT_FOUND",
         message: "Bag destination unavailable",
       });
+    // IATA Resolution 740 licence plate from the operating airline's counter;
+    // a legacy BD tag only when the airline has no numeric code configured.
+    const licensePlate = await tryAllocateLicensePlate(tx, flight.airlineId);
     const [created] = await tx.insert(tagsTable).values({
       sessionId,
       bagNumber,
-      tagNumber: `BD${String(randomInt(100000000)).padStart(8, "0")}`,
+      tagNumber:
+        licensePlate ?? `BD${String(randomInt(100000000)).padStart(8, "0")}`,
       weight: session.bagWeights[bagNumber - 1],
       destination: airport.code,
       printedAt: new Date(),
@@ -491,6 +501,79 @@ export async function printBagTag(
       .limit(1);
     return tag;
   });
+}
+
+/**
+ * Belt acceptance turns each printed tag into a tracked bag and records the
+ * Resolution 753 acceptance point. The bag-drop belt is a demo capability, so
+ * the point is a system entry (origin "system"), never a handler scan proof.
+ */
+async function acceptBagDropTags(
+  tx: SettlementTx,
+  session: typeof sessionsTable.$inferSelect,
+  tags: Array<typeof tagsTable.$inferSelect>
+) {
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, session.bookingId))
+    .limit(1);
+  const [flight] = booking
+    ? await tx
+        .select()
+        .from(flights)
+        .where(eq(flights.id, booking.flightId))
+        .limit(1)
+    : [];
+  const [origin] = flight
+    ? await tx
+        .select({ code: airports.code })
+        .from(airports)
+        .where(eq(airports.id, flight.originId))
+        .limit(1)
+    : [];
+  if (!booking || !flight || !origin)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Bag acceptance requires the booking's flight and origin station",
+    });
+  for (const tag of tags) {
+    const [existing] = await tx
+      .select({ id: baggageItems.id })
+      .from(baggageItems)
+      .where(eq(baggageItems.tagNumber, tag.tagNumber))
+      .limit(1);
+    let baggageId = existing?.id;
+    if (!baggageId) {
+      const [created] = await tx.insert(baggageItems).values({
+        bookingId: session.bookingId,
+        passengerId: session.passengerId,
+        tagNumber: tag.tagNumber,
+        licensePlate: LICENSE_PLATE_PATTERN.test(tag.tagNumber)
+          ? tag.tagNumber
+          : null,
+        weight: (tag.weight / 1000).toFixed(2),
+        status: "checked_in",
+        description: `Self-service bag drop ${tag.bagNumber}/${tags.length}`,
+      });
+      baggageId = created.insertId;
+    }
+    await recordBagTrackingEvent(tx, {
+      baggageId,
+      flightId: flight.id,
+      trackingPoint: "acceptance",
+      stationCode: origin.code,
+      airportId: flight.originId,
+      observedAt: new Date(),
+      sourceId: `bag-drop-unit:${session.unitId ?? "unassigned"}`,
+      deviceId: session.unitId == null ? null : String(session.unitId),
+      actorType: "system",
+      actorId: `bag-drop-session:${session.id}`,
+      scanMethod: "scanner",
+      origin: "system",
+    });
+  }
 }
 
 export async function confirmBagDrop(sessionId: number) {
@@ -517,6 +600,7 @@ export async function confirmBagDrop(sessionId: number) {
       .update(tagsTable)
       .set({ status: "attached" })
       .where(eq(tagsTable.sessionId, sessionId));
+    await acceptBagDropTags(tx, session, tags);
     session.status = "complete";
     session.completedAt = new Date();
     return {

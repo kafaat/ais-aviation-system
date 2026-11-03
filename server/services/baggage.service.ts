@@ -2,15 +2,21 @@ import { TRPCError } from "@trpc/server";
 import { eq, and, desc } from "drizzle-orm";
 import { getDb } from "../db";
 import {
+  airports,
   baggageItems,
   baggageTracking,
   bookings,
+  flights,
   passengers,
   type BaggageItem,
   type BaggageTracking,
   type InsertBaggageItem,
   type InsertBaggageTracking,
 } from "../../drizzle/schema";
+import {
+  recordBagTrackingEvent,
+  tryAllocateLicensePlate,
+} from "./baggage-tracking.service";
 
 /**
  * Baggage Handling & Tracking Service
@@ -62,8 +68,31 @@ export const VALID_STATUS_TRANSITIONS: Record<BaggageStatus, BaggageStatus[]> =
     damaged: ["claimed"],
   };
 
+/** Resolve a bag by 10-digit licence plate first, then by legacy tag number. */
+async function lookupBaggage(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  identifier: string
+): Promise<BaggageItem | undefined> {
+  const value = identifier.trim().toUpperCase();
+  if (/^[0-9]{10}$/.test(value)) {
+    const [byPlate] = await db
+      .select()
+      .from(baggageItems)
+      .where(eq(baggageItems.licensePlate, value))
+      .limit(1);
+    if (byPlate) return byPlate;
+  }
+  const [byTag] = await db
+    .select()
+    .from(baggageItems)
+    .where(eq(baggageItems.tagNumber, value))
+    .limit(1);
+  return byTag;
+}
+
 /**
- * Generate a unique baggage tag number
+ * Generate a legacy baggage tag number (used only when the operating airline
+ * has no IATA numeric code and no licence plate can be allocated).
  * Format: AIS + 7 random alphanumeric characters (e.g., "AISABC1234")
  */
 export function generateBaggageTag(): string {
@@ -76,7 +105,12 @@ export function generateBaggageTag(): string {
 }
 
 /**
- * Register new baggage for a passenger
+ * Register (accept) new baggage for a passenger.
+ *
+ * Allocates an IATA Resolution 740 licence plate when the operating airline
+ * has a numeric code, otherwise falls back to a legacy AIS tag with a null
+ * licence plate. Records the Resolution 753 acceptance point as a system
+ * entry: this is a counter/online registration, not a handler scan.
  */
 export async function registerBaggage(data: {
   bookingId: number;
@@ -84,6 +118,8 @@ export async function registerBaggage(data: {
   weight: number;
   description?: string;
   specialHandling?: string;
+  /** Authenticated user who entered the acceptance, when known. */
+  recordedByUserId?: number;
 }): Promise<BaggageItem> {
   const db = await getDb();
   if (!db)
@@ -102,6 +138,19 @@ export async function registerBaggage(data: {
   if (booking.length === 0) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
+  const [flight] = await db
+    .select()
+    .from(flights)
+    .where(eq(flights.id, booking[0].flightId))
+    .limit(1);
+  if (!flight) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+  }
+  const [originStation] = await db
+    .select({ code: airports.code })
+    .from(airports)
+    .where(eq(airports.id, flight.originId))
+    .limit(1);
 
   // Validate passenger belongs to booking
   const passenger = await db
@@ -137,60 +186,83 @@ export async function registerBaggage(data: {
     });
   }
 
-  // Generate unique tag number
-  let tagNumber = generateBaggageTag();
-  let attempts = 0;
-  const maxAttempts = 10;
+  return db.transaction(async tx => {
+    const licensePlate = await tryAllocateLicensePlate(tx, flight.airlineId);
+    let tagNumber = licensePlate;
+    if (!tagNumber) {
+      // Legacy fallback: airline numeric code not configured.
+      let attempts = 0;
+      const maxAttempts = 10;
+      tagNumber = generateBaggageTag();
+      while (attempts < maxAttempts) {
+        const existing = await tx
+          .select()
+          .from(baggageItems)
+          .where(eq(baggageItems.tagNumber, tagNumber))
+          .limit(1);
+        if (existing.length === 0) break;
+        tagNumber = generateBaggageTag();
+        attempts++;
+      }
+      if (attempts >= maxAttempts) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to generate unique baggage tag",
+        });
+      }
+    }
 
-  // Ensure tag is unique
-  while (attempts < maxAttempts) {
-    const existing = await db
+    // Create baggage item
+    const baggageData: InsertBaggageItem = {
+      bookingId: data.bookingId,
+      passengerId: data.passengerId,
+      tagNumber,
+      licensePlate,
+      weight: String(data.weight),
+      status: "checked_in",
+      description: data.description || null,
+      specialHandling: data.specialHandling || null,
+    };
+
+    const [result] = await tx.insert(baggageItems).values(baggageData);
+    const insertId = Number((result as { insertId: number }).insertId);
+
+    if (originStation) {
+      // Resolution 753 acceptance point, captured by AIS itself.
+      await recordBagTrackingEvent(tx, {
+        baggageId: insertId,
+        flightId: flight.id,
+        trackingPoint: "acceptance",
+        stationCode: originStation.code,
+        airportId: flight.originId,
+        observedAt: new Date(),
+        sourceId: "ais-baggage-register",
+        actorType: data.recordedByUserId ? "user" : "system",
+        actorId:
+          data.recordedByUserId !== undefined
+            ? String(data.recordedByUserId)
+            : null,
+        scanMethod: "manual",
+        origin: "system",
+      });
+    } else {
+      // Station unknown: keep the legacy timeline entry only.
+      await tx.insert(baggageTracking).values({
+        baggageId: insertId,
+        location: "Check-in Counter",
+        status: "checked_in",
+      });
+    }
+
+    // Return the created baggage item
+    const [created] = await tx
       .select()
       .from(baggageItems)
-      .where(eq(baggageItems.tagNumber, tagNumber))
+      .where(eq(baggageItems.id, insertId))
       .limit(1);
 
-    if (existing.length === 0) break;
-    tagNumber = generateBaggageTag();
-    attempts++;
-  }
-
-  if (attempts >= maxAttempts) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to generate unique baggage tag",
-    });
-  }
-
-  // Create baggage item
-  const baggageData: InsertBaggageItem = {
-    bookingId: data.bookingId,
-    passengerId: data.passengerId,
-    tagNumber,
-    weight: String(data.weight),
-    status: "checked_in",
-    description: data.description || null,
-    specialHandling: data.specialHandling || null,
-  };
-
-  const [result] = await db.insert(baggageItems).values(baggageData);
-  const insertId = Number((result as { insertId: number }).insertId);
-
-  // Create initial tracking record
-  await db.insert(baggageTracking).values({
-    baggageId: insertId,
-    location: "Check-in Counter",
-    status: "checked_in",
+    return created;
   });
-
-  // Return the created baggage item
-  const [created] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.id, insertId))
-    .limit(1);
-
-  return created;
 }
 
 /**
@@ -210,12 +282,8 @@ export async function updateBaggageStatus(data: {
       message: "Database not available",
     });
 
-  // Find baggage by tag number
-  const [baggage] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, data.tagNumber))
-    .limit(1);
+  // Find baggage by licence plate or legacy tag number
+  const baggage = await lookupBaggage(db, data.tagNumber);
 
   if (!baggage) {
     throw new TRPCError({
@@ -279,12 +347,8 @@ export async function trackBaggage(
       message: "Database not available",
     });
 
-  // Find baggage by tag number
-  const [baggage] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, tagNumber))
-    .limit(1);
+  // Find baggage by licence plate or legacy tag number
+  const baggage = await lookupBaggage(db, tagNumber);
 
   if (!baggage) {
     throw new TRPCError({
@@ -342,6 +406,7 @@ export async function getBookingBaggage(
       bookingId: baggageItems.bookingId,
       passengerId: baggageItems.passengerId,
       tagNumber: baggageItems.tagNumber,
+      licensePlate: baggageItems.licensePlate,
       weight: baggageItems.weight,
       status: baggageItems.status,
       lastLocation: baggageItems.lastLocation,
@@ -364,6 +429,7 @@ export async function getBookingBaggage(
     bookingId: item.bookingId,
     passengerId: item.passengerId,
     tagNumber: item.tagNumber,
+    licensePlate: item.licensePlate,
     weight: item.weight,
     status: item.status,
     lastLocation: item.lastLocation,
@@ -396,12 +462,8 @@ export async function reportLostBaggage(data: {
       message: "Database not available",
     });
 
-  // Find baggage by tag number
-  const [baggage] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, data.tagNumber))
-    .limit(1);
+  // Find baggage by licence plate or legacy tag number
+  const baggage = await lookupBaggage(db, data.tagNumber);
 
   if (!baggage) {
     throw new TRPCError({
@@ -497,11 +559,7 @@ export async function getBaggageByTag(
       message: "Database not available",
     });
 
-  const [baggage] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, tagNumber))
-    .limit(1);
+  const baggage = await lookupBaggage(db, tagNumber);
 
   return baggage || null;
 }
@@ -617,12 +675,8 @@ export async function markBaggageFound(data: {
       message: "Database not available",
     });
 
-  // Find baggage by tag number
-  const [baggage] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, data.tagNumber))
-    .limit(1);
+  // Find baggage by licence plate or legacy tag number
+  const baggage = await lookupBaggage(db, data.tagNumber);
 
   if (!baggage) {
     throw new TRPCError({
@@ -687,6 +741,7 @@ export async function getAllBaggage(filters?: {
       bookingId: baggageItems.bookingId,
       passengerId: baggageItems.passengerId,
       tagNumber: baggageItems.tagNumber,
+      licensePlate: baggageItems.licensePlate,
       weight: baggageItems.weight,
       status: baggageItems.status,
       lastLocation: baggageItems.lastLocation,
@@ -721,6 +776,7 @@ export async function getAllBaggage(filters?: {
     bookingId: item.bookingId,
     passengerId: item.passengerId,
     tagNumber: item.tagNumber,
+    licensePlate: item.licensePlate,
     weight: item.weight,
     status: item.status,
     lastLocation: item.lastLocation,

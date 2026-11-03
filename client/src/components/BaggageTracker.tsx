@@ -20,6 +20,8 @@ import {
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 
+const LICENSE_PLATE = /^[0-9]{10}$/;
+
 interface BaggageTrackerProps {
   initialTagNumber?: string;
   showSearch?: boolean;
@@ -34,9 +36,17 @@ export function BaggageTracker({
   const { t, i18n } = useTranslation();
   const currentLocale = i18n.language === "ar" ? ar : enUS;
   const [tagNumber, setTagNumber] = useState(initialTagNumber || "");
+  const [identity, setIdentity] = useState("");
   const [searchTag, setSearchTag] = useState(initialTagNumber || "");
+  const [searchIdentity, setSearchIdentity] = useState("");
 
-  // Fetch tracking data
+  // A 10-digit IATA licence plate is printed on the bag, so the public
+  // tracker also needs the passenger surname or booking reference.
+  const isLicensePlate = LICENSE_PLATE.test(tagNumber.trim());
+  const searchIsPlate = LICENSE_PLATE.test(searchTag);
+  const identityIsReference = /^[A-Z0-9]{4,6}$/.test(searchIdentity);
+
+  // Fetch tracking data (legacy tags)
   const {
     data: trackingData,
     isLoading,
@@ -45,8 +55,17 @@ export function BaggageTracker({
   } = trpc.baggage.track.useQuery(
     { tagNumber: searchTag },
     {
-      enabled: searchTag.length > 0,
+      enabled: searchTag.length > 0 && !searchIsPlate,
     }
+  );
+  const plateTracking = trpc.baggage.trackByLicensePlate.useQuery(
+    {
+      licensePlate: searchTag,
+      ...(identityIsReference
+        ? { bookingReference: searchIdentity }
+        : { surname: searchIdentity }),
+    },
+    { enabled: searchIsPlate && searchIdentity.length >= 2 }
   );
 
   const { isAuthenticated } = useAuth();
@@ -56,9 +75,11 @@ export function BaggageTracker({
   );
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (tagNumber.trim()) {
-      setSearchTag(tagNumber.trim().toUpperCase());
-    }
+    const value = tagNumber.trim().toUpperCase();
+    if (!value) return;
+    if (LICENSE_PLATE.test(value) && identity.trim().length < 2) return;
+    setSearchTag(value);
+    setSearchIdentity(identity.trim().toUpperCase());
   };
 
   const getStatusColor = (status: string) => {
@@ -140,22 +161,132 @@ export function BaggageTracker({
       {/* Search Form */}
       {showSearch && (
         <Card className="p-4">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="flex-1">
-              <Input
-                type="text"
-                value={tagNumber}
-                onChange={e => setTagNumber(e.target.value.toUpperCase())}
-                placeholder={t("baggage.enterTagNumber")}
-                maxLength={20}
-                className="uppercase"
-              />
+          <form onSubmit={handleSearch} className="space-y-2">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  value={tagNumber}
+                  onChange={e => setTagNumber(e.target.value.toUpperCase())}
+                  placeholder={t("baggage.enterTagNumber")}
+                  maxLength={20}
+                  className="uppercase"
+                  aria-label={t("baggage.tagNumber")}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={
+                  !tagNumber.trim() ||
+                  (isLicensePlate && identity.trim().length < 2)
+                }
+              >
+                <Search className="h-4 w-4 me-2" />
+                {t("baggage.track")}
+              </Button>
             </div>
-            <Button type="submit" disabled={!tagNumber.trim()}>
-              <Search className="h-4 w-4 me-2" />
-              {t("baggage.track")}
-            </Button>
+            {isLicensePlate && (
+              <div className="space-y-1">
+                <Input
+                  type="text"
+                  value={identity}
+                  onChange={e => setIdentity(e.target.value)}
+                  placeholder={`${t("baggage.tracking.surname")} / ${t(
+                    "baggage.tracking.bookingReference"
+                  )}`}
+                  maxLength={100}
+                  aria-label={t("baggage.tracking.identityRequired")}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("baggage.tracking.identityHint")}
+                </p>
+              </div>
+            )}
           </form>
+        </Card>
+      )}
+
+      {/* Licence-plate tracker (IATA Resolution 753 points, public allow-list) */}
+      {searchIsPlate && plateTracking.isLoading && (
+        <Card className="p-6">
+          <Skeleton className="h-8 w-48 mb-4" />
+          <Skeleton className="h-16 w-full" />
+        </Card>
+      )}
+      {searchIsPlate && plateTracking.error && (
+        <Card className="p-6 border-red-200 bg-red-50">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <div>
+              <p className="font-medium text-red-800">
+                {t("baggage.notFound")}
+              </p>
+              <p className="text-sm text-red-600">
+                {t("baggage.notFoundDesc", { tagNumber: searchTag })}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+      {searchIsPlate && plateTracking.data && (
+        <Card className={compact ? "p-4" : "p-6"}>
+          <div className="flex items-start justify-between mb-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2 font-mono">
+              <Package className="h-5 w-5" />
+              {plateTracking.data.licensePlate}
+            </h3>
+            <Badge variant="outline">
+              {t(`baggage.tracking.status.${plateTracking.data.status}`)}
+            </Badge>
+          </div>
+          {plateTracking.data.lastStationCode && (
+            <p className="text-sm text-muted-foreground mb-4 flex items-center gap-1">
+              <MapPin className="h-4 w-4" />
+              {t("baggage.currentLocation")}:{" "}
+              {plateTracking.data.lastStationCode}
+            </p>
+          )}
+          <h4 className="font-medium mb-2">{t("baggage.tracking.title")}</h4>
+          <ol className="space-y-2">
+            {(["acceptance", "loading", "transfer", "arrival"] as const).map(
+              point => {
+                const observed = plateTracking.data.points.filter(
+                  p => p.trackingPoint === point
+                );
+                return (
+                  <li key={point} className="flex items-start gap-3 text-sm">
+                    {observed.length ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    )}
+                    <div>
+                      <p className="font-medium">
+                        {t(`baggage.tracking.points.${point}`)}
+                      </p>
+                      {observed.map((p, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          {p.stationCode} ·{" "}
+                          {format(new Date(p.observedAt), "PPp", {
+                            locale: currentLocale,
+                          })}{" "}
+                          ·{" "}
+                          {p.physicalScanVerified
+                            ? t("baggage.tracking.physicalScan")
+                            : t("baggage.tracking.notPhysicalScan")}
+                        </p>
+                      ))}
+                      {!observed.length && (
+                        <p className="text-xs text-muted-foreground">
+                          {t("baggage.tracking.missing")}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              }
+            )}
+          </ol>
         </Card>
       )}
 

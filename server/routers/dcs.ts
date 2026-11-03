@@ -13,6 +13,10 @@ import { responseContracts } from "../contracts/dcs";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import * as dcsService from "../services/dcs.service";
+import {
+  getFlightBaggageCloseOut,
+  getMishandledBaggageKpi,
+} from "../services/baggage-tracking.service";
 
 export const dcsRouter = router({
   // ========================================================================
@@ -216,4 +220,54 @@ export const dcsRouter = router({
     .query(async () => {
       return await dcsService.getDcsStats();
     }),
+
+  // ========================================================================
+  // Baggage close-out (IATA Resolution 753)
+  // ========================================================================
+
+  /**
+   * Bags accepted but not loaded, bags loaded for passengers not boarded and
+   * boarded passengers with unloaded bags. The two boarding-dependent sets are
+   * null until a per-passenger boarding record is supplied; the DCS has none.
+   */
+  getBaggageCloseOut: adminProcedure
+    .input(
+      z.object({
+        flightId: z.number().int().positive(),
+        boardedPassengerIds: z
+          .array(z.number().int().positive())
+          .max(1000)
+          .optional(),
+      })
+    )
+    .output(responseContracts["getBaggageCloseOut"])
+    .query(({ input }) =>
+      getFlightBaggageCloseOut(input.flightId, {
+        boardedPassengerIds: input.boardedPassengerIds,
+      })
+    ),
+
+  getBaggageMishandlingKpi: adminProcedure
+    .input(
+      z
+        .object({
+          from: z.string().datetime(),
+          to: z.string().datetime(),
+          hoursAfterArrival: z.number().int().min(1).max(168).optional(),
+        })
+        .refine(v => Date.parse(v.to) >= Date.parse(v.from), {
+          message: "Window end precedes start",
+        })
+        .refine(v => Date.parse(v.to) - Date.parse(v.from) <= 92 * 86400000, {
+          message: "Window is limited to 92 days",
+        })
+    )
+    .output(responseContracts["getBaggageMishandlingKpi"])
+    .query(({ input }) =>
+      getMishandledBaggageKpi({
+        from: new Date(input.from),
+        to: new Date(input.to),
+        hoursAfterArrival: input.hoursAfterArrival,
+      })
+    ),
 });

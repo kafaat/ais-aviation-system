@@ -1,8 +1,61 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const trackingPoint = z.enum([
+  "acceptance",
+  "security",
+  "loading",
+  "transfer",
+  "arrival",
+]);
+const derivedStatus = z.enum([
+  "not_tracked",
+  "accepted",
+  "screened",
+  "loaded",
+  "in_transfer",
+  "arrived",
+]);
+const scanMethod = z.enum(["manual", "scanner", "bsm"]);
+const trackingOrigin = z.enum(["system", "handler"]);
+/** Full Resolution 753 event for operators; never returned on public routes. */
+export const bagTrackingEventContract = z.object({
+  id: outputNumber,
+  baggageId: outputNumber,
+  licensePlate: z.union([z.null(), z.string()]),
+  flightId: outputNumber,
+  trackingPoint,
+  stationCode: z.string(),
+  airportId: z.union([z.null(), outputNumber]),
+  observedAt: z.date(),
+  recordedAt: z.date(),
+  sourceId: z.string(),
+  deviceId: z.union([z.null(), z.string()]),
+  actorType: z.enum(["user", "handler", "system"]),
+  actorId: z.union([z.null(), z.string()]),
+  scanMethod,
+  origin: trackingOrigin,
+  physicalScanVerified: z.boolean(),
+  evidenceId: z.union([z.null(), outputNumber]),
+  containerId: z.union([z.null(), z.string()]),
+});
+const derivedTracking = z.object({
+  status: derivedStatus,
+  lastPoint: z.union([z.null(), trackingPoint]),
+  lastObservedAt: z.union([z.null(), z.date()]),
+  observedPoints: z.object({
+    acceptance: z.boolean(),
+    security: z.boolean(),
+    loading: z.boolean(),
+    transfer: z.boolean(),
+    arrival: z.boolean(),
+  }),
+  corePointsObserved: outputNumber,
+  physicalScanPoints: outputNumber,
+});
 const publicBag = z.object({
   tagNumber: z.string(),
+  licensePlate: z.union([z.null(), z.string()]),
   status: z.enum([
     "checked_in",
     "security_screening",
@@ -23,6 +76,55 @@ const publicBag = z.object({
 });
 
 export const responseContracts = {
+  /** Public allow-list: no booking, passenger, device or source identifiers. */
+  trackByLicensePlate: z.object({
+    licensePlate: z.string(),
+    status: derivedStatus,
+    lastStationCode: z.union([z.null(), z.string()]),
+    lastObservedAt: z.union([z.null(), z.date()]),
+    points: z.array(
+      z.object({
+        trackingPoint,
+        stationCode: z.string(),
+        observedAt: z.date(),
+        physicalScanVerified: z.boolean(),
+      })
+    ),
+  }),
+  adminTimeline: z.object({
+    bag: z.object({
+      baggageId: outputNumber,
+      licensePlate: z.union([z.null(), z.string()]),
+      tagNumber: z.string(),
+      bookingId: outputNumber,
+      pnr: z.string(),
+      passengerId: outputNumber,
+      passengerSurname: z.string(),
+      passengerGivenName: z.string(),
+      weightKg: z.string(),
+      flightIds: z.array(outputNumber),
+      legacyStatus: z.string(),
+      derived: derivedTracking,
+    }),
+    legs: z.array(
+      z.object({
+        flightId: outputNumber,
+        points: z.array(
+          z.object({
+            point: trackingPoint,
+            required: z.boolean(),
+            event: z.union([z.null(), bagTrackingEventContract]),
+          })
+        ),
+      })
+    ),
+    events: z.array(bagTrackingEventContract),
+  }),
+  adminRecordTrackingPoint: z.object({
+    success: z.boolean(),
+    eventId: outputNumber,
+    duplicate: z.boolean(),
+  }),
   track: z.object({
     baggage: publicBag,
     tracking: z.array(
@@ -57,6 +159,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -111,6 +214,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -140,6 +244,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -170,6 +275,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -200,6 +306,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -243,6 +350,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -272,6 +380,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -302,6 +411,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -332,6 +442,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),
@@ -369,6 +480,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       passengerId: outputNumber,
       tagNumber: z.string(),
+      licensePlate: z.union([z.null(), z.string()]),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),
       specialHandling: z.union([z.null(), z.string()]),

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BaggageCloseOutPanel } from "@/components/BaggageCloseOutPanel";
 import { downloadFile } from "@/lib/downloadFile";
 import { escapeCSV } from "@shared/csv";
 import { trpc } from "@/lib/trpc";
@@ -25,11 +26,18 @@ import {
   CheckCircle,
   ClipboardList,
   UserPlus,
+  Luggage,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
-type Tab = "overview" | "manifest" | "crew" | "loadplan" | "aircraft";
+type Tab =
+  | "overview"
+  | "manifest"
+  | "crew"
+  | "loadplan"
+  | "aircraft"
+  | "baggage";
 
 export default function DcsDashboard() {
   const { t } = useTranslation();
@@ -87,6 +95,11 @@ export default function DcsDashboard() {
               label: t("dcs.tabs.aircraft", "Aircraft Types"),
               icon: Shield,
             },
+            {
+              id: "baggage",
+              label: t("dcs.tabs.baggage", "Baggage close-out"),
+              icon: Luggage,
+            },
           ] as const
         )
           .filter(tab => tab.id !== "loadplan" || stats?.loadPlans)
@@ -109,6 +122,7 @@ export default function DcsDashboard() {
       {activeTab === "crew" && <CrewTab />}
       {activeTab === "loadplan" && stats?.loadPlans && <LoadPlanTab />}
       {activeTab === "aircraft" && <AircraftTab />}
+      {activeTab === "baggage" && <BaggageCloseOutPanel />}
     </div>
   );
 }

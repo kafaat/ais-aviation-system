@@ -106,6 +106,7 @@ const bag = {
   bookingId: 800,
   passengerId: 700,
   tagNumber: "AIS1234567",
+  licensePlate: null,
   weight: "23.00",
   lastLocation: null,
   specialHandling: null,

@@ -1,7 +1,74 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const closeOutBag = z.object({
+  baggageId: outputNumber,
+  licensePlate: z.union([z.null(), z.string()]),
+  tagNumber: z.string(),
+  passengerId: outputNumber,
+  passengerSurname: z.string(),
+  pnr: z.string(),
+  accepted: z.boolean(),
+  trackedOnFlight: z.boolean(),
+  loaded: z.boolean(),
+  containerId: z.union([z.null(), z.string()]),
+});
+const closeOutPassenger = z.object({
+  passengerId: outputNumber,
+  surname: z.string(),
+  givenName: z.string(),
+  pnr: z.string(),
+  checkedIn: z.boolean(),
+});
 export const responseContracts = {
+  /** Resolution 753 close-out: offload candidates and bag/passenger matching. */
+  getBaggageCloseOut: z.object({
+    flight: z.object({
+      id: outputNumber,
+      flightNumber: z.string(),
+      originCode: z.string(),
+      destinationCode: z.string(),
+      departureTime: z.date(),
+    }),
+    generatedAt: z.date(),
+    boardingEvidence: z.enum(["none", "provided"]),
+    acceptedNotLoaded: z.array(closeOutBag),
+    loadedForNotBoarded: z.union([z.null(), z.array(closeOutBag)]),
+    boardedWithoutLoadedBags: z.union([z.null(), z.array(closeOutPassenger)]),
+    totals: z.object({
+      bags: outputNumber,
+      accepted: outputNumber,
+      loaded: outputNumber,
+      passengers: outputNumber,
+      boarded: z.union([z.null(), outputNumber]),
+    }),
+  }),
+  getBaggageMishandlingKpi: z.object({
+    window: z.object({
+      from: z.date(),
+      to: z.date(),
+      hoursAfterArrival: outputNumber,
+    }),
+    flights: z.array(
+      z.object({
+        flightId: outputNumber,
+        flightNumber: z.string(),
+        arrivalTime: z.date(),
+        passengers: outputNumber,
+        bagsTracked: outputNumber,
+        bagsWithoutArrival: outputNumber,
+      })
+    ),
+    passengers: outputNumber,
+    bagsTracked: outputNumber,
+    bagsWithoutArrival: outputNumber,
+    perThousandPassengers: z.union([z.null(), outputNumber]),
+    benchmarks: z.object({
+      sita2025GlobalPerThousand: outputNumber,
+      sita2024MiddleEastAfricaPerThousand: outputNumber,
+    }),
+    method: z.string(),
+  }),
   getAircraftTypes: z.array(
     z.object({
       id: outputNumber,

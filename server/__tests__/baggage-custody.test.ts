@@ -42,7 +42,14 @@ beforeEach(() => {
         paymentStatus: "paid",
       },
     ],
-    baggage_items: [{ id: 1, bookingId: 7, tagNumber: "AIS-BAG" }],
+    baggage_items: [
+      { id: 1, bookingId: 7, tagNumber: "AIS-BAG", licensePlate: null },
+    ],
+    airports: [
+      { id: 1, code: "RUH" },
+      { id: 2, code: "JED" },
+      { id: 3, code: "DXB" },
+    ],
     booking_segments: [
       { id: 1, bookingId: 7, flightId: 11, segmentOrder: 1 },
       { id: 2, bookingId: 7, flightId: 12, segmentOrder: 2 },
@@ -120,6 +127,23 @@ describe("baggage handover evidence", () => {
       duplicate: true,
     });
     expect(fixture.rows("baggage_tracking")).toHaveLength(6);
+    // Every verified handover is also a Resolution 753 tracking point,
+    // attributed to the handler source and marked as a physical scanner read.
+    const tracking = fixture.rows("bag_tracking_events");
+    expect(tracking).toHaveLength(6);
+    expect(tracking.map(e => [e.trackingPoint, e.stationCode])).toEqual([
+      ["acceptance", "RUH"],
+      ["loading", "RUH"],
+      ["arrival", "JED"],
+      ["transfer", "JED"],
+      ["loading", "JED"],
+      ["arrival", "DXB"],
+    ]);
+    expect(tracking.every(e => e.origin === "handler")).toBe(true);
+    expect(tracking.every(e => e.physicalScanVerified)).toBe(true);
+    expect(tracking[0].evidenceId).toBe(
+      fixture.rows("baggage_custody_events")[0].evidenceId
+    );
   });
   it("routes around cancelled legs and never reports an empty itinerary complete", async () => {
     const actor = { id: 1, role: "user", tenantId: 3 };

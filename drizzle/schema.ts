@@ -117,6 +117,9 @@ export const airlines = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., SV, MS)
+    // IATA 3-digit airline accounting/prefix code (e.g., Saudia 065). Required
+    // to allocate Resolution 740 bag-tag licence plates; null disables allocation.
+    numericCode: varchar("numericCode", { length: 3 }),
     name: varchar("name", { length: 255 }).notNull(),
     country: varchar("country", { length: 100 }),
     logo: text("logo"), // URL to airline logo
@@ -2596,6 +2599,10 @@ export const baggageItems = mysqlTable(
     bookingId: int("bookingId").notNull(),
     passengerId: int("passengerId").notNull(),
     tagNumber: varchar("tagNumber", { length: 20 }).notNull().unique(), // Unique baggage tag (e.g., "AIS123456")
+    // IATA Resolution 740 10-digit licence plate. Null for bags tagged before
+    // allocation existed; the legacy tagNumber keeps serving those lookups.
+    // Backfill is operator-driven (see docs/research/.../implementation-status.md row 11).
+    licensePlate: varchar("licensePlate", { length: 10 }),
     weight: decimal("weight", { precision: 5, scale: 2 }).notNull(), // Weight in kg
     status: mysqlEnum("status", [
       "checked_in",
@@ -2626,6 +2633,9 @@ export const baggageItems = mysqlTable(
       table.passengerId
     ),
     tagNumberIdx: index("baggage_items_tag_number_idx").on(table.tagNumber),
+    licensePlateIdx: uniqueIndex("baggage_items_license_plate_idx").on(
+      table.licensePlate
+    ),
     statusIdx: index("baggage_items_status_idx").on(table.status),
     // Composite index for booking + passenger lookups
     bookingPassengerIdx: index("baggage_items_booking_passenger_idx").on(
@@ -5837,6 +5847,83 @@ export const baggageCustodyEvents = mysqlTable(
     journey: index("baggage_custody_journey_idx").on(t.baggageId, t.observedAt),
   })
 );
+
+/**
+ * Per-airline licence-plate serial counter (IATA Resolution 740). One row per
+ * airline, read with SELECT ... FOR UPDATE so concurrent acceptances receive
+ * distinct, monotonically increasing six-digit serials.
+ */
+export const bagTagSequences = mysqlTable(
+  "bag_tag_sequences",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    numericCode: varchar("numericCode", { length: 3 }).notNull(),
+    nextSequence: int("nextSequence").notNull().default(1),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    airline: uniqueIndex("bag_tag_sequences_airline_idx").on(t.airlineId),
+  })
+);
+export type BagTagSequence = typeof bagTagSequences.$inferSelect;
+
+/**
+ * IATA Resolution 753 tracking log. One row per observed tracking point.
+ * `origin` separates what AIS captured itself (a counter entry, a demo bag-drop
+ * belt, an admin form) from what a verified handler source reported through
+ * signed evidence; only a handler scanner event is a physical-scan proof.
+ */
+export const bagTrackingEvents = mysqlTable(
+  "bag_tracking_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    baggageId: int("baggageId").notNull(),
+    licensePlate: varchar("licensePlate", { length: 10 }),
+    flightId: int("flightId").notNull(),
+    trackingPoint: mysqlEnum("trackingPoint", [
+      "acceptance",
+      "security",
+      "loading",
+      "transfer",
+      "arrival",
+    ]).notNull(),
+    stationCode: varchar("stationCode", { length: 3 }).notNull(),
+    airportId: int("airportId"),
+    observedAt: timestamp("observedAt").notNull(),
+    recordedAt: timestamp("recordedAt").defaultNow().notNull(),
+    sourceId: varchar("sourceId", { length: 64 }).notNull(),
+    deviceId: varchar("deviceId", { length: 100 }),
+    actorType: mysqlEnum("actorType", ["user", "handler", "system"]).notNull(),
+    actorId: varchar("actorId", { length: 100 }),
+    scanMethod: mysqlEnum("scanMethod", ["manual", "scanner", "bsm"]).notNull(),
+    origin: mysqlEnum("origin", ["system", "handler"]).notNull(),
+    physicalScanVerified: boolean("physicalScanVerified")
+      .default(false)
+      .notNull(),
+    evidenceId: int("evidenceId"),
+    containerId: varchar("containerId", { length: 20 }),
+  },
+  t => ({
+    bagTimeline: index("bag_tracking_bag_timeline_idx").on(
+      t.baggageId,
+      t.observedAt
+    ),
+    flightPoint: index("bag_tracking_flight_point_idx").on(
+      t.flightId,
+      t.trackingPoint
+    ),
+    licensePlate: index("bag_tracking_license_plate_idx").on(t.licensePlate),
+    dedupe: index("bag_tracking_dedupe_idx").on(
+      t.baggageId,
+      t.trackingPoint,
+      t.stationCode,
+      t.observedAt
+    ),
+  })
+);
+export type BagTrackingEvent = typeof bagTrackingEvents.$inferSelect;
+export type InsertBagTrackingEvent = typeof bagTrackingEvents.$inferInsert;
 
 export const iropsRecoveryPlans = mysqlTable(
   "irops_recovery_plans",

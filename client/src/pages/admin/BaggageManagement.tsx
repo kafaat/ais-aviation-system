@@ -47,6 +47,16 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
+import { BaggageTrackingTimeline } from "@/components/BaggageTrackingTimeline";
+
+const TRACKING_POINTS = [
+  "acceptance",
+  "security",
+  "loading",
+  "transfer",
+  "arrival",
+] as const;
+type TrackingPoint = (typeof TRACKING_POINTS)[number];
 
 // Type for baggage item from API
 interface BaggageItemType {
@@ -54,6 +64,7 @@ interface BaggageItemType {
   bookingId: number;
   passengerId: number;
   tagNumber: string;
+  licensePlate: string | null;
   weight: string;
   status: string;
   lastLocation: string | null;
@@ -117,6 +128,13 @@ export default function BaggageManagement() {
   const [foundLocation, setFoundLocation] = useState("");
   const [foundNotes, setFoundNotes] = useState("");
 
+  // Resolution 753 tracking-point form state
+  const [pointDialogOpen, setPointDialogOpen] = useState(false);
+  const [pointFlightId, setPointFlightId] = useState("");
+  const [pointKind, setPointKind] = useState<TrackingPoint>("loading");
+  const [pointStation, setPointStation] = useState("");
+  const [pointContainer, setPointContainer] = useState("");
+
   // Fetch stats
   const { data: stats, isLoading: statsLoading } =
     trpc.baggage.adminGetStats.useQuery();
@@ -161,6 +179,50 @@ export default function BaggageManagement() {
       toast.error(error.message);
     },
   });
+
+  const utils = trpc.useUtils();
+  const recordPointMutation = trpc.baggage.adminRecordTrackingPoint.useMutation(
+    {
+      onSuccess: result => {
+        toast.success(
+          result.duplicate
+            ? t("baggage.tracking.duplicatePoint")
+            : t("baggage.tracking.pointRecorded")
+        );
+        setPointDialogOpen(false);
+        utils.baggage.adminTimeline.invalidate();
+        refetchList();
+      },
+      onError: error => {
+        toast.error(error.message);
+      },
+    }
+  );
+
+  const openPointDialog = (baggage: BaggageItemType) => {
+    setSelectedBaggage(baggage);
+    setPointFlightId("");
+    setPointKind("loading");
+    setPointStation("");
+    setPointContainer("");
+    setPointDialogOpen(true);
+  };
+
+  const handleRecordPoint = () => {
+    const flightId = parseInt(pointFlightId, 10);
+    if (!selectedBaggage || !flightId || pointStation.trim().length !== 3) {
+      toast.error(t("baggage.fillAllFields"));
+      return;
+    }
+    recordPointMutation.mutate({
+      identifier: selectedBaggage.licensePlate ?? selectedBaggage.tagNumber,
+      flightId,
+      trackingPoint: pointKind,
+      stationCode: pointStation.trim().toUpperCase(),
+      containerId: pointContainer.trim() || undefined,
+      scanMethod: "manual",
+    });
+  };
 
   // Handlers
   const handleUpdateStatus = () => {
@@ -239,7 +301,8 @@ export default function BaggageManagement() {
     baggageList?.filter(
       item =>
         !searchTag ||
-        item.tagNumber.toLowerCase().includes(searchTag.toLowerCase())
+        item.tagNumber.toLowerCase().includes(searchTag.toLowerCase()) ||
+        (item.licensePlate ?? "").includes(searchTag)
     ) || [];
 
   if (statsLoading) {
@@ -413,6 +476,7 @@ export default function BaggageManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("baggage.tagNumber")}</TableHead>
+                  <TableHead>{t("baggage.tracking.licensePlate")}</TableHead>
                   <TableHead>{t("baggage.passenger")}</TableHead>
                   <TableHead>{t("baggage.weight")}</TableHead>
                   <TableHead>{t("baggage.statusLabel")}</TableHead>
@@ -426,6 +490,16 @@ export default function BaggageManagement() {
                   <TableRow key={baggage.id}>
                     <TableCell className="font-mono font-medium">
                       {baggage.tagNumber}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {baggage.licensePlate ?? (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title={t("baggage.tracking.noLicensePlate")}
+                        >
+                          —
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>{baggage.passengerName || "-"}</TableCell>
                     <TableCell>
@@ -465,6 +539,14 @@ export default function BaggageManagement() {
                           onClick={() => openTrackDialog(baggage)}
                         >
                           <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openPointDialog(baggage)}
+                          title={t("baggage.tracking.recordPoint")}
+                        >
+                          <Plane className="h-4 w-4" />
                         </Button>
                         {baggage.status !== "claimed" && (
                           <Button
@@ -636,13 +718,101 @@ export default function BaggageManagement() {
         </DialogContent>
       </Dialog>
 
+      {/* Record Resolution 753 tracking point */}
+      <Dialog open={pointDialogOpen} onOpenChange={setPointDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("baggage.tracking.recordPoint")}</DialogTitle>
+            <DialogDescription>
+              {selectedBaggage?.licensePlate ?? selectedBaggage?.tagNumber} ·{" "}
+              {t("baggage.tracking.recordPointDesc")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="pointFlightId">
+                {t("baggage.tracking.flightId")}
+              </Label>
+              <Input
+                id="pointFlightId"
+                type="number"
+                value={pointFlightId}
+                onChange={e => setPointFlightId(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>{t("baggage.tracking.title")}</Label>
+              <Select
+                value={pointKind}
+                onValueChange={(value: TrackingPoint) => setPointKind(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRACKING_POINTS.map(point => (
+                    <SelectItem key={point} value={point}>
+                      {t(`baggage.tracking.points.${point}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="pointStation">
+                {t("baggage.tracking.station")}
+              </Label>
+              <Input
+                id="pointStation"
+                value={pointStation}
+                maxLength={3}
+                className="uppercase"
+                onChange={e => setPointStation(e.target.value.toUpperCase())}
+              />
+            </div>
+            <div>
+              <Label htmlFor="pointContainer">
+                {t("baggage.tracking.container")}
+              </Label>
+              <Input
+                id="pointContainer"
+                value={pointContainer}
+                maxLength={20}
+                onChange={e => setPointContainer(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPointDialogOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              onClick={handleRecordPoint}
+              disabled={recordPointMutation.isPending}
+            >
+              {recordPointMutation.isPending
+                ? t("common.loading")
+                : t("baggage.tracking.recordPoint")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Tracking History Dialog */}
       <Dialog open={trackDialogOpen} onOpenChange={setTrackDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("baggage.trackingHistory")}</DialogTitle>
             <DialogDescription>{selectedBaggage?.tagNumber}</DialogDescription>
           </DialogHeader>
+          {selectedBaggage && trackDialogOpen && (
+            <BaggageTrackingTimeline
+              identifier={
+                selectedBaggage.licensePlate ?? selectedBaggage.tagNumber
+              }
+            />
+          )}
+          <h4 className="font-medium mt-2">{t("baggage.trackingHistory")}</h4>
           {trackingLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map(i => (

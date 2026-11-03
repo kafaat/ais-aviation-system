@@ -3,9 +3,9 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
+  airports,
   baggageItems,
   baggageCustodyEvents,
-  baggageTracking,
   bookings,
   bookingSegments,
   flights,
@@ -18,18 +18,47 @@ import {
   type EvidenceEnvelope,
 } from "./aviation-evidence.service";
 import { assertTenantOperational } from "./tenant.service";
+import {
+  LICENSE_PLATE_PATTERN,
+  recordBagTrackingEvent,
+} from "./baggage-tracking.service";
 const scanSchema = z
   .object({
+    /** Legacy tag or 10-digit licence plate. */
     tagNumber: z.string().min(1).max(20),
     stage: z.enum(["acceptance", "loading", "transfer", "arrival"]),
     airportId: z.number().int().positive(),
     deviceId: z.string().min(1).max(100),
     previousEvidenceId: z.number().int().positive().nullable(),
+    /** How the handler captured the point; a BSM is a message, not a scan. */
+    scanMethod: z.enum(["scanner", "bsm", "manual"]).default("scanner"),
+    containerId: z.string().min(1).max(20).optional(),
   })
   .strict();
 type Scan = z.infer<typeof scanSchema>;
 export class BaggageCustodyConflict extends Error {}
 type Custody = typeof baggageCustodyEvents.$inferSelect;
+
+/** Resolve a bag by its 10-digit licence plate first, then by legacy tag. */
+async function findBagByTagOrPlate(
+  db: import("./booking-settlement.service").SettlementTx,
+  identifier: string
+) {
+  const [byPlate] = LICENSE_PLATE_PATTERN.test(identifier)
+    ? await db
+        .select()
+        .from(baggageItems)
+        .where(eq(baggageItems.licensePlate, identifier))
+        .limit(1)
+    : [];
+  if (byPlate) return byPlate;
+  const [byTag] = await db
+    .select()
+    .from(baggageItems)
+    .where(eq(baggageItems.tagNumber, identifier))
+    .limit(1);
+  return byTag;
+}
 
 function custodyFlightIds(
   legs: Array<{ flightId: number; status: string }>,
@@ -108,11 +137,7 @@ export async function ingestBaggageCustody(
     throw new Error("Source device or airport is not authorized");
   const db = await getDb();
   if (!db) throw new Error("Baggage storage unavailable");
-  const [hint] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, scan.tagNumber))
-    .limit(1);
+  const hint = await findBagByTagOrPlate(db, scan.tagNumber);
   if (!hint) throw new Error("Baggage tag not found");
   return db.transaction(async tx => {
     const [booking] = await tx
@@ -179,6 +204,12 @@ export async function ingestBaggageCustody(
       ordered,
       new Date(e.observedAt)
     );
+    const [station] = await tx
+      .select({ code: airports.code })
+      .from(airports)
+      .where(eq(airports.id, scan.airportId))
+      .limit(1);
+    if (!station) throw new Error("Scan station is not a known airport");
     const receipt = await persistAviationEvidence(tx, e, source);
     await tx.insert(baggageCustodyEvents).values({
       baggageId: bag.id,
@@ -191,23 +222,23 @@ export async function ingestBaggageCustody(
       sourceId: source.sourceId,
       observedAt: new Date(e.observedAt),
     });
-    const status =
-      scan.stage === "acceptance"
-        ? "checked_in"
-        : scan.stage === "arrival"
-          ? "arrived"
-          : "loading";
-    const location = `Airport ${scan.airportId}`;
-    await tx
-      .update(baggageItems)
-      .set({ status, lastLocation: location, updatedAt: new Date() })
-      .where(eq(baggageItems.id, bag.id));
-    await tx.insert(baggageTracking).values({
+    // Resolution 753 tracking log and the passenger-facing projection. The
+    // handler origin is kept so only a scanner read is shown as a physical scan.
+    await recordBagTrackingEvent(tx, {
       baggageId: bag.id,
-      location,
-      status,
-      scannedAt: new Date(e.observedAt),
-      notes: `Verified custody evidence ${receipt.evidenceId}`,
+      flightId: flight.id,
+      trackingPoint: scan.stage,
+      stationCode: station.code,
+      airportId: scan.airportId,
+      observedAt: new Date(e.observedAt),
+      sourceId: source.sourceId,
+      deviceId: scan.deviceId,
+      actorType: "handler",
+      actorId: source.sourceId,
+      scanMethod: scan.scanMethod,
+      origin: "handler",
+      evidenceId: receipt.evidenceId,
+      containerId: scan.containerId ?? null,
     });
     return receipt;
   });
@@ -218,11 +249,7 @@ export async function getBaggageCustody(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Baggage storage unavailable");
-  const [bag] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, tagNumber))
-    .limit(1);
+  const bag = await findBagByTagOrPlate(db, tagNumber);
   if (!bag)
     throw new TRPCError({ code: "NOT_FOUND", message: "Bag not found" });
   const [booking] = await db

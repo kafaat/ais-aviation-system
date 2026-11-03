@@ -417,12 +417,14 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/baggage-entitlement.service.ts",
+        "server/services/baggage-tracking.service.ts",
         "server/services/boarding-pass.service.ts",
         "server/services/demo-capability.ts"
       ],
       "tableExpressions": {
         "reads": [
           "airports",
+          "baggageItems",
           "bookingSegments",
           "bookings",
           "flights",
@@ -431,7 +433,7 @@
           "tagsTable",
           "unitsTable"
         ],
-        "writes": ["sessionsTable", "tagsTable", "unitsTable"]
+        "writes": ["baggageItems", "sessionsTable", "tagsTable", "unitsTable"]
       },
       "replacement": null
     },
@@ -455,10 +457,12 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/aviation-evidence.service.ts",
+        "server/services/baggage-tracking.service.ts",
         "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
         "reads": [
+          "airports",
           "aviationEvidence",
           "baggageCustodyEvents",
           "baggageItems",
@@ -466,7 +470,7 @@
           "bookings",
           "flights"
         ],
-        "writes": ["baggageCustodyEvents", "baggageItems", "baggageTracking"]
+        "writes": ["baggageCustodyEvents"]
       },
       "replacement": null
     },
@@ -499,6 +503,44 @@
       "replacement": null
     },
     {
+      "file": "server/services/baggage-tracking.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/baggage-tracking.service.ts",
+      "domain": "departure",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/baggage.ts",
+        "server/routers/dcs.ts",
+        "server/services/bag-drop.service.ts",
+        "server/services/baggage-custody.service.ts",
+        "server/services/baggage.service.ts"
+      ],
+      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "tableExpressions": {
+        "reads": [
+          "airlines",
+          "airports",
+          "bagTagSequences",
+          "bagTrackingEvents",
+          "baggageItems",
+          "bookingSegments",
+          "bookings",
+          "flights",
+          "passengers"
+        ],
+        "writes": [
+          "bagTagSequences",
+          "bagTrackingEvents",
+          "baggageItems",
+          "baggageTracking"
+        ]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/baggage.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/baggage.service.ts",
@@ -508,9 +550,20 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/routers/baggage.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/baggage-tracking.service.ts"
+      ],
       "tableExpressions": {
-        "reads": ["baggageItems", "baggageTracking", "bookings", "passengers"],
+        "reads": [
+          "airports",
+          "baggageItems",
+          "baggageTracking",
+          "bookings",
+          "flights",
+          "passengers"
+        ],
         "writes": ["baggageItems", "baggageTracking"]
       },
       "replacement": null

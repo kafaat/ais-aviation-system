@@ -52,6 +52,7 @@ async function seedData() {
     await db.insert(airlines).values([
       {
         code: "SV",
+        numericCode: "065", // IATA accounting code for bag-tag licence plates
         name: "الخطوط السعودية",
         country: "Saudi Arabia",
         logo: "https://upload.wikimedia.org/wikipedia/en/thumb/4/43/Saudia_Logo.svg/200px-Saudia_Logo.svg.png",
@@ -59,6 +60,7 @@ async function seedData() {
       },
       {
         code: "MS",
+        numericCode: "077", // IATA accounting code for bag-tag licence plates
         name: "مصر للطيران",
         country: "Egypt",
         logo: "https://upload.wikimedia.org/wikipedia/en/thumb/0/04/EgyptAir_Logo.svg/200px-EgyptAir_Logo.svg.png",
@@ -66,6 +68,7 @@ async function seedData() {
       },
       {
         code: "EK",
+        numericCode: "176", // IATA accounting code for bag-tag licence plates
         name: "طيران الإمارات",
         country: "UAE",
         logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Emirates_logo.svg/200px-Emirates_logo.svg.png",
@@ -73,6 +76,7 @@ async function seedData() {
       },
       {
         code: "QR",
+        numericCode: "157", // IATA accounting code for bag-tag licence plates
         name: "القطرية",
         country: "Qatar",
         logo: "https://upload.wikimedia.org/wikipedia/en/thumb/0/0b/Qatar_Airways_Logo.svg/200px-Qatar_Airways_Logo.svg.png",
