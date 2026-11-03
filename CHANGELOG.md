@@ -1,5 +1,29 @@
 # Changelog
 
+## What's Changed in v1.35.0
+
+### Features
+
+- feat(dcs): issue BCBP boarding passes with PDF417 and verify scans (#240) (3e5631e)
+- feat: implement gated airline standards readiness (#242) (336efd8)
+- feat(aviation): complete local airline servicing and evidence workflows (#243) (3a706dc)
+- feat: connect passenger and airline self-service workflows (1db45df)
+- feat: complete operational and passenger service journeys (9a76876)
+
+### Bug Fixes
+
+- fix(e2e): invalidate the flight-search cache after inserting a fixture flight (#241) (35d0328)
+- fix(payments): separate idempotency keys from trace ids and key every money-moving operation (#239) (4d76c94)
+
+### Other Changes
+
+- style: format privacy export browser assertions (c423fbd)
+- Merge pull request #244 from kafaat/codex/ais-passenger-and-airline-workflows (26fd19b)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.34.0...v1.35.0
+
+---
+
 ## What's Changed in v1.34.0
 
 ### Features
