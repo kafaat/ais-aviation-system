@@ -477,5 +477,55 @@
       "Arabic fixture preserved",
       "nonempty target refused without mutation"
     ]
+  },
+  "parentIntegration": {
+    "testedGitTree": "b4b018b4895c4860ccaf86f3fa9168bda65c922d",
+    "incorporatedParent": "89aa99827bcdba860f6f414e860afcaa31960350",
+    "unitAndComponent": {
+      "passed": 2495,
+      "failed": 0,
+      "skipped": 240
+    },
+    "chromium": {
+      "startTime": "2026-11-03T00:40:01.927Z",
+      "duration": 45609.271,
+      "expected": 26,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "transactionChecks": 131,
+    "transactionChecksSkipped": 0,
+    "providerCalls": 0,
+    "integrationScenarios": 30,
+    "outboundNetworkCalls": 0,
+    "exchange": {
+      "id": "EXCHANGE-SECTOR-01",
+      "finding": "Second-sector checkout recovery, paid seat, unchanged coupon and ledger replay",
+      "observations": {
+        "foreignTenantLedgerIdentityHidden": true,
+        "syntheticPayoutComparison": {
+          "reference": "po_sector",
+          "statementLineId": "synthetic-statement-line",
+          "matched": true,
+          "netMinor": 26422
+        },
+        "bookingId": 996195,
+        "modificationId": 1,
+        "paymentReceiptSource": "synthetic signed webhook",
+        "providerCheckoutAttempts": 2,
+        "distinctProviderSessions": 1,
+        "paymentDeliveries": 3,
+        "firstCouponUnchanged": true,
+        "oldCouponStatus": "E",
+        "replacementCouponStatus": "O",
+        "seatRetainedMinor": 2000,
+        "settledDeltaMinor": 26423,
+        "newTotalMinor": 48423,
+        "ledgerIds": [10, 11],
+        "originalLegId": 5,
+        "retainedEntitlementId": 2
+      }
+    }
   }
 }
