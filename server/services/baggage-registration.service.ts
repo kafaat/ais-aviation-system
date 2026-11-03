@@ -42,18 +42,27 @@ function storedWeightGrams(weight: number): number | null {
   return Math.round(centiKg) * 10;
 }
 
-export const baggageRegistrationInput = baggageRegistrationScopeInput.extend({
-  weight: z
-    .number()
-    .positive("Weight must be greater than 0")
-    .max(32, "Baggage weight exceeds maximum limit of 32kg")
-    .refine(value => storedWeightGrams(value) !== null, {
-      message: "Weight must have at most two decimal places",
-    }),
-  idempotencyKey: z.string().trim().min(8).max(128),
-  description: z.string().trim().max(500).optional(),
-  specialHandling: z.string().trim().max(255).optional(),
-});
+export const baggageRegistrationInput = baggageRegistrationScopeInput
+  .extend({
+    weight: z
+      .number()
+      .positive("Weight must be greater than 0")
+      .max(32, "Baggage weight exceeds maximum limit of 32kg")
+      .refine(value => storedWeightGrams(value) !== null, {
+        message: "Weight must have at most two decimal places",
+      }),
+    idempotencyKey: z.string().trim().min(8).max(128),
+    description: z.string().trim().max(500).optional(),
+    specialHandling: z.string().trim().max(255).optional(),
+    expectedActorId: z.number().int().positive().safe().optional(),
+    expectedTenantId: z.number().int().positive().safe().optional(),
+  })
+  .refine(
+    input =>
+      (input.expectedActorId === undefined) ===
+      (input.expectedTenantId === undefined),
+    { message: "Expected actor and tenant must be provided together" }
+  );
 
 export type BaggageRegistrationInput = z.infer<typeof baggageRegistrationInput>;
 type RegistrationScope = z.infer<typeof baggageRegistrationScopeInput>;
@@ -262,6 +271,20 @@ export async function registerBaggage(
 ): Promise<BaggageItem> {
   requireRegistrationActor(actor);
   const input = baggageRegistrationInput.parse(raw);
+  // A tab may retain an earlier operator's command after another tab replaces
+  // its session cookie. The authenticated actor still grants all authority;
+  // these optional bindings only reject a changed identity before replay/write.
+  if (
+    (input.expectedActorId !== undefined &&
+      input.expectedActorId !== actor.id) ||
+    (input.expectedTenantId !== undefined &&
+      input.expectedTenantId !== actor.tenantId)
+  )
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        "Baggage registration identity changed; restore the original staff and tenant session before retrying",
+    });
   const weightGrams = storedWeightGrams(input.weight);
   if (weightGrams === null)
     throw new TRPCError({

@@ -1,8 +1,17 @@
-import { useState } from "react";
-import type { inferRouterInputs } from "@trpc/server";
-import type { AppRouter } from "../../../server/routers";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { useCommandIdempotencyKey } from "@/hooks/useCommandIdempotencyKey";
+import {
+  bagRegistrationStorageKey,
+  clearBagRegistration,
+  observeBagRegistration,
+  readBagRegistration,
+  recoverBagRegistration,
+  saveBagRegistration,
+  startBagRegistrationAttempt,
+  type BagRegistrationCommand,
+  type BagRegistrationScope,
+} from "@/lib/baggage-registration-intent";
 import {
   OperationalReadState,
   useOperationalLabels,
@@ -11,36 +20,115 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
 
-type BagCommand = inferRouterInputs<AppRouter>["baggage"]["register"];
-
-export function DcsBaggageRegistration({
-  flightId,
-  bookingId,
-  passengerId,
-  segmentId,
-  disabled,
-}: {
+type Props = {
   flightId: number;
   bookingId: number;
   passengerId: number;
   segmentId: number;
   disabled: boolean;
-}) {
+};
+
+export function DcsBaggageRegistration(props: Props) {
+  const { user, loading } = useAuth();
+  const l = useOperationalLabels();
+  if (loading) return <p role="status">{l("جارٍ التحميل", "Loading")}</p>;
+  if (
+    !user ||
+    !Number.isSafeInteger(user.id) ||
+    user.id <= 0 ||
+    user.tenantId == null ||
+    !Number.isSafeInteger(user.tenantId) ||
+    user.tenantId <= 0 ||
+    !["admin", "super_admin", "airline_admin", "ops"].includes(user.role)
+  ) {
+    return (
+      <p role="alert">
+        {l(
+          "يلزم تسجيل الدخول بحساب عمليات تابع للجهة لاسترجاع إيصال الحقيبة.",
+          "Sign in with a scoped airline operations account to recover a bag receipt."
+        )}
+      </p>
+    );
+  }
+  const scope: BagRegistrationScope = {
+    actorId: user.id,
+    tenantId: user.tenantId,
+    bookingId: props.bookingId,
+    passengerId: props.passengerId,
+    flightId: props.flightId,
+    segmentId: props.segmentId,
+  };
+  return (
+    <ScopedBaggageRegistration
+      key={bagRegistrationStorageKey(scope)}
+      {...props}
+      scope={scope}
+    />
+  );
+}
+
+function ScopedBaggageRegistration({
+  flightId,
+  bookingId,
+  passengerId,
+  segmentId,
+  disabled,
+  scope,
+}: Props & { scope: BagRegistrationScope }) {
   const l = useOperationalLabels();
   const context = { flightId, bookingId, passengerId, segmentId };
   const query = trpc.baggage.registrationSummary.useQuery(context, {
     retry: false,
   });
-  const [weight, setWeight] = useState("");
-  const [description, setDescription] = useState("");
-  const [specialHandling, setSpecialHandling] = useState("");
+  const [receipt, setReceipt] = useState<{
+    command: BagRegistrationCommand | null;
+    storageError: boolean;
+  }>(() => {
+    try {
+      return {
+        command: readBagRegistration(sessionStorage, scope),
+        storageError: false,
+      };
+    } catch {
+      return { command: null, storageError: true };
+    }
+  });
+  const pendingReceipt = receipt.command;
+  const [weight, setWeight] = useState(
+    pendingReceipt ? String(pendingReceipt.weight) : ""
+  );
+  const [description, setDescription] = useState(
+    pendingReceipt?.description ?? ""
+  );
+  const [specialHandling, setSpecialHandling] = useState(
+    pendingReceipt?.specialHandling ?? ""
+  );
   const [lastTag, setLastTag] = useState<string | null>(null);
-  const [pendingReceipt, setPendingReceipt] = useState<BagCommand | null>(null);
-  const key = useCommandIdempotencyKey();
+  useEffect(
+    () =>
+      observeBagRegistration(scope, () => {
+        try {
+          const command = readBagRegistration(sessionStorage, scope);
+          setReceipt({ command, storageError: false });
+          setWeight(command ? String(command.weight) : "");
+          setDescription(command?.description ?? "");
+          setSpecialHandling(command?.specialHandling ?? "");
+        } catch {
+          setReceipt(current => ({ ...current, storageError: true }));
+        }
+      }),
+    [scope]
+  );
+  const attemptId = useRef<string | null>(null);
   const mutation = trpc.baggage.register.useMutation({
-    onSuccess: result => {
-      key.clear();
-      setPendingReceipt(null);
+    onSuccess: (result, command) => {
+      attemptId.current = null;
+      try {
+        clearBagRegistration(sessionStorage, scope, command);
+        setReceipt({ command: null, storageError: false });
+      } catch {
+        setReceipt({ command, storageError: true });
+      }
       setLastTag(result.baggage.tagNumber);
       setWeight("");
       setDescription("");
@@ -50,22 +138,30 @@ export function DcsBaggageRegistration({
     },
     onError: (error, command) => {
       const code = error.data?.code;
-      // A business rejection from the transaction means it did not commit.
-      // An unavailable response, or loss of authorization during recovery,
-      // does not establish what happened to the original command.
-      if (
-        code === "PRECONDITION_FAILED" ||
-        (!pendingReceipt &&
-          (code === "BAD_REQUEST" ||
-            code === "FORBIDDEN" ||
-            code === "UNAUTHORIZED" ||
-            code === "NOT_FOUND" ||
-            code === "TOO_MANY_REQUESTS"))
-      ) {
-        setPendingReceipt(null);
-        key.clear();
-      } else {
-        setPendingReceipt(command);
+      const rejectedAttemptId = attemptId.current;
+      attemptId.current = null;
+      // Only the latest transaction's definitive rejection may clear an intent.
+      // Pre-replay authorization/input errors cannot rule out an earlier commit.
+      try {
+        if (
+          code === "PRECONDITION_FAILED" &&
+          rejectedAttemptId &&
+          clearBagRegistration(
+            sessionStorage,
+            scope,
+            command,
+            rejectedAttemptId
+          )
+        ) {
+          setReceipt({ command: null, storageError: false });
+        } else {
+          setReceipt({
+            command: recoverBagRegistration(sessionStorage, scope, command),
+            storageError: false,
+          });
+        }
+      } catch {
+        setReceipt({ command, storageError: true });
       }
       void query.refetch();
       toast.error(error.message);
@@ -83,7 +179,8 @@ export function DcsBaggageRegistration({
   const overAllowance =
     summary?.remainingWeightGrams != null &&
     weightGrams > summary.remainingWeightGrams;
-  const commandLocked = !!pendingReceipt || mutation.isPending;
+  const commandLocked =
+    receipt.storageError || !!pendingReceipt || mutation.isPending;
   const unavailable =
     commandLocked ||
     disabled ||
@@ -165,12 +262,25 @@ export function DcsBaggageRegistration({
             weight: weightKg,
             description: description.trim() || undefined,
             specialHandling: specialHandling.trim() || undefined,
+            expectedActorId: scope.actorId,
+            expectedTenantId: scope.tenantId,
           };
           setLastTag(null);
-          mutation.mutate({
-            ...payload,
-            idempotencyKey: key.forPayload(payload),
-          });
+          try {
+            const command = saveBagRegistration(sessionStorage, scope, {
+              ...payload,
+              idempotencyKey: crypto.randomUUID(),
+            });
+            attemptId.current = startBagRegistrationAttempt(
+              sessionStorage,
+              scope,
+              command
+            );
+            setReceipt({ command, storageError: false });
+            mutation.mutate(command);
+          } catch {
+            setReceipt(current => ({ ...current, storageError: true }));
+          }
         }}
       >
         <label className="block space-y-1">
@@ -231,6 +341,14 @@ export function DcsBaggageRegistration({
         <Button type="submit" disabled={unavailable}>
           {l("تسجيل الحقيبة المستلمة", "Register received bag")}
         </Button>
+        {receipt.storageError && (
+          <p role="alert">
+            {l(
+              "تعذر استرجاع بيانات إيصال الحقيبة بأمان. التسجيل متوقف؛ راجع رقم الحقيبة الموجود مع العمليات قبل محاولة تسجيلها مجددًا.",
+              "Bag receipt recovery data is unavailable or invalid. Registration is blocked; review the existing bag tag with operations before registering it again."
+            )}
+          </p>
+        )}
         {pendingReceipt && (
           <div className="space-y-2">
             <p>
@@ -241,8 +359,24 @@ export function DcsBaggageRegistration({
             </p>
             <Button
               type="button"
-              disabled={mutation.isPending}
-              onClick={() => mutation.mutate(pendingReceipt)}
+              disabled={mutation.isPending || receipt.storageError}
+              onClick={() => {
+                try {
+                  const command = recoverBagRegistration(
+                    sessionStorage,
+                    scope,
+                    pendingReceipt
+                  );
+                  attemptId.current = startBagRegistrationAttempt(
+                    sessionStorage,
+                    scope,
+                    command
+                  );
+                  mutation.mutate(command);
+                } catch {
+                  setReceipt(current => ({ ...current, storageError: true }));
+                }
+              }}
             >
               {l("استرجاع إيصال الحقيبة", "Recover bag receipt")}
             </Button>

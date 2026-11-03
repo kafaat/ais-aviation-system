@@ -182,10 +182,13 @@ export const authRouter = router({
           name: z.string().nullable(),
           email: z.string().nullable(),
           role: z.string(),
+          tenantId: z.number().int().positive().nullable(),
         })
         .nullable()
     )
-    .query(({ ctx }) => ctx.user),
+    .query(({ ctx }) =>
+      ctx.user ? { ...ctx.user, tenantId: ctx.tenantId } : null
+    ),
 
   /**
    * Logout - clear session cookie (for web clients)

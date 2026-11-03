@@ -362,4 +362,177 @@ export function registerDcsCounterTests() {
       expect.arrayContaining(["check_in", "board", "deplane", "close"])
     );
   });
+
+  test("scoped desk recovers the same 5 kg bag receipt after reload without duplicate registration", async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
+    const scope = await prepareCounterBooking(page);
+    await useBrowserSession(page, "ops");
+    const operator = await rpc(page).auth.me.query();
+    if (!operator || operator.tenantId == null)
+      throw new Error(
+        "Scoped operations identity is required for receipt recovery"
+      );
+    const selectPassenger = async () => {
+      await page
+        .getByRole("combobox", { name: "Flight", exact: true })
+        .selectOption(String(scope.flightId));
+      await page
+        .getByRole("button", { name: "Select Synthetic Journey" })
+        .click();
+    };
+    await page.goto("/airline/dcs");
+    await selectPassenger();
+    await page
+      .getByLabel("Passenger action reason")
+      .fill("Counter document and reservation review before receipt recovery");
+    await page
+      .getByRole("button", { name: "Check in passenger", exact: true })
+      .click();
+    await expect(
+      page.getByRole("combobox", { name: "Passenger action", exact: true })
+    ).toHaveValue("board");
+
+    const commands: Record<string, unknown>[] = [];
+    let recoveryRequested = false;
+    const registerEndpoint = "**/api/trpc/*baggage.register*";
+    await page.route(registerEndpoint, async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const procedures = decodeURIComponent(
+        url.pathname.split("/api/trpc/")[1] ?? ""
+      ).split(",");
+      const index = procedures.indexOf("baggage.register");
+      expect(index).toBeGreaterThanOrEqual(0);
+      const body = request.postDataJSON() as Record<string, unknown>;
+      const envelope = (
+        url.searchParams.get("batch") === "1" ? body[String(index)] : body
+      ) as { json?: unknown };
+      if (
+        !envelope ||
+        !envelope.json ||
+        typeof envelope.json !== "object" ||
+        Array.isArray(envelope.json)
+      )
+        throw new Error("Expected the actual baggage registration payload");
+      commands.push(envelope.json as Record<string, unknown>);
+      if (commands.length > 1) {
+        expect(
+          recoveryRequested,
+          "A reload must not resubmit automatically"
+        ).toBe(true);
+        return route.continue();
+      }
+      // Commit the real receipt, then lose only its response to the browser.
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      await route.abort("failed");
+    });
+    const baggage = page.getByRole("region", {
+      name: "Passenger baggage registration",
+    });
+    const description = "Blue cabin-size suitcase";
+    const handling = "Fragile handle with care";
+    await baggage.getByLabel("Bag weight in kilograms").fill("5");
+    await baggage.getByLabel("Bag description (optional)").fill(description);
+    await baggage.getByLabel("Handling instructions (optional)").fill(handling);
+    await baggage
+      .getByRole("button", { name: "Register received bag" })
+      .click();
+    await expect(
+      baggage.getByRole("button", { name: "Recover bag receipt" })
+    ).toBeVisible();
+    await expect(
+      baggage.getByRole("definition").filter({ hasText: /^18 kg$/ })
+    ).toBeVisible();
+    expect(commands).toHaveLength(1);
+    const originalCommand = commands[0];
+    expect(originalCommand).toEqual({
+      ...scope,
+      segmentId: expect.any(Number),
+      weight: 5,
+      description,
+      specialHandling: handling,
+      idempotencyKey: expect.any(String),
+      expectedActorId: operator.id,
+      expectedTenantId: operator.tenantId,
+    });
+    const readBags = () =>
+      sqlRows<RowDataPacket>(
+        "SELECT id, tagNumber, passengerId, flightId, segmentId, weight, description, specialHandling FROM baggage_items WHERE bookingId = ? ORDER BY id",
+        [scope.bookingId]
+      );
+    const originalBags = await readBags();
+    expect(originalBags).toHaveLength(1);
+    const originalBag = originalBags[0];
+    expect(Number(originalBag.weight)).toBe(5);
+    expect(originalBag.flightId).toBe(scope.flightId);
+    expect(originalBag.passengerId).toBe(scope.passengerId);
+    expect(originalBag.segmentId).toBe(originalCommand.segmentId);
+    expect(originalBag.description).toBe(description);
+    expect(originalBag.specialHandling).toBe(handling);
+
+    await page.reload();
+    await selectPassenger();
+    await expect(
+      baggage.getByRole("definition").filter({ hasText: /^18 kg$/ })
+    ).toBeVisible();
+    const recover = baggage.getByRole("button", {
+      name: "Recover bag receipt",
+    });
+    await expect(recover).toBeEnabled();
+    await expect(baggage.getByLabel("Bag weight in kilograms")).toHaveValue(
+      "5"
+    );
+    await expect(baggage.getByLabel("Bag description (optional)")).toHaveValue(
+      description
+    );
+    await expect(
+      baggage.getByLabel("Handling instructions (optional)")
+    ).toHaveValue(handling);
+    for (const label of [
+      "Bag weight in kilograms",
+      "Bag description (optional)",
+      "Handling instructions (optional)",
+    ])
+      await expect(baggage.getByLabel(label)).toBeDisabled();
+    await expect(
+      baggage.getByRole("button", { name: "Register received bag" })
+    ).toBeDisabled();
+    expect(commands).toHaveLength(1);
+    expect(await readBags()).toEqual(originalBags);
+
+    recoveryRequested = true;
+    await recover.click();
+    await expect(baggage.getByRole("status")).toContainText(
+      String(originalBag.tagNumber)
+    );
+    await expect(recover).toBeHidden();
+    expect(commands).toHaveLength(2);
+    expect(commands[1]).toEqual(originalCommand);
+    expect(await readBags()).toEqual(originalBags);
+    const tracking = await sqlRows<RowDataPacket>(
+      "SELECT id FROM baggage_tracking WHERE baggageId = ?",
+      [originalBag.id]
+    );
+    expect(tracking).toHaveLength(1);
+
+    recoveryRequested = false;
+    await page.reload();
+    await selectPassenger();
+    await expect(
+      baggage.getByRole("definition").filter({ hasText: /^18 kg$/ })
+    ).toBeVisible();
+    await expect(recover).toBeHidden();
+    await expect(baggage.getByLabel("Bag weight in kilograms")).toHaveValue("");
+    await baggage.getByLabel("Bag weight in kilograms").fill("5");
+    await expect(
+      baggage.getByRole("button", { name: "Register received bag" })
+    ).toBeEnabled();
+    expect(commands).toHaveLength(2);
+    expect(await readBags()).toEqual(originalBags);
+    await page.unroute(registerEndpoint);
+  });
 }

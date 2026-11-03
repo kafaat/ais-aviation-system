@@ -192,6 +192,76 @@ describe("physical baggage registration authority", () => {
   it("rejects another airline and never writes", async () => {
     await denied({}, { ...actor, tenantId: 4 }, "NOT_FOUND");
   });
+  it.each([
+    ["another operator in the same tenant", { ...actor, id: 92 }],
+    ["the original operator in another tenant", { ...actor, tenantId: 4 }],
+  ])(
+    "rejects a bound request from %s before creating any receipt",
+    async (_, operator) => {
+      await denied(
+        { expectedActorId: actor.id, expectedTenantId: actor.tenantId },
+        operator,
+        "FORBIDDEN"
+      );
+      expect(fixture.rows("idempotency_requests")).toHaveLength(0);
+    }
+  );
+  it("keeps a committed receipt bound to its authenticated operator and tenant through the router", async () => {
+    const command = {
+      ...input,
+      weight: 5,
+      expectedActorId: actor.id,
+      expectedTenantId: actor.tenantId,
+    };
+    const caller = (id: number, tenantId: number) =>
+      baggageRouter.createCaller({
+        user: { id, role: "ops", tenantId },
+        tenantId,
+        req: { headers: {} },
+        res: {},
+      } as any);
+    const original = await caller(actor.id, actor.tenantId).register(command);
+    // Another 5 kg bag would fit: allowance rejection cannot hide a replay
+    // accidentally running as a new command for a different authenticated user.
+    await expect(
+      caller(92, actor.tenantId).register(command)
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringContaining("identity changed"),
+    });
+    await expect(caller(actor.id, 4).register(command)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringContaining("identity changed"),
+    });
+    expect(await caller(actor.id, actor.tenantId).register(command)).toEqual(
+      original
+    );
+    expect(fixture.rows("baggage_items")).toHaveLength(1);
+    expect(fixture.rows("baggage_tracking")).toHaveLength(1);
+    expect(fixture.rows("baggage_tracking")[0].scannedBy).toBe(actor.id);
+    expect(fixture.rows("idempotency_requests")).toEqual([
+      expect.objectContaining({ userId: actor.id, status: "COMPLETED" }),
+    ]);
+  });
+  it.each([
+    { expectedActorId: actor.id },
+    { expectedTenantId: actor.tenantId },
+  ])("rejects an incomplete expected identity pair: %j", async expected => {
+    const caller = baggageRouter.createCaller({
+      user: { ...actor },
+      tenantId: actor.tenantId,
+      req: { headers: {} },
+      res: {},
+    } as any);
+    await expect(
+      caller.register({ ...input, ...expected })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(fixture.rows("baggage_items")).toHaveLength(0);
+    expect(fixture.rows("baggage_tracking")).toHaveLength(0);
+    expect(fixture.rows("idempotency_requests")).toHaveLength(0);
+  });
   it("rejects a suspended airline", async () => {
     data.tenants[0].status = "suspended";
     install();

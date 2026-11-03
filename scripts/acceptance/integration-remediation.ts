@@ -2377,6 +2377,9 @@ try {
     "Recovery review preserves the funded outbound baggage and meal for the assigned passenger",
     () => verifyScopedAncillarySale(db, ctx, id)
   );
+  const { verifySsrPriorityReconciliation } =
+    await import("./ssr-priority-reconciliation");
+  await verifySsrPriorityReconciliation(db, id, record);
   await writeFile(
     reportPath,
     JSON.stringify(

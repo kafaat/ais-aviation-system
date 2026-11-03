@@ -82,8 +82,21 @@ decides which purchased allowances are funded; the counter has no payment overri
 
 The command receipt, canonical baggage item and actor-attributed tracking record
 commit together. Repeating the same key and payload returns the original result;
-changing a payload under that key conflicts. The UI keeps the key while retrying an
-unacknowledged command. A new acknowledged bag gets a new key.
+changing a payload under that key conflicts. Before sending, the UI saves the exact
+command and key in the current browser tab, scoped to the authenticated employee,
+tenant, booking, passenger, flight and segment. It restores an unacknowledged
+command after navigation, reload or reauthentication and offers **Recover bag
+receipt** while fresh registration stays locked. A new acknowledged bag gets a
+new key.
+
+Saved commands include `expectedActorId` and `expectedTenantId`. The server checks
+these against the authenticated context before replay or a new write, so a changed
+shared login cannot turn recovery into another employee's registration. Existing
+non-UI callers may omit both bindings. A late rejection cannot clear a newer retry.
+Corrupt or inaccessible recovery storage blocks new registration for review. This
+recovery lasts for the same browser tab; closing the tab or clearing its storage
+removes the local command. It does not expire automatically or replace the durable
+server receipt and physical baggage record.
 
 `baggage_items.flightId` and `segmentId` preserve explicit operational scope.
 Manifest, closeout and signed custody ingestion/readers honor that scope. A bag
@@ -104,6 +117,8 @@ or a current checked-in seat, the desk refuses the normal view and requests
 departure reconciliation. A current-flight physical bag excluded by reservation
 cleanup similarly prevents a clean manifest or baggage closeout. These read guards
 preserve evidence; they do not invent deplaning, baggage retrieval or payment reversal.
+The manifest also refuses a recorded boarded passenger omitted by reservation
+filtering, including a passenger who has no registered baggage.
 
 Counter registration and signed custody are separate records. This delivery does
 not synthesize airport/device signatures, loading scans, baggage return, rerouting,
@@ -121,12 +136,39 @@ control depends on an explicit capability read; unavailable or failed capability
 reads keep transmission disabled. Authority transport, acknowledgements and
 rejection handling still require a real integration.
 
+## Special-service sector scope and priority
+
+New passenger special-service requests select a flight sector and preserve that
+original flight and, when present, its stored booking segment. A request on one
+sector does not apply automatically to the onward sector. Exchanging a segment
+does not reassign its existing request to the replacement flight.
+
+Historical requests remain unscoped until their sector is verified. A `pending`
+or `confirmed` wheelchair, medical-assistance or unaccompanied-minor request with
+no recorded flight causes priority scoring, ranking and rebooking advice to fail
+with `PRECONDITION_FAILED` and an explicit reconciliation message. These readers
+neither guess the sector nor return a complete ranking with the assistance omitted.
+Cancelled or rejected requests do not block, and explicitly scoped other-flight
+requests stay on their own sector. An explicitly recorded flight on a supported
+legacy booking without a stored booking segment remains valid.
+
+Request storage and priority handling do not establish partner acknowledgement or
+delivery of the requested service. SSR/APFAX meal reports remain unimplemented.
+
 ## Rollout and compatibility
 
-- Apply committed migration `0061_dcs_counter_lifecycle.sql` before deploying the
-  updated application. It adds the two nullable baggage fields, their lookup index,
-  and flight state, passenger state and audit event tables. It does not rewrite
-  historical bags or manufacture boarding events.
+- Apply committed migrations `0061_dcs_counter_lifecycle.sql`,
+  `0062_special_service_sector.sql`, then
+  `0063_baggage_flight_reconciliation.sql`, in journal order before deploying the
+  updated application. Migration 0061 adds the two nullable baggage fields, their lookup
+  index, and flight state, passenger state and audit event tables. Migration 0062
+  adds nullable original flight and booking-segment identifiers to special-service
+  requests. Migration 0063 indexes baggage reconciliation reads by flight and bag
+  ID. These migrations do not invent historical scope or operational events.
+- Review active historical assistance requests before using priority rankings or
+  reaccommodation advice. Reconcile their original sector from verified request
+  evidence; a deployment must not populate every request with the primary flight
+  or mark it inactive simply to suppress a reconciliation error.
 - Unconfigured flights keep the existing check-in window: 48 hours until one hour
   before departure. Explicit opening does not extend that window.
 - Legacy bookings without a stored segment can use the existing supported check-in
@@ -141,7 +183,9 @@ rejection handling still require a real integration.
 - PR #246's passenger/segment ancillary purchase and funding work was merged in
   main `128e67c640ebb1e57f9e944471b89b1bb4711660` during this delivery. This branch
   incorporates that main revision and consumes its canonical entitlement reader
-  without replacing or duplicating the purchasing implementation.
+  without replacing or duplicating the purchasing implementation. PR #248 was also
+  merged into main at `ad4ca56772a75b2d10104090071db908bb1fd5f5` and reconciled here,
+  preserving its ticket allowance, coupon, initial-seat and VRS workflow changes.
 - Rollback should preserve the new receipt and history tables. Do not drop evidence
   or null out baggage scope to work around an operational refusal.
 
@@ -151,11 +195,15 @@ Focused service regressions cover unsafe booking states, owner/foreign-tenant
 requests, cumulative weights, exact sector identity, changed-payload replay,
 transaction rollback, boarding/denial transitions, scan identity and unresolved
 physical baggage. SQL-predicate tests cover multi-sector manifest/closeout behavior.
+Priority regressions cover active unscoped assistance, propagation through ranking
+and advisory readers, and inactive or explicitly scoped requests.
 
 React tests exercise role gating, selected passenger/sector binding, unavailable
 reads, denied/offloaded state, retry keys, baggage allowance and APIS form/preview
-reachability. The authenticated browser journey uses an isolated operations tenant,
-real booking/payment commands and a lost **committed** bag response before retry.
+reachability. Authenticated browser journeys use isolated operations tenants and
+real booking/payment commands. They lose a **committed** bag response, then recover
+the exact original payload and key, including after a same-tab reload. The recovery
+checks confirm one physical bag and one tracking row.
 
 The required Production Gates run the additional departure counter acceptance
 against actual MySQL 8.0 and 9.7 and Redis, including competing registration,
@@ -168,6 +216,8 @@ are not provider cancellation or aircraft movement tests.
 The migration gates replay both fresh and previous
 release databases. Unit tests, schema generation and local TypeScript/build checks
 are not substitutes for those CI results or for airport operational acceptance.
+The same gates exercise active unscoped assistance, inactive historical requests
+and explicit sector scoring through the real priority readers.
 
 ## Remaining comparison work
 
