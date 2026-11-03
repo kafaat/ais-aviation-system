@@ -1210,7 +1210,12 @@ Airport kiosk check-in operations.
 | `kiosk.checkIn`           | Mutation | Public | Self-service check-in   |
 | `kiosk.selectSeat`        | Mutation | Public | Seat selection at kiosk |
 | `kiosk.printBoardingPass` | Mutation | Public | Print boarding pass     |
-| `kiosk.printBagTag`       | Mutation | Public | Print baggage tag       |
+| `kiosk.printBagTag`       | Mutation | Public | Prepare registered bag-tag data for reprint |
+
+This mutation requires a scoped kiosk capability. A successful response sets
+`printStatus` to `document_ready` and `printedAt` to null for each tag. The
+[station pilot](operations/provider-acceptance.md#station-pilot-for-one-bag-tag-reprint)
+uses one such response to produce a test label and check a physical scan.
 
 ---
 

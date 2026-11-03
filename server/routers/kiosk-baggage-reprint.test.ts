@@ -189,3 +189,36 @@ it("refuses unpaid or cancelled bookings even with current custody and a checked
     code: "PRECONDITION_FAILED",
   });
 });
+
+it("renders one station test PDF from the kiosk response without confirming a print", async () => {
+  const { renderBagTagTestLabel } =
+    await import("../../scripts/acceptance/bag-tag-test-label");
+  const document = await caller.printBagTag(input);
+  const envelope = { result: { data: { json: document } } };
+  for (const body of [envelope, [envelope]]) {
+    const pdf = await renderBagTagTestLabel(body);
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+  }
+  for (const body of [
+    [envelope, envelope],
+    { error: { message: "Not authorized" } },
+    ...[
+      { totalBags: 2 },
+      { printStatus: "printed" },
+      {
+        bagTags: [
+          { ...document.bagTags[0], printedAt: new Date().toISOString() },
+        ],
+      },
+      { bagTags: [{ ...document.bagTags[0], barcodeData: "0065999999" }] },
+      {
+        bagTags: [
+          { ...document.bagTags[0], tagNumber: "12", barcodeData: "12" },
+        ],
+      },
+    ].map(patch => ({ result: { data: { json: { ...document, ...patch } } } })),
+  ]) {
+    await expect(renderBagTagTestLabel(body)).rejects.toThrow();
+  }
+  expect(fixture.rows("kiosk_sessions")).toEqual([]);
+});
