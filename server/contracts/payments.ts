@@ -2,6 +2,29 @@
 import { z } from "zod";
 import { outputNumber } from "./primitives";
 export const responseContracts = {
+  getCheckoutState: z.object({
+    bookingId: outputNumber,
+    bookingReference: z.string(),
+    bookingStatus: z.enum(["pending", "confirmed", "cancelled", "completed"]),
+    totalAmount: outputNumber,
+    currency: z.literal("SAR"),
+    invoiceEditable: z.boolean(),
+    appliedVoucher: z
+      .object({
+        code: z.string().nullable(),
+        discountAmount: outputNumber,
+      })
+      .nullable(),
+    state: z.enum([
+      "pending",
+      "expired",
+      "paid",
+      "refunded",
+      "cancelled",
+      "split",
+      "unavailable",
+    ]),
+  }),
   settlementReviews: z.array(
     z.object({
       paymentIntentId: z.string(),

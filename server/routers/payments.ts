@@ -2,6 +2,7 @@ import { createOrderServiceCheckout } from "../services/order-service-checkout.s
 import {
   createBookingCheckout,
   expireBookingCheckout,
+  getBookingCheckoutState,
 } from "../services/booking-checkout.service";
 import { responseContracts } from "../contracts/payments";
 import { z } from "zod";
@@ -61,6 +62,22 @@ const providerEnum = z.enum([
  * Handles all payment-related operations with multi-provider support
  */
 export const paymentsRouter = router({
+  getCheckoutState: protectedProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/payments/checkout/{bookingId}",
+        tags: ["Payments"],
+        summary:
+          "Read the owner's booking payment state before resuming checkout",
+        protect: true,
+      },
+    })
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(responseContracts["getCheckoutState"])
+    .query(({ ctx, input }) =>
+      getBookingCheckoutState(input.bookingId, ctx.user.id)
+    ),
   settlementReviews: adminProcedure
     .meta({
       openapi: {
@@ -148,7 +165,11 @@ export const paymentsRouter = router({
     })
     .input(
       z.object({
-        bookingId: z.number().describe("Booking ID to pay for"),
+        bookingId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Booking ID to pay for"),
         provider: providerEnum
           .optional()
           .default("stripe")

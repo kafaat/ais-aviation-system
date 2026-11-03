@@ -8,10 +8,16 @@ export function WalletBookingPayment({
   bookingId,
   totalAmount,
   initiallyReviewing = false,
+  disabled = false,
+  onPaymentStart,
+  onPaymentSettled,
 }: {
   bookingId: number;
   totalAmount: number;
   initiallyReviewing?: boolean;
+  disabled?: boolean;
+  onPaymentStart?: () => boolean;
+  onPaymentSettled?: () => Promise<unknown> | void;
 }) {
   const [, navigate] = useLocation();
   const l = useOperationalLabels();
@@ -29,11 +35,16 @@ export function WalletBookingPayment({
       void utils.bookings.myBookings.invalidate();
       void wallet.refetch();
     },
+    onSettled: () => onPaymentSettled?.(),
   });
 
   if (!review)
     return (
-      <Button variant="outline" onClick={() => setReview(true)}>
+      <Button
+        variant="outline"
+        disabled={disabled}
+        onClick={() => setReview(true)}
+      >
         {l("الدفع بالمحفظة", "Pay with wallet")}
       </Button>
     );
@@ -75,10 +86,16 @@ export function WalletBookingPayment({
               </p>
             ) : (
               <Button
-                disabled={payment.isPending}
-                onClick={() =>
-                  payment.mutate({ bookingId, expectedAmount: totalAmount })
-                }
+                disabled={disabled || payment.isPending}
+                onClick={() => {
+                  if (
+                    disabled ||
+                    payment.isPending ||
+                    onPaymentStart?.() === false
+                  )
+                    return;
+                  payment.mutate({ bookingId, expectedAmount: totalAmount });
+                }}
               >
                 {l("تأكيد الدفع بالمحفظة", "Confirm wallet payment")}
               </Button>

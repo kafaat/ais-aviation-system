@@ -74,6 +74,57 @@ spec:
                   number: 80
 
 ---
+# Exact public search location: preserve application CSP/XFO without the main
+# ingress's DENY override. All account/payment locations retain that override.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ais-embed-search-ingress
+  namespace: ais-production
+  labels:
+    app: ais-api
+    environment: production
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=()";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ais-aviation.example.com
+        - www.ais-aviation.example.com
+      secretName: ais-production-tls
+  rules:
+    - host: ais-aviation.example.com
+      http:
+        paths:
+          - path: /embed/search
+            pathType: Exact
+            backend:
+              service:
+                name: ais-api
+                port:
+                  number: 80
+    - host: www.ais-aviation.example.com
+      http:
+        paths:
+          - path: /embed/search
+            pathType: Exact
+            backend:
+              service:
+                name: ais-api
+                port:
+                  number: 80
+
+---
 # Production resource quotas (higher limits)
 apiVersion: v1
 kind: ResourceQuota

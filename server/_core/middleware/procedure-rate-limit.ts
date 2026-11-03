@@ -9,6 +9,7 @@ export function sensitiveProcedureScope(
   type: ProcedureKind = "mutation"
 ): string | null {
   if (/^auth\..*(?:reset|forgot)/i.test(path)) return "passwordReset";
+  if (path === "manageBooking.lookup") return "manageBookingLookup";
   if (
     /^auth\.(login|register|completeMfa)$/.test(path) ||
     /^mfa\.(setup|verify|disable|regenerateBackupCodes)$/.test(path) ||
@@ -19,7 +20,8 @@ export function sensitiveProcedureScope(
   if (/^(payments|wallet|splitPayments|refunds)\./.test(path))
     return type === "query" ? "paymentRead" : "payment";
   if (path === "loyalty.redeemMiles") return "accountStepUp";
-  if (path === "bookings.create") return "booking";
+  if (path === "bookings.create" || path === "agentPortal.createBooking")
+    return "booking";
   return null;
 }
 
@@ -33,7 +35,10 @@ export async function enforceProcedureRateLimit(
   if (!scope || !ctx.req) return;
   const ip = ctx.req.ip || ctx.req.socket?.remoteAddress || "unknown";
   const identifier =
-    scope === "auth" || scope === "passwordReset" || !ctx.user
+    scope === "auth" ||
+    scope === "passwordReset" ||
+    scope === "manageBookingLookup" ||
+    !ctx.user
       ? `ip:${ip}`
       : `user:${ctx.user.id}`;
   const result = await rateLimitService.checkStrictRateLimit(identifier, scope);
