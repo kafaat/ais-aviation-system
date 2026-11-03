@@ -22,6 +22,7 @@ import { getDb } from "../db";
 import type { SettlementTx } from "./booking-settlement.service";
 import {
   assertDepartureOpen,
+  assertFundedDepartureReservation,
   checkInPassengersTx,
   lockDepartureContext,
   refreshBookingCheckIn,
@@ -29,6 +30,7 @@ import {
 import {
   departureState,
   readDcsPassengerState,
+  readReconciledBoardings,
   writeDcsPassengerState,
   type DcsAttendanceState,
   type DcsPassengerKey,
@@ -146,6 +148,20 @@ function currentAttendance(
   if (checkedIn) return "checked_in";
   return state?.state === "offloaded" ? "offloaded" : "not_checked_in";
 }
+
+/**
+ * A schedule cutoff or flight cancellation must not strand current attendance.
+ * Recovery still requires the locked active itinerary, funding and seat; it
+ * never admits new travel or resolves a completed/refunded reservation.
+ */
+function assertDcsRecoveryAllowed(c: DepartureContext) {
+  assertFundedDepartureReservation(c);
+  if (!["scheduled", "delayed", "cancelled"].includes(c.flight.status))
+    reject(
+      "Flight requires departure reconciliation before attendance recovery"
+    );
+}
+
 async function appendEvent(
   tx: SettlementTx,
   value: typeof dcsOperationEvents.$inferInsert
@@ -292,49 +308,7 @@ export async function getDcsDesk(
             .limit(MAX_DESK_PASSENGERS + 1)
         : [];
       assertDeskBound(states.length);
-      // Financial settlement can retire the reservation and release its seat
-      // after local boarding was recorded. Do not hide that operational fact
-      // behind the paid-booking filter or invent a deplane/return decision.
-      const boarded = await tx
-        .select()
-        .from(dcsPassengerStates)
-        .where(
-          and(
-            eq(dcsPassengerStates.flightId, flightId),
-            eq(dcsPassengerStates.state, "boarded")
-          )
-        )
-        .limit(MAX_DESK_PASSENGERS + 1);
-      if (boarded.length > MAX_DESK_PASSENGERS)
-        reject(
-          "Departure reconciliation is required: too many boarded records to verify safely"
-        );
-      for (const state of boarded) {
-        const entry = eligible.find(e => e.booking.id === state.bookingId);
-        const person = ps.find(
-          p => p.id === state.passengerId && p.bookingId === state.bookingId
-        );
-        const assigned = seats.filter(
-          seat =>
-            seat.bookingId === state.bookingId &&
-            seat.passengerId === state.passengerId
-        );
-        const seat = assigned[0];
-        if (
-          !entry ||
-          !person ||
-          (person.tenantId != null && person.tenantId !== flight.tenantId) ||
-          assigned.length !== 1 ||
-          seat?.status !== "checked_in" ||
-          !seat.checkInNonce ||
-          !seat.checkedInAt ||
-          !seat.boardingSequence ||
-          seat.cabinClass !== entry.booking.cabinClass
-        )
-          reject(
-            "Departure reconciliation is required: a boarded passenger cannot be matched to an active paid reservation with a current checked-in seat"
-          );
-      }
+      await readReconciledBoardings(tx, flight);
       const [gate] = await tx
         .select()
         .from(dcsFlightOperations)
@@ -586,7 +560,9 @@ export async function transitionDcsPassenger(
     actor,
     "dcs.passenger_transition",
     async (tx, c, requestHash) => {
-      assertDepartureOpen(c, "boarding");
+      if (input.action === "deplane" || input.action === "offload")
+        assertDcsRecoveryAllowed(c);
+      else assertDepartureOpen(c, "boarding");
       const before = await readDcsPassengerState(tx, input);
       const seat = await passengerSeat(tx, input);
       const checkedIn =

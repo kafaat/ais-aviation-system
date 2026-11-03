@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { transactionMemory } from "./helpers/transaction-memory";
 
 const boundary = vi.hoisted(() => ({ db: null as any }));
-vi.mock("../db", () => ({ getDb: () => boundary.db }));
+vi.mock("../db", () => ({
+  getDb: () => boundary.db,
+  getBookingByIdWithDetails: (id: number) =>
+    fixture.rows("bookings").find(b => b.id === id),
+}));
+import { bookingsRouter } from "../routers/bookings";
 vi.mock("../_core/middleware/procedure-rate-limit", () => ({
   enforceProcedureRateLimit: vi.fn(),
 }));
@@ -171,6 +176,57 @@ describe("scoped staff departure desk", () => {
     fixture.rows("bookings")[0].paymentStatus = "refunded";
     expect((await getDcsDesk(11, actor)).passengers).toEqual([]);
   });
+
+  it.each(["deny", "board"] as const)(
+    "checks in an eligible companion on the customer route after %s and rejects stale batches atomically",
+    async action => {
+      const customer = bookingsRouter.createCaller({
+        user: { id: 7, role: "user", tenantId: 1 },
+        tenantId: 1,
+        req: { headers: {} },
+        res: {},
+      } as never);
+      const rows = () => customer.getDepartureState({ bookingId: 3 });
+      const submit = (...ids: number[]) =>
+        customer.checkIn({
+          bookingId: 3,
+          flightId: 11,
+          seatAssignments: ids.map(passengerId => ({ passengerId })),
+        });
+      expect((await rows())[0].passengers.map(p => p.departureState)).toEqual([
+        "not_checked_in",
+        "not_checked_in",
+      ]);
+      if (action === "board") await checkIn();
+      await transition(action);
+      const before = structuredClone(fixture.rows("seat_inventory"));
+      const status = action === "deny" ? "boarding_denied" : "boarded";
+      const [leg, onward] = await rows();
+      expect(leg.passengers.map(p => p.departureState)).toEqual([
+        status,
+        "not_checked_in",
+      ]);
+      expect(
+        onward.passengers.every(p => p.departureState === "not_checked_in")
+      ).toBe(true);
+      await expect(submit(5, 4)).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+      });
+      for (const ids of [[999], [5, 5]])
+        await expect(submit(...ids)).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+        });
+      expect(fixture.rows("seat_inventory")).toEqual(before);
+      await expect(submit(5)).resolves.toEqual({ success: true });
+      expect((await rows())[0].passengers.map(p => p.departureState)).toEqual([
+        status,
+        "checked_in",
+      ]);
+      expect(
+        fixture.rows("seat_inventory").filter(s => s.passengerId === 4)
+      ).toEqual(before.filter(s => s.passengerId === 4));
+    }
+  );
 
   it("requires operational reconciliation after a real late full-refund settlement without rewriting either truth", async () => {
     await checkIn();

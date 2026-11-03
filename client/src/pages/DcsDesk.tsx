@@ -1,4 +1,13 @@
-import { useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
+import {
+  matchMutation,
+  matchQuery,
+  useIsMutating,
+  useQueryClient,
+  type MutationFilters,
+  type QueryFilters,
+} from "@tanstack/react-query";
+import { getMutationKey, getQueryKey } from "@trpc/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
 import { Redirect } from "wouter";
@@ -29,14 +38,87 @@ type PassengerAction =
 const FLIGHTS_PER_PAGE = 50;
 type FlightCursor = { departureTime: Date; id: number };
 function allowedActions(passenger: Passenger): PassengerAction[] {
-  if (passenger.boardingDenied)
-    return passenger.checkedIn && passenger.attendanceState !== "boarded"
-      ? ["allow", "offload"]
-      : ["allow"];
   if (passenger.attendanceState === "boarded") return ["deplane"];
-  if (passenger.attendanceState === "checked_in")
+  if (passenger.boardingDenied)
+    return passenger.checkedIn ? ["allow", "offload"] : ["allow"];
+  if (passenger.attendanceState === "checked_in" && passenger.checkedIn)
     return ["board", "deny", "offload"];
   return ["check_in", "deny"];
+}
+
+function isRecoveryAction(action: PassengerAction) {
+  return action === "deplane" || action === "offload";
+}
+
+function flightAllowsPassengerAction(data: Desk, action: PassengerAction) {
+  const active = ["scheduled", "delayed"].includes(data.flight.status);
+  if (isRecoveryAction(action))
+    return active || data.flight.status === "cancelled";
+  if (!active) return false;
+  const remaining = data.flight.departureTime.getTime() - Date.now();
+  if (action === "check_in")
+    return (
+      data.checkInState === "open" &&
+      data.checkInWindowOpen &&
+      remaining > 3_600_000 &&
+      remaining <= 48 * 3_600_000
+    );
+  return remaining > 0 && remaining <= 48 * 3_600_000;
+}
+
+function useFlightNavigationLock(flightId: number) {
+  const cache = useQueryClient();
+  const commandKeys = [
+    getMutationKey(trpc.dcsOperations.checkIn),
+    getMutationKey(trpc.dcsOperations.transition),
+    getMutationKey(trpc.dcsOperations.changeFlightState),
+    getMutationKey(trpc.baggage.register),
+  ];
+  const commands: MutationFilters = {
+    predicate: mutation => {
+      const input = mutation.state.variables;
+      return (
+        flightId > 0 &&
+        typeof input === "object" &&
+        input !== null &&
+        "flightId" in input &&
+        input.flightId === flightId &&
+        commandKeys.some(mutationKey =>
+          matchMutation({ mutationKey, exact: true }, mutation)
+        )
+      );
+    },
+  };
+  const readKeys = [
+    getQueryKey(trpc.dcsOperations.getDesk, { flightId }),
+    getQueryKey(trpc.baggage.registrationSummary, { flightId }),
+    getQueryKey(trpc.baggage.flightCloseout, { flightId }),
+  ];
+  const reads: QueryFilters = {
+    predicate: query =>
+      flightId > 0 &&
+      readKeys.some(queryKey => matchQuery({ queryKey }, query)),
+  };
+  const pendingCommands = useIsMutating(commands);
+  const hasPendingReads = () =>
+    cache
+      .getQueryCache()
+      .findAll(reads)
+      .some(query => query.state.fetchStatus !== "idle");
+  // A refresh paused offline still owns the current command context.
+  const pendingReads = useSyncExternalStore(
+    useCallback(
+      (onChange: () => void) => cache.getQueryCache().subscribe(onChange),
+      [cache]
+    ),
+    hasPendingReads,
+    () => false
+  );
+  return {
+    locked: pendingCommands > 0 || pendingReads,
+    // Read the cache again in event handlers, including before the next render.
+    isLocked: () => cache.isMutating(commands) > 0 || hasPendingReads(),
+  };
 }
 
 function useDcsLabels() {
@@ -95,12 +177,15 @@ function FlightSelector() {
   const l = useOperationalLabels();
   const [cursors, setCursors] = useState<FlightCursor[]>([]);
   const [flightId, setFlightId] = useState(0);
+  const activity = useFlightNavigationLock(flightId);
   const query = trpc.operations.airlineFlights.useQuery({
     after: cursors.at(-1),
     limit: FLIGHTS_PER_PAGE + 1,
   });
   const flights = query.data?.slice(0, FLIGHTS_PER_PAGE);
+  const navigationLocked = query.isFetching || activity.locked;
   function changePage(next: FlightCursor[]) {
+    if (query.isFetching || activity.isLocked()) return;
     setFlightId(0);
     setCursors(next);
   }
@@ -116,7 +201,11 @@ function FlightSelector() {
             <select
               className="w-full rounded-md border bg-background p-2"
               value={flightId || ""}
-              onChange={e => setFlightId(Number(e.target.value))}
+              disabled={navigationLocked}
+              onChange={e => {
+                if (!query.isFetching && !activity.isLocked())
+                  setFlightId(Number(e.target.value));
+              }}
             >
               <option value="">{l("اختر رحلة", "Select flight")}</option>
               {flights?.map(flight => (
@@ -132,7 +221,7 @@ function FlightSelector() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            disabled={!cursors.length || query.isFetching}
+            disabled={!cursors.length || navigationLocked}
             onClick={() => changePage(cursors.slice(0, -1))}
           >
             {l("الرحلات السابقة", "Previous flights")}
@@ -143,7 +232,7 @@ function FlightSelector() {
               !query.data ||
               query.data.length <= FLIGHTS_PER_PAGE ||
               !!query.error ||
-              query.isFetching
+              navigationLocked
             }
             onClick={() => {
               const last = flights?.at(-1);
@@ -157,10 +246,23 @@ function FlightSelector() {
             {l("الرحلات التالية", "Next flights")}
           </Button>
         </div>
+        {activity.locked && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {l(
+              "انتظر اكتمال الإجراء وتحديث بيانات الرحلة قبل تغيير الرحلة أو الراكب.",
+              "Wait for the command and flight data refresh to finish before changing the flight or passenger."
+            )}
+          </p>
+        )}
       </section>
-      {flightId > 0 && !query.error && (
+      {flightId > 0 && (
         <>
-          <FlightDesk key={flightId} flightId={flightId} />
+          <FlightDesk
+            key={flightId}
+            flightId={flightId}
+            navigationLocked={activity.locked}
+            isNavigationLocked={activity.isLocked}
+          />
           <section
             className="space-y-2 rounded-lg border p-4"
             aria-label={l(
@@ -182,7 +284,15 @@ function FlightSelector() {
   );
 }
 
-function FlightDesk({ flightId }: { flightId: number }) {
+function FlightDesk({
+  flightId,
+  navigationLocked,
+  isNavigationLocked,
+}: {
+  flightId: number;
+  navigationLocked: boolean;
+  isNavigationLocked: () => boolean;
+}) {
   const l = useOperationalLabels();
   const labels = useDcsLabels();
   const [search, setSearch] = useState("");
@@ -326,7 +436,11 @@ function FlightDesk({ flightId }: { flightId: number }) {
                             `Select ${passenger.name}`
                           )}
                           aria-pressed={passengerId === passenger.passengerId}
-                          onClick={() => setPassengerId(passenger.passengerId)}
+                          disabled={navigationLocked || !readReady}
+                          onClick={() => {
+                            if (readReady && !isNavigationLocked())
+                              setPassengerId(passenger.passengerId);
+                          }}
                         >
                           {l("اختيار", "Select")}
                         </Button>
@@ -353,7 +467,7 @@ function FlightDesk({ flightId }: { flightId: number }) {
                 key={`${selected.passengerId}:${selected.attendanceState}:${selected.boardingDenied}`}
                 passenger={selected}
                 data={data}
-                disabled={!readReady || !flightActive}
+                disabled={!readReady}
                 refresh={() => query.refetch()}
               />
               {selected.segmentId === null ? (
@@ -542,7 +656,16 @@ function PassengerControl({
   const l = useOperationalLabels();
   const labels = useDcsLabels();
   const actions = allowedActions(passenger);
-  const [action, setAction] = useState<PassengerAction>(actions[0]);
+  const [action, setAction] = useState<PassengerAction>(() => {
+    const initial = actions[0];
+    if (flightAllowsPassengerAction(data, initial)) return initial;
+    return (
+      actions.find(
+        value =>
+          isRecoveryAction(value) && flightAllowsPassengerAction(data, value)
+      ) ?? initial
+    );
+  });
   const [reason, setReason] = useState("");
   const [seatNumber, setSeatNumber] = useState("");
   const [boardingPassToken, setBoardingPassToken] = useState("");
@@ -566,10 +689,15 @@ function PassengerControl({
   const checkInClosed =
     action === "check_in" &&
     (data.checkInState !== "open" || !data.checkInWindowOpen);
+  const flightAllowsAction = flightAllowsPassengerAction(data, action);
+  const controlsDisabled =
+    disabled ||
+    pending ||
+    !actions.some(value => flightAllowsPassengerAction(data, value));
   const unavailable =
     disabled ||
     pending ||
-    checkInClosed ||
+    !flightAllowsAction ||
     !actions.includes(action) ||
     reason.trim().length < 5;
   return (
@@ -577,7 +705,8 @@ function PassengerControl({
       className="space-y-3 rounded-lg border p-4"
       onSubmit={event => {
         event.preventDefault();
-        if (unavailable) return;
+        // The clock can pass the cutoff while a populated form stays open.
+        if (unavailable || !flightAllowsPassengerAction(data, action)) return;
         const context = {
           flightId: data.flight.id,
           bookingId: passenger.bookingId,
@@ -621,10 +750,15 @@ function PassengerControl({
         <select
           className="w-full rounded-md border bg-background p-2"
           value={action}
+          disabled={controlsDisabled}
           onChange={event => setAction(event.target.value as PassengerAction)}
         >
           {actions.map(value => (
-            <option key={value} value={value}>
+            <option
+              key={value}
+              value={value}
+              disabled={!flightAllowsPassengerAction(data, value)}
+            >
               {labels.action(value)}
             </option>
           ))}
@@ -637,6 +771,7 @@ function PassengerControl({
           </span>
           <Input
             value={seatNumber}
+            disabled={controlsDisabled}
             maxLength={5}
             onChange={e => setSeatNumber(e.target.value)}
             placeholder={l(
@@ -655,6 +790,7 @@ function PassengerControl({
             id="dcs-boarding-token"
             aria-describedby="dcs-boarding-token-help"
             value={boardingPassToken}
+            disabled={controlsDisabled}
             maxLength={8192}
             autoComplete="off"
             onChange={e => setBoardingPassToken(e.target.value)}
@@ -685,6 +821,7 @@ function PassengerControl({
           minLength={5}
           maxLength={500}
           value={reason}
+          disabled={controlsDisabled}
           onChange={e => setReason(e.target.value)}
         />
       </label>
@@ -696,6 +833,28 @@ function PassengerControl({
           )}
         </p>
       )}
+      {data.flight.status === "completed" ? (
+        <p role="status">
+          {l(
+            "الرحلة مكتملة؛ لا يمكن تغيير حالة الراكب.",
+            "This flight is completed; passenger state changes are unavailable."
+          )}
+        </p>
+      ) : data.flight.status === "cancelled" ? (
+        <p role="status">
+          {l(
+            "الرحلة ملغاة؛ يُتاح تسجيل النزول وإلغاء السفر فقط عندما تسمح حالة الراكب المسجلة.",
+            "This flight is cancelled; only deplane and offload are available when the recorded passenger state permits."
+          )}
+        </p>
+      ) : !flightAllowsAction && !checkInClosed ? (
+        <p role="status">
+          {l(
+            "هذا الإجراء غير متاح في حالة الرحلة أو نافذتها الزمنية الحالية.",
+            "This action is unavailable for the flight's current status or time window."
+          )}
+        </p>
+      ) : null}
       <Button type="submit" disabled={unavailable}>
         {labels.action(action)}
       </Button>

@@ -455,6 +455,8 @@
     "bcbpBarcode": "باركود بطاقة الصعود وفق IATA (BCBP، PDF417) لقارئات المطار",
     "signedQr": "رمز QR موقّع من AIS للتحقق عبر الاتصال",
     "onlineVerification": "تتطلب بطاقة AIS الموقعة التحقق عبر الاتصال من أهلية الصعود الحالية.",
+    "boardingDenied": "ممنوع من الصعود",
+    "alreadyBoarded": "صعد إلى الطائرة",
     "windowClosed": "يتطلب تسجيل الصعود حجزًا نشطًا ومدفوعًا، ويفتح من 48 ساعة حتى ساعة قبل المغادرة."
   },
   "analytics": {
@@ -1654,6 +1656,9 @@
       "totalBookings": "إجمالي الحجوزات",
       "totalRevenue": "إجمالي الإيرادات",
       "totalCommission": "إجمالي العمولة",
+      "reviewCommissions": "مراجعة العمولات",
+      "noCommissionsToReview": "لا توجد عمولات معلقة أو معتمدة",
+      "awaitingSettlement": "معتمدة بانتظار إثبات الصرف",
       "pendingCommissions": "العمولات المعلقة",
       "active": "نشط",
       "inactive": "غير نشط",

@@ -2,6 +2,7 @@ import { registerBaggageConsistencyTest } from "./fixtures/baggage-consistency";
 import { registerCodeshareTests } from "./fixtures/codeshare";
 import { passengerRightsSource } from "../shared/passenger-policy";
 import { registerProviderCheckoutTests } from "./fixtures/provider-checkout";
+import { registerFamilyCheckInTests } from "./fixtures/family-check-in";
 import { registerDcsCounterTests } from "./fixtures/dcs-counter";
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
@@ -22,6 +23,7 @@ registerProviderCheckoutTests();
 registerBaggageConsistencyTest();
 registerCodeshareTests();
 registerDcsCounterTests();
+registerFamilyCheckInTests();
 
 async function loginAsAdmin(page: Page) {
   await useBrowserSession(page, "admin");

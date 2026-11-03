@@ -64,44 +64,108 @@ it("shows accepted weight and rejects a single bag that exceeds the remaining se
   expect(api.mutate).not.toHaveBeenCalled();
 });
 
-it("submits an exact passenger-sector command and recovers the same key until acknowledged", () => {
-  render(<DcsBaggageRegistration {...props} />);
-  fireEvent.change(screen.getByLabelText("Bag weight in kilograms"), {
-    target: { value: "8.5" },
+it("recovers a lost 13 kg receipt with its original command after the allowance falls from 23 kg to 10 kg", () => {
+  api.query.mockReturnValue({
+    data: {
+      ...summary(),
+      registeredWeightGrams: 0,
+      remainingWeightGrams: 23000,
+      bags: [],
+    },
+    refetch: api.refetch,
   });
-  fireEvent.change(screen.getByLabelText("Bag description (optional)"), {
-    target: { value: "Blue suitcase" },
+  const view = render(<DcsBaggageRegistration {...props} />);
+  const weight = screen.getByLabelText("Bag weight in kilograms");
+  const description = screen.getByLabelText("Bag description (optional)");
+  const handling = screen.getByLabelText("Handling instructions (optional)");
+  const register = screen.getByRole("button", {
+    name: "Register received bag",
   });
-  const button = screen.getByRole("button", { name: "Register received bag" });
-  fireEvent.click(button);
+  fireEvent.change(weight, { target: { value: "13" } });
+  fireEvent.change(description, { target: { value: "Blue suitcase" } });
+  fireEvent.change(handling, { target: { value: "Fragile" } });
+  fireEvent.click(register);
   const first = api.mutate.mock.calls[0][0];
   expect(first).toEqual({
     flightId: 41,
     bookingId: 82,
     passengerId: 92,
     segmentId: 102,
-    weight: 8.5,
+    weight: 13,
     description: "Blue suitcase",
-    specialHandling: undefined,
+    specialHandling: "Fragile",
     idempotencyKey: expect.any(String),
   });
-  fireEvent.click(button);
-  expect(api.mutate.mock.calls[1][0]).toEqual(first);
   act(() =>
     api.mutation.mock.calls
       .at(-1)![0]
-      .onSuccess({ baggage: { tagNumber: "0123000002" } })
+      .onError(new Error("Connection lost"), first)
   );
-  expect(screen.getByRole("status")).toHaveTextContent("0123000002");
-  expect(screen.getByLabelText("Bag weight in kilograms")).toHaveValue(null);
-  expect(api.refetch).toHaveBeenCalledOnce();
-  fireEvent.change(screen.getByLabelText("Bag weight in kilograms"), {
-    target: { value: "8.5" },
-  });
-  fireEvent.click(button);
-  expect(api.mutate.mock.calls[2][0].idempotencyKey).not.toBe(
+  api.query.mockReturnValue({ data: summary(), refetch: api.refetch });
+  view.rerender(<DcsBaggageRegistration {...props} disabled />);
+  expect(screen.getByText("10 kg")).toBeInTheDocument();
+  for (const input of [weight, description, handling, register])
+    expect(input).toBeDisabled();
+  const recover = screen.getByRole("button", { name: "Recover bag receipt" });
+  fireEvent.click(recover);
+  expect(api.mutate.mock.calls[1][0]).toEqual(first);
+  act(() =>
+    api.mutation.mock.calls.at(-1)![0].onError(
+      {
+        message: "Tenant temporarily unavailable",
+        data: { code: "FORBIDDEN" },
+      },
+      first
+    )
+  );
+  fireEvent.click(recover);
+  expect(api.mutate.mock.calls[2][0]).toEqual(first);
+  act(() =>
+    api.mutation.mock.calls
+      .at(-1)![0]
+      .onSuccess({ baggage: { tagNumber: "0123000001" } })
+  );
+  expect(screen.getByRole("status")).toHaveTextContent("0123000001");
+  expect(
+    screen.queryByRole("button", { name: "Recover bag receipt" })
+  ).not.toBeInTheDocument();
+  expect(weight).toHaveValue(null);
+  expect(register).toBeDisabled();
+  view.rerender(<DcsBaggageRegistration {...props} />);
+  fireEvent.change(weight, { target: { value: "5" } });
+  fireEvent.click(register);
+  expect(api.mutate.mock.calls[3][0].idempotencyKey).not.toBe(
     first.idempotencyKey
   );
+});
+
+it("allows a corrected new registration after the server rejects the allowance", () => {
+  render(<DcsBaggageRegistration {...props} />);
+  const weight = screen.getByLabelText("Bag weight in kilograms");
+  const register = screen.getByRole("button", {
+    name: "Register received bag",
+  });
+  fireEvent.change(weight, { target: { value: "9" } });
+  fireEvent.click(register);
+  const first = api.mutate.mock.calls[0][0];
+  act(() =>
+    api.mutation.mock.calls.at(-1)![0].onError(
+      {
+        message: "Allowance exceeded",
+        data: { code: "PRECONDITION_FAILED" },
+      },
+      first
+    )
+  );
+  expect(
+    screen.queryByRole("button", { name: "Recover bag receipt" })
+  ).not.toBeInTheDocument();
+  expect(weight).toBeEnabled();
+  fireEvent.change(weight, { target: { value: "4" } });
+  fireEvent.click(register);
+  const corrected = api.mutate.mock.calls[1][0];
+  expect(corrected.weight).toBe(4);
+  expect(corrected.idempotencyKey).not.toBe(first.idempotencyKey);
 });
 
 it("blocks ambiguous legacy bags and shows review instead of a made-up remaining allowance", () => {

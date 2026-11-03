@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
+import { OperationalReadState } from "@/components/OperationalReadState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,8 +105,11 @@ export default function TravelAgentManagement() {
   );
   type Agent = NonNullable<typeof agentsData>["agents"][number];
 
+  const commissionsQuery = trpc.travelAgent.getPendingCommissions.useQuery({
+    includeApproved: true,
+  });
   const { data: pendingCommissions, refetch: refetchCommissions } =
-    trpc.travelAgent.getPendingCommissions.useQuery();
+    commissionsQuery;
 
   const { data: agentStats, isLoading: statsLoading } =
     trpc.travelAgent.getAgentStats.useQuery(
@@ -245,10 +249,6 @@ export default function TravelAgentManagement() {
     updateCommissionStatusMutation.mutate({ id, status: "approved" });
   };
 
-  const handlePayCommission = (id: number) => {
-    updateCommissionStatusMutation.mutate({ id, status: "paid" });
-  };
-
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success(t("common.copied") || "Copied to clipboard");
@@ -378,7 +378,7 @@ export default function TravelAgentManagement() {
             {t("travelAgent.admin.agents") || "Agents"}
           </TabsTrigger>
           <TabsTrigger value="commissions">
-            {t("travelAgent.admin.pendingCommissions") || "Pending Commissions"}
+            {t("travelAgent.admin.reviewCommissions")}
             {pendingCommissions && pendingCommissions.length > 0 && (
               <Badge variant="destructive" className="ml-2">
                 {pendingCommissions.length}
@@ -593,15 +593,17 @@ export default function TravelAgentManagement() {
         <TabsContent value="commissions">
           <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">
-              {t("travelAgent.admin.pendingCommissions") ||
-                "Pending Commissions"}
+              {t("travelAgent.admin.reviewCommissions")}
             </h2>
-            {!pendingCommissions || pendingCommissions.length === 0 ? (
+            {commissionsQuery.isLoading || commissionsQuery.isError ? (
+              <OperationalReadState query={commissionsQuery}>
+                {null}
+              </OperationalReadState>
+            ) : !pendingCommissions || pendingCommissions.length === 0 ? (
               <div className="text-center py-12">
                 <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">
-                  {t("travelAgent.admin.noCommissions") ||
-                    "No pending commissions"}
+                  {t("travelAgent.admin.noCommissionsToReview")}
                 </p>
               </div>
             ) : (
@@ -657,28 +659,23 @@ export default function TravelAgentManagement() {
                         })}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        {commission.commissionStatus === "approved" ? (
+                          <Badge variant="outline">
+                            {t("travelAgent.admin.awaitingSettlement")}
+                          </Badge>
+                        ) : (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="bg-green-50 text-green-700"
+                            disabled={updateCommissionStatusMutation.isPending}
                             onClick={() =>
                               handleApproveCommission(commission.id)
                             }
                           >
                             <CheckCircle2 className="h-4 w-4 mr-1" />
-                            {t("travelAgent.admin.approve") || "Approve"}
+                            {t("travelAgent.admin.approve")}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-blue-50 text-blue-700"
-                            onClick={() => handlePayCommission(commission.id)}
-                          >
-                            <DollarSign className="h-4 w-4 mr-1" />
-                            {t("travelAgent.admin.markPaid") || "Mark Paid"}
-                          </Button>
-                        </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

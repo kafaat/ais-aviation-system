@@ -2889,6 +2889,10 @@ export const baggageItems = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
+    flightHistoryIdx: index("baggage_items_flight_id_row_idx").on(
+      table.flightId,
+      table.id
+    ),
     bookingIdIdx: index("baggage_items_booking_id_idx").on(table.bookingId),
     passengerIdIdx: index("baggage_items_passenger_id_idx").on(
       table.passengerId

@@ -7,6 +7,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import ExcelJS from "exceljs";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { reportsRouter } from "../routers/reports";
 
 /** Parse an .xlsx buffer back into { sheetNames, cells-per-sheet } for assertions. */
 async function readWorkbook(buffer: Buffer) {
@@ -406,18 +408,9 @@ describe("Report Export Service", () => {
   describe("PDF Export Functions", () => {
     describe("generateBookingsPDF", () => {
       it("should generate PDF buffer for bookings", async () => {
-        const mockSummary = {
-          totalBookings: 10,
-          totalRevenue: 500000,
-          confirmedBookings: 8,
-          cancelledBookings: 2,
-          totalPassengers: 25,
-        };
-
         const mockDb = {
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockResolvedValue([mockSummary]),
+          ..._createMockQueryBuilder(mockBookingsData),
+          limit: vi.fn().mockResolvedValue(mockBookingsData),
         };
 
         vi.mocked(getDb).mockResolvedValue(
@@ -524,29 +517,67 @@ describe("Report Export Service", () => {
         });
       }
     });
-    it("should apply date filters correctly", async () => {
-      const mockDb = {
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        leftJoin: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([]),
-      };
-
+    it("validates booking report filters and preserves exact instants in every format", async () => {
+      const query = _createMockQueryBuilder([]);
+      query.limit.mockResolvedValue([]);
       vi.mocked(getDb).mockResolvedValue(
-        mockDb as unknown as ReturnType<typeof getDb>
+        query as unknown as Awaited<ReturnType<typeof getDb>>
       );
+      const api = reportsRouter.createCaller({
+        user: { id: 9, role: "admin" },
+        authMethod: "jwt",
+        tenantId: null,
+        req: { headers: {} },
+        res: {},
+      } as unknown as Parameters<typeof reportsRouter.createCaller>[0]);
+      for (const run of [
+        api.exportBookingsCSV,
+        api.exportBookingsExcel,
+        api.generateBookingsPDF,
+      ]) {
+        for (const invalid of [
+          { startDate: "2026-02-30" },
+          { startDate: "2026-11-04", endDate: "2026-11-03" },
+          { status: "paid" },
+        ]) {
+          await expect(run(invalid)).rejects.toMatchObject({
+            code: "BAD_REQUEST",
+          });
+        }
+        expect(query.where).not.toHaveBeenCalled();
+        await run({
+          startDate: "2026-11-03",
+          endDate: "2026-11-03T17:15:00+03:00",
+          status: "cancelled",
+        });
+        const params = new MySqlDialect().sqlToQuery(
+          query.where.mock.calls[0][0]
+        ).params;
+        expect(params).toEqual([
+          "2026-11-03 00:00:00.000",
+          "2026-11-03 14:15:00.000",
+          "cancelled",
+        ]);
+        query.where.mockClear();
+      }
+    });
 
-      const filters: ReportFilters = {
-        startDate: new Date("2024-01-01"),
-        endDate: new Date("2024-01-31"),
-        status: "confirmed",
-      };
-
-      await exportBookingsToCSV(filters);
-
-      expect(mockDb.where).toHaveBeenCalled();
+    it("rejects oversized booking exports in all formats before rendering partial totals", async () => {
+      const query = _createMockQueryBuilder([]);
+      query.limit.mockResolvedValue(Array(10001).fill(mockBookingsData[0]));
+      vi.mocked(getDb).mockResolvedValue(
+        query as unknown as Awaited<ReturnType<typeof getDb>>
+      );
+      for (const run of [
+        exportBookingsToCSV,
+        exportBookingsToExcel,
+        generateBookingsPDF,
+      ]) {
+        await expect(run({})).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message: expect.stringContaining("10,000 bookings"),
+        });
+      }
     });
 
     it("should handle missing filters gracefully", async () => {

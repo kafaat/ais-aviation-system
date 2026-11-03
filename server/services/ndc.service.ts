@@ -1,3 +1,4 @@
+import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { LOCAL_NDC_VERSION as NDC_VERSION } from "./ndc-capabilities";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import {
@@ -1395,6 +1396,7 @@ export async function cancelOrder(
         code: "BAD_REQUEST",
         message: `NDC order cannot be cancelled. Current status: ${order.status}`,
       });
+    await assertNoFlownCouponForCancellation(tx, booking.id);
     await cancelBookingResources(tx, booking, cancelReason, actorId);
     const now = new Date();
     const history = safeParseJson<NdcServicingAction[]>(

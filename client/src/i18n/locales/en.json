@@ -455,6 +455,8 @@
     "bcbpBarcode": "IATA boarding pass barcode (BCBP, PDF417) for airport readers",
     "signedQr": "Signed AIS QR for online verification",
     "onlineVerification": "This signed AIS pass requires online verification of current eligibility.",
+    "boardingDenied": "Boarding denied",
+    "alreadyBoarded": "Already boarded",
     "windowClosed": "Check-in requires a paid active reservation and is open from 48 hours until 1 hour before departure."
   },
   "analytics": {
@@ -1654,6 +1656,9 @@
       "totalBookings": "Total Bookings",
       "totalRevenue": "Total Revenue",
       "totalCommission": "Total Commission",
+      "reviewCommissions": "Commission review",
+      "noCommissionsToReview": "No pending or approved commissions",
+      "awaitingSettlement": "Approved — awaiting payout evidence",
       "pendingCommissions": "Pending Commissions",
       "active": "Active",
       "inactive": "Inactive",

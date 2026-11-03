@@ -115,9 +115,9 @@ export async function assertSeatSelectionContext(
     throw new Error("A current checkout hold is required to select seats");
 }
 
-export function assertDepartureOpen(
-  c: Awaited<ReturnType<typeof lockDepartureContext>>,
-  purpose: "check_in" | "boarding"
+/** Admission and attendance recovery require the same current funded booking. */
+export function assertFundedDepartureReservation(
+  c: Awaited<ReturnType<typeof lockDepartureContext>>
 ) {
   if (
     c.booking.status !== "confirmed" ||
@@ -128,6 +128,13 @@ export function assertDepartureOpen(
       code: "PRECONDITION_FAILED",
       message: "An active paid reservation is required",
     });
+}
+
+export function assertDepartureOpen(
+  c: Awaited<ReturnType<typeof lockDepartureContext>>,
+  purpose: "check_in" | "boarding"
+) {
+  assertFundedDepartureReservation(c);
   const remaining = c.flight.departureTime.getTime() - Date.now();
   if (
     !["scheduled", "delayed"].includes(c.flight.status) ||
@@ -172,7 +179,6 @@ export async function checkInPassengersTx(
     bookingId: number;
     flightId?: number;
     assignments: { passengerId: number; seatNumber?: string }[];
-    requireAllPassengers?: boolean;
     owner?: { userId: number; tenantId: number | null };
   }
 ) {
@@ -203,12 +209,12 @@ export async function checkInPassengersTx(
     !ids.length ||
     new Set(ids).size !== ids.length ||
     new Set(numbers).size !== numbers.length ||
-    ids.some(id => !ps.some(p => p.id === id)) ||
-    (input.requireAllPassengers && ps.length !== ids.length)
+    ids.some(id => !ps.some(p => p.id === id))
   )
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Supply each passenger exactly once with distinct seats",
+      message:
+        "Select passengers from this booking once each, with distinct seats",
     });
   const results = [];
   for (const a of input.assignments) {
