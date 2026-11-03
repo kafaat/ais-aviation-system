@@ -2,6 +2,7 @@
  * These assertions document observed defects on 3a140729; PASS means reproduced,
  * not correct product behaviour. All outbound HTTP and Stripe refund calls are stubbed.
  */
+import { fixtureSurname } from "./fixture-passenger";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
@@ -102,7 +103,7 @@ async function booking(
       tenantId: id,
       bookingId: id + offset,
       firstName: "Synthetic",
-      lastName: `Traveler${offset}-${i}`,
+      lastName: fixtureSurname(offset, i),
       nationality: "SA",
       passportNumber: `AU${offset}P${i}`,
       passportExpiry: hour(24 * 365),
@@ -136,9 +137,30 @@ try {
     .insert(s.airlines)
     .values({ id, code: "ZY", name: "Synthetic audit" });
   await db.insert(s.airports).values([
-    { id, code: "ZZA", name: "A", city: "A", country: "SA" },
-    { id: id + 1, code: "ZZB", name: "B", city: "B", country: "SA" },
-    { id: id + 2, code: "ZZC", name: "C", city: "C", country: "AE" },
+    {
+      id,
+      code: "ZZA",
+      name: "A",
+      city: "A",
+      country: "SA",
+      timezone: "Asia/Riyadh",
+    },
+    {
+      id: id + 1,
+      code: "ZZB",
+      name: "B",
+      city: "B",
+      country: "SA",
+      timezone: "Asia/Riyadh",
+    },
+    {
+      id: id + 2,
+      code: "ZZC",
+      name: "C",
+      city: "C",
+      country: "AE",
+      timezone: "Asia/Dubai",
+    },
   ]);
   await db.insert(s.flights).values(
     Array.from({ length: 14 }, (_, i) => ({
