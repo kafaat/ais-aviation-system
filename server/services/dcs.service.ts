@@ -27,8 +27,9 @@ import {
   crewAssignments,
   loadPlans,
   baggageItems,
+  dcsPassengerStates,
 } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, notExists, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -318,6 +319,37 @@ async function readFlightManifest(db: SettlementTx, flightId: number) {
     .limit(1);
 
   const membership = manifestBookingCondition(flightId);
+  // A financial reversal can remove someone from the reservation list while
+  // their physical boarding is still recorded, even when they have no bags.
+  const [unlistedBoarding] = await db
+    .select({ passengerId: dcsPassengerStates.passengerId })
+    .from(dcsPassengerStates)
+    .where(
+      and(
+        eq(dcsPassengerStates.flightId, flightId),
+        eq(dcsPassengerStates.state, "boarded"),
+        notExists(
+          db
+            .select({ id: passengers.id })
+            .from(bookings)
+            .innerJoin(passengers, eq(passengers.bookingId, bookings.id))
+            .where(
+              and(
+                membership,
+                eq(bookings.id, dcsPassengerStates.bookingId),
+                eq(passengers.id, dcsPassengerStates.passengerId)
+              )
+            )
+        )
+      )
+    )
+    .limit(1);
+  if (unlistedBoarding)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "A boarded passenger is missing from the flight manifest; departure reconciliation is required",
+    });
   // Only unsegmented legacy bookings can use a booking-wide seat. Multiple
   // competing active assignments cannot establish a reliable seat number.
   const confirmedBookings = await db
