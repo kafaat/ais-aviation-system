@@ -36,6 +36,7 @@ export const specialServicesRouter = router({
       z.object({
         bookingId: z.number(),
         passengerId: z.number(),
+        flightId: z.number().int().positive().optional(),
         serviceType: z.enum([
           "meal",
           "wheelchair",
@@ -87,6 +88,7 @@ export const specialServicesRouter = router({
         const service = await specialServicesService.requestService({
           bookingId: input.bookingId,
           passengerId: input.passengerId,
+          flightId: input.flightId,
           serviceType: input.serviceType,
           serviceCode: input.serviceCode,
           details: input.details,

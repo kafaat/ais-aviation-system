@@ -49,6 +49,22 @@ export const capabilityCatalog = [
     requirement: "Verified departure-control provider and dispatch acceptance",
   },
   {
+    id: "dcsCounterLifecycle",
+    implementation: "implemented",
+    owner: "dcs-operations.service and departure-control.service",
+    consumer: "dcsOperations and /airline/dcs",
+    requirement:
+      "Tenant-scoped paid passenger/flight check-in, open/close/reopen, board/deplane/deny/allow/offload with transactional command receipts and actor/reason history. New travel retains document, seat and time-window rules. Deplane/offload may correct current attendance after the schedule cutoff or flight cancellation while funding, active-segment, tenant, seat and baggage guards remain required; completed/refunded cases require reconciliation. Physical baggage blocks offload until a verified withdrawal workflow exists; station/device and dispatch acceptance remain external.",
+  },
+  {
+    id: "staffBaggageRegistration",
+    implementation: "implemented",
+    owner: "baggage-registration.service and baggage-custody.service",
+    consumer: "baggage.register, baggage.registrationSummary and /airline/dcs",
+    requirement:
+      "Scoped airline staff, exact confirmed passenger/flight/segment, current check-in, funded cumulative allowance and payload-bound transactional idempotency. Configured carrier numeric code required; ambiguous legacy baggage requires review. Counter receipts do not replace signed device custody or certified hardware acceptance.",
+  },
+  {
     id: "gdsSynchronization",
     implementation: "demo",
     owner: "gds.service",

@@ -10,10 +10,12 @@ export function registerBaggageConsistencyTest() {
     page,
   }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
-    await useBrowserSession(page, "regular");
+    await useBrowserSession(page, "reporting");
     const client = rpc(page);
     const user = await client.auth.me.query();
     if (!user) throw new Error("Passenger session missing");
+    expect(user.role).toBe("user");
+    expect(user.tenantId).toEqual(expect.any(Number));
     const bag = (await client.ancillary.getAvailable.query({})).find(
       item => item.code === "BAG_20KG"
     );
@@ -24,7 +26,7 @@ export function registerBaggageConsistencyTest() {
     ] as const;
     const fixtures = [];
     for (const { cabinClass, firstName, totalKg } of scenarios) {
-      const flightId = await fixtureFlight();
+      const flightId = await fixtureFlight(user.tenantId);
       // A domestic, check-in-eligible sector with a real cabin seat.
       await sqlRows(
         "UPDATE flights f JOIN airports o ON o.id=f.originId SET f.departureTime=UTC_TIMESTAMP()+INTERVAL 12 HOUR, f.arrivalTime=UTC_TIMESTAMP()+INTERVAL 14 HOUR, f.destinationId=(SELECT a.id FROM airports a WHERE a.country=o.country AND a.id<>o.id ORDER BY a.id LIMIT 1) WHERE f.id=?",

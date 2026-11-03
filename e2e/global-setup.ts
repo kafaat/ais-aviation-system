@@ -4,11 +4,10 @@
  * Registers test users via auth service (creates DB rows with passwordHash),
  * then promotes the admin user's role via direct SQL.
  */
-import mysql from "mysql2/promise";
+import mysql, { type RowDataPacket } from "mysql2/promise";
 import { disposableDatabaseUrl } from "./disposable-database";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { FullConfig } from "@playwright/test";
+import { testUsers } from "./fixtures/test-data";
 import { prepareBrowserSessions } from "./fixtures/browser-session";
 
 const AUTH_SERVICE_URL =
@@ -23,10 +22,21 @@ const TEST_USERS = [
     role: "user" as const,
   },
   {
+    ...testUsers.reporting,
+    name: "Reporting User",
+    role: "user" as const,
+  },
+  {
     name: "Admin User",
     email: "admin@ais-aviation.com",
     password: "AdminPassword123!",
     role: "admin" as const,
+  },
+  {
+    name: "Operations User",
+    email: "test.ops@example.com",
+    password: "TestPassword123!",
+    role: "ops" as const,
   },
 ];
 
@@ -69,7 +79,26 @@ async function promoteAdminUsers() {
         [user.email]
       );
     }
-    console.info("[e2e-setup] Admin roles promoted");
+    // The shared reporting/departure passenger and operator belong to one
+    // synthetic airline. The regular owner and admin remain separate accounts.
+    await connection.execute(
+      "INSERT IGNORE INTO tenants (slug, name, status) VALUES ('e2e-dcs-operations', 'Synthetic DCS E2E airline', 'active')"
+    );
+    const [tenants] = await connection.execute<
+      (RowDataPacket & { id: number })[]
+    >("SELECT id FROM tenants WHERE slug = 'e2e-dcs-operations'");
+    if (tenants.length !== 1) throw new Error("DCS E2E tenant unavailable");
+    await connection.execute(
+      "UPDATE users SET role = 'ops', tenantId = ? WHERE email = 'test.ops@example.com'",
+      [tenants[0].id]
+    );
+    // The reporting customer doubles as the other airline's passenger in the
+    // agency ownership test, using the same authenticated browser session.
+    await connection.execute(
+      "UPDATE users SET tenantId = ? WHERE email = ? AND role = 'user'",
+      [tenants[0].id, testUsers.reporting.email]
+    );
+    console.info("[e2e-setup] Admin and airline fixtures prepared");
   } finally {
     await connection.end();
   }
@@ -80,31 +109,9 @@ export default async function globalSetup(config: FullConfig) {
   console.info("[e2e-setup] Starting E2E test user setup...");
   await registerWithAuthService();
   await promoteAdminUsers();
-  // Authenticated consent is server-authoritative; localStorage only dismisses
-  // the anonymous banner. Use the real writer for the two synthetic accounts.
-  // The child compiles the server graph through tsx from a cold cache, which
-  // on a busy runner has exceeded 30 seconds; a timeout kills it silently,
-  // so the failure names the exit code, the signal and the child's stderr.
-  try {
-    await promisify(execFile)(
-      process.execPath,
-      ["--import", "tsx", "scripts/e2e/prepare-consent.ts"],
-      { timeout: 120000 }
-    );
-  } catch (error) {
-    const child = error as NodeJS.ErrnoException & {
-      code?: number | string;
-      signal?: NodeJS.Signals | null;
-      stderr?: string;
-    };
-    throw new Error(
-      `[e2e-setup] prepare-consent failed (code=${String(child.code)}, signal=${String(child.signal)})` +
-        (child.stderr?.trim() ? `\n${child.stderr.trim()}` : ""),
-      { cause: error }
-    );
-  }
-  console.info("[e2e-setup] Consent recorded for both accounts");
   const cleanup = await prepareBrowserSessions(config);
-  console.info("[e2e-setup] Real user/admin UI logins complete");
+  console.info(
+    "[e2e-setup] Four real regular/reporting/admin/ops UI logins and consent complete"
+  );
   return cleanup;
 }

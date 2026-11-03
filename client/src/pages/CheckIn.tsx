@@ -12,6 +12,7 @@ import { SeatMap } from "@/components/SeatMap";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { BaggageEntitlement } from "@/components/BaggageEntitlement";
+import { PassengerTravelDocuments } from "@/components/PassengerTravelDocuments";
 
 function BoardingPass({
   bookingId,
@@ -23,10 +24,11 @@ function BoardingPass({
   passengerId: number;
 }) {
   const { t } = useTranslation();
-  const { data, error, isLoading } = trpc.seatMap.getBoardingPass.useQuery(
-    { flightId, passengerId },
-    { retry: false, refetchOnWindowFocus: true, staleTime: 0 }
-  );
+  const { data, error, isFetching, isPaused } =
+    trpc.seatMap.getBoardingPass.useQuery(
+      { flightId, passengerId },
+      { retry: false, refetchOnWindowFocus: true, staleTime: 0 }
+    );
   const [qr, setQr] = useState<{ token: string; image: string }>();
   // IATA BCBP (Resolution 792) PDF417 for airport readers; rendered lazily so
   // the barcode library stays out of the main bundle.
@@ -68,7 +70,7 @@ function BoardingPass({
       active = false;
     };
   }, [data]);
-  if (isLoading) return <p role="status">{t("common.loading")}</p>;
+  if (isFetching || isPaused) return <p role="status">{t("common.loading")}</p>;
   if (error || !data || qr?.token !== data.barcodeData)
     return <p role="alert">{error?.message || t("checkIn.passUnavailable")}</p>;
   return (
@@ -147,10 +149,19 @@ function BoardingPass({
 export default function CheckIn() {
   const { t } = useTranslation();
   const { isAuthenticated } = useAuth();
-  const [pnr, setPnr] = useState("");
-  const [searched, setSearched] = useState("");
+  const [pnr, setPnr] = useState(() => {
+    const issuedPnr: unknown = window.history.state?.checkInPnr;
+    return typeof issuedPnr === "string" && /^[A-Z0-9]{6}$/.test(issuedPnr)
+      ? issuedPnr
+      : "";
+  });
+  const [searched, setSearched] = useState(pnr);
   const [flightId, setFlightId] = useState<number>();
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selection, setSelection] = useState<{
+    key: string;
+    seats: string[];
+  }>();
+  const [excluded, setExcluded] = useState<number[]>([]);
   const utils = trpc.useUtils();
   const booking = trpc.bookings.getByPNR.useQuery(
     { pnr: searched },
@@ -166,14 +177,30 @@ export default function CheckIn() {
   );
   const leg =
     states.data?.find(l => l.flightId === flightId) ?? states.data?.[0];
+  const eligible =
+    leg?.passengers.filter(
+      p =>
+        p.departureState === "not_checked_in" ||
+        p.departureState === "offloaded"
+    ) ?? [];
+  const chosen = eligible.filter(p => !excluded.includes(p.passengerId));
+  const seatMapKey = [
+    booking.data?.id,
+    leg?.flightId,
+    ...chosen.map(p => p.passengerId),
+  ].join(":");
   const checkIn = trpc.bookings.checkIn.useMutation({
     onSuccess: async () => {
-      setSelected([]);
+      setSelection(undefined);
+      setExcluded([]);
       await utils.bookings.getDepartureState.invalidate();
       await utils.seatMap.invalidate();
       toast.success(t("checkIn.successMessage"));
     },
-    onError: error => toast.error(error.message),
+    onError: async error => {
+      toast.error(error.message);
+      await utils.bookings.getDepartureState.invalidate();
+    },
   });
   if (!isAuthenticated)
     return (
@@ -194,7 +221,8 @@ export default function CheckIn() {
             return;
           }
           setFlightId(undefined);
-          setSelected([]);
+          setSelection(undefined);
+          setExcluded([]);
           setSearched(pnr);
         }}
       >
@@ -229,7 +257,8 @@ export default function CheckIn() {
                 variant={l.flightId === leg?.flightId ? "default" : "outline"}
                 onClick={() => {
                   setFlightId(l.flightId);
-                  setSelected([]);
+                  setSelection(undefined);
+                  setExcluded([]);
                 }}
               >
                 {l.flightNumber} ·{" "}
@@ -244,41 +273,88 @@ export default function CheckIn() {
                 {new Date(leg.departureTime).toLocaleString()}
               </p>
               <div className="space-y-2 print:hidden">
-                {passengers.data?.map(p => (
-                  <p key={p.id}>
-                    {p.firstName} {p.lastName} ·{" "}
-                    {leg.passengers.find(s => s.passengerId === p.id)
-                      ?.seatNumber ?? t("checkIn.autoAssign")}
-                  </p>
-                ))}
+                {passengers.data?.map(p => {
+                  const row = leg.passengers.find(s => s.passengerId === p.id);
+                  if (!row) return null;
+                  const name = p.firstName + " " + p.lastName;
+                  return (
+                    <div key={p.id}>
+                      {leg.open &&
+                      eligible.some(e => e.passengerId === p.id) ? (
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={!excluded.includes(p.id)}
+                            disabled={checkIn.isPending}
+                            onChange={event => {
+                              setExcluded(
+                                event.target.checked
+                                  ? excluded.filter(id => id !== p.id)
+                                  : [...excluded, p.id]
+                              );
+                              setSelection(undefined);
+                            }}
+                          />{" "}
+                          {name}
+                        </label>
+                      ) : (
+                        name
+                      )}
+                      {" · "}
+                      {row.departureState === "boarding_denied"
+                        ? t("checkIn.boardingDenied")
+                        : row.departureState === "boarded"
+                          ? t("checkIn.alreadyBoarded")
+                          : (row.seatNumber ?? t("checkIn.autoAssign"))}
+                    </div>
+                  );
+                })}
               </div>
-              {leg.passengers.some(p => !p.checkedIn) && (
+              {passengers.data && (
+                <PassengerTravelDocuments
+                  key={`${booking.data.id}:${leg.flightId}`}
+                  bookingId={booking.data.id}
+                  flightId={leg.flightId}
+                  passengers={passengers.data.filter(passenger =>
+                    leg.passengers.some(row => row.passengerId === passenger.id)
+                  )}
+                />
+              )}
+              {eligible.length > 0 && (
                 <section className="space-y-4 print:hidden">
                   {leg.open ? (
                     <>
-                      <SeatMap
-                        key={`${booking.data.id}:${leg.flightId}`}
-                        flightId={leg.flightId}
-                        cabinClass={booking.data.cabinClass}
-                        maxSeats={
-                          leg.passengers.filter(p => !p.checkedIn).length
-                        }
-                        onSeatSelect={seats =>
-                          setSelected(seats.map(s => s.id))
-                        }
-                      />
+                      {chosen.length > 0 && (
+                        <SeatMap
+                          key={seatMapKey}
+                          flightId={leg.flightId}
+                          cabinClass={booking.data.cabinClass}
+                          maxSeats={chosen.length}
+                          onSeatSelect={seats =>
+                            setSelection({
+                              key: seatMapKey,
+                              seats: seats.map(s => s.id),
+                            })
+                          }
+                        />
+                      )}
                       <Button
-                        disabled={checkIn.isPending || !passengers.data?.length}
+                        disabled={
+                          checkIn.isPending ||
+                          states.isFetching ||
+                          !chosen.length ||
+                          !passengers.data?.length
+                        }
                         onClick={() => {
-                          let next = 0;
                           checkIn.mutate({
                             bookingId: booking.data.id,
                             flightId: leg.flightId,
-                            seatAssignments: leg.passengers.map(p => ({
+                            seatAssignments: chosen.map((p, index) => ({
                               passengerId: p.passengerId,
-                              seatNumber: p.checkedIn
-                                ? (p.seatNumber ?? undefined)
-                                : selected[next++],
+                              seatNumber:
+                                selection?.key === seatMapKey
+                                  ? selection.seats[index]
+                                  : undefined,
                             })),
                           });
                         }}
@@ -294,7 +370,7 @@ export default function CheckIn() {
                 </section>
               )}
               {leg.passengers
-                .filter(p => p.checkedIn)
+                .filter(p => p.departureState === "checked_in")
                 .map(
                   p =>
                     booking.data && (

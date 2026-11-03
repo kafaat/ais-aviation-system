@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     bookings: {
+      getDepartureState: { useQuery: () => ({ data: [] }) },
       myBookings: {
         useQuery: () => ({
           data: state.data,

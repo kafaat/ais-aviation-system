@@ -1,40 +1,16 @@
-import { createTRPCClient, httpLink } from "@trpc/client";
 import type { Page } from "@playwright/test";
-import superjson from "superjson";
 import mysql, {
   type ResultSetHeader,
   type RowDataPacket,
 } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import Redis from "ioredis";
-import type { AppRouter } from "../../server/routers";
 import { disposableDatabaseUrl } from "../disposable-database";
 import { useBrowserSession } from "./browser-session";
+import { rpc } from "./rpc";
 
-export function rpc(page: Page) {
-  return createTRPCClient<AppRouter>({
-    links: [
-      httpLink({
-        url:
-          (process.env.E2E_BASE_URL ?? "http://localhost:3000") + "/api/trpc",
-        transformer: superjson,
-        fetch: async (url, init) => {
-          const result = await page.request.fetch(String(url), {
-            method: init?.method,
-            data: init?.body as string | undefined,
-            headers: Object.fromEntries(
-              new Headers(init?.headers as HeadersInit)
-            ),
-          });
-          return new Response(new Uint8Array(await result.body()), {
-            status: result.status(),
-            headers: result.headers(),
-          });
-        },
-      }),
-    ],
-  });
-}
+export { rpc };
+
 export async function sqlRows<T extends RowDataPacket>(
   sql: string,
   params: (number | string)[] = []
@@ -46,7 +22,7 @@ export async function sqlRows<T extends RowDataPacket>(
     await db.end();
   }
 }
-export async function fixtureFlight() {
+export async function fixtureFlight(tenantId: number | null = null) {
   const db = await mysql.createConnection(disposableDatabaseUrl());
   try {
     await db.beginTransaction();
@@ -56,7 +32,8 @@ export async function fixtureFlight() {
       // date finds it whatever zone the seeded origin airport carries and
       // whatever hour the suite runs (it failed between 21:00 and 24:00 UTC,
       // when the Riyadh day had already turned).
-      "INSERT INTO flights (flightNumber, airlineId, originId, destinationId, departureTime, arrivalTime, aircraftType, economySeats, businessSeats, economyPrice, businessPrice, economyAvailable, businessAvailable) SELECT flightNumber, airlineId, originId, destinationId, TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '12:00:00'), TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '14:00:00'), 'B737', 10, 2, 10000, 20000, 10, 2 FROM flights ORDER BY id LIMIT 1"
+      "INSERT INTO flights (tenantId, flightNumber, airlineId, originId, destinationId, departureTime, arrivalTime, aircraftType, economySeats, businessSeats, economyPrice, businessPrice, economyAvailable, businessAvailable) SELECT ?, flightNumber, airlineId, originId, destinationId, TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '12:00:00'), TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '14:00:00'), 'B737', 10, 2, 10000, 20000, 10, 2 FROM flights ORDER BY id LIMIT 1",
+      [tenantId]
     );
     if (!flight.affectedRows) throw new Error("Seed flight missing");
     // The disposable seed uses small auto-increment IDs. Keep each fixture
@@ -88,10 +65,10 @@ export async function ownedBooking(
   account: Parameters<typeof useBrowserSession>[1] = "regular"
 ) {
   await useBrowserSession(page, account);
-  const client = rpc(page),
-    flightId = await fixtureFlight();
+  const client = rpc(page);
   const user = await client.auth.me.query();
   if (!user) throw new Error("Authentication failed");
+  const flightId = await fixtureFlight(user.tenantId);
   const command = {
     flightId,
     cabinClass: "economy" as const,
@@ -115,6 +92,12 @@ export async function ownedBooking(
       amount: booking.totalAmount,
     });
   return { booking, flightId, userId: user.id, command };
+}
+
+/** Report/export setup has its own customer quota and remains distinct from the
+ * administrator reading the results. Creation and funding still use real APIs. */
+export function reportBooking(page: Page, funded = false) {
+  return ownedBooking(page, funded, undefined, "reporting");
 }
 
 async function invalidateFlightSearchCache(): Promise<void> {

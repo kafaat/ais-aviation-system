@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getDb } from "../db";
 import {
@@ -9,6 +10,11 @@ import {
   airports,
   bookings,
   passengers,
+  tenants,
+  bookingSegments,
+  seatInventory,
+  seatMaps,
+  idempotencyRequests,
 } from "../../drizzle/schema";
 import * as baggageService from "./baggage.service";
 import { eq } from "drizzle-orm";
@@ -19,6 +25,9 @@ const dbAvailable = await isDatabaseAvailable();
 describe.skipIf(!dbAvailable)("Baggage Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
+  let testTenantId: number;
+  let testSegmentId: number;
+  let testSeatMapId: number;
   let testAirlineId: number;
   let testOriginId: number;
   let testDestinationId: number;
@@ -28,9 +37,50 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
   let testBaggageId: number;
   let testTagNumber: string;
 
+  async function register(data: {
+    bookingId: number;
+    passengerId: number;
+    weight: number;
+    description?: string;
+    specialHandling?: string;
+  }) {
+    return baggageService.registerBaggage(
+      {
+        ...data,
+        flightId: testFlightId,
+        segmentId: testSegmentId,
+        idempotencyKey: randomUUID(),
+      },
+      { id: testUserId, role: "ops", tenantId: testTenantId }
+    );
+  }
+
+  // Existing historical bags remain readable/editable. Tracking-only tests seed
+  // them directly instead of bypassing the new physical acceptance authority.
+  async function seedLegacyBag(weight: number, description: string) {
+    if (!db) throw new Error("Database not available");
+    const tagNumber = baggageService.generateBaggageTag("065");
+    const [result] = await db.insert(baggageItems).values({
+      bookingId: testBookingId,
+      passengerId: testPassengerId,
+      tagNumber,
+      weight: weight.toFixed(2),
+      description,
+      status: "checked_in",
+    });
+    return { id: result.insertId, tagNumber };
+  }
+
   beforeAll(async () => {
     db = await getDb();
     if (!db) throw new Error("Database not available");
+
+    const [tenant] = await db.insert(tenants).values({
+      slug: `baggage-test-${randomUUID()}`,
+      name: "Baggage Test Airline",
+      status: "active",
+    });
+    testTenantId = tenant.insertId;
 
     // Create test user
     const [userResult] = await db.insert(users).values({
@@ -38,7 +88,8 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
       name: "Test User Baggage",
       email: "test-baggage@services.com",
       loginMethod: "test",
-      role: "user",
+      role: "ops",
+      tenantId: testTenantId,
     });
     testUserId = userResult.insertId;
 
@@ -70,10 +121,11 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
     // Create test flight
     const [flightResult] = await db.insert(flights).values({
       flightNumber: "BG123",
+      tenantId: testTenantId,
       airlineId: testAirlineId,
       originId: testOriginId,
       destinationId: testDestinationId,
-      departureTime: new Date(Date.now() + 86400000 * 7), // 7 days in future
+      departureTime: new Date(Date.now() + 3 * 3600000), // inside the acceptance window
       arrivalTime: new Date(Date.now() + 90000000),
       economySeats: 150,
       businessSeats: 20,
@@ -87,6 +139,9 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
     // Create test booking
     const [bookingResult] = await db.insert(bookings).values({
       userId: testUserId,
+      tenantId: testTenantId,
+      seatsReserved: true,
+      checkedIn: true,
       flightId: testFlightId,
       bookingReference: "BGTST1",
       pnr: "BGTEST",
@@ -101,12 +156,46 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
     // Create test passenger
     const [passengerResult] = await db.insert(passengers).values({
       bookingId: testBookingId,
+      tenantId: testTenantId,
       type: "adult",
       title: "Mr",
       firstName: "John",
       lastName: "Doe",
     });
     testPassengerId = passengerResult.insertId;
+    const [segment] = await db.insert(bookingSegments).values({
+      bookingId: testBookingId,
+      flightId: testFlightId,
+      segmentOrder: 1,
+      status: "confirmed",
+      seatsReserved: true,
+      departureDate: new Date(Date.now() + 3 * 3600000),
+    });
+    testSegmentId = segment.insertId;
+    const [seatMap] = await db.insert(seatMaps).values({
+      aircraftType: "Baggage Test",
+      airlineId: testAirlineId,
+      configName: "Test seat",
+      cabinLayout: "{}",
+      totalSeats: 1,
+      economySeats: 1,
+    });
+    testSeatMapId = seatMap.insertId;
+    await db.insert(seatInventory).values({
+      flightId: testFlightId,
+      seatMapId: testSeatMapId,
+      seatNumber: "1A",
+      row: 1,
+      column: "A",
+      cabinClass: "economy",
+      seatType: "window",
+      bookingId: testBookingId,
+      passengerId: testPassengerId,
+      status: "checked_in",
+      checkedInAt: new Date(),
+      checkInNonce: randomUUID(),
+      boardingSequence: 1,
+    });
   });
 
   afterAll(async () => {
@@ -122,6 +211,16 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
     await db
       .delete(baggageItems)
       .where(eq(baggageItems.bookingId, testBookingId));
+    await db
+      .delete(idempotencyRequests)
+      .where(eq(idempotencyRequests.userId, testUserId));
+    await db
+      .delete(seatInventory)
+      .where(eq(seatInventory.flightId, testFlightId));
+    await db.delete(seatMaps).where(eq(seatMaps.id, testSeatMapId));
+    await db
+      .delete(bookingSegments)
+      .where(eq(bookingSegments.bookingId, testBookingId));
     await db.delete(passengers).where(eq(passengers.bookingId, testBookingId));
     await db.delete(bookings).where(eq(bookings.id, testBookingId));
     await db.delete(flights).where(eq(flights.id, testFlightId));
@@ -129,6 +228,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
     await db.delete(airports).where(eq(airports.id, testOriginId));
     await db.delete(airports).where(eq(airports.id, testDestinationId));
     await db.delete(users).where(eq(users.id, testUserId));
+    await db.delete(tenants).where(eq(tenants.id, testTenantId));
   });
 
   describe("generateBaggageTag", () => {
@@ -150,7 +250,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
 
   describe("registerBaggage", () => {
     it("should register baggage for a passenger", async () => {
-      const baggage = await baggageService.registerBaggage({
+      const baggage = await register({
         bookingId: testBookingId,
         passengerId: testPassengerId,
         weight: 23,
@@ -174,7 +274,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
 
     it("should reject invalid booking ID", async () => {
       await expect(
-        baggageService.registerBaggage({
+        register({
           bookingId: 999999,
           passengerId: testPassengerId,
           weight: 20,
@@ -184,7 +284,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
 
     it("should reject invalid passenger ID", async () => {
       await expect(
-        baggageService.registerBaggage({
+        register({
           bookingId: testBookingId,
           passengerId: 999999,
           weight: 20,
@@ -194,7 +294,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
 
     it("should reject weight exceeding 32kg", async () => {
       await expect(
-        baggageService.registerBaggage({
+        register({
           bookingId: testBookingId,
           passengerId: testPassengerId,
           weight: 35,
@@ -204,7 +304,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
 
     it("should reject weight of 0 or negative", async () => {
       await expect(
-        baggageService.registerBaggage({
+        register({
           bookingId: testBookingId,
           passengerId: testPassengerId,
           weight: 0,
@@ -351,12 +451,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
 
     beforeAll(async () => {
       // Create a new baggage to test lost reporting
-      const baggage = await baggageService.registerBaggage({
-        bookingId: testBookingId,
-        passengerId: testPassengerId,
-        weight: 15,
-        description: "Red carry-on bag",
-      });
+      const baggage = await seedLegacyBag(15, "Red carry-on bag");
       lostBaggageId = baggage.id;
       lostTagNumber = baggage.tagNumber;
     });
@@ -412,12 +507,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
 
     beforeAll(async () => {
       // Create and mark as lost
-      const baggage = await baggageService.registerBaggage({
-        bookingId: testBookingId,
-        passengerId: testPassengerId,
-        weight: 18,
-        description: "Blue duffel bag",
-      });
+      const baggage = await seedLegacyBag(18, "Blue duffel bag");
       foundBaggageId = baggage.id;
       foundTagNumber = baggage.tagNumber;
 

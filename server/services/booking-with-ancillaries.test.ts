@@ -25,10 +25,9 @@ describe.skipIf(!dbAvailable)("Booking with Ancillaries Integration", () => {
   let testUserId: number;
   let testFlightId: number;
 
-  // Fixed IDs for cleanup
-  const testAirlineId = 999701;
-  const testOriginId = 999702;
-  const testDestinationId = 999703;
+  let testAirlineId: number;
+  let testOriginId: number;
+  let testDestinationId: number;
 
   beforeAll(async () => {
     const db = await getDb();
@@ -48,30 +47,28 @@ describe.skipIf(!dbAvailable)("Booking with Ancillaries Integration", () => {
       (userResult as any).insertId || (userResult as any)[0]?.insertId;
 
     // Create test airline
-    await db.insert(airlines).values({
-      id: testAirlineId,
+    const [airlineResult] = await db.insert(airlines).values({
       code: "BA9",
       name: "Test Booking Ancillary Airline",
       active: true,
     });
+    testAirlineId = airlineResult.insertId;
 
-    // Create test airports
-    await db.insert(airports).values([
-      {
-        id: testOriginId,
-        code: "BA1",
-        name: "Test Booking Origin",
-        city: "Test City 1",
-        country: "Saudi Arabia",
-      },
-      {
-        id: testDestinationId,
-        code: "BA2",
-        name: "Test Booking Destination",
-        city: "Test City 2",
-        country: "Saudi Arabia",
-      },
-    ]);
+    // Allocate IDs through MySQL, as the other parallel suites do.
+    const [originResult] = await db.insert(airports).values({
+      code: "BA1",
+      name: "Test Booking Origin",
+      city: "Test City 1",
+      country: "Saudi Arabia",
+    });
+    testOriginId = originResult.insertId;
+    const [destinationResult] = await db.insert(airports).values({
+      code: "BA2",
+      name: "Test Booking Destination",
+      city: "Test City 2",
+      country: "Saudi Arabia",
+    });
+    testDestinationId = destinationResult.insertId;
 
     // Create test flight
     const tomorrow = new Date();
@@ -135,9 +132,12 @@ describe.skipIf(!dbAvailable)("Booking with Ancillaries Integration", () => {
     if (testUserId) {
       await db.delete(users).where(eq(users.id, testUserId));
     }
-    await db.delete(airports).where(eq(airports.id, testOriginId));
-    await db.delete(airports).where(eq(airports.id, testDestinationId));
-    await db.delete(airlines).where(eq(airlines.id, testAirlineId));
+    if (testOriginId)
+      await db.delete(airports).where(eq(airports.id, testOriginId));
+    if (testDestinationId)
+      await db.delete(airports).where(eq(airports.id, testDestinationId));
+    if (testAirlineId)
+      await db.delete(airlines).where(eq(airlines.id, testAirlineId));
   });
 
   it("should create booking without ancillaries", async () => {

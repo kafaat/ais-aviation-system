@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { downloadFile } from "@/lib/downloadFile";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -167,6 +168,9 @@ function StatsCards({
     { flightId: parseInt(flightId) },
     { enabled: !!flightId && !isNaN(parseInt(flightId)) }
   );
+  const capability = trpc.apis.getSubmissionCapability.useQuery(undefined, {
+    retry: false,
+  });
 
   if (isLoading && flightId) {
     return (
@@ -213,9 +217,15 @@ function StatsCards({
       title: t("apis.stats.submitted", "Submitted"),
       value: submittedCount,
       icon: <Send className="h-5 w-5 text-green-500" />,
-      detail: flightStatus?.readyForSubmission
-        ? t("apis.stats.readyForSubmission", "Ready for submission")
-        : t("apis.stats.notReady", "Not ready"),
+      detail:
+        !capability.error && capability.data?.available
+          ? flightStatus?.readyForSubmission
+            ? t("apis.stats.readyForSubmission", "Ready for submission")
+            : t("apis.stats.notReady", "Not ready")
+          : t(
+              "apis.authorityUnavailable",
+              "Authority transmission is unavailable"
+            ),
     },
     {
       title: t("apis.stats.rejected", "Rejected"),
@@ -256,33 +266,54 @@ function StatsCards({
 function SubmissionsTab({ flightId }: { flightId: string }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === "ar" ? ar : enUS;
+  const requestedFlightId = Number(flightId);
+  const validFlightId =
+    Number.isSafeInteger(requestedFlightId) && requestedFlightId > 0;
+  const capability = trpc.apis.getSubmissionCapability.useQuery(undefined, {
+    retry: false,
+  });
 
   const {
     data: submissions,
     isLoading,
     refetch: refetchSubmissions,
   } = trpc.apis.getSubmissions.useQuery(
-    { flightId: parseInt(flightId) },
-    { enabled: !!flightId && !isNaN(parseInt(flightId)) }
+    { flightId: requestedFlightId },
+    { enabled: validFlightId }
   );
 
   const {
-    data: flightStatus,
+    data: flightStatusData,
+    error: flightStatusError,
     isLoading: statusLoading,
     refetch: refetchStatus,
   } = trpc.apis.getFlightStatus.useQuery(
-    { flightId: parseInt(flightId) },
-    { enabled: !!flightId && !isNaN(parseInt(flightId)) }
+    { flightId: requestedFlightId },
+    { enabled: validFlightId }
+  );
+  const flightStatus =
+    !flightStatusError && flightStatusData?.flightId === requestedFlightId
+      ? flightStatusData
+      : undefined;
+  const canSubmit = Boolean(
+    !capability.error &&
+    !capability.isFetching &&
+    capability.data?.available &&
+    flightStatus?.readyForSubmission
   );
 
   const submitMutation = trpc.apis.submitToAuthorities.useMutation({
     onSuccess: data => {
-      toast.success(
+      const notify = ["submitted", "acknowledged"].includes(data.status)
+        ? toast.success
+        : toast.info;
+      notify(
         t(
-          "apis.submitSuccess",
-          "APIS data submitted successfully for {{flight}}",
+          "apis.submissionResult",
+          "Authority submission for {{flight}}: {{status}}",
           {
             flight: data.flightNumber,
+            status: data.status,
           }
         )
       );
@@ -312,8 +343,12 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
       toast.error(error.message);
     },
   });
+  const draft =
+    generateMutation.data?.flightId === requestedFlightId
+      ? generateMutation.data
+      : undefined;
 
-  if (!flightId || isNaN(parseInt(flightId))) {
+  if (!validFlightId) {
     return (
       <Card className="shadow-sm rounded-xl">
         <CardContent className="py-12 text-center">
@@ -340,6 +375,19 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
 
   return (
     <div className="space-y-6">
+      {flightStatusError && (
+        <div role="alert" className="rounded border p-4">
+          <p>
+            {t(
+              "apis.flightStatusError",
+              "Flight APIS status could not be verified."
+            )}
+          </p>
+          <Button variant="outline" onClick={() => refetchStatus()}>
+            {t("common.retry", "Retry")}
+          </Button>
+        </div>
+      )}
       {/* Flight Summary */}
       {flightStatus && (
         <Card className="shadow-sm rounded-xl">
@@ -402,7 +450,7 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
                 size="sm"
                 onClick={() =>
                   generateMutation.mutate({
-                    flightId: parseInt(flightId),
+                    flightId: requestedFlightId,
                     format: "paxlst",
                   })
                 }
@@ -420,7 +468,7 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
                 size="sm"
                 onClick={() =>
                   generateMutation.mutate({
-                    flightId: parseInt(flightId),
+                    flightId: requestedFlightId,
                     format: "pnrgov",
                   })
                 }
@@ -431,18 +479,15 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
                 ) : (
                   <FileCheck className="me-2 h-4 w-4" />
                 )}
-                {t("apis.generatePNRGOV", "Preview PNR data (text)")}
+                {t("apis.generatePNRGOV", "Generate PNR/GOV draft")}
               </Button>
               <Button
                 size="sm"
-                onClick={() =>
-                  submitMutation.mutate({
-                    flightId: parseInt(flightId),
-                  })
-                }
-                disabled={
-                  submitMutation.isPending || !flightStatus.readyForSubmission
-                }
+                onClick={() => {
+                  if (canSubmit)
+                    submitMutation.mutate({ flightId: requestedFlightId });
+                }}
+                disabled={submitMutation.isPending || !canSubmit}
               >
                 {submitMutation.isPending ? (
                   <Loader2 className="me-2 h-4 w-4 animate-spin" />
@@ -451,6 +496,48 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
                 )}
                 {t("apis.submitToAuthorities", "Submit to Authorities")}
               </Button>
+            </div>
+
+            <div
+              className="mt-3 space-y-2 text-sm"
+              role={capability.error ? "alert" : "status"}
+            >
+              <p>
+                {capability.error
+                  ? t(
+                      "apis.capabilityReadError",
+                      "Authority connection readiness could not be verified. Submission remains disabled."
+                    )
+                  : capability.isLoading
+                    ? t(
+                        "apis.capabilityLoading",
+                        "Checking authority connection readiness..."
+                      )
+                    : capability.data?.available
+                      ? t(
+                          "apis.authorityAvailable",
+                          "Authority connection is available."
+                        )
+                      : t(
+                          "apis.authorityUnavailableDetail",
+                          "Authority transmission is unavailable. No verified transport and acknowledgment adapter is configured. You can generate and review a local draft."
+                        )}
+              </p>
+              <p>
+                {t(
+                  "apis.dataReadinessOnly",
+                  "Validated passenger data does not establish an authority connection or acceptance."
+                )}
+              </p>
+              {capability.error && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => capability.refetch()}
+                >
+                  {t("common.retry", "Retry")}
+                </Button>
+              )}
             </div>
 
             {!flightStatus.readyForSubmission &&
@@ -463,6 +550,61 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
                   )}
                 </p>
               )}
+          </CardContent>
+        </Card>
+      )}
+
+      {draft && (
+        <Card className="shadow-sm rounded-xl">
+          <CardHeader>
+            <CardTitle>
+              {t("apis.draft.title", "Generated local draft")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p role="status">
+              {t(
+                "apis.draft.notTransmitted",
+                "Not transmitted. This draft has no authority acknowledgment."
+              )}
+            </p>
+            <p className="text-sm">
+              {draft.flightNumber} · {draft.format.toUpperCase()} ·{" "}
+              {draft.generatedAt}
+            </p>
+            <p className="text-sm">
+              {t(
+                "apis.draft.counts",
+                "Passengers: {{total}} · Validated: {{validated}} · Missing: {{missing}}",
+                {
+                  total: draft.passengerCount,
+                  validated: draft.validatedCount,
+                  missing: draft.missingCount,
+                }
+              )}
+            </p>
+            <pre
+              aria-label={t(
+                "apis.draft.content",
+                "Generated APIS draft content"
+              )}
+              dir="ltr"
+              className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border bg-muted p-3 text-xs"
+            >
+              {draft.messageContent}
+            </pre>
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadFile(
+                  draft.messageContent,
+                  `apis-draft-${draft.format}-${draft.flightId}.txt`,
+                  "text/plain;charset=utf-8"
+                )
+              }
+            >
+              {t("apis.draft.download", "Download exact draft")}
+            </Button>
           </CardContent>
         </Card>
       )}

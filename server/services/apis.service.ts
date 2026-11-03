@@ -1118,6 +1118,16 @@ export async function submitToAuthorities(
   });
 }
 
+/** A data-completeness flag is not evidence of an available authority link.
+ * Keep this aligned with the deliberately unavailable submission action above.
+ */
+export function getAuthoritySubmissionCapability() {
+  return {
+    available: false,
+    reason: "authority_transport_unavailable" as const,
+  };
+}
+
 // ============================================================================
 // Get Submissions
 // ============================================================================

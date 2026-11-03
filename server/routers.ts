@@ -54,6 +54,7 @@ import { disruptionsRouter } from "./routers/disruptions";
 import { rebookingRouter } from "./routers/rebooking";
 import { travelScenariosRouter } from "./routers/travel-scenarios";
 import { dcsRouter } from "./routers/dcs";
+import { dcsOperationsRouter } from "./routers/dcs-operations";
 import { inventoryRouter } from "./routers/inventory.router";
 import { pricingRouter } from "./routers/pricing.router";
 import { softDeleteRouter } from "./routers/soft-delete";
@@ -180,6 +181,7 @@ export const appRouter = router({
   rebooking: rebookingRouter,
   travelScenarios: travelScenariosRouter,
   dcs: dcsRouter,
+  dcsOperations: dcsOperationsRouter,
   inventory: inventoryRouter,
   pricing: pricingRouter,
   softDelete: softDeleteRouter,

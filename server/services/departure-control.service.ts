@@ -14,6 +14,11 @@ import { getDb } from "../db";
 import type { SettlementTx } from "./booking-settlement.service";
 import { assertTravelClearance } from "./travel-clearance.service";
 import { recordEvent } from "./outbox.service";
+import {
+  assertDcsCheckInOpen,
+  assertDcsPassengerMutable,
+  writeDcsPassengerState,
+} from "./dcs-state.service";
 
 /** Booking -> itinerary flights (ascending) -> passenger -> seat is the lock order. */
 export async function lockDepartureContext(
@@ -39,6 +44,11 @@ export async function lockDepartureContext(
     l => l.status === "confirmed" || l.status === "pending"
   );
   const member = legs.length ? active.find(l => l.flightId === flightId) : null;
+  if (active.filter(l => l.flightId === flightId).length > 1)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Flight maps to more than one active booking segment",
+    });
   if (legs.length ? !member : flightId !== booking.flightId)
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -105,9 +115,9 @@ export async function assertSeatSelectionContext(
     throw new Error("A current checkout hold is required to select seats");
 }
 
-export function assertDepartureOpen(
-  c: Awaited<ReturnType<typeof lockDepartureContext>>,
-  purpose: "check_in" | "boarding"
+/** Admission and attendance recovery require the same current funded booking. */
+export function assertFundedDepartureReservation(
+  c: Awaited<ReturnType<typeof lockDepartureContext>>
 ) {
   if (
     c.booking.status !== "confirmed" ||
@@ -118,6 +128,13 @@ export function assertDepartureOpen(
       code: "PRECONDITION_FAILED",
       message: "An active paid reservation is required",
     });
+}
+
+export function assertDepartureOpen(
+  c: Awaited<ReturnType<typeof lockDepartureContext>>,
+  purpose: "check_in" | "boarding"
+) {
+  assertFundedDepartureReservation(c);
   const remaining = c.flight.departureTime.getTime() - Date.now();
   if (
     !["scheduled", "delayed"].includes(c.flight.status) ||
@@ -148,7 +165,8 @@ export async function refreshBookingCheckIn(
     )
     .limit(1);
   // Compatibility flag means ANY passenger/leg checked in. It blocks itinerary
-  // changes; passenger/flight state is exclusively held by seat_inventory.
+  // changes; attendance/denial decisions live in dcs_passenger_states while
+  // seat_inventory remains the authority for check-in and pass identity.
   await tx
     .update(bookings)
     .set({ checkedIn: Boolean(active) })
@@ -161,7 +179,6 @@ export async function checkInPassengersTx(
     bookingId: number;
     flightId?: number;
     assignments: { passengerId: number; seatNumber?: string }[];
-    requireAllPassengers?: boolean;
     owner?: { userId: number; tenantId: number | null };
   }
 ) {
@@ -177,6 +194,7 @@ export async function checkInPassengersTx(
       message: "Booking access denied",
     });
   assertDepartureOpen(c, "check_in");
+  await assertDcsCheckInOpen(tx, c.flight.id);
   const ps = await tx
     .select()
     .from(passengers)
@@ -191,15 +209,21 @@ export async function checkInPassengersTx(
     !ids.length ||
     new Set(ids).size !== ids.length ||
     new Set(numbers).size !== numbers.length ||
-    ids.some(id => !ps.some(p => p.id === id)) ||
-    (input.requireAllPassengers && ps.length !== ids.length)
+    ids.some(id => !ps.some(p => p.id === id))
   )
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Supply each passenger exactly once with distinct seats",
+      message:
+        "Select passengers from this booking once each, with distinct seats",
     });
   const results = [];
   for (const a of input.assignments) {
+    const key = {
+      bookingId: input.bookingId,
+      passengerId: a.passengerId,
+      flightId: c.flight.id,
+    };
+    await assertDcsPassengerMutable(tx, key);
     await assertTravelClearance(tx, input.bookingId, a.passengerId);
     const previous = await tx
       .select()
@@ -230,6 +254,7 @@ export async function checkInPassengersTx(
         boardingGroup: checked.boardingGroup,
         boardingSequence: checked.boardingSequence,
       });
+      await writeDcsPassengerState(tx, key, "checked_in");
       continue;
     }
     if (
@@ -327,6 +352,7 @@ export async function checkInPassengersTx(
       c.flight.id,
       true
     );
+    await writeDcsPassengerState(tx, key, "checked_in");
     if (c.booking.flightId === c.flight.id)
       await tx
         .update(passengers)

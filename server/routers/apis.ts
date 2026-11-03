@@ -17,8 +17,40 @@ import {
 } from "../_core/trpc";
 import * as apisService from "../services/apis.service";
 import { assertPassengerOwnership } from "../services/access-control.service";
+import { getPassengerJourneyStatus } from "../services/travel-clearance.service";
+import {
+  authoritySubmissionCapability,
+  passengerJourneyStatus,
+} from "../contracts/apis-journey";
 
 export const apisRouter = router({
+  getMyJourneyStatus: protectedProcedure
+    .input(
+      z.object({
+        passengerId: z.number().int().positive(),
+        flightId: z.number().int().positive(),
+      })
+    )
+    .output(passengerJourneyStatus)
+    .query(async ({ input, ctx }) => {
+      const bookingId = await assertPassengerOwnership(
+        input.passengerId,
+        ctx.user.id,
+        ctx.user.role,
+        { tenantId: ctx.tenantId }
+      );
+      return getPassengerJourneyStatus(
+        bookingId,
+        input.passengerId,
+        input.flightId,
+        ctx.tenantId
+      );
+    }),
+
+  getSubmissionCapability: adminProcedure
+    .output(authoritySubmissionCapability)
+    .query(() => apisService.getAuthoritySubmissionCapability()),
+
   // ========================================================================
   // Passenger-facing (protected)
   // ========================================================================

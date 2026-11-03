@@ -88,6 +88,28 @@ export const responseContracts = {
       })
     ),
   }),
+  registrationSummary: z.object({
+    bookingId: outputNumber,
+    passengerId: outputNumber,
+    flightId: outputNumber,
+    segmentId: outputNumber,
+    allowanceWeightGrams: z.number().int().nonnegative(),
+    registeredWeightGrams: z.number().int().nonnegative().nullable(),
+    remainingWeightGrams: z.number().int().nonnegative().nullable(),
+    requiresOperationalReview: z.boolean(),
+    warnings: z.array(z.string()),
+    bags: z.array(
+      z.object({
+        id: outputNumber,
+        tagNumber: z.string(),
+        weightGrams: z.number().int().positive().nullable(),
+        status: publicBag.shape.status,
+        flightId: outputNumber.nullable(),
+        segmentId: outputNumber.nullable(),
+        legacy: z.boolean(),
+      })
+    ),
+  }),
   register: z.object({
     success: z.boolean(),
     baggage: z.object({
@@ -110,6 +132,8 @@ export const responseContracts = {
       description: z.union([z.null(), z.string()]),
       bookingId: outputNumber,
       passengerId: outputNumber,
+      flightId: outputNumber.nullable(),
+      segmentId: outputNumber.nullable(),
       tagNumber: z.string(),
       weight: z.string(),
       lastLocation: z.union([z.null(), z.string()]),

@@ -498,11 +498,12 @@ export const seatMapRouter = router({
       })
     )
     .output(responseContracts["undoCheckIn"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       return await seatMapService.undoCheckIn(
         input.flightId,
         input.bookingId,
-        input.passengerId
+        input.passengerId,
+        { userId: ctx.user.id, role: ctx.user.role, tenantId: ctx.tenantId }
       );
     }),
 
