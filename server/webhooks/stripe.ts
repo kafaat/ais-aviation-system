@@ -1,3 +1,4 @@
+import { expireVerifiedOrderServiceCheckout } from "../services/order-service-checkout.service";
 import { recordVerifiedOrderRefund } from "../services/order-refunds.service";
 /**
  * Stripe Webhook Handler - Production-Grade
@@ -279,6 +280,10 @@ export async function processStripeEvent(
   event: Stripe.Event
 ): Promise<void> {
   switch (event.type) {
+    case "checkout.session.expired":
+      await expireVerifiedOrderServiceCheckout(tx, event.data.object, event.id);
+      return;
+
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded":
       await handleCheckoutSessionCompleted(

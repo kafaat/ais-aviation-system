@@ -209,7 +209,10 @@ export const paymentsRouter = router({
         )
         .limit(1);
 
-      if (!bookingData) {
+      if (
+        !bookingData ||
+        (ctx.tenantId != null && bookingData.tenantId !== ctx.tenantId)
+      ) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",
@@ -263,7 +266,8 @@ export const paymentsRouter = router({
           input.modificationId,
           ctx.user.id,
           process.env.VITE_APP_URL ||
-            `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`
+            `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`,
+          ctx.tenantId
         );
       }
       const authoritativeAmount = modification.totalCost;

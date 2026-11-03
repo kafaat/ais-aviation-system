@@ -1,3 +1,4 @@
+import { fundInvoiceSeats } from "./seat-exchange.service";
 import { closeLocalCoupons } from "./ticket-coupons.service";
 import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 import { countActiveHolds } from "./inventory-capacity.service";
@@ -214,13 +215,20 @@ async function applyFundedBooking(
     transitionReason: "Verified funds settled with inventory",
     changedBy: null,
   });
-  await recordEvent(tx, {
+  const confirmationEventId = await recordEvent(tx, {
     aggregateType: "booking",
     aggregateId: booking.id,
     tenantId: booking.tenantId,
     eventType: "booking.confirmed",
     payload: { bookingId: booking.id },
   });
+  try {
+    await fundInvoiceSeats(tx, booking.id, confirmationEventId);
+  } catch (cause) {
+    if (cause instanceof TRPCError && cause.code === "PRECONDITION_FAILED")
+      throw new InventoryUnavailableError(cause.message);
+    throw cause;
+  }
 }
 
 export async function reserveSeats(

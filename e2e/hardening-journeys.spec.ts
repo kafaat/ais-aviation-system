@@ -47,6 +47,181 @@ test.describe("Funded journeys and truthful operational reads", () => {
     );
   });
 
+  test("second-sector exchange recovers the completed change after its response is lost", async ({
+    page,
+  }) => {
+    await useBrowserSession(page, "regular");
+    const client = rpc(page);
+    const user = await client.auth.me.query();
+    if (!user) throw new Error("Authenticated passenger missing");
+    const first = await fixtureFlight();
+    const second = await fixtureFlight();
+    const replacement = await fixtureFlight();
+    const outbound = await client.flights.getById.query({ id: first });
+    if (!outbound) throw new Error("Missing outbound flight");
+    // Same route, cabin, schedule and price for the two inbound flights, outside the fee window.
+    // Set fixtures before searching so both alternatives are visible to the real cache.
+    await sqlRows<RowDataPacket>(
+      "UPDATE flights SET departureTime=DATE_ADD(departureTime,INTERVAL 15 DAY), arrivalTime=DATE_ADD(arrivalTime,INTERVAL 15 DAY) WHERE id=?",
+      [first]
+    );
+    await sqlRows<RowDataPacket>(
+      "UPDATE flights SET originId=?, destinationId=?, departureTime=DATE_ADD(departureTime,INTERVAL 16 DAY), arrivalTime=DATE_ADD(arrivalTime,INTERVAL 16 DAY) WHERE id IN (?,?)",
+      [outbound.destination.id, outbound.origin.id, second, replacement]
+    );
+    const [firstFlight, secondFlight, newFlight] = await Promise.all(
+      [first, second, replacement].map(id =>
+        client.flights.getById.query({ id })
+      )
+    );
+    if (!firstFlight || !secondFlight || !newFlight)
+      throw new Error("Incomplete fixture itinerary");
+    const booking = await client.multiCity.create.mutate({
+      segments: [firstFlight, secondFlight].map(f => ({
+        flightId: f.id,
+        departureDate: f.departureTime,
+      })),
+      cabinClass: "economy",
+      passengers: [{ type: "adult", firstName: "Test", lastName: "Exchange" }],
+      sessionId: randomUUID(),
+    });
+    const [passenger] = await client.bookings.getPassengers.query({
+      bookingId: booking.bookingId,
+    });
+    const service = (
+      await client.ancillary.getAvailable.query({ category: "seat" })
+    ).find(s => s.code === "SEAT_EXTRA_LEG");
+    if (!passenger || !service)
+      throw new Error("Seed paid seat or booking passenger missing");
+    const mapName = "Browser extra legroom " + randomUUID();
+    await sqlRows<RowDataPacket>(
+      "INSERT INTO seat_maps(aircraftType,airlineId,configName,cabinLayout,totalSeats,economySeats) VALUES('B737',?,?,'[]',1,1)",
+      [outbound.airline.id, mapName]
+    );
+    const [map] = await sqlRows<RowDataPacket>(
+      "SELECT id FROM seat_maps WHERE configName=?",
+      [mapName]
+    );
+    for (const id of [second, replacement]) {
+      await sqlRows<RowDataPacket>(
+        "INSERT INTO seat_inventory(flightId,seatMapId,seatNumber,`row`,`column`,cabinClass,seatType,priceTier,hasExtraLegroom,seatPrice) VALUES (?,?,'12A',12,'A','economy','window','extra_legroom',1,?)",
+        [id, map.id, service.price]
+      );
+    }
+    await page.goto("/my-bookings");
+    const card = page
+      .locator('[data-slot="card"]')
+      .filter({ hasText: booking.bookingReference });
+    await card.getByRole("button", { name: "Manage Services" }).click();
+    const servicesDialog = page.getByRole("dialog");
+    const product = servicesDialog
+      .getByText(service.name, { exact: true })
+      .locator("../..");
+    await product.getByLabel("Flight sector").selectOption(String(second));
+    await product.getByLabel("Passenger").selectOption(String(passenger.id));
+    await product.getByLabel("Seat", { exact: true }).selectOption("12A");
+    await product.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(
+      page
+        .locator("[data-sonner-toast]")
+        .filter({ hasText: "Service added successfully" })
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    const fundingAmount = booking.totalAmount + service.price;
+    await sqlRows<RowDataPacket>(
+      "INSERT INTO user_credits(userId,amount,source) VALUES (?,?,'promo')",
+      [user.id, fundingAmount]
+    );
+    await client.vouchers.useCredits.mutate({
+      bookingId: booking.bookingId,
+      amount: fundingAmount,
+    });
+    await page.goto(`/my-bookings?exchange=${booking.bookingId}`);
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Sector to change").selectOption(String(second));
+    await dialog
+      .getByRole("button", { name: new RegExp(newFlight.flightNumber) })
+      .click();
+    await dialog.getByRole("button", { name: "Quote change" }).click();
+    const accept = dialog.getByRole("button", { name: "Accept this quote" });
+    await expect(accept).toBeDisabled();
+    const quote = (
+      await client.modifications.exchangeContext.query({
+        bookingId: booking.bookingId,
+      })
+    ).latest;
+    expect(quote?.replacementFlight?.flightId).toBe(replacement);
+    expect(quote?.totalCost).toBe(0);
+    await expect(dialog.getByText(/Paid seat 12A retained/)).toBeVisible();
+    expect(quote?.seatExchange?.retainedAmount).toBe(service.price);
+    await dialog
+      .getByLabel("I accept this itinerary change", { exact: false })
+      .check();
+    let commits = 0;
+    await page.route("**/api/trpc/*confirmNoChargeService*", async route => {
+      commits++;
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      await route.abort("failed");
+    });
+    await accept.click();
+    await expect(dialog.getByRole("alert")).toHaveText(
+      /last result could not be verified/
+    );
+    await dialog
+      .getByRole("button", { name: "Check operation status" })
+      .click();
+    await expect(dialog.getByText(/Exchange completed/)).toBeVisible();
+    const result = await client.modifications.exchangeContext.query({
+      bookingId: booking.bookingId,
+    });
+    expect(result.sectors.map(s => s.flightId)).toEqual([first, replacement]);
+    expect(result.latest?.modificationId).toBe(quote?.modificationId);
+    expect(result.latest?.receiptId).toBeTruthy();
+    expect(
+      await sqlRows<RowDataPacket>(
+        "SELECT status FROM seat_inventory WHERE flightId=? AND seatNumber='12A' AND bookingId=? AND passengerId=?",
+        [replacement, booking.bookingId, passenger.id]
+      )
+    ).toEqual([{ status: "occupied" }]);
+    expect(
+      await sqlRows<RowDataPacket>(
+        "SELECT id FROM financial_ledger WHERE bookingId=? AND type='charge'",
+        [booking.bookingId]
+      )
+    ).toHaveLength(1);
+    expect(commits).toBe(1);
+  });
+  test("exchange chat links the funded reservation without creating a quote or collecting again", async ({
+    page,
+  }) => {
+    const { booking } = await ownedBooking(page, true);
+    const effects = () =>
+      sqlRows<RowDataPacket>(
+        "SELECT (SELECT COUNT(*) FROM booking_modifications WHERE bookingId=?) AS changesCount, (SELECT COUNT(*) FROM financial_ledger WHERE bookingId=?) AS ledgerCount",
+        [booking.bookingId, booking.bookingId]
+      );
+    const before = await effects();
+    await page.goto("/ai-chat");
+    await page.getByRole("button", { name: "Start Conversation" }).click();
+    await page.getByRole("button", { name: "Change my booking" }).click();
+    const target = page.getByRole("link", {
+      name: "Review booking " + booking.bookingReference,
+    });
+    await expect(target).toHaveAttribute(
+      "href",
+      "/my-bookings?exchange=" + booking.bookingId
+    );
+    await page
+      .getByRole("textbox", { name: "Your message" })
+      .fill("Go ahead and charge me");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(target).toHaveCount(2);
+    expect(await effects()).toEqual(before);
+    await target.last().click();
+    await expect(page).toHaveURL(url => url.pathname === "/my-bookings");
+  });
+
   for (const paymentButton of [
     "Complete Booking & Payment",
     "Split with Others",

@@ -16,6 +16,8 @@ if (
   !/\/[a-z0-9_]+_test$/i.test(new URL(process.env.DATABASE_URL).pathname)
 )
   throw new Error("Use an empty disposable *_test database in NODE_ENV=test");
+// This standalone fixture signs only synthetic provider deliveries.
+process.env.STRIPE_WEBHOOK_SECRET = "whsec_disposable_remediation_fixture";
 const reportPath = process.argv[2];
 assert(reportPath, "Pass a JSON result path");
 process.env.BUILT_IN_FORGE_API_URL = "https://audit.invalid";
@@ -147,7 +149,7 @@ try {
     user,
     tenantId: id,
     authMethod: "bearer",
-    req: { ip: "127.0.0.1", headers: {} },
+    req: { ip: "127.0.0.1", protocol: "http", headers: { host: "localhost" } },
     res: { setHeader() {} },
   } as unknown as TrpcContext;
   const caller = bookingsRouter.createCaller(ctx);
@@ -1863,6 +1865,12 @@ try {
   await booking(70, 0, 2);
   const { verifyBaggageEntitlements } = await import("./baggage-entitlements");
   await verifyBaggageEntitlements(db, id + 70, id, record);
+  const { verifyPaidSectorExchange } = await import("./paid-sector-exchange");
+  await record(
+    "EXCHANGE-SECTOR-01",
+    "Second-sector checkout recovery, paid seat, unchanged coupon and ledger replay",
+    () => verifyPaidSectorExchange(db, ctx, id)
+  );
   await writeFile(
     reportPath,
     JSON.stringify(

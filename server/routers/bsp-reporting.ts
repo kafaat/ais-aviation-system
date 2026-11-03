@@ -1,3 +1,8 @@
+import {
+  payoutComparison,
+  payoutEvidence,
+} from "../../shared/payout-comparison";
+import { comparePayoutEvidence } from "../services/payout-comparison.service";
 import { requireValue } from "../services/required-value";
 import { isAdmin } from "../services/rbac.service";
 import { getFinancialSummary } from "../services/financial-reporting.service";
@@ -23,6 +28,15 @@ import {
 } from "../services/bsp-reporting.service";
 
 export const bspReportingRouter = router({
+  comparePayout: airlineFinanceProcedure
+    .input(payoutEvidence)
+    .output(payoutComparison)
+    .mutation(({ input, ctx }) =>
+      comparePayoutEvidence(
+        input,
+        isAdmin(ctx.user.role) ? undefined : requireValue(ctx.tenantId)
+      )
+    ),
   ledgerDraft: airlineFinanceProcedure
     .input(
       z.object({ startDate: z.date().optional(), endDate: z.date().optional() })

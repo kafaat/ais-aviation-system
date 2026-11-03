@@ -9,7 +9,7 @@ import {
   passengers,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
-import { eq, and, lt, gt, sql } from "drizzle-orm";
+import { eq, and, lt, gt, sql, inArray } from "drizzle-orm";
 
 /**
  * Inventory Lock Service
@@ -240,7 +240,7 @@ export async function releaseExpiredLocks(): Promise<number> {
             and(
               eq(seatInventory.bookingId, booking.id),
               eq(seatInventory.flightId, hold.flightId),
-              eq(seatInventory.status, "occupied")
+              inArray(seatInventory.status, ["held", "occupied"])
             )
           );
         if (booking.flightId === hold.flightId)

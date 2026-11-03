@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { BookingCreditPayment } from "@/components/BookingCreditPayment";
 import { OperationalReadState } from "@/components/OperationalReadState";
 import { useTranslation } from "react-i18next";
@@ -107,6 +107,22 @@ export default function MyBookings() {
   });
   const { data: bookings, isLoading } = bookingsQuery;
   type Booking = NonNullable<typeof bookings>[number];
+
+  // Both the agent handoff and a provider return open the owner's booking.
+  // Payment and exchange status always come from the server.
+  useEffect(() => {
+    if (!bookings) return;
+    const url = new URL(window.location.href);
+    const id = url.searchParams.get("exchange");
+    if (!id) return;
+    const owned = bookings.find(b => String(b.id) === id);
+    if (owned) {
+      setSelectedBooking(owned);
+      setModifyDialogOpen(true);
+    }
+    url.searchParams.delete("exchange");
+    window.history.replaceState(window.history.state, "", url);
+  }, [bookings]);
 
   // Get flight IDs for WebSocket subscription
   const flightIds = useMemo<number[]>(
@@ -890,20 +906,23 @@ export default function MyBookings() {
                                         {t("myBookings.cancelBooking")}
                                       </Button>
                                     </div>
-                                    <Button
-                                      variant="outline"
-                                      className="w-full rounded-xl hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 dark:hover:bg-purple-950/30 dark:hover:text-purple-400"
-                                      onClick={() => {
-                                        setSelectedBooking(booking);
-                                        setManageAncillariesOpen(true);
-                                      }}
-                                    >
-                                      <Package className="mr-2 h-4 w-4" />
-                                      {t("myBookings.manageServices")}
-                                    </Button>
                                   </div>
                                 )}
                             </div>
+                          )}
+                          {(booking.status === "pending" ||
+                            booking.status === "confirmed") && (
+                            <Button
+                              variant="outline"
+                              className="w-full rounded-xl hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 dark:hover:bg-purple-950/30 dark:hover:text-purple-400"
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                setManageAncillariesOpen(true);
+                              }}
+                            >
+                              <Package className="mr-2 h-4 w-4" />
+                              {t("myBookings.manageServices")}
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -931,16 +950,14 @@ export default function MyBookings() {
       )}
 
       {/* Modify Booking Dialog */}
-      {selectedBooking && (
+      {selectedBooking && modifyDialogOpen && (
         <ModifyBookingDialog
           open={modifyDialogOpen}
           onOpenChange={setModifyDialogOpen}
           booking={{
             id: selectedBooking.id,
             bookingReference: selectedBooking.bookingReference,
-            flightNumber: selectedBooking.flight.flightNumber,
             cabinClass: selectedBooking.cabinClass,
-            totalAmount: selectedBooking.totalAmount,
             originName: selectedBooking.flight.origin,
             destinationName: selectedBooking.flight.destination,
           }}
@@ -950,6 +967,11 @@ export default function MyBookings() {
       {/* Manage Ancillaries Dialog */}
       {selectedBooking && (
         <ManageAncillariesDialog
+          key={selectedBooking.id}
+          editable={
+            selectedBooking.status === "pending" &&
+            selectedBooking.paymentStatus === "pending"
+          }
           open={manageAncillariesOpen}
           onOpenChange={setManageAncillariesOpen}
           bookingId={selectedBooking.id}

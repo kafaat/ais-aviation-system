@@ -232,6 +232,15 @@ export async function checkInPassengersTx(
       });
       continue;
     }
+    if (
+      previous.some(
+        s => s.seatPrice > 0 && a.seatNumber && s.seatNumber !== a.seatNumber
+      )
+    )
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Use paid seat servicing before changing this seat",
+      });
     const requested =
       a.seatNumber ??
       previous.find(

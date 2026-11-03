@@ -72,6 +72,17 @@ and evidence tests passed. No real Stripe sandbox credential was available in
 this execution environment. No live-provider acceptance was executed, and the
 presence of a GitHub Actions secret has not been verified.
 
+## Exchange checkout with a lost provider acknowledgement
+
+Subscribe the verified Stripe webhook endpoint to `checkout.session.expired` as well
+as the payment settlement events. In the merchant sandbox, interrupt the response
+after creating an exchange Checkout session. Deliver its signed, expired and unpaid
+event. AIS must match the original request UUID, booking, owner, modification,
+amount, currency and any previously recorded session ID before releasing the
+replacement holds. Repeat the event and verify a single cancellation, the original
+itinerary and zero new ledger entries. A missing event or a conflicting payment
+receipt leaves the request open for reconciliation.
+
 ## Remaining operational handoff after PR #148
 
 The post-merge [CI/CD Pipeline run 34746676270](https://github.com/kafaat/ais-aviation-system/actions/runs/34746676270)

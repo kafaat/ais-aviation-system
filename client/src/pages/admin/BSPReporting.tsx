@@ -45,7 +45,6 @@ import {
   AlertTriangle,
   DollarSign,
   ClipboardCheck,
-  FileDown,
   ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -198,29 +197,6 @@ export default function BSPReporting() {
     },
   });
 
-  const exportHOTMutation = bspTrpc.exportHOT.useMutation({
-    onSuccess: (data: {
-      content: string;
-      filename: string;
-      recordCount: number;
-    }) => {
-      // Trigger file download
-      const blob = new Blob([data.content], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = data.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success(t("bspReporting.hotExported", { count: data.recordCount }));
-    },
-    onError: error => {
-      toast.error(t("bspReporting.hotExportFailed", { error: error.message }));
-    },
-  });
-
   const validateComplianceMutation = bspTrpc.validateCompliance.useMutation({
     onSuccess: (data: { isCompliant: boolean; checks: ComplianceCheck[] }) => {
       if (data.isCompliant) {
@@ -254,10 +230,6 @@ export default function BSPReporting() {
 
   const handleReconcile = (cycleNumber: number) => {
     reconcileMutation.mutate({ cycleNumber });
-  };
-
-  const handleExportHOT = () => {
-    exportHOTMutation.mutate();
   };
 
   const handleValidateCompliance = () => {
@@ -313,18 +285,6 @@ export default function BSPReporting() {
           <p className="text-muted-foreground">{t("bspReporting.subtitle")}</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleExportHOT}
-            disabled={exportHOTMutation.isPending}
-          >
-            {exportHOTMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <FileDown className="mr-2 h-4 w-4" />
-            )}
-            {t("bspReporting.exportHOT")}
-          </Button>
           <Button
             variant="outline"
             onClick={handleValidateCompliance}

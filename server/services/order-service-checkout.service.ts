@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import type Stripe from "stripe";
+import type { SettlementTx } from "./booking-settlement.service";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { stripe } from "../stripe";
 import {
@@ -8,8 +10,12 @@ import {
   bookingModifications,
   flights,
   inventoryLocks,
+  paymentReceipts,
 } from "../../drizzle/schema";
-import { planSchema } from "./order-servicing.service";
+import {
+  planSchema,
+  validatePaidServiceQuote,
+} from "./order-servicing.service";
 import { assertNoCollectionReview } from "./booking-settlement.service";
 import { releaseInventoryLock } from "./inventory-lock.service";
 import { recordEvent } from "./outbox.service";
@@ -24,7 +30,8 @@ const requestSchema = z.object({
 export async function createOrderServiceCheckout(
   modificationId: number,
   userId: number,
-  baseUrl: string
+  baseUrl: string,
+  tenantId: number | null = null
 ) {
   const db = await getDb();
   if (!db) throw new Error("Checkout storage unavailable");
@@ -48,7 +55,10 @@ export async function createOrderServiceCheckout(
       .for("update");
     if (
       !booking ||
+      booking.userId !== userId ||
+      (tenantId !== null && tenantId !== booking.tenantId) ||
       !change ||
+      change.bookingId !== booking.id ||
       change.userId !== userId ||
       booking.status !== "confirmed" ||
       change.status !== "pending" ||
@@ -56,6 +66,7 @@ export async function createOrderServiceCheckout(
     )
       throw new Error("Modification is not payable");
     await assertNoCollectionReview(tx, booking.id);
+    const { plan } = await validatePaidServiceQuote(tx, booking, change);
     if (change.checkoutRequestId) {
       const request = requestSchema.parse(change.checkoutData);
       if (
@@ -71,9 +82,6 @@ export async function createOrderServiceCheckout(
         url: change.checkoutUrl,
       };
     }
-    const plan = planSchema.parse(change.servicingPayload);
-    if (Date.parse(plan.expiresAt) <= Date.now())
-      throw new Error("Servicing quote expired");
     const base = new URL(baseUrl);
     if (
       !["http:", "https:"].includes(base.protocol) ||
@@ -107,7 +115,10 @@ export async function createOrderServiceCheckout(
         !hold ||
         hold.status !== "active" ||
         hold.expiresAt <= new Date() ||
-        hold.userId !== userId
+        hold.userId !== userId ||
+        hold.flightId !== leg.flightId ||
+        hold.cabinClass !== leg.cabinClass ||
+        hold.numberOfSeats !== booking.numberOfPassengers
       )
         throw new Error("Replacement capacity hold expired");
       await tx
@@ -157,21 +168,158 @@ export async function createOrderServiceCheckout(
       metadata,
       payment_intent_data: { metadata },
       expires_at: claim.request.expiresAt,
-      success_url: `${claim.request.baseUrl}/my-bookings?modification=success`,
-      cancel_url: `${claim.request.baseUrl}/my-bookings?modification=cancelled`,
+      success_url: `${claim.request.baseUrl}/my-bookings?modification=success&exchange=${claim.request.bookingId}`,
+      cancel_url: `${claim.request.baseUrl}/my-bookings?modification=cancelled&exchange=${claim.request.bookingId}`,
     },
     { idempotencyKey: `order-checkout:${claim.requestId}` }
   );
   if (!session.url) throw new Error("Provider checkout URL unavailable");
-  await db
+  const [persisted] = await db
     .update(bookingModifications)
     .set({ checkoutSessionId: session.id, checkoutUrl: session.url })
-    .where(eq(bookingModifications.id, modificationId));
+    .where(
+      and(
+        eq(bookingModifications.id, modificationId),
+        eq(bookingModifications.status, "pending"),
+        eq(bookingModifications.checkoutRequestId, claim.requestId)
+      )
+    );
+  if (persisted.affectedRows !== 1)
+    throw new Error(
+      "Servicing request changed before checkout acknowledgement"
+    );
   return { provider: "stripe", sessionId: session.id, url: session.url };
 }
+type Change = typeof bookingModifications.$inferSelect;
+
+function matchesCheckout(change: Change, session: Stripe.Checkout.Session) {
+  const stored = requestSchema.safeParse(change.checkoutData);
+  const meta = session.metadata;
+  return (
+    stored.success &&
+    !!change.checkoutRequestId &&
+    session.id.startsWith("cs_") &&
+    (!change.checkoutSessionId || change.checkoutSessionId === session.id) &&
+    session.mode === "payment" &&
+    session.currency === "sar" &&
+    stored.data.amount === change.totalCost &&
+    session.amount_total === stored.data.amount &&
+    stored.data.userId === change.userId &&
+    stored.data.bookingId === change.bookingId &&
+    meta?.type === "modification" &&
+    meta.checkoutRequestId === change.checkoutRequestId &&
+    meta.modificationId === String(change.id) &&
+    meta.bookingId === String(change.bookingId) &&
+    meta.userId === String(change.userId)
+  );
+}
+
+async function releasePendingQuote(
+  tx: SettlementTx,
+  change: Change,
+  expiry?: { sessionId: string; eventId: string }
+) {
+  const plan = planSchema.parse(change.servicingPayload);
+  for (const leg of [...plan.segments].sort(
+    (a, b) => a.flightId - b.flightId
+  )) {
+    if (!leg.holdId) continue;
+    await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, leg.flightId))
+      .for("update");
+    await releaseInventoryLock(leg.holdId, tx);
+  }
+  await tx
+    .update(bookingModifications)
+    .set({
+      status: "rejected",
+      ...(expiry
+        ? { checkoutSessionId: expiry.sessionId, checkoutUrl: null }
+        : {}),
+    })
+    .where(eq(bookingModifications.id, change.id));
+  await recordEvent(tx, {
+    aggregateType: "booking",
+    aggregateId: change.bookingId,
+    eventType: "order.servicing_cancelled",
+    payload: {
+      modificationId: change.id,
+      userId: change.userId,
+      ...(expiry
+        ? {
+            providerEventId: expiry.eventId,
+            providerSessionId: expiry.sessionId,
+            reason: "verified_unpaid_expiry",
+          }
+        : {}),
+    },
+  });
+}
+
+/** Invoked only by verified checkout.session.expired webhook processing inside its deduplication transaction. */
+export async function expireVerifiedOrderServiceCheckout(
+  tx: SettlementTx,
+  session: Stripe.Checkout.Session,
+  eventId: string
+) {
+  const meta = session.metadata;
+  if (
+    meta?.type !== "modification" ||
+    !meta.checkoutRequestId ||
+    session.status !== "expired" ||
+    session.payment_status !== "unpaid"
+  )
+    return;
+  const bookingId = Number(meta.bookingId),
+    modificationId = Number(meta.modificationId);
+  if (
+    !Number.isSafeInteger(bookingId) ||
+    bookingId <= 0 ||
+    !Number.isSafeInteger(modificationId) ||
+    modificationId <= 0
+  )
+    return;
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
+    .for("update");
+  if (!booking || String(booking.userId) !== meta.userId) return;
+  const [change] = await tx
+    .select()
+    .from(bookingModifications)
+    .where(eq(bookingModifications.id, modificationId))
+    .for("update");
+  if (
+    !change ||
+    change.bookingId !== booking.id ||
+    change.userId !== booking.userId ||
+    change.status !== "pending" ||
+    change.paymentStatus !== "pending" ||
+    !matchesCheckout(change, session)
+  )
+    return;
+  const [collected] = await tx
+    .select({ id: paymentReceipts.paymentIntentId })
+    .from(paymentReceipts)
+    .where(
+      and(
+        eq(paymentReceipts.kind, "modification"),
+        eq(paymentReceipts.targetId, modificationId),
+        eq(paymentReceipts.bookingId, bookingId)
+      )
+    )
+    .limit(1);
+  if (collected) return;
+  await releasePendingQuote(tx, change, { sessionId: session.id, eventId });
+}
+
 export async function cancelOrderServiceQuote(
   modificationId: number,
-  userId: number
+  userId: number,
+  tenantId: number | null = null
 ) {
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
@@ -182,19 +330,39 @@ export async function cancelOrderServiceQuote(
     .limit(1);
   if (!hint || hint.userId !== userId || !hint.servicingPayload)
     throw new Error("Owned servicing request not found");
+  const [owner] = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, hint.bookingId))
+    .limit(1);
+  if (
+    !owner ||
+    owner.userId !== userId ||
+    (tenantId !== null && owner.tenantId !== tenantId)
+  )
+    throw new Error("Owned servicing request not found");
   if (hint.checkoutRequestId && !hint.checkoutSessionId)
     throw new Error("Checkout outcome must be reconciled before cancellation");
   if (hint.checkoutSessionId) {
     const session = await stripe.checkout.sessions.retrieve(
       hint.checkoutSessionId
     );
-    if (session.status === "complete")
+    if (!matchesCheckout(hint, session))
+      throw new Error("Provider checkout identity or amount mismatch");
+    if (session.status === "complete" || session.payment_status !== "unpaid")
       throw new Error("Payment must be reconciled before cancellation");
-    if (session.status !== "expired")
-      await stripe.checkout.sessions.expire(session.id);
+    if (session.status !== "expired") {
+      const expired = await stripe.checkout.sessions.expire(session.id);
+      if (
+        !matchesCheckout(hint, expired) ||
+        expired.status !== "expired" ||
+        expired.payment_status !== "unpaid"
+      )
+        throw new Error("Unpaid session expiry was not confirmed");
+    }
   }
   return db.transaction(async tx => {
-    await tx
+    const [booking] = await tx
       .select()
       .from(bookings)
       .where(eq(bookings.id, hint.bookingId))
@@ -205,35 +373,19 @@ export async function cancelOrderServiceQuote(
       .where(eq(bookingModifications.id, modificationId))
       .for("update");
     if (
+      !booking ||
+      booking.userId !== userId ||
+      (tenantId !== null && booking.tenantId !== tenantId) ||
       !change ||
+      change.userId !== userId ||
+      change.bookingId !== booking.id ||
       change.status === "completed" ||
       change.checkoutRequestId !== hint.checkoutRequestId
     )
       throw new Error("Servicing request changed");
     if (change.status === "rejected") return { cancelled: true };
-    const plan = planSchema.parse(change.servicingPayload);
-    for (const leg of [...plan.segments].sort(
-      (a, b) => a.flightId - b.flightId
-    )) {
-      if (leg.holdId) {
-        await tx
-          .select()
-          .from(flights)
-          .where(eq(flights.id, leg.flightId))
-          .for("update");
-        await releaseInventoryLock(leg.holdId, tx);
-      }
-    }
-    await tx
-      .update(bookingModifications)
-      .set({ status: "rejected" })
-      .where(eq(bookingModifications.id, modificationId));
-    await recordEvent(tx, {
-      aggregateType: "booking",
-      aggregateId: hint.bookingId,
-      eventType: "order.servicing_cancelled",
-      payload: { modificationId, userId },
-    });
+    await assertNoCollectionReview(tx, booking.id);
+    await releasePendingQuote(tx, change);
     return { cancelled: true };
   });
 }
