@@ -1100,12 +1100,15 @@ test.describe("Funded journeys and truthful operational reads", () => {
       route.abort("failed")
     );
     await page.goto("/admin/revenue-accounting");
+    // The error is displayed after the client has exhausted its retry backoff.
     await expect(page.getByRole("alert")).toContainText("unavailable", {
       ignoreCase: true,
+      timeout: 25000,
     });
     await expect(
       page.getByRole("button", { name: "Retry", exact: true })
     ).toBeVisible();
+    await expect(page.getByText(/^0(?:[.,]00)? SAR$/)).toHaveCount(0);
   });
   test("biometric without an accepted adapter reports unavailable, not empty", async ({
     page,
@@ -1119,7 +1122,8 @@ test.describe("Funded journeys and truthful operational reads", () => {
     await page.goto("/admin/biometric");
     await page.getByRole("tab", { name: "Events Log" }).click();
     await expect(page.getByRole("alert")).toContainText(
-      "no verified production adapter configured"
+      "no verified production adapter configured",
+      { timeout: 25000 }
     );
     await expect(
       page.getByRole("button", { name: "Retry", exact: true })
