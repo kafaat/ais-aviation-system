@@ -129,10 +129,8 @@ describe("flight cost capacity snapshot", () => {
     const first = await ingestFlightCost(e, sign(e));
     const snapshot = structuredClone(fixture.rows("aviation_evidence")[0]);
     fixture.rows("flights")[0].economySeats = 180;
-    const replay = await ingestFlightCost(
-      { ...e, issuedAt: new Date().toISOString() },
-      sign({ ...e, issuedAt: new Date().toISOString() })
-    );
+    const replayEnvelope = { ...e, issuedAt: new Date().toISOString() };
+    const replay = await ingestFlightCost(replayEnvelope, sign(replayEnvelope));
     expect(replay).toEqual({ evidenceId: first.evidenceId, duplicate: true });
     expect(fixture.rows("aviation_evidence")).toHaveLength(1);
     expect(fixture.rows("aviation_evidence")[0].ingestSnapshot).toEqual(
