@@ -579,11 +579,9 @@ test.describe("Funded journeys and truthful operational reads", () => {
       { timeout: 30000 }
     );
     await page.getByRole("button", { name: "Refresh exports" }).click();
-    const row = page
-      .getByRole("listitem")
-      .filter({
-        hasText: new RegExp("#" + requestId + " · JSON · .*completed", "i"),
-      });
+    const row = page.getByRole("listitem").filter({
+      hasText: new RegExp("#" + requestId + " · JSON · .*completed", "i"),
+    });
     const link = row.getByRole("link", { name: "Download" });
     const downloadUrl = "/api/gdpr/download/" + requestId;
     await expect(link).toHaveAttribute("href", downloadUrl);
