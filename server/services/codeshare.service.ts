@@ -1,3 +1,8 @@
+import {
+  applicableAgreement,
+  readAllotments,
+} from "./codeshare-allotment.service";
+import { availableSeatsExpression } from "./inventory-capacity.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -780,26 +785,6 @@ export async function getCodeshareFlights(marketingAirlineId: number) {
       return [];
     }
 
-    // Prefer a route-specific contract over a network-wide fallback. Within
-    // the same scope use the latest effective contract and a stable ID tie-break.
-    activeAgreements.sort(
-      (left, right) =>
-        Number(right.routeScope === "specific_routes") -
-          Number(left.routeScope === "specific_routes") ||
-        right.validFrom.getTime() - left.validFrom.getTime() ||
-        left.id - right.id
-    );
-    const candidates = activeAgreements.map(agreement => {
-      let routes: unknown;
-      if (agreement.routeScope === "specific_routes" && agreement.routes) {
-        try {
-          routes = JSON.parse(agreement.routes);
-        } catch {
-          // A malformed route list grants no routes.
-        }
-      }
-      return { agreement, routes };
-    });
     const operatingAirlineIds = [
       ...new Set(activeAgreements.map(a => a.operatingAirlineId)),
     ];
@@ -815,8 +800,18 @@ export async function getCodeshareFlights(marketingAirlineId: number) {
         status: flights.status,
         economyPrice: flights.economyPrice,
         businessPrice: flights.businessPrice,
-        economyAvailable: flights.economyAvailable,
-        businessAvailable: flights.businessAvailable,
+        economyAvailable: availableSeatsExpression(
+          flights.id,
+          flights.economyAvailable,
+          "economy",
+          now
+        ),
+        businessAvailable: availableSeatsExpression(
+          flights.id,
+          flights.businessAvailable,
+          "business",
+          now
+        ),
         operatingAirline: {
           id: airlines.id,
           code: airlines.code,
@@ -861,35 +856,50 @@ export async function getCodeshareFlights(marketingAirlineId: number) {
       .where(eq(airlines.id, marketingAirlineId))
       .limit(1);
 
-    // Filter flights based on route scope of each agreement and annotate
+    const allocations = await readAllotments(
+      db,
+      codeshareFlights.map(flight => flight.flightId)
+    );
     const result = codeshareFlights
       .map(flight => {
-        const match = candidates.find(({ agreement, routes }) => {
-          if (
-            agreement.operatingAirlineId !== flight.operatingAirline.id ||
-            (agreement.validUntil &&
-              flight.departureTime > agreement.validUntil) ||
-            (agreement.agreementType !== "free_sale" &&
-              !(Number(agreement.blockSize) > 0))
-          )
-            return false;
-          if (agreement.routeScope === "all_routes") return true;
-          return (
-            Array.isArray(routes) &&
-            routes.some(
-              route =>
-                route?.originId === flight.origin.id &&
-                route?.destinationId === flight.destination.id
-            )
-          );
+        const agreement = applicableAgreement(activeAgreements, {
+          airlineId: flight.operatingAirline.id,
+          originId: flight.origin.id,
+          destinationId: flight.destination.id,
+          departureTime: flight.departureTime,
         });
-        if (!match) return null;
-        const { agreement } = match;
-
+        if (!agreement) return null;
+        const scopes = allocations.filter(
+          row =>
+            row.flightId === flight.flightId && row.agreementId === agreement.id
+        );
+        const overBlock =
+          agreement.agreementType !== "free_sale" &&
+          scopes.reduce((sum, row) => sum + row.seatLimit, 0) >
+            Number(agreement.blockSize);
+        const saleOptions = scopes.map(row => ({
+          allotmentId: row.allotmentId,
+          marketingFlightNumber: row.marketingFlightNumber,
+          cabinClass: row.cabinClass,
+          seatsAvailable: overBlock
+            ? 0
+            : Math.max(
+                0,
+                Math.min(
+                  row.seatLimit - row.occupied,
+                  row.cabinClass === "business"
+                    ? flight.businessAvailable
+                    : flight.economyAvailable
+                )
+              ),
+        }));
         return {
           ...flight,
           marketingAirline: marketingAirline ?? null,
-          partnerSeatsAvailable: null,
+          saleOptions,
+          partnerSeatsAvailable: saleOptions.length
+            ? saleOptions.reduce((n, s) => n + s.seatsAvailable, 0)
+            : null,
           agreementReference: agreement.agreementReference,
           agreementType: agreement.agreementType,
           blockSize: agreement.blockSize,

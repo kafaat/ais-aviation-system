@@ -54,7 +54,7 @@ export const capabilityCatalog = [
     owner: "dcs-operations.service and departure-control.service",
     consumer: "dcsOperations and /airline/dcs",
     requirement:
-      "Tenant-scoped paid passenger/flight check-in, open/close/reopen, board/deplane/deny/allow/offload with transactional command receipts and actor/reason history. New travel retains document, seat and time-window rules. Deplane/offload may correct current attendance after the schedule cutoff or flight cancellation while funding, active-segment, tenant, seat and baggage guards remain required; completed/refunded cases require reconciliation. Physical baggage blocks offload until a verified withdrawal workflow exists; station/device and dispatch acceptance remain external.",
+      "Tenant-scoped paid passenger/flight check-in, open/close/reopen, board/deplane/deny/allow/offload with transactional command receipts and actor/reason history. New travel retains document, seat and time-window rules. Deplane/offload may correct current attendance after the schedule cutoff or flight cancellation while funding, active-segment, tenant, seat and baggage guards remain required; completed/refunded cases require reconciliation. An unresolved counter bag blocks offload until signed handback. The desk supports station cases, scoped APFAX, seat blocking and remapping, eligible quoted downgrades, supervised DCS closure and observed OUT. Authority, station device and dispatch acceptance remain external.",
   },
   {
     id: "staffBaggageRegistration",

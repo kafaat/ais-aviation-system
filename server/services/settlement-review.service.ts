@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { asc, eq } from "drizzle-orm";
 import { paymentReceipts } from "../../drizzle/schema";
+import { DepartureReleaseError } from "./booking-settlement.service";
 import { getDb } from "../db";
 import { stripe } from "../stripe";
 import { createServiceLogger } from "../_core/logger";
@@ -36,9 +37,14 @@ export async function requestSettlementReviewRefund(
       message: "Unsettled collection not found",
     });
   }
-  if (receipt.settlementStatus === "review_refunded") {
+  if (
+    receipt.settlementStatus === "review_refunded" ||
+    (receipt.refundedAmount > 0 && receipt.refundedAmount === receipt.amount)
+  ) {
     return { state: "refunded" as const, refundId: null };
   }
+  if (receipt.settlementError === DepartureReleaseError.reason)
+    throw new DepartureReleaseError();
   // Omitting amount refunds the provider's actual remaining balance. The stable
   // key makes operator/network retries identical, including partial refunds.
   log.info({ paymentIntentId, actorId }, "Settlement review refund requested");

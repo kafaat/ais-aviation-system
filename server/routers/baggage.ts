@@ -1,4 +1,9 @@
 import {
+  baggageCorrectionInput,
+  correctCounterBag,
+} from "../services/baggage-registration.service";
+import { eventReceipt } from "../contracts/dcs-station";
+import {
   getBaggageCustody,
   getFlightBaggageCloseout,
 } from "../services/baggage-custody.service";
@@ -37,8 +42,25 @@ const baggageStatusEnum = z.enum([
  * Baggage Router
  * Handles baggage registration, tracking, and management
  */
-const custodyStage = z.enum(["acceptance", "loading", "transfer", "arrival"]);
+const custodyStage = z.enum([
+  "acceptance",
+  "loading",
+  "transfer",
+  "arrival",
+  "unloading",
+  "return",
+]);
 export const baggageRouter = router({
+  correctWeight: airlineOpsProcedure
+    .input(baggageCorrectionInput)
+    .output(eventReceipt)
+    .mutation(({ input, ctx }) =>
+      correctCounterBag(input, {
+        id: ctx.user.id,
+        role: ctx.user.role,
+        tenantId: ctx.tenantId,
+      })
+    ),
   flightCloseout: airlineOpsProcedure
     .input(z.object({ flightId: z.number().int().positive() }))
     .output(

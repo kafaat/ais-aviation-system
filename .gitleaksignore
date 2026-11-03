@@ -1,3 +1,8 @@
 # Historical synthetic UUID used only as a unit-test idempotency nonce.
 # The fixture now generates its nonce at runtime; ignore only this published finding.
 691054c9a427bbc42b49a05fbed45b68d49e8392:client/src/lib/baggage-registration-intent.test.ts:generic-api-key:28
+
+# Historical synthetic idempotency labels in baggage weight-correction tests.
+f247762a582e88b31b4461e89da0640323176067:server/__tests__/baggage-registration-authority.test.ts:generic-api-key:580
+f247762a582e88b31b4461e89da0640323176067:server/__tests__/baggage-registration-authority.test.ts:generic-api-key:592
+f247762a582e88b31b4461e89da0640323176067:server/__tests__/baggage-registration-authority.test.ts:generic-api-key:606

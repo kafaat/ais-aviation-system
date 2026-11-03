@@ -141,9 +141,19 @@ export const responseContracts = {
         blockSize: z
           .union([z.null(), outputNumber])
           .describe("Configured agreement block size"),
-        partnerSeatsAvailable: z
-          .null()
-          .describe("No partner sale inventory is connected"),
+        partnerSeatsAvailable: outputNumber
+          .nullable()
+          .describe(
+            "Remaining locally configured seats, or null without an allocation"
+          ),
+        saleOptions: z.array(
+          z.object({
+            allotmentId: outputNumber,
+            marketingFlightNumber: z.string(),
+            cabinClass: z.enum(["economy", "business"]),
+            seatsAvailable: outputNumber,
+          })
+        ),
         flightId: outputNumber,
         flightNumber: z.string(),
         departureTime: z.date(),

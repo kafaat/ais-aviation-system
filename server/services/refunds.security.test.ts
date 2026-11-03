@@ -27,11 +27,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./ticket-coupons.service", () => ({
   assertNoFlownCouponForCancellation: mocks.assertUnused,
 }));
+vi.mock("./booking-settlement.service", () => ({
+  assertBookingDepartureReleasable: vi.fn(),
+}));
 vi.mock("./payment-settlement.service", () => ({
   settleVerifiedRefund: mocks.settle,
-}));
-vi.mock("./booking-settlement.service", () => ({
-  cancelBookingResources: mocks.cancel,
+  cancelAfterPartialRefund: mocks.cancel,
 }));
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
 vi.mock("../stripe", () => ({
@@ -435,7 +436,7 @@ describe("refund cancels the itinerary", () => {
     expect(mocks.cancel).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ id: 10, status: "confirmed" }),
-      expect.stringContaining("cancellation-fee refund"),
+      booking.stripePaymentIntentId,
       owner.id
     );
   });

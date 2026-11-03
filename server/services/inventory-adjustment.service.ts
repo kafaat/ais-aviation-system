@@ -1,3 +1,4 @@
+import type { SettlementTx } from "./booking-settlement.service";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -11,14 +12,17 @@ import { countActiveHolds } from "./inventory-capacity.service";
 import { recordEvent } from "./outbox.service";
 
 /** A manual adjustment cannot erase reservations or promises made by any channel. */
-export async function adjustFlightAvailability(input: {
-  flightId: number;
-  cabinClass: "economy" | "business";
-  seats: number;
-  tenantId?: number;
-  actorId?: number;
-  reason: string;
-}) {
+export async function adjustFlightAvailability(
+  input: {
+    flightId: number;
+    cabinClass: "economy" | "business";
+    seats: number;
+    tenantId?: number;
+    actorId?: number;
+    reason: string;
+  },
+  transaction?: SettlementTx
+) {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
   if (
@@ -30,7 +34,7 @@ export async function adjustFlightAvailability(input: {
       code: "BAD_REQUEST",
       message: "Invalid availability adjustment",
     });
-  return await db.transaction(async tx => {
+  const adjust = async (tx: SettlementTx) => {
     const [flight] = await tx
       .select()
       .from(flights)
@@ -120,5 +124,6 @@ export async function adjustFlightAvailability(input: {
       },
     });
     return true;
-  });
+  };
+  return await (transaction ? adjust(transaction) : db.transaction(adjust));
 }

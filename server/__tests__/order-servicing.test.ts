@@ -424,6 +424,46 @@ describe("paid order servicing", () => {
       5, 5, 5,
     ]);
   });
+  it.each(["saved", "legacy"])(
+    "preserves a codeshare reservation on a collected %s exchange",
+    async kind => {
+      const quote = await quotePaidOrderService(
+        {
+          bookingId: 7,
+          offerIds: [(await offer(12)).id, (await offer(13)).id],
+          idempotencyKey: "codeshare-collection",
+        },
+        1,
+        3
+      );
+      await createOrderServiceCheckout(
+        quote.modificationId,
+        1,
+        "https://ais.example"
+      );
+      fixture.rows("bookings")[0].codeshareAllotmentId = 9;
+      if (kind === "legacy") {
+        const modification = fixture.rows("booking_modifications")[0];
+        modification.servicingPayload = null;
+        modification.newFlightId = 12;
+      }
+      await payment(quote.modificationId, 3000);
+      expect(
+        fixture
+          .rows("payment_receipts")
+          .find(receipt => receipt.paymentIntentId === "pi_mod")
+          .settlementStatus
+      ).toBe("review_required");
+      expect(fixture.rows("bookings")[0]).toMatchObject({
+        flightId: 11,
+        codeshareAllotmentId: 9,
+        totalAmount: 10000,
+      });
+      expect(fixture.rows("flights").map(f => f.economyAvailable)).toEqual([
+        5, 5, 5,
+      ]);
+    }
+  );
   it("records a lower-fare liability and posts only a verified provider refund", async () => {
     fixture.rows("flights")[1].destinationId = 3;
     const a = await offer(12);

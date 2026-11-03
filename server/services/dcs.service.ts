@@ -528,7 +528,7 @@ export async function calculateWeightAndBalance(input: {
     .innerJoin(bookings, eq(baggageItems.bookingId, bookings.id))
     .where(
       and(
-        eq(bookings.flightId, input.flightId),
+        manifestBaggageFlightCondition(input.flightId),
         sql`${bookings.status} IN ('confirmed', 'completed')`
       )
     );

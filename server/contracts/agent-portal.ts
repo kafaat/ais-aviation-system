@@ -98,8 +98,19 @@ export const agentPortalFlight = z
 export const agentPortalDashboardInput = z
   .object({ agencyId: id, page: z.number().int().min(1).default(1) })
   .strict();
+export const agencyCreditSummary = z
+  .object({
+    termsId: id.nullable(),
+    limitMinor: z.number().int().nonnegative().nullable(),
+    outstandingMinor: z.number().int().nonnegative(),
+    settlementReview: z.boolean(),
+    availableMinor: z.number().int().nonnegative().nullable(),
+    currency: z.literal("SAR"),
+  })
+  .strict();
 export const agentPortalDashboard = z
   .object({
+    credit: agencyCreditSummary,
     bookings: z.array(
       z
         .object({

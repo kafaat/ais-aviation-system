@@ -16,7 +16,10 @@ import {
   planOrderRefund,
   processPendingOrderRefunds,
 } from "./order-refunds.service";
-import { cancelBookingResources } from "./booking-settlement.service";
+import {
+  DepartureReleaseError,
+  cancelBookingResources,
+} from "./booking-settlement.service";
 import { recordEvent } from "./outbox.service";
 
 /** Capture targets after the flight lock closes sales. Retry resumes the same jobs. */
@@ -184,6 +187,7 @@ export async function processFlightCancellations() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       const review =
+        error instanceof DepartureReleaseError ||
         /segment_cancellation_requires_review|original_collection_requires_reconciliation|cancellation_owner_state_changed|refund liability|Cancellation refund plan|Original refundable payer|collection is awaiting|collected payment is awaiting/i.test(
           message
         );

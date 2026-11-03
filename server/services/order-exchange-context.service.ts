@@ -10,6 +10,7 @@ import {
   orderServiceRefunds,
   paymentReceipts,
 } from "../../drizzle/schema";
+import { revalidationReceipt } from "./ticket-revalidation.service";
 import { getDb } from "../db";
 
 const flight = z.object({
@@ -31,6 +32,7 @@ const retainedSeats = z.object({
 const quoteMetadata = z.object({
   expiresAt: z.iso.datetime(),
   seatExchange: retainedSeats.optional(),
+  revalidation: revalidationReceipt.optional(),
 });
 export const exchangeContextOutput = z.object({
   sectors: z.array(flight.extend({ status: z.string() })),
@@ -41,6 +43,7 @@ export const exchangeContextOutput = z.object({
       checkoutStarted: z.boolean(),
       reviewRequired: z.boolean(),
       receiptId: z.string().nullable(),
+      revalidation: revalidationReceipt.nullable().optional(),
       refundStatus: z.enum(["processing", "completed", "review"]).nullable(),
       originalFlight: flight.nullable(),
       replacementFlight: flight.nullable(),
@@ -176,6 +179,9 @@ export async function getExchangeContext(
           !payload.success ||
           change.modificationType === "add_services",
         receiptId: change.executionEventId,
+        revalidation: payload.success
+          ? (payload.data.revalidation ?? null)
+          : null,
         refundStatus,
         originalFlight: byId.get(change.originalFlightId ?? 0) ?? null,
         replacementFlight: byId.get(change.newFlightId ?? 0) ?? null,

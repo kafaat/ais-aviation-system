@@ -1,3 +1,4 @@
+import { AgencyCreditApproval } from "@/components/AgencyCreditApproval";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -1011,6 +1012,12 @@ export default function TravelAgentManagement() {
             </DialogTitle>
             <DialogDescription>{selectedAgent?.agencyName}</DialogDescription>
           </DialogHeader>
+          {selectedAgent?.ownerUserId && statsDialogOpen ? (
+            <AgencyCreditApproval
+              key={selectedAgent.id}
+              agencyId={selectedAgent.id}
+            />
+          ) : null}
           {statsLoading ? (
             <div className="space-y-4">
               {[1, 2, 3, 4].map(i => (

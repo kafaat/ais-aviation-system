@@ -88,6 +88,27 @@ export default function CodeshareFlights() {
                   {flight.operatingAirline.name} ({flight.operatingAirline.code}
                   )
                 </p>
+                {flight.saleOptions.map(option => (
+                  <div key={option.allotmentId}>
+                    <bdi>{option.marketingFlightNumber}</bdi>
+                    {" · "}
+                    {t(`cabin.${option.cabinClass}`)}
+                    {" · "}
+                    {t("codeshare.localAvailability", {
+                      seats: option.seatsAvailable,
+                    })}{" "}
+                    {option.seatsAvailable > 0 && (
+                      <Link
+                        className="underline"
+                        href={`/booking/${flight.flightId}?class=${option.cabinClass}&codeshareAllotmentId=${option.allotmentId}`}
+                      >
+                        {t("codeshare.bookService", {
+                          flight: option.marketingFlightNumber,
+                        })}
+                      </Link>
+                    )}
+                  </div>
+                ))}
                 <p>
                   {t("codeshare.departureUtc")}:{" "}
                   <time dateTime={flight.departureTime.toISOString()}>

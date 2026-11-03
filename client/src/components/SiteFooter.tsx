@@ -104,6 +104,14 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link
+                  href="/kiosk"
+                  className="hover:text-white transition-colors"
+                >
+                  {t("kioskBagTag.title")}
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/check-in"
                   className="hover:text-white transition-colors"
                 >
