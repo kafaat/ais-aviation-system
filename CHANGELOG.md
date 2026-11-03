@@ -1,5 +1,53 @@
 # Changelog
 
+## What's Changed in v1.35.0
+
+### Features
+
+- feat(dcs): issue BCBP boarding passes with PDF417 and verify scans (#240) (3e5631e)
+- feat: implement gated airline standards readiness (#242) (336efd8)
+- feat(aviation): complete local airline servicing and evidence workflows (#243) (3a706dc)
+- feat: connect passenger and airline self-service workflows (1db45df)
+- feat: complete operational and passenger service journeys (9a76876)
+- feat: assign funded passenger extras to their booked sector (#246) (d0710a9)
+- feat(booking): add per-sector named fares, eligible passenger extras, codeshare carrier details, and funded baggage allowances in tickets and kiosk reads (#248).
+- feat(ibe): preserve passenger counts, return and multi-city searches, promotions and safe login return paths through owned invoice checkout (#250).
+- feat(bookings): add rate-limited reference-and-surname itinerary lookup within the deployment's tenant boundary (#250).
+- feat(agent): link agencies to tenant-matched owners and provide a session-authenticated browser portal for their own searches, bookings and invoices (#248, #250).
+- feat(ibe): add operator branding, allowlisted embedded search and display-currency estimates while retaining the invoice currency (#250).
+- feat(dcs): add a tenant-scoped departure desk with check-in controls, boarding, attendance changes and audited command receipts (#247).
+- feat(baggage): register physical bags against the exact paid passenger and sector, and recover the original staff receipt after a lost response or same-tab reload (#247, #251).
+- feat(passengers): support individual family check-in, passenger/flight document entry, untransmitted APIS drafts and sector-specific special-service requests (#247, #251).
+
+### Bug Fixes
+
+- fix(e2e): invalidate the flight-search cache after inserting a fixture flight (#241) (35d0328)
+- fix(payments): separate idempotency keys from trace ids and key every money-moving operation (#239) (4d76c94)
+- fix: reconcile scoped extras across invoice edits and refunds (#246) (04e73ce)
+- fix(finance): block whole-itinerary cancellation when a coupon has flown, require posted funding for commission approval and reject unverified agency payout settlement (#248).
+- fix(reports): align booking, flight and revenue exports with their date/status filters and canonical financial projections (#248).
+- fix(checkout): preserve the submitted payload through uncertain booking responses and verify agency ownership and tenant before execution or replay (#250).
+- fix(client): cap tRPC batches at the server limit so concurrent booking and allowance reads remain usable (#250).
+- fix(dcs): permit deplane and offload after departure time or flight cancellation only while the reservation remains funded and active, retaining seat, tenant and baggage guards (#251).
+- fix(dcs): preserve boarding denial across seat release, enforce it during free-seat selection and retain boarded-passenger and physical-bag reconciliation after financial cleanup (#247, #251).
+
+### Tests
+
+- Extend isolated browser and MySQL acceptance journeys for invoice recovery, agency ownership, passenger-sector baggage, departure recovery and report-owner separation (#247, #248, #250, #251).
+
+### Documentation
+
+- Document public lookup, agent portal and embedding configuration, DCS migration and legacy-sector review requirements, and the remaining provider, device and dispatch acceptance boundaries (#247, #250, #251).
+
+### Other Changes
+
+- style: format privacy export browser assertions (c423fbd)
+- Merge pull request #244 from kafaat/codex/ais-passenger-and-airline-workflows (26fd19b)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.34.0...v1.35.0
+
+---
+
 ## What's Changed in v1.34.0
 
 ### Features
