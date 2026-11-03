@@ -5,7 +5,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  onlineManager,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { beforeAll, expect, it, vi } from "vitest";
 import superjson from "superjson";
@@ -24,6 +28,15 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 }));
 vi.mock("@/lib/downloadFile", () => ({ downloadFile: vi.fn() }));
 vi.mock("@/components/SEO", () => ({ SEO: () => null }));
+vi.mock("qrcode", () => ({
+  default: {
+    toDataURL: (token: string) =>
+      Promise.resolve(`data:image/png;base64,${btoa(token)}`),
+  },
+}));
+vi.mock("@/lib/boarding-pass-pdf417", () => ({
+  renderBoardingPassPDF417: () => '<svg xmlns="http://www.w3.org/2000/svg"/>',
+}));
 
 beforeAll(async () => {
   await i18n.changeLanguage("en");
@@ -123,6 +136,7 @@ function passengerReplies() {
   const replies: Record<string, Reply> = {
     "bookings.getByPNR": () => ({ id: 7, cabinClass: "economy" }),
     "bookings.getPassengers": () => passengers,
+    "ancillary.getBookingAncillaries": () => [],
     "bookings.getDepartureState": () =>
       [42, 43].map(flightId => ({
         flightId,
@@ -362,6 +376,231 @@ it("rechecks an uncertain save and hides old clearance until the saved document 
   ).toBeInTheDocument();
   expect(screen.getByLabelText(/^Document Number/)).toHaveValue("UPDATED123");
 });
+
+/** A second active flight read verifies that document changes invalidate the
+ * passenger's whole itinerary, while the companion's pass remains untouched.
+ */
+function AnotherFlightPass() {
+  const query = trpc.seatMap.getBoardingPass.useQuery(
+    { flightId: 43, passengerId: 11 },
+    { retry: false }
+  );
+  return (
+    <output data-testid="another-flight-pass">
+      {query.error
+        ? "unavailable"
+        : query.isFetching
+          ? "checking"
+          : query.data?.barcodeData}
+    </output>
+  );
+}
+
+function boardingPassFixture(passengerId: number, flightId: number) {
+  return {
+    flightNumber: `AIS${flightId}`,
+    passenger: {
+      firstName: passengerId === 11 ? "First" : "Second",
+      lastName: "Traveler",
+    },
+    airline: { code: "AI", name: "Fixture airline" },
+    origin: { code: "ADE" },
+    destination: { code: "AUH" },
+    departureTime: new Date("2090-06-15T10:00:00Z"),
+    seat: {
+      seatNumber: passengerId === 11 ? "1A" : "1B",
+      cabinClass: "economy",
+    },
+    barcodeData: `token-${passengerId}-${flightId}-before`,
+    bcbp: `BCBP-${passengerId}-${flightId}-before`,
+  };
+}
+
+function PausePassRefresh() {
+  const utils = trpc.useUtils();
+  return (
+    <button
+      onClick={() => {
+        onlineManager.setOnline(false);
+        void utils.seatMap.getBoardingPass.invalidate({ passengerId: 11 });
+      }}
+    >
+      Recheck while offline
+    </button>
+  );
+}
+
+it("does not display a cached printable pass when its verification is paused offline", async () => {
+  const replies = passengerReplies();
+  replies["bookings.getDepartureState"] = () => [
+    {
+      flightId: 42,
+      flightNumber: "AIS42",
+      departureTime: new Date("2090-06-15T10:00:00Z"),
+      status: "scheduled",
+      open: true,
+      passengers: [{ passengerId: 11, seatNumber: "1A", checkedIn: true }],
+    },
+  ];
+  replies["bookings.baggageEntitlements"] = () => [];
+  replies["seatMap.getBoardingPass"] = ({ passengerId, flightId }) =>
+    boardingPassFixture(passengerId, flightId);
+  visit(
+    <>
+      <CheckIn />
+      <PausePassRefresh />
+    </>,
+    replies
+  );
+  fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+    target: { value: "ABC123" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  await screen.findByText("BCBP-11-42-before");
+  expect(
+    screen.getByRole("button", { name: "Print Boarding Pass" })
+  ).toBeInTheDocument();
+  try {
+    fireEvent.click(
+      screen.getByRole("button", { name: "Recheck while offline" })
+    );
+    await waitFor(() =>
+      expect(screen.queryByText("BCBP-11-42-before")).not.toBeInTheDocument()
+    );
+    expect(
+      screen.queryByRole("button", { name: "Print Boarding Pass" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("img", { name: "Boarding Pass", exact: true })
+    ).not.toBeInTheDocument();
+  } finally {
+    await act(async () => {
+      onlineManager.setOnline(true);
+    });
+  }
+});
+
+it.each(["acknowledged", "lost response"])(
+  "hides and rechecks every flight pass for the edited passenger after an APIS save with %s",
+  async outcome => {
+    const replies = passengerReplies();
+    const save = replies["apis.submitInfo"];
+    let committed = false;
+    let releasePassReads!: () => void;
+    const pendingPassRead = new Promise<void>(resolve => {
+      releasePassReads = resolve;
+    });
+    replies["bookings.getDepartureState"] = () =>
+      [42, 43].map(flightId => ({
+        flightId,
+        flightNumber: `AIS${flightId}`,
+        departureTime: new Date("2090-06-15T10:00:00Z"),
+        status: "scheduled",
+        open: true,
+        passengers: passengers.map(person => ({
+          passengerId: person.id,
+          seatNumber: person.id === 11 ? "1A" : "1B",
+          checkedIn: true,
+        })),
+      }));
+    replies["bookings.baggageEntitlements"] = () => [];
+    replies["seatMap.getBoardingPass"] = async ({ passengerId, flightId }) => {
+      if (committed && passengerId === 11) {
+        await pendingPassRead;
+        throw new Error(
+          "Current operator clearance is required for the updated documents"
+        );
+      }
+      return boardingPassFixture(passengerId, flightId);
+    };
+    replies["apis.submitInfo"] = input => {
+      const result = save(input);
+      committed = true;
+      if (outcome === "lost response")
+        throw new Error("Save response was lost after commit");
+      return result;
+    };
+    const calls = visit(
+      <>
+        <CheckIn />
+        <AnotherFlightPass />
+      </>,
+      replies
+    );
+    fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+      target: { value: "ABC123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await screen.findByText("BCBP-11-42-before");
+    await screen.findByText("BCBP-12-42-before");
+    expect(
+      screen.getAllByRole("button", { name: "Print Boarding Pass" })
+    ).toHaveLength(2);
+    expect(screen.getByTestId("another-flight-pass")).toHaveTextContent(
+      "token-11-43-before"
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review or edit travel documents" })
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Save Information" })
+      ).toBeEnabled()
+    );
+    fireEvent.change(screen.getByLabelText(/^Document Number/), {
+      target: { value: "UPDATED123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Information" }));
+    await waitFor(() => {
+      for (const flightId of [42, 43]) {
+        expect(
+          calls.filter(
+            call =>
+              call.method === "seatMap.getBoardingPass" &&
+              call.input.passengerId === 11 &&
+              call.input.flightId === flightId
+          )
+        ).toHaveLength(2);
+      }
+    });
+    expect(screen.queryByText("BCBP-11-42-before")).not.toBeInTheDocument();
+    expect(
+      screen
+        .queryByRole("img", {
+          name: "Boarding Pass",
+          exact: true,
+          hidden: true,
+        })
+        ?.getAttribute("src")
+    ).not.toContain(btoa("token-11-42-before"));
+    expect(
+      screen.getAllByRole("button", { name: "Print Boarding Pass" })
+    ).toHaveLength(1);
+    expect(screen.getByTestId("another-flight-pass")).toHaveTextContent(
+      "checking"
+    );
+    expect(
+      calls.filter(
+        call =>
+          call.method === "seatMap.getBoardingPass" &&
+          call.input.passengerId === 12
+      )
+    ).toHaveLength(1);
+    await act(async () => {
+      releasePassReads();
+      await pendingPassRead;
+    });
+    await screen.findByText("Synthetic source unavailable");
+    expect(screen.queryByText("BCBP-11-42-before")).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Print Boarding Pass" })
+    ).toHaveLength(1);
+    expect(screen.getByText("BCBP-12-42-before")).toBeInTheDocument();
+    expect(screen.getByTestId("another-flight-pass")).toHaveTextContent(
+      "unavailable"
+    );
+  }
+);
 
 function adminReplies(overrides: Record<string, Reply> = {}) {
   return {

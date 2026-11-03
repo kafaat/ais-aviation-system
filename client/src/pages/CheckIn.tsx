@@ -24,10 +24,11 @@ function BoardingPass({
   passengerId: number;
 }) {
   const { t } = useTranslation();
-  const { data, error, isLoading } = trpc.seatMap.getBoardingPass.useQuery(
-    { flightId, passengerId },
-    { retry: false, refetchOnWindowFocus: true, staleTime: 0 }
-  );
+  const { data, error, isFetching, isPaused } =
+    trpc.seatMap.getBoardingPass.useQuery(
+      { flightId, passengerId },
+      { retry: false, refetchOnWindowFocus: true, staleTime: 0 }
+    );
   const [qr, setQr] = useState<{ token: string; image: string }>();
   // IATA BCBP (Resolution 792) PDF417 for airport readers; rendered lazily so
   // the barcode library stays out of the main bundle.
@@ -69,7 +70,7 @@ function BoardingPass({
       active = false;
     };
   }, [data]);
-  if (isLoading) return <p role="status">{t("common.loading")}</p>;
+  if (isFetching || isPaused) return <p role="status">{t("common.loading")}</p>;
   if (error || !data || qr?.token !== data.barcodeData)
     return <p role="alert">{error?.message || t("checkIn.passUnavailable")}</p>;
   return (
