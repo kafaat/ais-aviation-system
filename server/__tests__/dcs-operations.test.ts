@@ -29,6 +29,12 @@ import {
 import { changeSeat, undoCheckIn } from "../services/seat-map.service";
 import { paymentReceipts } from "../../drizzle/schema";
 import { settleVerifiedRefund } from "../services/payment-settlement.service";
+import { DepartureReleaseError } from "../services/booking-settlement.service";
+import { registerBaggage } from "../services/baggage-registration.service";
+import {
+  performCheckIn as kioskCheckIn,
+  selectSeat as kioskSelectSeat,
+} from "../services/kiosk.service";
 
 const actor: DcsActor = { userId: 20, role: "ops", tenantId: 1 };
 const key = { flightId: 11, bookingId: 3, passengerId: 4 };
@@ -861,6 +867,192 @@ describe("passenger attendance, denial and scan binding", () => {
 });
 
 describe("station reports and controlled desk commands", () => {
+  it.each([
+    { label: "another open sector", targetFlightId: 12, reopen: false },
+    { label: "a supervised reopened sector", targetFlightId: 11, reopen: true },
+  ])(
+    "retains full-refund departure evidence without admitting travel on $label",
+    async ({ targetFlightId, reopen }) => {
+      await checkIn();
+      const target = { ...key, flightId: targetFlightId };
+      if (targetFlightId !== key.flightId)
+        await checkInDcsPassenger({ ...target, ...command() }, actor);
+      const pass = await issueBoardingPass(target, { userId: 7 });
+      await transition("board");
+      await changeDcsFlightState(
+        { flightId: key.flightId, action: "close", ...command() },
+        actor
+      );
+      // The live-MySQL acceptance exercises final close itself. This boundary
+      // fixture retains its persisted result without simulating its SQL joins.
+      fixture.rows("flights")[0].dcsClosedAt = new Date(Date.now() - 1000);
+      const original = structuredClone({
+        seats: fixture.rows("seat_inventory"),
+        states: fixture.rows("dcs_passenger_states"),
+        coupons: fixture.rows("ticket_coupons"),
+      });
+      await fixture.db.insert(paymentReceipts).values({
+        paymentIntentId: "pi_closed_departure_refund",
+        kind: "booking",
+        bookingId: 3,
+        userId: 7,
+        targetId: 3,
+        amount: 10000,
+        refundedAmount: 0,
+        currency: "SAR",
+        settlementStatus: "applied",
+      });
+      const refund = {
+        paymentIntentId: "pi_closed_departure_refund",
+        chargeId: "ch_closed_departure_refund",
+        eventId: "evt_closed_departure_refund",
+        amount: 10000,
+        amountRefunded: 10000,
+        currency: "sar",
+      };
+      for (let i = 0; i < 2; i++)
+        await fixture.db.transaction((tx: any) =>
+          settleVerifiedRefund(tx, refund)
+        );
+      expect(fixture.rows("payment_receipts")[0]).toMatchObject({
+        refundedAmount: 10000,
+        settlementStatus: "review_required",
+        settlementError: DepartureReleaseError.reason,
+      });
+      expect(fixture.rows("financial_ledger")).toMatchObject([
+        { type: "refund", amount: "100.00" },
+      ]);
+      expect(fixture.rows("bookings")[0]).toMatchObject({
+        status: "confirmed",
+        paymentStatus: "paid",
+        seatsReserved: true,
+      });
+      expect({
+        seats: fixture.rows("seat_inventory"),
+        states: fixture.rows("dcs_passenger_states"),
+        coupons: fixture.rows("ticket_coupons"),
+      }).toEqual(original);
+      expect(
+        (await getDcsDesk(key.flightId, actor)).passengers.find(
+          p => p.passengerId === key.passengerId
+        )?.attendanceState
+      ).toBe("boarded");
+      if (reopen) {
+        await caller("airline_admin").finalize({
+          flightId: key.flightId,
+          action: "reopen",
+          ...command(),
+        });
+        await changeDcsFlightState(
+          { flightId: key.flightId, action: "reopen", ...command() },
+          actor
+        );
+      }
+      const events = structuredClone(fixture.rows("dcs_operation_events"));
+      await expect(
+        checkInDcsPassenger({ ...target, passengerId: 5, ...command() }, actor)
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        checkInPassengers({
+          bookingId: key.bookingId,
+          flightId: targetFlightId,
+          assignments: [{ passengerId: 5 }],
+          owner: { userId: 7, tenantId: 1 },
+        })
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        kioskCheckIn(key.bookingId, 5, { flightId: targetFlightId })
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        kioskSelectSeat(key.bookingId, 5, "1B", targetFlightId)
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        transitionDcsPassenger(
+          { ...target, action: "board", ...command() },
+          actor
+        )
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(issueBoardingPass(target, { userId: 7 })).rejects.toThrow(
+        /departure reconciliation/i
+      );
+      expect((await verifyActiveBoardingPass(pass.token)).valid).toBe(false);
+      expect((await verifyActiveBoardingPass(pass.bcbp)).valid).toBe(false);
+      await expect(
+        changeSeat(targetFlightId, "1A", "2A", key.bookingId, key.passengerId)
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        registerBaggage(
+          {
+            ...target,
+            segmentId: targetFlightId === 11 ? 30 : 31,
+            weight: 10,
+            idempotencyKey: command().idempotencyKey,
+          },
+          { id: actor.userId, role: actor.role, tenantId: 1 }
+        )
+      ).rejects.toThrow(/departure reconciliation/i);
+      expect(fixture.rows("baggage_items")).toHaveLength(0);
+      expect(fixture.rows("dcs_operation_events")).toEqual(events);
+      expect({
+        seats: fixture.rows("seat_inventory"),
+        states: fixture.rows("dcs_passenger_states"),
+        coupons: fixture.rows("ticket_coupons"),
+      }).toEqual(original);
+      if (reopen) {
+        expect((await transition("deplane")).state).toBe("checked_in");
+        await expect(transition("board")).rejects.toThrow(
+          /departure reconciliation/i
+        );
+        expect((await transition("offload")).state).toBe("offloaded");
+        await expect(checkIn()).rejects.toThrow(/departure reconciliation/i);
+      }
+    }
+  );
+
+  it("does not revoke funded travel when a duplicate collection is refunded", async () => {
+    await fixture.db.insert(paymentReceipts).values([
+      {
+        paymentIntentId: "pi_original_departure_payment",
+        kind: "booking",
+        bookingId: 3,
+        userId: 7,
+        targetId: 3,
+        amount: 10000,
+        currency: "SAR",
+        settlementStatus: "applied",
+      },
+      {
+        paymentIntentId: "pi_duplicate_departure_payment",
+        kind: "booking",
+        bookingId: 3,
+        userId: 7,
+        targetId: 3,
+        amount: 10000,
+        currency: "SAR",
+        settlementStatus: "review_required",
+        settlementError: "Booking already has a different collected payment",
+      },
+    ]);
+    await fixture.db.transaction((tx: any) =>
+      settleVerifiedRefund(tx, {
+        paymentIntentId: "pi_duplicate_departure_payment",
+        chargeId: "ch_duplicate_departure_payment",
+        eventId: "evt_duplicate_departure_payment",
+        amount: 10000,
+        amountRefunded: 10000,
+        currency: "sar",
+      })
+    );
+    expect(fixture.rows("payment_receipts")[1]).toMatchObject({
+      settlementStatus: "review_refunded",
+      refundedAmount: 10000,
+    });
+    expect((await checkIn()).state).toBe("checked_in");
+    const pass = await issueBoardingPass(key, { userId: 7 });
+    expect((await verifyActiveBoardingPass(pass.token)).valid).toBe(true);
+    expect((await transition("board")).state).toBe("boarded");
+  });
+
   it("reopens a cancelled final closure for supervised attendance recovery without admitting travel", async () => {
     await checkIn();
     await transition("board");

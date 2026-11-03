@@ -9,9 +9,13 @@ import {
   passengers,
   seatInventory,
   inventoryLocks,
+  paymentReceipts,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
-import type { SettlementTx } from "./booking-settlement.service";
+import {
+  DepartureReleaseError,
+  type SettlementTx,
+} from "./booking-settlement.service";
 import { assertTravelClearance } from "./travel-clearance.service";
 import { recordEvent } from "./outbox.service";
 import {
@@ -20,7 +24,9 @@ import {
   writeDcsPassengerState,
 } from "./dcs-state.service";
 
-/** Booking -> itinerary flights (ascending) -> passenger -> seat is the lock order. */
+/** Booking -> itinerary flights (ascending) -> passenger -> seat is the lock order.
+ * Callers lock this booking before their first consistent read, or use READ
+ * COMMITTED, so receipt reads cannot predate the locked booking state. */
 export async function lockDepartureContext(
   tx: SettlementTx,
   bookingId: number,
@@ -33,6 +39,21 @@ export async function lockDepartureContext(
     .for("update");
   if (!booking)
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  // Refund writers also own the booking lock. Read their durable departure hold
+  // without locking/scanning other bookings' receipts after itinerary locks.
+  // A refunded duplicate collection has a different reason and must not revoke
+  // the valid original booking's right to travel.
+  const [departureReview] = await tx
+    .select({ id: paymentReceipts.paymentIntentId })
+    .from(paymentReceipts)
+    .where(
+      and(
+        eq(paymentReceipts.bookingId, bookingId),
+        eq(paymentReceipts.settlementStatus, "review_required"),
+        eq(paymentReceipts.settlementError, DepartureReleaseError.reason)
+      )
+    )
+    .limit(1);
   const legs = await tx
     .select()
     .from(bookingSegments)
@@ -74,6 +95,7 @@ export async function lockDepartureContext(
     flight,
     legs,
     reserved: member ? member.seatsReserved : booking.seatsReserved,
+    departureReconciliationRequired: Boolean(departureReview),
   };
 }
 
@@ -85,11 +107,23 @@ export function assertDcsOpen(flight: { dcsClosedAt?: Date | null }) {
     });
 }
 
+function assertDepartureReconciled(
+  c: Awaited<ReturnType<typeof lockDepartureContext>>
+) {
+  if (c.departureReconciliationRequired)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Departure reconciliation is required before new passenger or seat admissions",
+    });
+}
+
 export async function assertSeatSelectionContext(
   tx: SettlementTx,
   c: Awaited<ReturnType<typeof lockDepartureContext>>
 ) {
   assertDcsOpen(c.flight);
+  assertDepartureReconciled(c);
   if (
     !["scheduled", "delayed"].includes(c.flight.status) ||
     c.flight.departureTime <= new Date()
@@ -145,6 +179,10 @@ export function assertDepartureOpen(
   purpose: "check_in" | "boarding"
 ) {
   assertFundedDepartureReservation(c);
+  // Final closure retains physical attendance and its paid reservation flags
+  // after a provider refund. That evidence permits supervised recovery, never
+  // new travel on an open or subsequently reopened sector.
+  assertDepartureReconciled(c);
   const remaining = c.flight.departureTime.getTime() - Date.now();
   if (
     !["scheduled", "delayed"].includes(c.flight.status) ||

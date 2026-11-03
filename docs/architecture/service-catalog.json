@@ -1027,6 +1027,7 @@
         "server/services/booking-checkout.service.ts",
         "server/services/bookings.service.ts",
         "server/services/corporate-settlement.service.ts",
+        "server/services/departure-control.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/internal-refund.service.ts",
         "server/services/irops-recovery.service.ts",
@@ -2027,6 +2028,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/booking-settlement.service.ts",
         "server/services/dcs-state.service.ts",
         "server/services/outbox.service.ts",
         "server/services/ticket-coupons.service.ts",
@@ -2039,6 +2041,7 @@
           "flights",
           "inventoryLocks",
           "passengers",
+          "paymentReceipts",
           "seatInventory"
         ],
         "writes": ["bookings", "passengers", "seatInventory"]

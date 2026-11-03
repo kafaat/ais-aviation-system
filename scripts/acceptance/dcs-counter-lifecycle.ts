@@ -15,6 +15,10 @@ import {
 import { readTicketDocument } from "../../server/services/ticket-documents.service";
 import { checkInPassengers } from "../../server/services/departure-control.service";
 import {
+  issueBoardingPass,
+  verifyActiveBoardingPass,
+} from "../../server/services/boarding-pass.service";
+import {
   setBagReturnGrant,
   returnDcsBag,
   changeDcsFlightState,
@@ -1337,6 +1341,160 @@ export async function verifyDcsCounterLifecycle(
       );
     }
   );
+  for (const reopen of [false, true])
+    await check(
+      `DCS station: refunded departure blocks new admission on ${reopen ? "a supervised reopened" : "another open"} sector`,
+      async () => {
+        const j = await journey(2, 2);
+        const closed = j.key(0, 0);
+        const target = j.key(0, reopen ? 0 : 1);
+        const newPassenger = j.key(1, reopen ? 0 : 1);
+        await staffCheckIn(closed);
+        if (!reopen) await staffCheckIn(target);
+        const pass = await issueBoardingPass(target, { userId: ownerId });
+        await transitionDcsPassenger(
+          { ...closed, action: "board", ...command() },
+          actor
+        );
+        await changeDcsFlightState(
+          { flightId: closed.flightId, action: "close", ...command() },
+          actor
+        );
+        await finalizeDesk(
+          { flightId: closed.flightId, action: "close", ...command() },
+          supervisor
+        );
+        if (!reopen)
+          await finalizeDesk(
+            {
+              flightId: closed.flightId,
+              action: "record_out",
+              offBlocksAt: new Date().toISOString(),
+              ...command(),
+            },
+            supervisor
+          );
+        const seat = await storedSeat(closed);
+        const manifest = (await generateFlightManifest(closed.flightId))
+          .manifest.passengers.list;
+        const [paid] = await db
+          .select()
+          .from(s.paymentReceipts)
+          .where(eq(s.paymentReceipts.bookingId, j.bookingId));
+        const refund = {
+          paymentIntentId: paid.paymentIntentId,
+          chargeId: "ch_departure_hold_" + j.bookingId,
+          amount: paid.amount,
+          amountRefunded: paid.amount,
+          currency: "sar",
+          eventId: randomUUID(),
+        };
+        for (let i = 0; i < 2; i++)
+          await db.transaction(tx => settleVerifiedRefund(tx, refund));
+        const [receipt] = await db
+          .select()
+          .from(s.paymentReceipts)
+          .where(eq(s.paymentReceipts.paymentIntentId, paid.paymentIntentId));
+        assert.equal(receipt.refundedAmount, paid.amount);
+        assert.equal(receipt.settlementStatus, "review_required");
+        assert.match(receipt.settlementError ?? "", /departure reconciliation/);
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(s.financialLedger)
+              .where(eq(s.financialLedger.stripeEventId, refund.eventId))
+          ).length,
+          1
+        );
+        assert.deepEqual(await storedSeat(closed), seat);
+        assert.deepEqual(
+          (await generateFlightManifest(closed.flightId)).manifest.passengers
+            .list,
+          manifest
+        );
+        if (reopen) {
+          await finalizeDesk(
+            { flightId: closed.flightId, action: "reopen", ...command() },
+            supervisor
+          );
+          await changeDcsFlightState(
+            { flightId: closed.flightId, action: "reopen", ...command() },
+            actor
+          );
+        }
+        await assert.rejects(
+          staffCheckIn(newPassenger),
+          /departure reconciliation/i
+        );
+        await assert.rejects(
+          checkInPassengers({
+            bookingId: j.bookingId,
+            flightId: target.flightId,
+            assignments: [{ passengerId: newPassenger.passengerId }],
+            owner: { userId: ownerId, tenantId },
+          }),
+          /departure reconciliation/i
+        );
+        await assert.rejects(
+          transitionDcsPassenger(
+            { ...target, action: "board", ...command() },
+            actor
+          ),
+          /departure reconciliation/i
+        );
+        await assert.rejects(
+          issueBoardingPass(target, { userId: ownerId }),
+          /departure reconciliation/i
+        );
+        assert.equal((await verifyActiveBoardingPass(pass.token)).valid, false);
+        assert.equal((await verifyActiveBoardingPass(pass.bcbp)).valid, false);
+        await assert.rejects(
+          selectSeat(
+            target.flightId,
+            "2A",
+            j.bookingId,
+            newPassenger.passengerId
+          ),
+          /departure reconciliation/i
+        );
+        await assert.rejects(
+          registerBaggage(j.bag(10, 0, reopen ? 0 : 1), bagActor),
+          /departure reconciliation/i
+        );
+        assert.deepEqual(await storedSeat(closed), seat);
+        assert.equal(
+          (await getDcsDesk(closed.flightId, actor)).passengers.find(
+            p => p.passengerId === closed.passengerId
+          )?.attendanceState,
+          "boarded"
+        );
+        if (reopen) {
+          assert.equal(
+            (
+              await transitionDcsPassenger(
+                { ...closed, action: "deplane", ...command() },
+                actor
+              )
+            ).state,
+            "checked_in"
+          );
+          assert.equal(
+            (
+              await transitionDcsPassenger(
+                { ...closed, action: "offload", ...command() },
+                actor
+              )
+            ).state,
+            "offloaded"
+          );
+          await assert.rejects(
+            staffCheckIn(closed),
+            /departure reconciliation/i
+          );
+        }
+      }
+    );
   await check(
     "DCS station: cancellation after final closure allows supervised recovery before OUT",
     async () => {
