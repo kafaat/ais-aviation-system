@@ -544,6 +544,7 @@ export async function printBoardingPass(
       sequence: String(data.seat.boardingSequence).padStart(4, "0"),
       gate: data.gate,
       barcodeData: data.barcodeData,
+      bcbp: data.bcbp,
       printedAt: data.issuedAt.toISOString(),
     },
   };

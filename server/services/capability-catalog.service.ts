@@ -97,6 +97,15 @@ export const capabilityCatalog = [
       "Certified scale, printer, conveyor and device heartbeat adapter",
   },
   {
+    id: "bcbpBoardingPass",
+    implementation: "implemented",
+    owner: "boarding-pass.service and bcbp.service",
+    consumer:
+      "boardingPass, seatMap.getBoardingPass, eticket.generateBoardingPass, kiosk.printBoardingPass and bagDrop.scanPass",
+    requirement:
+      "IATA Resolution 792 M1 string (BCBP version 6 conditional items, HMAC security data) rendered as PDF417 beside the signed QR, round-trip tested with committed sample vectors; acceptance by the airport's CUSS/CUPPS/gate readers and independently captured scanner reads remain external evidence",
+  },
+  {
     id: "weightBalance",
     implementation: "demo",
     owner: "weight-balance.service",

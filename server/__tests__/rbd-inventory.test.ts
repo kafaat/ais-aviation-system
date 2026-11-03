@@ -167,6 +167,7 @@ describe("transactional RBD inventory", () => {
   });
 
   it("writes one RBD hold and segment reference per itinerary leg", async () => {
+    fixture.rows("fare_classes")[0].basePriceMultiplier = "1.250";
     const created = await createMultiCityBooking({
       userId: 1,
       tenantId: 3,
@@ -187,6 +188,7 @@ describe("transactional RBD inventory", () => {
       ],
     });
 
+    expect(created.totalAmount).toBe(25_000);
     expect(created.segments).toHaveLength(2);
     expect(
       fixture

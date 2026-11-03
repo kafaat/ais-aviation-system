@@ -20,7 +20,7 @@ export const boardingPassRouter = router({
         tags: ["Boarding Pass"],
         summary: "Issue a signed boarding pass",
         description:
-          "Issue a cryptographically signed, state-verified boarding pass token for a passenger on one of the caller's checked-in, active paid reservations.",
+          "Issue a cryptographically signed, state-verified boarding pass token for a passenger on one of the caller's checked-in, active paid reservations, together with the IATA Resolution 792 BCBP (M1) string for PDF417 readers and wallets.",
         protect: true,
       },
     })
@@ -47,7 +47,7 @@ export const boardingPassRouter = router({
         tags: ["Boarding Pass"],
         summary: "Verify a boarding pass",
         description:
-          "Verify a boarding-pass token's signature, expiry and current eligibility online. Returns validity and the decoded boarding details.",
+          "Verify a boarding pass online: either the signed token (QR layer) or a scanned IATA BCBP M1 string whose security data must match the current pass. Checks expiry and current eligibility and returns the decoded boarding details.",
       },
     })
     .input(z.object({ token: z.string().min(1).max(8192) }))

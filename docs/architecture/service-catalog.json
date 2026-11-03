@@ -572,6 +572,23 @@
       "replacement": null
     },
     {
+      "file": "server/services/bcbp.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bcbp.service.ts",
+      "domain": "departure",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/boarding-pass.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/biometric.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/biometric.service.ts",
@@ -615,12 +632,21 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/access-control.service.ts",
+        "server/services/bcbp.service.ts",
         "server/services/departure-control.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/travel-clearance.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["passengers", "seatInventory"],
+        "reads": [
+          "airlines",
+          "airports",
+          "bookingSegments",
+          "bookings",
+          "flights",
+          "passengers",
+          "seatInventory"
+        ],
         "writes": ["seatInventory"]
       },
       "replacement": null
@@ -2254,6 +2280,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/_core/idempotency.ts",
         "server/services/aircraft-rotation.service.ts",
         "server/services/ancillary-services.service.ts",
         "server/services/aviation-evidence.service.ts",
@@ -3170,6 +3197,7 @@
         "server/services/metrics.service.ts",
         "server/services/outbox.service.ts",
         "server/services/rbd-inventory.service.ts",
+        "server/services/retail-offer.service.ts",
         "server/services/seat-economics.service.ts",
         "server/services/tenant.service.ts"
       ],
@@ -3981,7 +4009,10 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/services/payment-providers/index.ts"],
-      "dependencies": ["server/services/stripe/client-factory.ts"],
+      "dependencies": [
+        "server/_core/idempotency.ts",
+        "server/services/stripe/client-factory.ts"
+      ],
       "tableExpressions": {
         "reads": [],
         "writes": []
@@ -4970,6 +5001,7 @@
         "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",
         "server/services/fare-components.service.ts",
+        "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
         "server/services/order-servicing.service.ts"

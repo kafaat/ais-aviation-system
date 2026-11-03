@@ -11,6 +11,7 @@ export const responseContracts = {
     pdf: z.string(),
     ticketNumber: z.string(),
     filename: z.string(),
+    bcbp: z.string(),
   }),
   generateCalendarEvent: z.object({ ics: z.string(), filename: z.string() }),
 };

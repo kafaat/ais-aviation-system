@@ -1,5 +1,6 @@
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { assertTenantOperational } from "./tenant.service";
+import { DEFAULT_TAX_RATE, priceOfferLines } from "./retail-offer.service";
 import { allocateProportional } from "./seat-economics.service";
 import { createInventoryLock } from "./inventory-lock.service";
 import {
@@ -226,8 +227,15 @@ export async function calculateMultiCityPrice(
     cabinClass: "economy" | "business";
     fareClassCode?: string;
   }>,
-  passengerCount: number
+  passengerCount: number,
+  passengerTypes?: Array<"adult" | "child" | "infant">
 ): Promise<MultiCityPriceResult> {
+  if (passengerTypes && passengerTypes.length !== passengerCount)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Passenger count does not match passenger types",
+    });
+  const typedPassengers = passengerTypes?.map(type => ({ type }));
   if (segments.length < MIN_SEGMENTS) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -259,6 +267,7 @@ export async function calculateMultiCityPrice(
           });
         }
 
+        let fareMultiplier = 1;
         if (segment.fareClassCode) {
           const database = await db.getDb();
           if (!database)
@@ -280,18 +289,35 @@ export async function calculateMultiCityPrice(
               code: "BAD_REQUEST",
               message: `Booking class unavailable for segment ${index + 1}`,
             });
+          fareMultiplier = rbd.basePriceMultiplier;
         }
 
         const pricingResult = await calculateFlightPrice(
           flight,
           segment.cabinClass,
-          passengerCount
+          passengerCount,
+          typedPassengers ??
+            (segment.fareClassCode
+              ? Array.from({ length: passengerCount }, () => ({
+                  type: "adult" as const,
+                }))
+              : undefined)
         );
 
         return {
           segmentIndex: index,
           flightId: segment.flightId,
-          basePrice: pricingResult.price,
+          basePrice: segment.fareClassCode
+            ? priceOfferLines(
+                pricingResult,
+                {
+                  name: "direct:rbd",
+                  fareMultiplier,
+                  taxRate: pricingResult.fareLines ? DEFAULT_TAX_RATE : 0,
+                },
+                "direct"
+              ).totalAmount
+            : pricingResult.price,
           cabinClass: segment.cabinClass,
           fareClassCode: segment.fareClassCode?.toUpperCase(),
         };
@@ -376,7 +402,8 @@ export async function createMultiCityBooking(
         cabinClass: input.cabinClass,
         fareClassCode: s.fareClassCode,
       })),
-      input.passengers.length
+      input.passengers.length,
+      input.passengers.map(p => p.type)
     );
 
     // Generate booking reference and PNR

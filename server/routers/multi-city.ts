@@ -86,13 +86,19 @@ export const multiCityRouter = router({
           .min(1)
           .max(9)
           .describe("Number of passengers"),
+        passengerTypes: z
+          .array(z.enum(["adult", "child", "infant"]))
+          .min(1)
+          .max(9)
+          .optional(),
       })
     )
     .output(responseContracts["calculatePrice"])
     .query(async ({ input }) => {
       return await multiCityService.calculateMultiCityPrice(
         input.segments,
-        input.passengerCount
+        input.passengerCount,
+        input.passengerTypes
       );
     }),
 

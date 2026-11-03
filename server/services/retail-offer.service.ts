@@ -81,6 +81,41 @@ export function composeOfferPolicy(
     throw new Error("Offer exceeds monetary storage range");
   return { baseAmount: base, taxesAndFees, totalAmount };
 }
+export function priceOfferLines(
+  price: { price: number; fareLines?: z.infer<typeof offerFareLineSchema>[] },
+  policy: OfferPayload["policy"],
+  channel: "direct" | "ndc"
+) {
+  const fareLines = price.fareLines?.map(line => {
+    if (channel === "direct" && policy.fareMultiplier === 1) return line;
+    // Apply the channel's price and tax policy to the fare before tax.
+    const adjusted = composeOfferPolicy(line.baseFare, policy);
+    return {
+      ...line,
+      baseFare: adjusted.baseAmount,
+      tax: adjusted.taxesAndFees,
+      total: adjusted.totalAmount + line.bookingFee,
+    };
+  });
+  const amounts = fareLines
+    ? {
+        fareLines,
+        baseAmount: fareLines.reduce((sum, line) => sum + line.baseFare, 0),
+        taxesAndFees: fareLines.reduce(
+          (sum, line) => sum + line.tax + line.bookingFee,
+          0
+        ),
+        totalAmount: fareLines.reduce((sum, line) => sum + line.total, 0),
+      }
+    : composeOfferPolicy(price.price, policy);
+  if (
+    !Number.isSafeInteger(amounts.totalAmount) ||
+    amounts.totalAmount > 2147483647
+  )
+    throw new Error("Offer exceeds monetary storage range");
+  return amounts;
+}
+
 export async function createRetailOffer(
   input: {
     flightId: number;
@@ -136,36 +171,10 @@ export async function createRetailOffer(
         ? {
             name: `direct:rbd:${input.fareClass.fareClassId}:v1`,
             fareMultiplier: input.fareClass.fareMultiplier,
-            taxRate: 0,
+            taxRate: price.fareLines ? DEFAULT_TAX_RATE : 0,
           }
         : { name: "direct:v1", fareMultiplier: 1, taxRate: 0 };
-  const fareLines = price.fareLines?.map(line => {
-    if (input.channel === "direct") return line;
-    // Apply the channel's price and tax policy to the fare before tax.
-    const adjusted = composeOfferPolicy(line.baseFare, policy);
-    return {
-      ...line,
-      baseFare: adjusted.baseAmount,
-      tax: adjusted.taxesAndFees,
-      total: adjusted.totalAmount + line.bookingFee,
-    };
-  });
-  const amounts = fareLines
-    ? {
-        fareLines,
-        baseAmount: fareLines.reduce((sum, line) => sum + line.baseFare, 0),
-        taxesAndFees: fareLines.reduce(
-          (sum, line) => sum + line.tax + line.bookingFee,
-          0
-        ),
-        totalAmount: fareLines.reduce((sum, line) => sum + line.total, 0),
-      }
-    : composeOfferPolicy(price.price, policy);
-  if (
-    !Number.isSafeInteger(amounts.totalAmount) ||
-    amounts.totalAmount > 2147483647
-  )
-    throw new Error("Offer exceeds monetary storage range");
+  const amounts = priceOfferLines(price, policy, input.channel);
   const payload: OfferPayload = {
     version: 1,
     currency: "SAR",

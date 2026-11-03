@@ -14,6 +14,7 @@ export interface RbdAvailability {
   cabinClass: SellableCabin;
   fareFamily: string | null;
   priority: number;
+  basePriceMultiplier: number;
   totalAllocated: number;
   availableSeats: number;
 }
@@ -224,6 +225,7 @@ export async function getFlightRbdAvailability(
       cabinClass: fareClass.cabinClass,
       fareFamily: fareClass.fareFamily,
       priority: fareClass.priority,
+      basePriceMultiplier: Number(fareClass.basePriceMultiplier),
       totalAllocated: row.capacity,
       availableSeats: Math.max(0, row.availableSeats - held),
     };

@@ -163,9 +163,15 @@ importers:
       axios:
         specifier: ^1.20.0
         version: 1.20.0
+      bcbp:
+        specifier: 6.0.2
+        version: 6.0.2
       bullmq:
         specifier: ^5.81.4
         version: 5.81.4
+      bwip-js:
+        specifier: 4.11.4
+        version: 4.11.4
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -3215,6 +3221,9 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
+  bcbp@6.0.2:
+    resolution: {integrity: sha512-GOpIZW5+lgbpHghyuwBCm1SjneaCw3lk/oHpUtS+1HewAkhZKZfmGDG6U4toUMCS2KOOG3YuVU5Hkt34M8JVEg==}
+
   big-integer@1.6.52:
     resolution: {integrity: sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg==}
     engines: {node: '>=0.6'}
@@ -3284,6 +3293,10 @@ packages:
     peerDependenciesMeta:
       redis:
         optional: true
+
+  bwip-js@4.11.4:
+    resolution: {integrity: sha512-FOXnOQkinxog8FwxdnPB+8k2wRqwPnqXwxX37KcXOtMNW+9CinOkGv9MtIoRC4HX/UyogT0/9lIp6FDm2DcquQ==}
+    hasBin: true
 
   bytes-iec@3.1.1:
     resolution: {integrity: sha512-fey6+4jDK7TFtFg/klGSvNKJctyU7n2aQdnM+CO0ruLPbqqMOM8Tio0Pc+deqUeVKX1tL5DQep1zQ7+37aTAsA==}
@@ -10156,6 +10169,8 @@ snapshots:
 
   baseline-browser-mapping@2.11.21: {}
 
+  bcbp@6.0.2: {}
+
   big-integer@1.6.52: {}
 
   binary@0.3.0:
@@ -10244,6 +10259,8 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+
+  bwip-js@4.11.4: {}
 
   bytes-iec@3.1.1: {}
 
