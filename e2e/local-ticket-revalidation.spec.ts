@@ -9,6 +9,7 @@ test("owner revalidates an open local coupon to a different date once and recove
   page,
   browser,
 }) => {
+  await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
   await useBrowserSession(page, "reporting");
   const client = rpc(page);
   const user = await client.auth.me.query();
