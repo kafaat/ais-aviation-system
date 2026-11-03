@@ -548,6 +548,7 @@ export async function printBoardingPass(
     .from(flights)
     .where(eq(flights.id, flightId ?? b.flightId));
   return {
+    printStatus: "document_ready" as const,
     boardingPass: {
       passengerName: `${p.firstName} ${p.lastName}`,
       ticketNumber: p.ticketNumber,
@@ -573,7 +574,8 @@ export async function printBoardingPass(
       gate: data.gate,
       barcodeData: data.barcodeData,
       bcbp: data.bcbp,
-      printedAt: data.issuedAt.toISOString(),
+      issuedAt: data.issuedAt.toISOString(),
+      printedAt: null,
     },
   };
 }
@@ -1014,6 +1016,13 @@ export async function getKioskDevices(filters?: {
 // Kiosk Analytics
 // ============================================================================
 
+// Legacy numeric fields count confirmed outputs. No station receipt source is configured.
+const unconfirmedPrintTotals = {
+  printConfirmationAvailable: false,
+  boardingPassesPrinted: 0,
+  bagTagsPrinted: 0,
+} as const;
+
 /**
  * Get kiosk usage analytics for an airport within a date range.
  */
@@ -1051,8 +1060,9 @@ export async function getKioskAnalytics(
         abandonedSessions: 0,
         errorSessions: 0,
         avgCompletionRate: 0,
-        boardingPassesPrinted: 0,
-        bagTagsPrinted: 0,
+        checkInSessions: 0,
+        bagTagSessions: 0,
+        ...unconfirmedPrintTotals,
       },
     };
   }
@@ -1123,11 +1133,11 @@ export async function getKioskAnalytics(
     (sum, k) => sum + k.errorSessions,
     0
   );
-  const boardingPassesPrinted = kioskAnalyticsData.reduce(
+  const checkInSessions = kioskAnalyticsData.reduce(
     (sum, k) => sum + k.checkInSessions,
     0
   );
-  const bagTagsPrinted = kioskAnalyticsData.reduce(
+  const bagTagSessions = kioskAnalyticsData.reduce(
     (sum, k) => sum + k.bagTagSessions,
     0
   );
@@ -1148,8 +1158,9 @@ export async function getKioskAnalytics(
         totalSessions > 0
           ? Math.round((completedSessions / totalSessions) * 100)
           : 0,
-      boardingPassesPrinted,
-      bagTagsPrinted,
+      checkInSessions,
+      bagTagSessions,
+      ...unconfirmedPrintTotals,
     },
   };
 }

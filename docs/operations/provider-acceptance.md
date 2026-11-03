@@ -29,6 +29,47 @@ rollout runs `python3 scripts/deploy/verify_service_ownership.py` before its
 first cluster operation. It requires recorded assignments for every domain and
 a matching owner, on-call contact and evidence reference for every active service.
 
+## Station printer and scanner field check
+
+Use an isolated station, synthetic baggage, and 4 × 2 inch test stock. Record the
+station and printer asset IDs, model, firmware read directly from the device,
+driver, reader asset ID and UTC time. If station maintenance requires a firmware
+change, use the station-approved package for that exact model. With the PrintSet 5
+USB procedure, re-read the device version after reboot and compare it with the
+approved version. Follow the model-specific post-upgrade calibration procedure.
+
+1. From the AIS test environment, request one eligible registered bag through
+   `kiosk.printBagTag` for the checked-in passenger and flight sector. Record
+   the flight, bag and request reference. Save the successful, decoded result
+   (or its ordinary or single-item batched tRPC HTTP response) locally as UTF-8
+   `response.json`. Keep request tokens out of captures.
+2. In the checked-out project with dependencies installed, run
+   `node --import tsx scripts/acceptance/kiosk-printer.ts label response.json test.pdf`.
+   Print the resulting diagnostic label on the selected station queue at actual
+   size. Record its print job ID and observe the label exit that printer.
+3. Run `node --import tsx scripts/acceptance/kiosk-printer.ts scan response.json`.
+   Scan the paper with an independent reader configured for Interleaved 2 of 5
+   and an Enter terminator. The comparison uses all ten digits including leading
+   zeros. A different test label must give a mismatch and a nonzero exit code.
+4. Retain the AIS revision and request reference, printer/reader IDs, observed
+   print job, expected and scanned test values, UTC times and operator in the
+   station evidence record. Capture the raw reader output independently. Record
+   blocked for missing equipment or unsupported stock, and failed for unreadable
+   or mismatched output. Only a witnessed print and matching independent scan
+   completes this station-specific check.
+
+For integrated acceptance, correlate an authenticated device acknowledgement with
+the AIS request, printer and registered bag. Disconnect the printer or exhaust its
+stock during a second job. Verify that AIS records no confirmed print. Reconcile
+any queued output before retrying. Verify the same tag and no extra baggage or
+custody record. Keep integrated acceptance blocked while that adapter or its
+acknowledgement is unavailable.
+
+The PDF is a diagnostic label. A matching value verifies the supplied text.
+Keep the paper and reader observations with it. This tool does not update custody,
+printer telemetry or airport acceptance status. Production bag-tag stock, layout,
+device acknowledgement and airport sign-off have their own acceptance criteria.
+
 ## Running the existing Stripe sandbox acceptance
 
 Use the **Stripe Sandbox Acceptance** workflow on `main` after PR #148. It is

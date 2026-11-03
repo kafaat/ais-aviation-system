@@ -2,6 +2,19 @@
 import { bagTagDocument } from "./kiosk-bag-tag";
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const analyticsTotals = z.object({
+  totalSessions: outputNumber,
+  completedSessions: outputNumber,
+  abandonedSessions: outputNumber,
+  errorSessions: outputNumber,
+  avgCompletionRate: outputNumber,
+  checkInSessions: outputNumber,
+  bagTagSessions: outputNumber,
+  printConfirmationAvailable: z.literal(false),
+  boardingPassesPrinted: z.literal(0),
+  bagTagsPrinted: z.literal(0),
+});
+
 export const responseContracts = {
   authenticate: z.object({
     capabilityToken: z.string(),
@@ -128,6 +141,7 @@ export const responseContracts = {
     newSeat: z.string(),
   }),
   printBoardingPass: z.object({
+    printStatus: z.literal("document_ready"),
     boardingPass: z.object({
       passengerName: z.string(),
       ticketNumber: z.union([z.null(), z.string()]),
@@ -159,7 +173,8 @@ export const responseContracts = {
       gate: z.string().nullable(),
       barcodeData: z.string(),
       bcbp: z.string(),
-      printedAt: z.string(),
+      issuedAt: z.string().datetime(),
+      printedAt: z.null(),
     }),
   }),
   printBagTag: bagTagDocument,
@@ -214,15 +229,7 @@ export const responseContracts = {
       airportId: outputNumber,
       dateRange: z.object({ from: z.date(), to: z.date() }),
       kiosks: z.array(z.never()),
-      totals: z.object({
-        totalSessions: outputNumber,
-        completedSessions: outputNumber,
-        abandonedSessions: outputNumber,
-        errorSessions: outputNumber,
-        avgCompletionRate: outputNumber,
-        boardingPassesPrinted: outputNumber,
-        bagTagsPrinted: outputNumber,
-      }),
+      totals: analyticsTotals,
     }),
     z.object({
       airportId: outputNumber,
@@ -245,15 +252,7 @@ export const responseContracts = {
           avgSessionDurationSec: outputNumber,
         })
       ),
-      totals: z.object({
-        totalSessions: outputNumber,
-        completedSessions: outputNumber,
-        abandonedSessions: outputNumber,
-        errorSessions: outputNumber,
-        avgCompletionRate: outputNumber,
-        boardingPassesPrinted: outputNumber,
-        bagTagsPrinted: outputNumber,
-      }),
+      totals: analyticsTotals,
     }),
   ]),
   getDeviceStatus: z.object({
