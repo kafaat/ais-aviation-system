@@ -36,37 +36,10 @@ interface SelectedFlight {
   segmentIndex: number;
   flightId: number;
   cabinClass: "economy" | "business";
-  price: number;
+  fareClassCode?: string;
 }
 
-type FlightResult = {
-  id: number;
-  flightNumber: string;
-  departureTime: Date;
-  arrivalTime: Date;
-  status: string;
-  economyPrice: number;
-  businessPrice: number;
-  economyAvailable: number;
-  businessAvailable: number;
-  airline: {
-    code: string;
-    name: string;
-    logo: string | null;
-  };
-  origin: {
-    code: string;
-    name: string;
-    city: string;
-    timezone?: string | null;
-  };
-  destination: {
-    code: string;
-    name: string;
-    city: string;
-    timezone?: string | null;
-  };
-};
+type PassengerType = "adult" | "child" | "infant";
 
 export default function MultiCityResults() {
   const search = useRawSearch();
@@ -84,9 +57,8 @@ function MultiCityResultsForm({ search }: { search: string }) {
       : "economy"
   );
   const preferences = useMemo(() => searchPreferences(search), [search]);
-  const passengerTypes = useMemo(
-    () => travelerTypes(preferences),
-    [preferences]
+  const [passengerTypes, setPassengerTypes] = useState<PassengerType[]>(() =>
+    travelerTypes(preferences)
   );
   const passengerCount = passengerTypes.length;
 
@@ -98,21 +70,25 @@ function MultiCityResultsForm({ search }: { search: string }) {
   });
 
   // Calculate price for selected flights
-  const { data: priceResult, error: priceError } =
-    trpc.multiCity.calculatePrice.useQuery(
-      {
-        segments: selectedFlights.map(sf => ({
-          flightId: sf.flightId,
-          cabinClass,
-        })),
-        passengerCount,
-        passengerTypes,
-      },
-      {
-        enabled:
-          selectedFlights.length === segments.length && segments.length >= 2,
-      }
-    );
+  const quote = trpc.multiCity.calculatePrice.useQuery(
+    {
+      segments: selectedFlights.map(sf => ({
+        flightId: sf.flightId,
+        cabinClass: sf.cabinClass,
+        ...(sf.fareClassCode ? { fareClassCode: sf.fareClassCode } : {}),
+      })),
+      passengerCount,
+      passengerTypes,
+    },
+    {
+      retry: false,
+      enabled:
+        selectedFlights.length === segments.length && segments.length >= 2,
+    }
+  );
+
+  const priceResult =
+    quote.isError || quote.isFetching ? undefined : quote.data;
 
   // Trigger search when segments are loaded
   useEffect(() => {
@@ -127,12 +103,10 @@ function MultiCityResultsForm({ search }: { search: string }) {
 
   const handleSelectFlight = (
     segmentIndex: number,
-    flight: FlightResult,
-    selectedClass: "economy" | "business"
+    flightId: number,
+    selectedClass: "economy" | "business",
+    fareClassCode?: string
   ) => {
-    const price =
-      selectedClass === "economy" ? flight.economyPrice : flight.businessPrice;
-
     setSelectedFlights(prev => {
       const existing = prev.filter(
         sf =>
@@ -142,9 +116,9 @@ function MultiCityResultsForm({ search }: { search: string }) {
         ...existing,
         {
           segmentIndex,
-          flightId: flight.id,
+          flightId,
           cabinClass: selectedClass,
-          price,
+          fareClassCode,
         },
       ].sort((a, b) => a.segmentIndex - b.segmentIndex);
     });
@@ -162,7 +136,7 @@ function MultiCityResultsForm({ search }: { search: string }) {
   };
 
   const handleProceedToBooking = () => {
-    if (selectedFlights.length !== segments.length) {
+    if (!priceResult || selectedFlights.length !== segments.length) {
       toast.error(t("multiCity.selectAllFlights"));
       return;
     }
@@ -176,11 +150,17 @@ function MultiCityResultsForm({ search }: { search: string }) {
       segments: selectedFlights.map(sf => ({
         flightId: sf.flightId,
         departureDate: segments[sf.segmentIndex].departureDate.toISOString(),
+        ...(sf.fareClassCode ? { fareClassCode: sf.fareClassCode } : {}),
       })),
       cabinClass,
     };
 
-    const context = preferenceParams(preferences);
+    const context = preferenceParams({
+      ...preferences,
+      adults: passengerTypes.filter(type => type === "adult").length,
+      children: passengerTypes.filter(type => type === "child").length,
+      infants: passengerTypes.filter(type => type === "infant").length,
+    });
     context.set("data", JSON.stringify(bookingData));
     context.set("search", search);
     setLocation(`/booking/multi-city?${context}`);
@@ -200,12 +180,6 @@ function MultiCityResultsForm({ search }: { search: string }) {
       ? `${hours}s ${minutes}d`
       : `${hours}h ${minutes}m`;
   };
-
-  const totalSelectedPrice = useMemo(() => {
-    return (
-      selectedFlights.reduce((sum, sf) => sum + sf.price, 0) * passengerCount
-    );
-  }, [selectedFlights, passengerCount]);
 
   if (!segments.length)
     return (
@@ -337,12 +311,16 @@ function MultiCityResultsForm({ search }: { search: string }) {
                   </Card>
                 ) : (
                   <div className="space-y-3">
-                    {segmentResult.flights.map((flight: FlightResult) => {
+                    {segmentResult.flights.map(flight => {
                       const isSelected = isFlightSelected(
                         segmentIndex,
                         flight.id
                       );
 
+                      const selectedFare = isSelected
+                        ? getSelectedFlightForSegment(segmentIndex)
+                            ?.fareClassCode
+                        : undefined;
                       return (
                         <Card
                           key={flight.id}
@@ -427,7 +405,9 @@ function MultiCityResultsForm({ search }: { search: string }) {
                                 {flight.economyAvailable >= passengerCount && (
                                   <Button
                                     variant={
-                                      isSelected && cabinClass === "economy"
+                                      isSelected &&
+                                      !selectedFare &&
+                                      cabinClass === "economy"
                                         ? "default"
                                         : "outline"
                                     }
@@ -436,7 +416,7 @@ function MultiCityResultsForm({ search }: { search: string }) {
                                     onClick={() =>
                                       handleSelectFlight(
                                         segmentIndex,
-                                        flight,
+                                        flight.id,
                                         "economy"
                                       )
                                     }
@@ -458,7 +438,9 @@ function MultiCityResultsForm({ search }: { search: string }) {
                                 {flight.businessAvailable >= passengerCount && (
                                   <Button
                                     variant={
-                                      isSelected && cabinClass === "business"
+                                      isSelected &&
+                                      !selectedFare &&
+                                      cabinClass === "business"
                                         ? "default"
                                         : "outline"
                                     }
@@ -467,7 +449,7 @@ function MultiCityResultsForm({ search }: { search: string }) {
                                     onClick={() =>
                                       handleSelectFlight(
                                         segmentIndex,
-                                        flight,
+                                        flight.id,
                                         "business"
                                       )
                                     }
@@ -487,6 +469,37 @@ function MultiCityResultsForm({ search }: { search: string }) {
                                   </Button>
                                 )}
                               </div>
+                              {flight.fareClassAvailability
+                                ?.filter(
+                                  fare => fare.availableSeats >= passengerCount
+                                )
+                                .map(fare => (
+                                  <Button
+                                    key={fare.fareClassId}
+                                    size="sm"
+                                    className="mt-2 mr-2"
+                                    variant={
+                                      selectedFare === fare.code
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    aria-pressed={selectedFare === fare.code}
+                                    onClick={() =>
+                                      handleSelectFlight(
+                                        segmentIndex,
+                                        flight.id,
+                                        fare.cabinClass,
+                                        fare.code
+                                      )
+                                    }
+                                  >
+                                    {t("search." + fare.cabinClass)} ·{" "}
+                                    {fare.fareFamily
+                                      ? fare.fareFamily + " · "
+                                      : ""}
+                                    {fare.code}
+                                  </Button>
+                                ))}
                             </div>
                           </div>
                         </Card>
@@ -505,6 +518,52 @@ function MultiCityResultsForm({ search }: { search: string }) {
                 {t("multiCity.priceSummary")}
               </h3>
 
+              <label className="mb-2 flex justify-between gap-2 text-sm">
+                {t("booking.passengers")}
+                <select
+                  value={passengerCount}
+                  onChange={event => {
+                    const count = Number(event.target.value);
+                    setPassengerTypes(types =>
+                      Array.from(
+                        { length: count },
+                        (_, i) => types[i] ?? "adult"
+                      )
+                    );
+                  }}
+                >
+                  {Array.from({ length: 9 }, (_, index) => (
+                    <option key={index + 1} value={index + 1}>
+                      {index + 1}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {passengerTypes.map((type, index) => (
+                <label
+                  key={index}
+                  className="mb-2 flex justify-between gap-2 text-sm"
+                >
+                  {t("booking.passengerType")} {index + 1}
+                  <select
+                    value={type}
+                    onChange={event => {
+                      const value = event.target.value as PassengerType;
+                      setPassengerTypes(types =>
+                        types.map((original, i) =>
+                          i === index ? value : original
+                        )
+                      );
+                    }}
+                  >
+                    {(["adult", "child", "infant"] as const).map(value => (
+                      <option key={value} value={value}>
+                        {t("booking." + value)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
               {/* Selected Flights Summary */}
               <div className="space-y-3 mb-6">
                 {segments.map((_, index) => {
@@ -519,7 +578,15 @@ function MultiCityResultsForm({ search }: { search: string }) {
                       </span>
                       {selected ? (
                         <span className="font-medium">
-                          {formatPrice(selected.price)} {t("common.currency")}
+                          {selected.fareClassCode &&
+                            selected.fareClassCode + " · "}
+                          {priceResult?.segments[index]
+                            ? formatPrice(
+                                priceResult.segments[index].basePrice
+                              ) +
+                              " " +
+                              t("common.currency")
+                            : "—"}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">
@@ -560,22 +627,26 @@ function MultiCityResultsForm({ search }: { search: string }) {
               <div className="border-t pt-4">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold">{t("booking.total")}</span>
-                  <span className="text-2xl font-bold text-primary">
-                    {priceResult
-                      ? formatPrice(priceResult.totalPrice)
-                      : formatPrice(totalSelectedPrice)}{" "}
-                    {t("common.currency")}
-                    <DisplayCurrencyEstimate
-                      amountMinor={
-                        priceResult?.totalPrice ?? totalSelectedPrice
-                      }
-                    />
+                  <span
+                    data-testid="multi-city-quoted-total"
+                    className="text-2xl font-bold text-primary"
+                  >
+                    {priceResult ? (
+                      <>
+                        {formatPrice(priceResult.totalPrice)}{" "}
+                        {t("common.currency")}
+                        <DisplayCurrencyEstimate
+                          amountMinor={priceResult.totalPrice}
+                        />
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </span>
                 </div>
               </div>
 
-              {priceError && <p role="alert">{priceError.message}</p>}
-
+              {quote.error && <p role="alert">{quote.error.message}</p>}
               {/* Book Button */}
               <Button
                 className="w-full mt-6"

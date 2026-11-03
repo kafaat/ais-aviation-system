@@ -48,7 +48,7 @@ async function buildXlsxBuffer(
 export interface ReportFilters {
   startDate?: Date;
   endDate?: Date;
-  status?: string;
+  status?: typeof bookings.$inferSelect.status;
   type?: string;
 }
 
@@ -92,12 +92,9 @@ export interface FlightPerformanceRow {
 // CSV Export Functions
 // ============================================================================
 
-/**
- * Export bookings to CSV format
- */
-export async function exportBookingsToCSV(
-  filters: ReportFilters
-): Promise<string> {
+const maxBookingRows = 10000;
+
+async function getBookingRows(filters: ReportFilters) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -113,12 +110,7 @@ export async function exportBookingsToCSV(
     conditions.push(lte(bookings.createdAt, filters.endDate));
   }
   if (filters.status) {
-    conditions.push(
-      eq(
-        bookings.status,
-        filters.status as "pending" | "confirmed" | "cancelled" | "completed"
-      )
-    );
+    conditions.push(eq(bookings.status, filters.status));
   }
 
   const results = await db
@@ -149,27 +141,36 @@ export async function exportBookingsToCSV(
       sql`dest_airport.id = ${flights.destinationId}`
     )
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(bookings.createdAt))
-    .limit(10000);
+    .orderBy(desc(bookings.createdAt), desc(bookings.id))
+    .limit(maxBookingRows + 1);
+  if (results.length > maxBookingRows) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Report exceeds 10,000 bookings. Narrow the selected filters.",
+    });
+  }
+  return results;
+}
 
-  // Generate CSV
-  const headers = [
-    "Booking Reference",
-    "PNR",
-    "Flight Number",
-    "Origin",
-    "Destination",
-    "Departure Date",
-    "Cabin Class",
-    "Status",
-    "Payment Status",
-    "Total Amount (SAR)",
-    "Passengers",
-    "User Email",
-    "Created At",
-  ];
+type BookingRow = Awaited<ReturnType<typeof getBookingRows>>[number];
+const bookingHeaders = [
+  "Booking Reference",
+  "PNR",
+  "Flight Number",
+  "Origin",
+  "Destination",
+  "Departure Date",
+  "Cabin Class",
+  "Status",
+  "Payment Status",
+  "Total Amount (SAR)",
+  "Passengers",
+  "User Email",
+  "Created At",
+];
 
-  const rows = results.map(row => [
+function bookingCells(row: BookingRow) {
+  return [
     row.bookingReference || "",
     row.pnr || "",
     row.flightNumber || "",
@@ -180,15 +181,46 @@ export async function exportBookingsToCSV(
     row.status || "",
     row.paymentStatus || "",
     ((Number(row.totalAmount) || 0) / 100).toFixed(2),
-    String(row.passengers || 0),
+    row.passengers || 0,
     row.userEmail || "",
     row.createdAt ? new Date(row.createdAt).toISOString() : "",
-  ]);
+  ];
+}
 
+function bookingSummary(rows: BookingRow[]) {
+  const amount = rows.reduce((sum, row) => sum + row.totalAmount, 0);
   return [
-    headers.join(","),
-    ...rows.map(row => row.map(escapeCSV).join(",")),
-  ].join("\n");
+    ["Total Bookings", rows.length, "إجمالي الحجوزات"],
+    [
+      "Total Booking Amount (SAR)",
+      (amount / 100).toFixed(2),
+      "إجمالي قيمة الحجوزات",
+    ],
+    [
+      "Confirmed Bookings",
+      rows.filter(row => row.status === "confirmed").length,
+      "الحجوزات المؤكدة",
+    ],
+    [
+      "Cancelled Bookings",
+      rows.filter(row => row.status === "cancelled").length,
+      "الحجوزات الملغاة",
+    ],
+    [
+      "Total Passengers",
+      rows.reduce((sum, row) => sum + row.passengers, 0),
+      "إجمالي الركاب",
+    ],
+  ] as const;
+}
+
+export async function exportBookingsToCSV(
+  filters: ReportFilters
+): Promise<string> {
+  const rows = await getBookingRows(filters);
+  return [bookingHeaders, ...rows.map(bookingCells)]
+    .map(row => row.map(cell => escapeCSV(String(cell))).join(","))
+    .join("\n");
 }
 
 const financialColumns = [
@@ -366,93 +398,20 @@ export async function exportFlightPerformanceToCSV(
 export async function generateBookingsPDF(
   filters: ReportFilters
 ): Promise<Buffer> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get summary data
-  const startDate =
-    filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const endDate = filters.endDate || new Date();
-
-  const [summary] = await db
-    .select({
-      totalBookings: sql<number>`COUNT(*)`,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
-      confirmedBookings: sql<number>`SUM(CASE WHEN ${bookings.status} = 'confirmed' THEN 1 ELSE 0 END)`,
-      cancelledBookings: sql<number>`SUM(CASE WHEN ${bookings.status} = 'cancelled' THEN 1 ELSE 0 END)`,
-      totalPassengers: sql<number>`SUM(${bookings.numberOfPassengers})`,
-    })
-    .from(bookings)
-    .where(
-      and(gte(bookings.createdAt, startDate), lte(bookings.createdAt, endDate))
+  const rows = await getBookingRows(filters);
+  return reportPDF("Booking Report - AIS Aviation / تقرير الحجوزات", doc => {
+    doc.text(
+      `Created (UTC): ${filters.startDate?.toISOString() ?? "All time"} to ${filters.endDate?.toISOString() ?? "No end date"}`
     );
-
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 50 });
-    const chunks: Buffer[] = [];
-
-    doc.on("data", chunk => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-
-    // Title
-    doc.fontSize(24).text("تقرير الحجوزات - AIS Aviation", { align: "center" });
+    doc.text(`Status: ${filters.status ?? "All"}`);
     doc.moveDown();
-    doc.fontSize(12).text(`Booking Report - AIS Aviation`, { align: "center" });
-    doc.moveDown(2);
-
-    // Date range
-    doc
-      .fontSize(12)
-      .text(
-        `Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
-        { align: "center" }
-      );
-    doc.moveDown(2);
-
-    // Summary statistics
-    doc.fontSize(16).text("Summary / ملخص", { underline: true });
+    doc.fontSize(14).text("Summary / ملخص");
+    doc.fontSize(11);
+    for (const [label, value, arabicLabel] of bookingSummary(rows)) {
+      doc.text(`${label}: ${value} / ${arabicLabel}`);
+    }
     doc.moveDown();
-
-    const stats = [
-      {
-        label: "Total Bookings / إجمالي الحجوزات",
-        value: summary?.totalBookings || 0,
-      },
-      {
-        label: "Total Revenue / إجمالي الإيرادات",
-        value: `${((Number(summary?.totalRevenue) || 0) / 100).toFixed(2)} SAR`,
-      },
-      { label: "Confirmed / مؤكدة", value: summary?.confirmedBookings || 0 },
-      { label: "Cancelled / ملغية", value: summary?.cancelledBookings || 0 },
-      {
-        label: "Total Passengers / إجمالي الركاب",
-        value: summary?.totalPassengers || 0,
-      },
-    ];
-
-    stats.forEach(stat => {
-      doc.fontSize(12).text(`${stat.label}: ${stat.value}`);
-      doc.moveDown(0.5);
-    });
-
-    doc.moveDown(2);
-
-    // Footer
-    doc
-      .fontSize(10)
-      .text(
-        `Generated on ${new Date().toISOString()}`,
-        50,
-        doc.page.height - 50,
-        { align: "center" }
-      );
-
-    doc.end();
+    doc.fontSize(9).text(`Generated on ${new Date().toISOString()}`);
   });
 }
 
@@ -529,132 +488,22 @@ export function getReportFilename(reportType: string, format: string): string {
 export async function exportBookingsToExcel(
   filters: ReportFilters
 ): Promise<Buffer> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const conditions = [];
-  if (filters.startDate) {
-    conditions.push(gte(bookings.createdAt, filters.startDate));
-  }
-  if (filters.endDate) {
-    conditions.push(lte(bookings.createdAt, filters.endDate));
-  }
-  if (filters.status) {
-    conditions.push(
-      eq(
-        bookings.status,
-        filters.status as "pending" | "confirmed" | "cancelled" | "completed"
-      )
-    );
-  }
-
-  const results = await db
-    .select({
-      bookingReference: bookings.bookingReference,
-      pnr: bookings.pnr,
-      flightNumber: flights.flightNumber,
-      origin: sql<string>`origin_airport.city`,
-      destination: sql<string>`dest_airport.city`,
-      departureTime: flights.departureTime,
-      cabinClass: bookings.cabinClass,
-      status: bookings.status,
-      paymentStatus: bookings.paymentStatus,
-      totalAmount: bookings.totalAmount,
-      passengers: bookings.numberOfPassengers,
-      userEmail: users.email,
-      createdAt: bookings.createdAt,
-    })
-    .from(bookings)
-    .leftJoin(flights, eq(bookings.flightId, flights.id))
-    .leftJoin(users, eq(bookings.userId, users.id))
-    .leftJoin(
-      sql`${airports} AS origin_airport`,
-      sql`origin_airport.id = ${flights.originId}`
-    )
-    .leftJoin(
-      sql`${airports} AS dest_airport`,
-      sql`dest_airport.id = ${flights.destinationId}`
-    )
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(bookings.createdAt))
-    .limit(10000);
-
-  // Calculate summary statistics
-  const totalBookings = results.length;
-  const totalRevenue = results.reduce(
-    (sum, r) => sum + (Number(r.totalAmount) || 0),
-    0
-  );
-  const confirmedBookings = results.filter(
-    r => r.status === "confirmed"
-  ).length;
-  const totalPassengers = results.reduce(
-    (sum, r) => sum + (r.passengers || 0),
-    0
-  );
-
-  // Create summary sheet data
-  const summaryData = [
-    ["AIS Aviation System - Bookings Report"],
-    [],
-    [
-      "Report Period:",
-      filters.startDate?.toLocaleDateString() || "All Time",
-      "-",
-      filters.endDate?.toLocaleDateString() || "Present",
-    ],
-    ["Generated:", new Date().toISOString()],
-    [],
-    ["Summary Statistics"],
-    ["Total Bookings:", totalBookings],
-    ["Total Revenue (SAR):", (totalRevenue / 100).toFixed(2)],
-    ["Confirmed Bookings:", confirmedBookings],
-    ["Total Passengers:", totalPassengers],
-  ];
-
-  // Create detail sheet data
-  const headers = [
-    "Booking Reference",
-    "PNR",
-    "Flight Number",
-    "Origin",
-    "Destination",
-    "Departure Date",
-    "Cabin Class",
-    "Status",
-    "Payment Status",
-    "Total Amount (SAR)",
-    "Passengers",
-    "User Email",
-    "Created At",
-  ];
-
-  const detailData = [
-    headers,
-    ...results.map(row => [
-      row.bookingReference || "",
-      row.pnr || "",
-      row.flightNumber || "",
-      row.origin || "",
-      row.destination || "",
-      row.departureTime ? new Date(row.departureTime).toISOString() : "",
-      row.cabinClass || "",
-      row.status || "",
-      row.paymentStatus || "",
-      ((Number(row.totalAmount) || 0) / 100).toFixed(2),
-      row.passengers || 0,
-      row.userEmail || "",
-      row.createdAt ? new Date(row.createdAt).toISOString() : "",
-    ]),
-  ];
-
+  const rows = await getBookingRows(filters);
   return buildXlsxBuffer([
-    { name: "Summary", rows: summaryData },
-    { name: "Bookings", rows: detailData },
+    {
+      name: "Summary",
+      rows: [
+        ["AIS Aviation System - Bookings Report"],
+        ["Start (UTC)", filters.startDate?.toISOString() ?? "All time"],
+        ["End (UTC)", filters.endDate?.toISOString() ?? "No end date"],
+        ["Status", filters.status ?? "All"],
+        ["Generated:", new Date().toISOString()],
+        [],
+        ["Summary Statistics"],
+        ...bookingSummary(rows).map(([label, value]) => [`${label}:`, value]),
+      ],
+    },
+    { name: "Bookings", rows: [bookingHeaders, ...rows.map(bookingCells)] },
   ]);
 }
 

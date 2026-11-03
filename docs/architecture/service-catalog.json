@@ -982,7 +982,8 @@
         "server/services/rbd-inventory.service.ts",
         "server/services/retail-offer.service.ts",
         "server/services/seat-map.service.ts",
-        "server/services/tenant.service.ts"
+        "server/services/tenant.service.ts",
+        "server/services/ticket-coupons.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -3670,7 +3671,8 @@
         "server/services/outbox.service.ts",
         "server/services/retail-offer.service.ts",
         "server/services/seat-economics.service.ts",
-        "server/services/tenant.service.ts"
+        "server/services/tenant.service.ts",
+        "server/services/ticket-coupons.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -5300,6 +5302,7 @@
         "server/services/notification.service.ts",
         "server/services/order-refunds.service.ts",
         "server/services/payment-settlement.service.ts",
+        "server/services/ticket-coupons.service.ts",
         "server/stripe.ts"
       ],
       "tableExpressions": {
@@ -5887,6 +5890,7 @@
         "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
         "server/services/payment-settlement.service.ts",
+        "server/services/ticket-coupons.service.ts",
         "server/stripe.ts"
       ],
       "tableExpressions": {
@@ -6051,10 +6055,14 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/services/booking-settlement.service.ts",
+        "server/services/bookings.service.ts",
         "server/services/departure-control.service.ts",
         "server/services/irops-recovery.service.ts",
+        "server/services/ndc.service.ts",
         "server/services/order-servicing.service.ts",
+        "server/services/refunds.service.ts",
         "server/services/seat-map.service.ts",
+        "server/services/split-refund.service.ts",
         "server/services/ticket-documents.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
@@ -6131,6 +6139,7 @@
           "airlines",
           "airports",
           "bookings",
+          "financialLedger",
           "flights",
           "hash",
           "idempotencyRequests",

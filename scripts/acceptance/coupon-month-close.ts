@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
 import type { TrpcContext } from "../../server/_core/context";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
+import { settleVerifiedPayment } from "../../server/services/payment-settlement.service";
+import { readTicketDocument } from "../../server/services/ticket-documents.service";
+import { bookingsRouter } from "../../server/routers/bookings";
+import { ndcRouter } from "../../server/routers/ndc";
 import { aviationIntegrationsRouter } from "../../server/routers/aviation-integrations";
 import { revenueAccountingRouter } from "../../server/routers/revenue-accounting";
 import { calculateRequestHash } from "../../server/services/idempotency-v2.service";
@@ -217,8 +221,144 @@ export async function verifyCouponMonthClose(
     );
     assert(legacy.issues.includes("missing_or_ambiguous_coupon_fare"));
     assert.equal(legacy.transportDeferredMinor, null);
+    // This is a paid booking with evidence that one passenger has already
+    // flown. A later sector is still reserved, so the booking stays confirmed.
+    const later = new Date(now.getTime() + 72 * 3600_000);
+    const [{ id: returnFlightId }] = await db
+      .insert(s.flights)
+      .values({
+        flightNumber: "ZY778",
+        airlineId: tenantId,
+        tenantId,
+        originId: tenantId + 1,
+        destinationId: tenantId,
+        departureTime: later,
+        arrivalTime: new Date(later.getTime() + 3600_000),
+        status: "scheduled",
+        economySeats: 4,
+        economyAvailable: 2,
+        businessSeats: 0,
+        businessAvailable: 0,
+        economyPrice: 10000,
+        businessPrice: 20000,
+      })
+      .$returningId();
+    await db.insert(s.bookingSegments).values([
+      {
+        bookingId,
+        flightId,
+        segmentOrder: 1,
+        departureDate: before,
+        seatsReserved: true,
+        status: "completed",
+      },
+      {
+        bookingId,
+        flightId: returnFlightId,
+        segmentOrder: 2,
+        departureDate: later,
+        seatsReserved: true,
+        status: "confirmed",
+      },
+    ]);
+    const orderId = "synthetic-flown-cancel";
+    await db.insert(s.ndcOrders).values({
+      orderId,
+      offerId: "synthetic-flown-offer",
+      bookingId,
+      airlineId: tenantId,
+      passengers: "[]",
+      contactInfo: "{}",
+      totalAmount: 15000,
+      status: "confirmed",
+      orderPayload: '{"ndcVersion":"21.3"}',
+    });
+    const state = async () => ({
+      coupons: await db
+        .select()
+        .from(s.ticketCoupons)
+        .where(eq(s.ticketCoupons.bookingId, bookingId))
+        .orderBy(s.ticketCoupons.id),
+      segments: await db
+        .select()
+        .from(s.bookingSegments)
+        .where(eq(s.bookingSegments.bookingId, bookingId))
+        .orderBy(s.bookingSegments.segmentOrder),
+      flights: await db
+        .select()
+        .from(s.flights)
+        .where(inArray(s.flights.id, [flightId, returnFlightId]))
+        .orderBy(s.flights.id),
+      booking: await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, bookingId)),
+      order: await db
+        .select()
+        .from(s.ndcOrders)
+        .where(eq(s.ndcOrders.orderId, orderId)),
+      cancellations: await db
+        .select()
+        .from(s.outbox)
+        .where(
+          and(
+            eq(s.outbox.aggregateType, "booking"),
+            eq(s.outbox.aggregateId, String(bookingId)),
+            eq(s.outbox.eventType, "booking.cancelled")
+          )
+        ),
+    });
+    const beforeCancel = await state();
+    const sale = bookingsRouter.createCaller(ctx);
+    const expected = { code: "PRECONDITION_FAILED", message: /flown coupon/ };
+    await assert.rejects(sale.cancel({ bookingId }), expected);
+    await assert.rejects(
+      ndcRouter
+        .createCaller(ctx)
+        .cancelOrder({ orderId, reason: "Passenger requested cancellation" }),
+      expected
+    );
+    assert.deepEqual(await state(), beforeCancel);
+    const unused = await sale.create({
+      flightId: returnFlightId,
+      cabinClass: "economy",
+      sessionId: "unused-coupon-cancel-control",
+      passengers: [
+        { firstName: "Synthetic", lastName: "Control", type: "adult" },
+      ],
+    });
+    await db.transaction(tx =>
+      settleVerifiedPayment(tx, {
+        paymentIntentId: "pi_synthetic_unused_coupon_control",
+        amount: unused.totalAmount,
+        currency: "sar",
+        metadata: {
+          bookingId: String(unused.bookingId),
+          userId: String(ctx.user!.id),
+        },
+        eventId: "evt_synthetic_unused_coupon_control",
+      })
+    );
+    const [unusedPax] = await sale.getPassengers({
+      bookingId: unused.bookingId,
+    });
+    await readTicketDocument(unused.bookingId, unusedPax.id, ctx.user.id);
+    assert.equal(
+      (await sale.cancel({ bookingId: unused.bookingId })).success,
+      true
+    );
+    const [voided] = await db
+      .select({ status: s.ticketCoupons.status })
+      .from(s.ticketCoupons)
+      .where(eq(s.ticketCoupons.bookingId, unused.bookingId));
+    assert.equal(voided.status, "V");
     return {
       signedUpliftId: first.evidenceId,
+      voluntaryCancellation: {
+        rejectedChannels: ["booking", "ndc"],
+        unchangedFlownAndRemainingSectors: true,
+        unusedControlCancelled: true,
+      },
       syntheticClosedMonth: month,
       cashMinor: 15000,
       carriageRecognizedMinor: 6000,

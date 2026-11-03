@@ -14,7 +14,7 @@ into live database, provider or production acceptance.
 
 | Scope                                                                                                            | Existing work and inspected head                                                                     | Treatment here                                                                                        |
 | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Direct sectors, scoped initial extras, named fare rules, ticket allowance, agency ownership, kiosk and reporting | PR #248 `83d950fef7140b89f4522002793ecba5f3fd6b6b`                                                   | Included as an explicit dependency, preserving its commits and financial writers.                     |
+| Direct sectors, scoped initial extras, named fare rules, ticket allowance, agency ownership, kiosk and reporting | PR #248 `eef8e9894059956410c54413210a47a42d3dac08` (initial dependency `83d950f`)                    | Included as an explicit dependency, preserving its commits and financial writers.                     |
 | Departure desk, boarding/offload, physical baggage acceptance, APIS                                              | PR #247 `4f803a6fbb02e57e44372bb0e54c0fb26bc34a19`; later `00ef5528b64ee0454e70140bb7bd6f6cf9cc2d4b` | Kept with its owner. Compatibility tested in a separate local integration, not imported into this PR. |
 | Passenger special services by sector                                                                             | PR #249, incorporated into #247                                                                      | Its sector/authorization work is retained in the separate compatibility integration.                  |
 | DCS funded recovery and seat denial follow-up                                                                    | PR #251 `34129b2da63b70d07a70a4cd1e8df6dd9b2f1f50` at discovery                                      | Separate owner; no duplicate DCS implementation here.                                                 |
@@ -90,6 +90,41 @@ A no-browser probe using the repository's actual Playwright configuration also
 verified both artifact policies: the agent-registration test resolves
 trace/video/screenshots to `off`, while the independent base test retains the
 normal recording settings. No broader trace policy was weakened.
+
+### Owner update consumed after the first CI run
+
+PR #248 advanced to `eef8e9894059956410c54413210a47a42d3dac08` while the
+first integration CI was running. Its substantive fixes are consumed as an
+explicit second parent: flown-coupon cancellation/refund protection, evidence
+requirements for agency commission approval/payout, consistent bounded booking
+exports, and named fares per multi-city sector. Its new commission and
+multi-city-fare browser suites remain registered. Conflict resolution preserves
+typed passenger edits, raw search/authentication context, canonical pricing and
+the owned invoice-review destination. The F07 createAgentBooking function and
+ownership guards remained byte-identical through this owner update.
+
+Initial CI head `dde3bd37770b06b2a22002f06a007e5318eb9ab4`, tree
+`c7aca993e978db311f898970eeb05e25826d4b91`, passed all application/E2E/script
+type checks, lint, security, component labs and Docker checks. On both MySQL 8.0
+and 9.7 it passed 132 live transaction checks, 36 integration remediation checks,
+37 baggage baseline cases and all seven mutation checks, plus a matching
+172-table backup/restore snapshot. Those checks made no provider calls.
+
+The initial complete test run had 3284 passes and four failures in static
+source-contract assertions that still expected provider navigation in
+BookingPage and the old literal agent-command return statement. The assertions
+were updated to follow CheckoutResume and the guarded transaction while retaining
+the authority requirements. A new IBE browser assertion was also corrected to
+compare the ledger's decimal SAR major units with invoice minor units. None of
+these test corrections changes financial source to satisfy an obsolete test.
+The resulting integrated head requires a fresh complete CI run; initial results
+are not transferred to changed source.
+
+After resolving that merge, 34 focused multi-city/authentication cases and
+68 commission/export/refund cases passed. The four stale assertions were
+reproduced before correction; afterward 67 cases passed across their two wiring
+contracts and three existing checkout/agency behavior suites. These runs overlap
+earlier evidence and are not added together as a single acceptance suite.
 
 ## Browser and database acceptance
 

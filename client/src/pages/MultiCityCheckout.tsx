@@ -32,6 +32,12 @@ const itinerary = z
       .array(
         z.object({
           flightId: z.number().int().positive(),
+          fareClassCode: z
+            .string()
+            .trim()
+            .regex(/^[a-z0-9]{1,2}$/i)
+            .toUpperCase()
+            .optional(),
           departureDate: z.iso.datetime().transform(value => new Date(value)),
         })
       )
@@ -39,9 +45,8 @@ const itinerary = z
       .max(5),
   })
   .refine(
-    value =>
-      !value.passengerTypes ||
-      value.passengerTypes.length === value.passengerCount
+    data =>
+      !data.passengerTypes || data.passengerTypes.length === data.passengerCount
   );
 type Passenger = {
   firstName: string;
@@ -82,14 +87,18 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
       type: data.passengerTypes?.[index] ?? "adult",
     }))
   );
-  const quote = trpc.multiCity.calculatePrice.useQuery({
-    segments: data.segments.map(({ flightId }) => ({
-      flightId,
-      cabinClass: data.cabinClass,
-    })),
-    passengerCount: passengers.length,
-    passengerTypes: passengers.map(p => p.type),
-  });
+  const quote = trpc.multiCity.calculatePrice.useQuery(
+    {
+      segments: data.segments.map(({ flightId, fareClassCode }) => ({
+        flightId,
+        cabinClass: data.cabinClass,
+        ...(fareClassCode ? { fareClassCode } : {}),
+      })),
+      passengerCount: passengers.length,
+      passengerTypes: passengers.map(p => p.type),
+    },
+    { retry: false }
+  );
   const utils = trpc.useUtils();
   const booking = trpc.multiCity.create.useMutation();
   const [submittedAmount, setSubmittedAmount] = useState<number | null>(null);
@@ -100,7 +109,9 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
 
   const total =
     submittedAmount ??
-    (quote.data ? quote.data.totalPrice + extrasTotal : undefined);
+    (quote.data && !quote.isError && !quote.isFetching
+      ? quote.data.totalPrice + extrasTotal
+      : undefined);
   function edit(index: number, patch: Partial<Passenger>) {
     if (patch.type === "infant")
       setSeats(current => current.filter(s => s.passengerIndex !== index));
@@ -113,6 +124,15 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
       <h1 className="text-2xl font-semibold">
         {t("multiCity.proceedToBooking")}
       </h1>
+      {data.segments.map(
+        (segment, index) =>
+          segment.fareClassCode && (
+            <p key={segment.flightId}>
+              {t("multiCity.segment")} {index + 1} · {t("fareRules.fareFamily")}{" "}
+              · {segment.fareClassCode}
+            </p>
+          )
+      )}
       <form
         className="space-y-5"
         onSubmit={async event => {

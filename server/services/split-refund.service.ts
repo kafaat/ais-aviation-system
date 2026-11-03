@@ -1,3 +1,4 @@
+import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, lte, desc, lt } from "drizzle-orm";
@@ -107,6 +108,7 @@ export function allocateSplitRefund(
 }
 
 async function quoteFor(tx: SettlementTx, booking: Booking) {
+  await assertNoFlownCouponForCancellation(tx, booking.id);
   await assertNoOrderRefundPending(tx, booking.id);
   if (
     booking.status !== "confirmed" ||

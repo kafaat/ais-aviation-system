@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   flights,
@@ -55,6 +56,29 @@ export async function localDocumentCoupons(
   }));
   await tx.insert(ticketCoupons).values(coupons);
   return coupons;
+}
+
+/** A voluntary cancellation releases the entire itinerary. A used coupon
+ * requires review of the remaining sectors. The booking lock serializes this
+ * check with operator uplift and cancellation in local write transactions. */
+export async function assertNoFlownCouponForCancellation(
+  tx: SettlementTx,
+  bookingId: number
+) {
+  const [flown] = await tx
+    .select({ id: ticketCoupons.id })
+    .from(ticketCoupons)
+    .where(
+      and(eq(ticketCoupons.bookingId, bookingId), eq(ticketCoupons.status, "F"))
+    )
+    .limit(1)
+    .for("update");
+  if (flown)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "A flown coupon prevents whole-itinerary cancellation; the remaining sectors require review",
+    });
 }
 
 /** Only local issued documents move; transactions never fabricate external ticket numbers. */

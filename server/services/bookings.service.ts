@@ -1,3 +1,4 @@
+import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import {
   priceInitialAncillaries,
   persistInitialAncillaries,
@@ -650,6 +651,7 @@ export async function cancelBooking(
       if (!current || current.status === "completed")
         throw new Error("Booking cannot be cancelled");
       if (current.status === "cancelled") return;
+      await assertNoFlownCouponForCancellation(tx, current.id);
       await cancelBookingResources(tx, current, "Owner cancellation", userId);
     });
 

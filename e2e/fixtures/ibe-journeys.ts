@@ -129,11 +129,15 @@ export function registerIbeJourneyTests() {
         )
       ).toHaveLength(1);
       const charges = await sqlRows<RowDataPacket>(
-        "SELECT amount FROM financial_ledger WHERE bookingId=? AND type='charge'",
+        "SELECT amount, currency FROM financial_ledger WHERE bookingId=? AND type='charge'",
         [bookingId]
       );
       expect(charges).toHaveLength(1);
-      expect(Number(charges[0].amount)).toBe(discounted.totalAmount);
+      // The invoice uses minor units; the ledger stores DECIMAL major units.
+      expect(Math.round(Number(charges[0].amount) * 100)).toBe(
+        discounted.totalAmount
+      );
+      expect(charges[0].currency).toBe("SAR");
     });
 
     test("public reference lookup shows only the itinerary and does not grant account access", async ({
