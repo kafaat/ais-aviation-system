@@ -11,6 +11,11 @@ import {
   paymentReceipts,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
+import {
+  bookingDistributionContext,
+  capabilitySummaryOutput,
+  resolveCapabilitySummary,
+} from "./ndc-capability-matrix";
 
 const flight = z.object({
   flightId: z.number().int(),
@@ -33,6 +38,8 @@ const quoteMetadata = z.object({
   seatExchange: retainedSeats.optional(),
 });
 export const exchangeContextOutput = z.object({
+  /** Which servicing actions the booking's distribution combination allows. */
+  capabilities: capabilitySummaryOutput,
   sectors: z.array(flight.extend({ status: z.string() })),
   latest: z
     .object({
@@ -130,7 +137,14 @@ export async function getExchangeContext(
         });
       return { ...row, status: leg.status };
     });
-    if (!change) return { sectors, latest: null };
+    const capabilities = await resolveCapabilitySummary(
+      tx,
+      await bookingDistributionContext(tx, {
+        id: bookingId,
+        flightId: booking.flightId,
+      })
+    );
+    if (!change) return { capabilities, sectors, latest: null };
     const payload = quoteMetadata.safeParse(change.servicingPayload);
     const [collectionReview] = await tx
       .select({ id: paymentReceipts.targetId })
@@ -166,6 +180,7 @@ export async function getExchangeContext(
           ? "review"
           : "processing";
     return {
+      capabilities,
       sectors,
       latest: {
         modificationId: change.id,

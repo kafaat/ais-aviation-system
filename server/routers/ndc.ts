@@ -15,6 +15,7 @@ import {
 } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import * as ndcService from "../services/ndc.service";
+import { ndcCapabilitiesRouter } from "./ndc-capabilities";
 
 // ============================================================================
 // Shared Zod Schemas
@@ -96,6 +97,8 @@ const serviceItemSchema = z.object({
  * and ancillary service management through a standards-compliant interface.
  */
 export const ndcRouter = router({
+  /** Capability matrix gating every servicing action per carrier/seller/channel/version. */
+  capabilities: ndcCapabilitiesRouter,
   cancelPaidService: protectedProcedure
     .input(z.object({ modificationId: z.number().int().positive() }))
     .output(z.object({ cancelled: z.boolean() }))

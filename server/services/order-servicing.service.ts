@@ -47,6 +47,10 @@ import {
 import { assertTenantOperational } from "./tenant.service";
 import { recordEvent } from "./outbox.service";
 import { planOrderRefund } from "./order-refunds.service";
+import {
+  assertCapability,
+  bookingDistributionContext,
+} from "./ndc-capability-matrix";
 
 const ancillaryInput = z.object({
   ancillaryServiceId: z.number().int().positive(),
@@ -283,8 +287,15 @@ export async function quotePaidOrderService(
           let modificationFee = 0;
           let fareDifference = 0;
           const expiry = new Date(Date.now() + 10 * 60000);
+          // The distribution matrix decides which servicing actions this
+          // carrier/seller/channel/schema combination may be offered at all.
+          const distribution = await bookingDistributionContext(tx, booking);
           if (input.offerIds) {
             await assertDirectExchange(tx, booking.id);
+            await assertCapability(tx, {
+              ...distribution,
+              action: "order_change_voluntary",
+            });
             await assertBaggageNotInCustody(tx, booking.id);
             const offers = await tx
               .select()
@@ -497,18 +508,26 @@ export async function quotePaidOrderService(
               );
               for (const [i, leg] of segments.entries()) leg.amount += fees[i];
             }
-          } else
+          } else {
+            await assertCapability(tx, {
+              ...distribution,
+              action: "ancillary_change",
+            });
             for (const item of input.ancillaries ?? []) {
               const quote = await quoteInvoiceAncillary(tx, booking, item);
               additions.push({ ...item, unitTotal: quote.totalPrice });
               newAmount += quote.totalPrice;
             }
+          }
           if (
             !Number.isSafeInteger(newAmount) ||
             newAmount <= 0 ||
             newAmount > 2147483647
           )
             throw unavailable("Invalid replacement total");
+          // A lower fare is only quoted when the combination can refund it.
+          if (newAmount < booking.totalAmount)
+            await assertCapability(tx, { ...distribution, action: "refund" });
           const plan: z.infer<typeof planSchema> = {
             version: 1,
             partyHash: partyHash(booking, pax),

@@ -19,6 +19,12 @@ import { getDb, generateBookingReference } from "../db";
 import { canTransitionTo, type NdcOrderStatus } from "./ndc-order-state";
 import { recordEvent } from "./outbox.service";
 import {
+  ANY,
+  INTERNAL_NDC_VERSION,
+  assertCapability,
+  distributionChannelOf,
+} from "./ndc-capability-matrix";
+import {
   ndcOffers,
   ndcOrders,
   bookingSegments,
@@ -39,10 +45,12 @@ import crypto from "crypto";
 /** Default offer expiry window in minutes */
 const OFFER_EXPIRY_MINUTES = 30;
 
-/** Tax rate applied to base fares (15% VAT for Saudi Arabia) */
-
-/** NDC message version */
-const NDC_VERSION = "21.3";
+/**
+ * NDC message version of the internal vocabulary. Whether a given
+ * carrier/seller/channel/version combination supports an action is decided by
+ * the distribution capability matrix, never by this constant alone.
+ */
+const NDC_VERSION = INTERNAL_NDC_VERSION;
 
 /** Maximum passengers per NDC order */
 const MAX_PASSENGERS = 9;
@@ -981,6 +989,15 @@ export async function createOrder(
           message: `NDC offer is not available for ordering. Current status: ${offer.status}`,
         });
       }
+
+      // OrderCreate is itself a gated capability of the offer's channel.
+      await assertCapability(db, {
+        carrierCode: offer.ownerCode ?? ANY,
+        sellerId: ANY,
+        channel: distributionChannelOf(offer.channel),
+        schemaVersion: NDC_VERSION,
+        action: "order_create",
+      });
 
       // Create the internal booking
       const bookingReference = generateBookingReference();

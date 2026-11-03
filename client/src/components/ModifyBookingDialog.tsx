@@ -79,6 +79,24 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
   const checkout = trpc.payments.createModificationCheckout.useMutation();
   const confirm = trpc.ndc.confirmNoChargeService.useMutation();
   const cancel = trpc.ndc.cancelPaidService.useMutation();
+  // The distribution capability matrix decides whether an exchange may be
+  // offered for this carrier/seller/channel/schema combination at all.
+  const capability = context.data?.capabilities;
+  const exchangeCapability = capability?.actions.order_change_voluntary;
+  const seatMoveCapability = capability?.actions.seat_move;
+  const exchangeBlocked = !!capability && !exchangeCapability?.allowed;
+  const capabilityParams = (
+    decision: NonNullable<typeof exchangeCapability>
+  ) => ({
+    action: t(`ndcCapabilities.actions.${decision.action}`),
+    carrier: decision.carrierCode,
+    channel: t(`ndcCapabilities.channels.${decision.channel}`),
+    version: decision.schemaVersion,
+    reason:
+      decision.confirmation === "unconfirmed" || decision.support === "unknown"
+        ? t("modifyBooking.capability.unconfirmed")
+        : t(`ndcCapabilities.supports.${decision.support}`),
+  });
   const disabled = busy || context.isFetching || unknown || !!context.error;
   const expiry = pending?.expiresAt?.getTime() ?? 0;
   const [elapsedExpiry, setElapsedExpiry] = useState<number | null>(null);
@@ -130,7 +148,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
     }
   };
   const request = async () => {
-    if (!sector || pending || disabled) return;
+    if (!sector || pending || disabled || exchangeBlocked) return;
     const fingerprint = JSON.stringify({
       booking: booking.id,
       sector: sector.flightId,
@@ -218,6 +236,24 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
         {(unknown || context.error) && (
           <p role="alert">{t("modifyBooking.exchange.lookupFirst")}</p>
         )}
+        {exchangeBlocked && exchangeCapability && (
+          <p role="alert" data-testid="capability-blocked">
+            {t(
+              "modifyBooking.capability.blocked",
+              capabilityParams(exchangeCapability)
+            )}
+          </p>
+        )}
+        {!exchangeBlocked &&
+          seatMoveCapability &&
+          !seatMoveCapability.allowed && (
+            <p role="note" data-testid="capability-seat-move">
+              {t(
+                "modifyBooking.capability.seatMoveUnavailable",
+                capabilityParams(seatMoveCapability)
+              )}
+            </p>
+          )}
         {latest && !pending && (
           <div role="status" className="rounded border p-3">
             {latest.reviewRequired
@@ -240,6 +276,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
             <div className="flex gap-2">
               <Button
                 aria-pressed={mode === "date"}
+                disabled={exchangeBlocked}
                 variant={mode === "date" ? "default" : "outline"}
                 onClick={() => setMode("date")}
               >
@@ -248,7 +285,9 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
               <Button
                 aria-pressed={mode === "upgrade"}
                 disabled={
-                  booking.cabinClass === "business" || sectors.length !== 1
+                  exchangeBlocked ||
+                  booking.cabinClass === "business" ||
+                  sectors.length !== 1
                 }
                 variant={mode === "upgrade" ? "default" : "outline"}
                 onClick={() => setMode("upgrade")}
@@ -256,7 +295,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
                 {t("modifyBooking.upgradeTab")}
               </Button>
             </div>
-            {mode === "date" && (
+            {mode === "date" && !exchangeBlocked && (
               <>
                 <label className="block text-sm">
                   {t("modifyBooking.exchange.sector")}
@@ -450,7 +489,10 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
           ) : (
             <Button
               disabled={
-                disabled || !sector || (mode === "date" && !replacement)
+                disabled ||
+                exchangeBlocked ||
+                !sector ||
+                (mode === "date" && !replacement)
               }
               onClick={() => void execute(request)}
             >

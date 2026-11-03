@@ -6395,3 +6395,73 @@ export const supplierFinanceEvents = mysqlTable(
     ),
   })
 );
+
+/**
+ * Distribution capability matrix. One row states whether a carrier/seller/
+ * channel/schema-version combination supports a servicing action. "*" is a
+ * wildcard for carrier and seller; schemaVersion is exact ("24.1"), an
+ * inclusive range ("17.2-21.3") or "*" for the channel default. Lookups
+ * prefer exact version, then range, then channel default (see
+ * server/services/ndc-capability-seed.ts). Rows marked unconfirmed never
+ * authorize an action.
+ */
+export const distributionCapabilities = mysqlTable(
+  "distribution_capabilities",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    carrierCode: varchar("carrierCode", { length: 3 }).notNull().default("*"),
+    sellerId: varchar("sellerId", { length: 50 }).notNull().default("*"),
+    channel: mysqlEnum("channel", ["direct", "ndc", "gds", "ota"]).notNull(),
+    schemaVersion: varchar("schemaVersion", { length: 16 })
+      .notNull()
+      .default("*"),
+    action: mysqlEnum("action", [
+      "shop",
+      "price",
+      "order_create",
+      "pay",
+      "order_change_voluntary",
+      "order_change_involuntary",
+      "passenger_split",
+      "seat_move",
+      "seat_fee_refund",
+      "ancillary_change",
+      "refund",
+      "reissue",
+      "name_correction",
+    ]).notNull(),
+    support: mysqlEnum("support", [
+      "supported",
+      "unsupported",
+      "partial",
+    ]).notNull(),
+    confirmation: mysqlEnum("confirmation", ["confirmed", "unconfirmed"])
+      .notNull()
+      .default("unconfirmed"),
+    evidenceUrl: varchar("evidenceUrl", { length: 512 }),
+    evidenceNote: text("evidenceNote"),
+    effectiveFrom: timestamp("effectiveFrom"),
+    effectiveTo: timestamp("effectiveTo"),
+    updatedBy: int("updatedBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    combination: uniqueIndex("distribution_capability_combination").on(
+      t.carrierCode,
+      t.sellerId,
+      t.channel,
+      t.schemaVersion,
+      t.action
+    ),
+    channelAction: index("distribution_capability_channel_action").on(
+      t.channel,
+      t.action
+    ),
+  })
+);
+
+export type DistributionCapability =
+  typeof distributionCapabilities.$inferSelect;
+export type InsertDistributionCapability =
+  typeof distributionCapabilities.$inferInsert;
