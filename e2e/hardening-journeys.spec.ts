@@ -1,3 +1,4 @@
+import { registerBaggageConsistencyTest } from "./fixtures/baggage-consistency";
 import { registerCodeshareTests } from "./fixtures/codeshare";
 import { passengerRightsSource } from "../shared/passenger-policy";
 import { registerProviderCheckoutTests } from "./fixtures/provider-checkout";
@@ -17,6 +18,7 @@ import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 
 registerProviderCheckoutTests();
+registerBaggageConsistencyTest();
 registerCodeshareTests();
 
 async function loginAsAdmin(page: Page) {
