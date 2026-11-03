@@ -1754,6 +1754,7 @@
           "bookings",
           "crewAssignments",
           "crewMembers",
+          "dcsPassengerStates",
           "flights",
           "loadPlans",
           "passengers"
