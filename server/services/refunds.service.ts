@@ -1,3 +1,4 @@
+import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
 import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
@@ -262,6 +263,9 @@ export async function createRefund(
         });
       }
 
+      // A new operation on this endpoint cancels the whole itinerary, including
+      // a fee-bearing partial refund. Prior provider outcomes still reconcile.
+      await assertNoFlownCouponForCancellation(database, booking.id);
       const refundParams: Stripe.RefundCreateParams = {
         payment_intent: booking.stripePaymentIntentId,
         amount: refundAmount,
@@ -506,6 +510,7 @@ export async function isBookingRefundable(bookingId: number): Promise<{
       return { refundable: false, reason: splitRefundReason };
     }
 
+    await assertNoFlownCouponForCancellation(database, bookingId);
     const activeRefunds = await listActiveRefunds(
       booking.stripePaymentIntentId
     );
@@ -515,6 +520,8 @@ export async function isBookingRefundable(bookingId: number): Promise<{
 
     return { refundable: true };
   } catch (error) {
+    if (error instanceof TRPCError && error.code === "PRECONDITION_FAILED")
+      return { refundable: false, reason: error.message };
     console.error("Error checking refundability:", error);
     return { refundable: false, reason: "Error checking refundability" };
   }

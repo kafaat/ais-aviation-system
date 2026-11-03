@@ -1,3 +1,5 @@
+import { selectSeat } from "./seat-map.service";
+import { saleFareRuleDigest } from "./sale-fare-rules";
 import {
   priceInitialAncillaries,
   persistInitialAncillaries,
@@ -33,6 +35,8 @@ import {
 import {
   checkFlightAvailability,
   calculateFlightPrice,
+  attachRbdAvailability,
+  type FlightSearchResult,
 } from "./flights.service";
 import { trackBookingStarted } from "./metrics.service";
 import {
@@ -55,7 +59,7 @@ export interface MultiCitySegment {
 
 export interface MultiCitySearchResult {
   segmentIndex: number;
-  flights: Awaited<ReturnType<typeof db.searchFlights>>;
+  flights: FlightSearchResult;
 }
 
 export interface MultiCityPriceResult {
@@ -65,6 +69,7 @@ export interface MultiCityPriceResult {
     basePrice: number;
     discountedPrice: number;
     fareLines?: OfferPayload["fareLines"];
+    fareRuleDigest?: string;
     cabinClass: "economy" | "business";
     fareClassCode?: string;
   }>;
@@ -84,6 +89,7 @@ export interface MultiCityBookingInput {
     flightId: number;
     departureDate: Date;
     fareClassCode?: string;
+    seats?: Array<{ passengerIndex: number; seatNumber: string }>;
   }>;
   cabinClass: "economy" | "business";
   passengers: Array<{
@@ -207,7 +213,7 @@ export async function searchMultiCityFlights(
   try {
     // Search for flights for each segment in parallel
     const searchPromises = segments.map(async (segment, index) => {
-      const flights = await db.searchFlights({
+      const rows = await db.searchFlights({
         originId: segment.originId,
         destinationId: segment.destinationId,
         departureDate: segment.departureDate,
@@ -215,7 +221,7 @@ export async function searchMultiCityFlights(
 
       return {
         segmentIndex: index,
-        flights,
+        flights: await attachRbdAvailability(rows),
       };
     });
 
@@ -283,6 +289,7 @@ export async function calculateMultiCityPrice(
         }
 
         let fareMultiplier = 1;
+        let fareRuleDigest: string | undefined;
         if (segment.fareClassCode) {
           const database = await db.getDb();
           if (!database)
@@ -304,6 +311,18 @@ export async function calculateMultiCityPrice(
               code: "BAD_REQUEST",
               message: `Booking class unavailable for segment ${index + 1}`,
             });
+          fareRuleDigest = await saleFareRuleDigest(
+            database,
+            {
+              ...flight,
+              originId: flight.origin.id,
+              destinationId: flight.destination.id,
+            },
+            rbd.fareClassId,
+            passengerTypes ??
+              Array.from({ length: passengerCount }, () => "adult"),
+            segments.length
+          );
           fareMultiplier = rbd.basePriceMultiplier;
         }
 
@@ -332,6 +351,7 @@ export async function calculateMultiCityPrice(
           : null;
         return {
           segmentIndex: index,
+          fareRuleDigest,
           flightId: segment.flightId,
           basePrice: adjusted?.totalAmount ?? pricingResult.price,
           fareLines:
@@ -509,6 +529,25 @@ export async function createMultiCityBooking(
               code: "CONFLICT",
               message: "Requested booking class is unavailable",
             });
+          if (selectedFareClass) {
+            const digest = await saleFareRuleDigest(
+              tx,
+              flight,
+              selectedFareClass.fareClass.id,
+              input.passengers.map(p => p.type),
+              input.segments.length
+            );
+            if (
+              digest !==
+              priceResult.segments.find(s => s.flightId === flight.id)
+                ?.fareRuleDigest
+            )
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message:
+                  "Fare conditions changed; request a new itinerary price",
+              });
+          }
           const hold = await createInventoryLock(
             flight.id,
             input.passengers.length,
@@ -632,6 +671,36 @@ export async function createMultiCityBooking(
           .where(eq(passengers.bookingId, bookingId))
           .orderBy(asc(passengers.id));
         const passengerIds = insertedPassengers.map(p => p.id);
+        for (const segment of input.segments) {
+          const assigned = new Set<number>();
+          const occupied = new Set<string>();
+          for (const { passengerIndex, seatNumber } of segment.seats ?? []) {
+            const passengerId = passengerIds[passengerIndex];
+            if (
+              !passengerId ||
+              input.passengers[passengerIndex]?.type === "infant"
+            )
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Choose a seated passenger for this flight",
+              });
+            if (assigned.has(passengerId) || occupied.has(seatNumber))
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message:
+                  "Assign one distinct seat per passenger on each flight",
+              });
+            await selectSeat(
+              segment.flightId,
+              seatNumber,
+              bookingId,
+              passengerId,
+              tx
+            );
+            assigned.add(passengerId);
+            occupied.add(seatNumber);
+          }
+        }
         const purchases = await persistInitialAncillaries(
           tx,
           selected,

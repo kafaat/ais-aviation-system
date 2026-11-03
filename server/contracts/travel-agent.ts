@@ -94,6 +94,7 @@ export const responseContracts = {
       bookingReference: z.string(),
       bookingAmount: outputNumber,
       commissionRate: z.string(),
+      commissionStatus: z.enum(["pending", "approved", "paid", "cancelled"]),
       commissionAmount: outputNumber,
       createdAt: z.date(),
     })

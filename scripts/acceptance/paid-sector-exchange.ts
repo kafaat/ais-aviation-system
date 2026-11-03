@@ -8,6 +8,8 @@ import type { TrpcContext } from "../../server/_core/context";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
 import { bspReportingRouter } from "../../server/routers/bsp-reporting";
 import { ancillaryRouter } from "../../server/routers/ancillary";
+import { bookingsRouter } from "../../server/routers/bookings";
+import { priceQuoteRouter } from "../../server/routers/price-quote";
 import { multiCityRouter } from "../../server/routers/multi-city";
 import { aiChatRouter } from "../../server/routers/ai-chat";
 import { eticketRouter } from "../../server/routers/eticket";
@@ -161,6 +163,58 @@ export async function verifyPaidSectorExchange(
   const passengers = [
     { type: "adult" as const, firstName: "Synthetic", lastName: "Exchange" },
   ];
+  const [rule] = await db
+    .insert(s.fareRules)
+    .values({
+      fareClassId: rbd.id,
+      airlineId: id,
+      ruleName: "Adult Q eligibility",
+      ruleCategory: "eligibility",
+      conditions: JSON.stringify({ passengerTypes: ["adult"] }),
+      validFrom: new Date(),
+      active: true,
+    })
+    .$returningId();
+  const quotes = priceQuoteRouter.createCaller(ctx);
+  const direct = { flightId: old, cabinClass, fareClassCode: "Q" };
+  const originalOffer = await quotes.createOffer({
+    ...direct,
+    passengerTypes: ["adult"],
+  });
+  await assert.rejects(
+    quotes.createOffer({ ...direct, passengerTypes: ["child"] }),
+    /Passenger type is ineligible/
+  );
+  await assert.rejects(
+    sale.calculatePrice({
+      segments: segments.map(s => ({ ...s, cabinClass })),
+      passengerCount: 1,
+      passengerTypes: ["child"],
+    }),
+    /Passenger type is ineligible/
+  );
+  // A formerly eligible passenger must request a new offer even if the
+  // revised rule happens to permit that passenger too.
+  await db
+    .update(s.fareRules)
+    .set({
+      conditions: JSON.stringify({ passengerTypes: ["adult", "infant"] }),
+    })
+    .where(eq(s.fareRules.id, rule.id));
+  await assert.rejects(
+    bookingsRouter.createCaller(ctx).create({
+      ...direct,
+      offerId: originalOffer.offerId,
+      passengers,
+      sessionId: "changed-rbd-terms",
+    }),
+    /Fare conditions changed/
+  );
+  const [offered] = await db
+    .select()
+    .from(s.retailOffers)
+    .where(eq(s.retailOffers.id, originalOffer.offerId));
+  assert.equal(offered.consumedBookingId, null);
   const price = await sale.calculatePrice({
     segments: segments.map(s => ({ ...s, cabinClass })),
     passengerCount: 1,

@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import {
+  decodeBcbpM1,
+  normalizeBcbpSeat,
+} from "../../server/services/bcbp.service";
 import { eq } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
 import type { TrpcContext } from "../../server/_core/context";
@@ -21,7 +25,7 @@ export async function verifyScopedAncillarySale(
   const when = (days: number) => new Date(Date.now() + days * 86400000);
   const segments = flightIds.map((flightId, index) => ({
     flightId,
-    departureDate: when(index + 7),
+    departureDate: when(1 + index / 2),
   }));
   await db.insert(s.flights).values(
     segments.map(({ flightId, departureDate }, index) => ({
@@ -82,8 +86,31 @@ export async function verifyScopedAncillarySale(
     passengerTypes: ["adult", "adult"],
   });
   const expectedTotalMinor = fare.totalPrice + 6800;
+  await db.insert(s.seatInventory).values(
+    flightIds.flatMap(flightId =>
+      ["12A", "12B", "12C"].map(seatNumber => ({
+        flightId,
+        seatMapId: id,
+        seatNumber,
+        row: 12,
+        column: seatNumber.slice(-1),
+        cabinClass: "economy" as const,
+        seatType: "window" as const,
+        priceTier:
+          seatNumber === "12B" ? ("preferred" as const) : ("free" as const),
+        seatPrice: seatNumber === "12B" ? 500 : 0,
+      }))
+    )
+  );
+  const namedSegments = segments.map((leg, segmentIndex) => ({
+    ...leg,
+    seats: passengers.map((_, passengerIndex) => ({
+      passengerIndex,
+      seatNumber: passengerIndex === segmentIndex ? "12A" : "12C",
+    })),
+  }));
   const command = {
-    segments,
+    segments: namedSegments,
     passengers,
     cabinClass,
     ancillaries,
@@ -91,8 +118,62 @@ export async function verifyScopedAncillarySale(
     checkoutContractVersion: 1 as const,
     expectedTotalMinor,
   };
-  const saleResult = await sale.create(command);
-  assert.deepEqual(await sale.create(command), saleResult);
+  const badSeat = { passengerIndex: 1, seatNumber: "12B" };
+  await assert.rejects(
+    sale.create({
+      ...command,
+      sessionId: "sector-paid-seat-rejected",
+      segments: [namedSegments[0], { ...segments[1], seats: [badSeat] }],
+    }),
+    /seat unavailable/i
+  );
+  for (const flightId of flightIds) {
+    const inventory = await db
+      .select()
+      .from(s.seatInventory)
+      .where(eq(s.seatInventory.flightId, flightId));
+    assert(
+      inventory.every(
+        row => row.status === "available" && row.bookingId === null
+      )
+    );
+    const partial = await db
+      .select()
+      .from(s.inventoryLocks)
+      .where(eq(s.inventoryLocks.flightId, flightId));
+    assert.equal(partial.length, 0);
+  }
+  await assert.rejects(
+    sale.create({
+      ...command,
+      sessionId: "sector-duplicate-seat-rejected",
+      segments: [
+        {
+          ...segments[0],
+          seats: [
+            { passengerIndex: 0, seatNumber: "12A" },
+            { passengerIndex: 1, seatNumber: "12A" },
+          ],
+        },
+        namedSegments[1],
+      ],
+    }),
+    /one distinct seat/i
+  );
+  const attempts = [
+    command,
+    { ...command, sessionId: "same-seat-competing-order" },
+  ];
+  const outcomes = await Promise.allSettled(
+    attempts.map(attempt => sale.create(attempt))
+  );
+  const winners = outcomes.filter(r => r.status === "fulfilled");
+  assert.equal(winners.length, 1);
+  const loser = outcomes.find(r => r.status === "rejected");
+  assert(loser && /seat unavailable/i.test(String(loser.reason)));
+  const accepted = attempts[outcomes.findIndex(r => r.status === "fulfilled")];
+  const saleResult = winners[0].value;
+  assert.deepEqual(await sale.create(accepted), saleResult);
   const { bookingId } = saleResult;
   await db
     .insert(s.wallets)
@@ -117,6 +198,33 @@ export async function verifyScopedAncillarySale(
   assert.equal(people.length, 2);
   const first = people.find(person => person.firstName === "First");
   assert(first);
+  for (const [index, flightId] of flightIds.entries()) {
+    const owner = people.find(
+      person => person.firstName === passengers[index].firstName
+    );
+    assert(owner);
+    const assigned = await db
+      .select()
+      .from(s.seatInventory)
+      .where(eq(s.seatInventory.flightId, flightId));
+    assert(
+      assigned.some(
+        row =>
+          row.seatNumber === "12A" &&
+          row.status === "occupied" &&
+          row.bookingId === bookingId &&
+          row.passengerId === owner.id
+      )
+    );
+    assert(
+      assigned.some(
+        row =>
+          row.seatNumber === "12B" &&
+          row.status === "available" &&
+          row.bookingId === null
+      )
+    );
+  }
   const verifyView = async (actor: TrpcContext) => {
     const rows = await bookingsRouter
       .createCaller(actor)
@@ -156,17 +264,6 @@ export async function verifyScopedAncillarySale(
     ...ctx,
     user: { ...ctx.user, id: id + 9999, role: "admin" as const },
   };
-  await db.insert(s.seatInventory).values({
-    flightId: flightIds[0],
-    seatMapId: id,
-    seatNumber: "12A",
-    row: 12,
-    column: "A",
-    cabinClass: "economy",
-    seatType: "window",
-    priceTier: "free",
-    seatPrice: 0,
-  });
   const seats = seatMapRouter.createCaller(ctx);
   const seatScope = {
     bookingId,
@@ -203,7 +300,7 @@ export async function verifyScopedAncillarySale(
     /active extras/i
   );
   assert.deepEqual(await seats.getPassengerSeat(seatScope), originalSeat);
-  assert.deepEqual(await sale.create(command), saleResult);
+  assert.deepEqual(await sale.create(accepted), saleResult);
   await verifyView(ctx);
   await verifyView(staff);
   const issued = await db
@@ -212,11 +309,48 @@ export async function verifyScopedAncillarySale(
     .where(eq(s.bookingAncillaries.bookingId, bookingId));
   assert.equal(issued.length, 2);
   for (const item of issued) assert(item.fundedAt && item.fundingReference);
+  let verifiedBoardingPasses = 0;
+  for (const [segmentIndex, flightId] of flightIds.entries()) {
+    for (const { passengerIndex, seatNumber } of namedSegments[segmentIndex]
+      .seats) {
+      const person = people.find(
+        p => p.firstName === passengers[passengerIndex].firstName
+      );
+      assert(person);
+      const scope = { bookingId, passengerId: person.id, flightId };
+      assert.equal(
+        (await seats.getPassengerSeat(scope))?.seatNumber,
+        seatNumber
+      );
+      await seats.checkIn(scope); // No override: use the customer's stored initial seat.
+      const pass = await seats.getBoardingPass({
+        passengerId: person.id,
+        flightId,
+      });
+      assert.equal(pass.flightNumber, "ZY" + (711 + segmentIndex));
+      assert.equal(pass.passenger.firstName, person.firstName);
+      assert.equal(pass.seat.seatNumber, seatNumber);
+      assert.equal(
+        normalizeBcbpSeat(decodeBcbpM1(pass.bcbp).seatNumber),
+        seatNumber
+      );
+      verifiedBoardingPasses++;
+    }
+    const map = await seats.getFlightSeatMap({ flightId });
+    const occupied = map.cabins
+      .flatMap(c => c.rows.flatMap(r => r.seats))
+      .filter(s => s.status === "checked_in");
+    assert.deepEqual(occupied.map(s => s.seatNumber).sort(), ["12A", "12C"]);
+  }
   return {
     bookingId,
     paidMinor: expectedTotalMinor,
     walletDebits: 1,
     scopesVerified: 4,
+    initialSectorSeatsVerified: 4,
+    verifiedBoardingPasses,
+    competingSeatOrderWinners: winners.length,
+    failedSeatSelectionRolledBack: true,
     recoveryRefusedWithExtras: true,
     assignedSeatRetained: "12A",
     outboundWeightGrams: 43000,

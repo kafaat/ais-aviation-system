@@ -11,6 +11,7 @@ vi.mock("../../db", () => ({
 
 // Mock the flights service
 vi.mock("../../services/flights.service", () => ({
+  attachRbdAvailability: vi.fn((rows: unknown[]) => rows),
   checkFlightAvailability: vi.fn(),
   calculateFlightPrice: vi.fn(),
 }));
@@ -138,6 +139,9 @@ describe("Multi-City Service", () => {
       expect(results[0].segmentIndex).toBe(0);
       expect(results[1].segmentIndex).toBe(1);
       expect(db.searchFlights).toHaveBeenCalledTimes(2);
+      expect(flightsService.attachRbdAvailability).toHaveBeenCalledWith(
+        mockFlights
+      );
     });
 
     it("should search for segments in parallel", async () => {

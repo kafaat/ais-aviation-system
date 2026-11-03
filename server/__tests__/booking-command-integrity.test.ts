@@ -114,6 +114,9 @@ describe("atomic booking commands", () => {
     expect(await createBooking(input)).toEqual(first);
     expect(fixture.rows("bookings")).toHaveLength(1);
     expect(fixture.rows("passengers")).toHaveLength(1);
+    expect(fixture.rows("booking_segments")).toMatchObject([
+      { bookingId: first.bookingId, flightId: 11, segmentOrder: 1 },
+    ]);
     expect(fixture.rows("inventory_locks")).toHaveLength(1);
     expect(fixture.rows("outbox")).toHaveLength(2);
     expect(fixture.rows("retail_offers")[0].consumedBookingId).toBe(
@@ -168,6 +171,13 @@ describe("atomic booking commands", () => {
     };
     const result = await createBooking(request);
     expect(result.totalAmount).toBe(7000 + 2500 + 1000);
+    expect(fixture.rows("booking_ancillaries")).toMatchObject([
+      {
+        passengerId: fixture.rows("passengers")[0].id,
+        segmentId: fixture.rows("booking_segments")[0].id,
+        weightSnapshotGrams: 40000,
+      },
+    ]);
     expect(fixture.rows("price_locks")[0]).toMatchObject({
       status: "used",
       bookingId: result.bookingId,
@@ -230,6 +240,27 @@ describe("initial ancillary scope and pricing", () => {
     unitPrice: 500,
     totalPrice: 1000,
   };
+  it("does not sell an unassigned extra on a group or a seat without inventory", async () => {
+    const legacy = {
+      ancillaryServiceId: 1,
+      quantity: 1,
+      unitPrice: 500,
+      totalPrice: 500,
+    };
+    await expect(
+      createBooking({
+        ...input,
+        passengers: [...input.passengers, ...input.passengers],
+        ancillaries: [legacy],
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    fixture.rows("ancillary_services")[0].category = "seat";
+    await expect(
+      createBooking({ ...input, ancillaries: [legacy] })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(fixture.rows("booking_ancillaries")).toHaveLength(0);
+    expect(fixture.rows("bookings")).toHaveLength(0);
+  });
   it("preserves the purchased allowance and binds both the invoice and baggage to the issued passenger and sector", async () => {
     const command = { ...input, ancillaries: [line] };
     const sale = await createBooking(command);

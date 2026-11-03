@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
+import { OperationalReadState } from "@/components/OperationalReadState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +51,14 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 
+function validOwnerId(value: string) {
+  return (
+    /^\d+$/.test(value) &&
+    Number.isSafeInteger(Number(value)) &&
+    Number(value) > 0
+  );
+}
+
 export default function TravelAgentManagement() {
   const { t, i18n } = useTranslation();
   const currentLocale = i18n.language === "ar" ? ar : enUS;
@@ -63,6 +72,8 @@ export default function TravelAgentManagement() {
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
   const [commissionDialogOpen, setCommissionDialogOpen] = useState(false);
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
+  const [unlinkedAgent, setUnlinkedAgent] = useState<Agent | null>(null);
+  const [ownerId, setOwnerId] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [newCredentials, setNewCredentials] = useState<{
     apiKey: string;
@@ -71,6 +82,7 @@ export default function TravelAgentManagement() {
 
   // Form state for registration
   const [registerForm, setRegisterForm] = useState({
+    ownerUserId: "",
     agencyName: "",
     iataNumber: "",
     contactName: "",
@@ -93,8 +105,11 @@ export default function TravelAgentManagement() {
   );
   type Agent = NonNullable<typeof agentsData>["agents"][number];
 
+  const commissionsQuery = trpc.travelAgent.getPendingCommissions.useQuery({
+    includeApproved: true,
+  });
   const { data: pendingCommissions, refetch: refetchCommissions } =
-    trpc.travelAgent.getPendingCommissions.useQuery();
+    commissionsQuery;
 
   const { data: agentStats, isLoading: statsLoading } =
     trpc.travelAgent.getAgentStats.useQuery(
@@ -115,6 +130,14 @@ export default function TravelAgentManagement() {
     onError: error => {
       toast.error(error.message);
     },
+  });
+
+  const assignOwnerMutation = trpc.travelAgent.assignOwner.useMutation({
+    onSuccess: () => {
+      setUnlinkedAgent(null);
+      refetchAgents();
+    },
+    onError: error => toast.error(error.message),
   });
 
   const regenerateCredentialsMutation =
@@ -165,6 +188,7 @@ export default function TravelAgentManagement() {
   // Handlers
   const resetRegisterForm = () => {
     setRegisterForm({
+      ownerUserId: "",
       agencyName: "",
       iataNumber: "",
       contactName: "",
@@ -189,7 +213,10 @@ export default function TravelAgentManagement() {
       );
       return;
     }
-    registerMutation.mutate(registerForm);
+    registerMutation.mutate({
+      ...registerForm,
+      ownerUserId: Number(registerForm.ownerUserId),
+    });
   };
 
   const handleToggleStatus = (agent: Agent) => {
@@ -220,10 +247,6 @@ export default function TravelAgentManagement() {
 
   const handleApproveCommission = (id: number) => {
     updateCommissionStatusMutation.mutate({ id, status: "approved" });
-  };
-
-  const handlePayCommission = (id: number) => {
-    updateCommissionStatusMutation.mutate({ id, status: "paid" });
   };
 
   const copyToClipboard = (text: string) => {
@@ -355,7 +378,7 @@ export default function TravelAgentManagement() {
             {t("travelAgent.admin.agents") || "Agents"}
           </TabsTrigger>
           <TabsTrigger value="commissions">
-            {t("travelAgent.admin.pendingCommissions") || "Pending Commissions"}
+            {t("travelAgent.admin.reviewCommissions")}
             {pendingCommissions && pendingCommissions.length > 0 && (
               <Badge variant="destructive" className="ml-2">
                 {pendingCommissions.length}
@@ -441,6 +464,28 @@ export default function TravelAgentManagement() {
                           <div className="text-xs text-muted-foreground">
                             ID: {agent.id}
                           </div>
+                          {agent.ownerUserId != null ? (
+                            <span className="text-xs">
+                              {t("travelAgent.admin.ownerUserId")}:{" "}
+                              {agent.ownerUserId}
+                            </span>
+                          ) : (
+                            <div>
+                              <p className="text-xs">
+                                {t("travelAgent.admin.bookingBlocked")}
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setOwnerId("");
+                                  setUnlinkedAgent(agent);
+                                }}
+                              >
+                                {t("travelAgent.admin.linkOwner")}
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{agent.iataNumber}</Badge>
@@ -548,15 +593,17 @@ export default function TravelAgentManagement() {
         <TabsContent value="commissions">
           <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">
-              {t("travelAgent.admin.pendingCommissions") ||
-                "Pending Commissions"}
+              {t("travelAgent.admin.reviewCommissions")}
             </h2>
-            {!pendingCommissions || pendingCommissions.length === 0 ? (
+            {commissionsQuery.isLoading || commissionsQuery.isError ? (
+              <OperationalReadState query={commissionsQuery}>
+                {null}
+              </OperationalReadState>
+            ) : !pendingCommissions || pendingCommissions.length === 0 ? (
               <div className="text-center py-12">
                 <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">
-                  {t("travelAgent.admin.noCommissions") ||
-                    "No pending commissions"}
+                  {t("travelAgent.admin.noCommissionsToReview")}
                 </p>
               </div>
             ) : (
@@ -612,28 +659,23 @@ export default function TravelAgentManagement() {
                         })}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        {commission.commissionStatus === "approved" ? (
+                          <Badge variant="outline">
+                            {t("travelAgent.admin.awaitingSettlement")}
+                          </Badge>
+                        ) : (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="bg-green-50 text-green-700"
+                            disabled={updateCommissionStatusMutation.isPending}
                             onClick={() =>
                               handleApproveCommission(commission.id)
                             }
                           >
                             <CheckCircle2 className="h-4 w-4 mr-1" />
-                            {t("travelAgent.admin.approve") || "Approve"}
+                            {t("travelAgent.admin.approve")}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-blue-50 text-blue-700"
-                            onClick={() => handlePayCommission(commission.id)}
-                          >
-                            <DollarSign className="h-4 w-4 mr-1" />
-                            {t("travelAgent.admin.markPaid") || "Mark Paid"}
-                          </Button>
-                        </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -646,7 +688,7 @@ export default function TravelAgentManagement() {
 
       {/* Register Dialog */}
       <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {t("travelAgent.admin.registerAgent") || "Register Travel Agent"}
@@ -670,6 +712,24 @@ export default function TravelAgentManagement() {
                   })
                 }
                 placeholder="Travel Agency Name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="agency-owner-register">
+                {t("travelAgent.admin.ownerUserId")} *
+              </Label>
+              <Input
+                id="agency-owner-register"
+                type="number"
+                min={1}
+                required
+                value={registerForm.ownerUserId}
+                onChange={e =>
+                  setRegisterForm({
+                    ...registerForm,
+                    ownerUserId: e.target.value,
+                  })
+                }
               />
             </div>
             <div>
@@ -751,7 +811,10 @@ export default function TravelAgentManagement() {
             </Button>
             <Button
               onClick={handleRegister}
-              disabled={registerMutation.isPending}
+              disabled={
+                registerMutation.isPending ||
+                !validOwnerId(registerForm.ownerUserId)
+              }
             >
               {registerMutation.isPending ? (
                 <>
@@ -761,6 +824,45 @@ export default function TravelAgentManagement() {
               ) : (
                 t("travelAgent.admin.register") || "Register"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!unlinkedAgent}
+        onOpenChange={open => {
+          if (!open) setUnlinkedAgent(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("travelAgent.admin.linkOwner")}</DialogTitle>
+            <DialogDescription>{unlinkedAgent?.agencyName}</DialogDescription>
+          </DialogHeader>
+          <Label htmlFor="agency-owner-link">
+            {t("travelAgent.admin.ownerUserId")}
+          </Label>
+          <Input
+            id="agency-owner-link"
+            type="number"
+            min={1}
+            value={ownerId}
+            onChange={e => setOwnerId(e.target.value)}
+          />
+          <DialogFooter>
+            <Button
+              disabled={!validOwnerId(ownerId) || assignOwnerMutation.isPending}
+              onClick={() =>
+                unlinkedAgent &&
+                assignOwnerMutation.mutate({
+                  agentId: unlinkedAgent.id,
+                  ownerUserId: Number(ownerId),
+                  onlyIfUnlinked: true,
+                })
+              }
+            >
+              {t("travelAgent.admin.linkOwner")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -790,9 +892,15 @@ export default function TravelAgentManagement() {
                 </p>
               </div>
               <div>
-                <Label>{t("travelAgent.admin.apiKey") || "API Key"}</Label>
+                <Label htmlFor="agency-api-key">
+                  {t("travelAgent.admin.apiKey") || "API Key"}
+                </Label>
                 <div className="flex gap-2">
-                  <Input value={newCredentials.apiKey} readOnly />
+                  <Input
+                    id="agency-api-key"
+                    value={newCredentials.apiKey}
+                    readOnly
+                  />
                   <Button
                     size="icon"
                     variant="outline"
@@ -803,11 +911,12 @@ export default function TravelAgentManagement() {
                 </div>
               </div>
               <div>
-                <Label>
+                <Label htmlFor="agency-api-secret">
                   {t("travelAgent.admin.apiSecret") || "API Secret"}
                 </Label>
                 <div className="flex gap-2">
                   <Input
+                    id="agency-api-secret"
                     type={showSecret ? "text" : "password"}
                     value={newCredentials.apiSecret}
                     readOnly

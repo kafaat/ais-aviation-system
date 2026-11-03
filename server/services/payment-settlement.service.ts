@@ -575,6 +575,7 @@ export async function settleVerifiedRefund(
     throw new Error(
       "Refund collection not yet reconciled; retry after payment receipt"
     );
+  let couponTransitions: Awaited<ReturnType<typeof releaseBookingSeats>> = [];
   let ownerBooking;
   let ownerWallet;
   if (hint.kind === "wallet_topup") {
@@ -711,7 +712,7 @@ export async function settleVerifiedRefund(
     const allRefunded =
       receipts.length > 0 && receipts.every(r => r.amount === r.refundedAmount);
     if (allRefunded) {
-      await releaseBookingSeats(tx, booking, "refunded");
+      couponTransitions = await releaseBookingSeats(tx, booking, "refunded");
       await tx
         .update(bookings)
         .set({ status: "cancelled", paymentStatus: "refunded" })
@@ -760,6 +761,12 @@ export async function settleVerifiedRefund(
       userId: receipt.userId,
       bookingId: receipt.bookingId,
       amount: delta,
+      ...(couponTransitions.length
+        ? {
+            providerEventId: input.eventId,
+            localCouponTransitions: couponTransitions,
+          }
+        : {}),
     },
   });
 }

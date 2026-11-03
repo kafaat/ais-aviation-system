@@ -5,6 +5,8 @@ vi.mock("../db", () => ({
   getDb: () => boundary.db,
   getFlightById: async () => ({
     id: 11,
+    origin: { id: 1 },
+    destination: { id: 2 },
     tenantId: 3,
     status: "scheduled",
     departureTime: new Date("2030-01-01"),

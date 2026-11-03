@@ -555,7 +555,8 @@
       "consumers": [
         "server/routers/bookings.ts",
         "server/services/bag-drop.service.ts",
-        "server/services/baggage-registration.service.ts"
+        "server/services/baggage-registration.service.ts",
+        "server/services/ticket-documents.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
       "tableExpressions": {
@@ -743,6 +744,7 @@
         "server/routers/eticket.ts",
         "server/services/bag-drop.service.ts",
         "server/services/dcs-operations.service.ts",
+        "server/services/kiosk.service.ts",
         "server/services/seat-map.service.ts"
       ],
       "dependencies": [
@@ -1027,7 +1029,8 @@
         "server/services/rbd-inventory.service.ts",
         "server/services/retail-offer.service.ts",
         "server/services/seat-map.service.ts",
-        "server/services/tenant.service.ts"
+        "server/services/tenant.service.ts",
+        "server/services/ticket-coupons.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -1222,6 +1225,7 @@
         "server/services/apis.service.ts",
         "server/services/flights.service.ts",
         "server/services/price-calendar.service.ts",
+        "server/services/sale-fare-rules.ts",
         "server/services/travel-agent.service.ts"
       ],
       "dependencies": [],
@@ -2119,7 +2123,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/fare-rules.ts"],
+      "consumers": [
+        "server/routers/fare-rules.ts",
+        "server/services/sale-fare-rules.ts"
+      ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/_core/logger.ts",
@@ -2177,6 +2184,7 @@
         "server/services/data-warehouse.service.ts",
         "server/services/premium-experiment.service.ts",
         "server/services/refunds-stats.service.ts",
+        "server/services/report-export.service.ts",
         "server/services/revenue-accounting.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts", "server/db.ts"],
@@ -3157,15 +3165,20 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/boarding-pass.service.ts",
         "server/services/departure-control.service.ts",
-        "server/services/seat-map.service.ts"
+        "server/services/seat-map.service.ts",
+        "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
         "reads": [
           "airlines",
           "airports",
           "ancillaryServices",
+          "baggageCustodyEvents",
+          "baggageItems",
           "bookingAncillaries",
+          "bookingSegments",
           "bookings",
           "flights",
           "kioskDevices",
@@ -3577,7 +3590,9 @@
         "server/services/outbox.service.ts",
         "server/services/rbd-inventory.service.ts",
         "server/services/retail-offer.service.ts",
+        "server/services/sale-fare-rules.ts",
         "server/services/seat-economics.service.ts",
+        "server/services/seat-map.service.ts",
         "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
@@ -3731,7 +3746,8 @@
         "server/services/outbox.service.ts",
         "server/services/retail-offer.service.ts",
         "server/services/seat-economics.service.ts",
-        "server/services/tenant.service.ts"
+        "server/services/tenant.service.ts",
+        "server/services/ticket-coupons.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -5151,7 +5167,8 @@
         "server/services/flights.service.ts",
         "server/services/inventory-lock.service.ts",
         "server/services/irops-recovery.service.ts",
-        "server/services/multi-city.service.ts"
+        "server/services/multi-city.service.ts",
+        "server/services/retail-offer.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
       "tableExpressions": {
@@ -5361,6 +5378,7 @@
         "server/services/notification.service.ts",
         "server/services/order-refunds.service.ts",
         "server/services/payment-settlement.service.ts",
+        "server/services/ticket-coupons.service.ts",
         "server/stripe.ts"
       ],
       "tableExpressions": {
@@ -5388,6 +5406,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/financial-reporting.service.ts",
         "server/services/refunds-stats.service.ts",
         "shared/csv.ts"
       ],
@@ -5415,7 +5434,6 @@
         "server/services/intelligence/economics.agent.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/premium-experiment.service.ts",
-        "server/services/retail-offer.service.ts",
         "server/services/travel-clearance.service.ts",
         "server/services/travel-evidence.service.ts"
       ],
@@ -5451,10 +5469,11 @@
         "server/services/flights.service.ts",
         "server/services/outbox.service.ts",
         "server/services/premium-experiment.service.ts",
-        "server/services/required-value.ts"
+        "server/services/rbd-inventory.service.ts",
+        "server/services/sale-fare-rules.ts"
       ],
       "tableExpressions": {
-        "reads": ["retailOffers"],
+        "reads": ["flights", "retailOffers"],
         "writes": ["retailOffers"]
       },
       "replacement": null
@@ -5506,6 +5525,30 @@
       "tableExpressions": {
         "reads": ["bookings", "flightReviews", "flights"],
         "writes": ["flightReviews"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/sale-fare-rules.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/sale-fare-rules.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/multi-city.service.ts",
+        "server/services/retail-offer.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/civil-day.ts",
+        "server/services/fare-rules.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["airports"],
+        "writes": []
       },
       "replacement": null
     },
@@ -5647,6 +5690,7 @@
         "server/routers/seat-map.ts",
         "server/services/bookings.service.ts",
         "server/services/kiosk.service.ts",
+        "server/services/multi-city.service.ts",
         "server/services/travel-scenarios.service.ts"
       ],
       "dependencies": [
@@ -5936,6 +5980,7 @@
         "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
         "server/services/payment-settlement.service.ts",
+        "server/services/ticket-coupons.service.ts",
         "server/stripe.ts"
       ],
       "tableExpressions": {
@@ -6067,6 +6112,7 @@
         "server/services/crew-rule.service.ts",
         "server/services/dcs-operations.service.ts",
         "server/services/irops-recovery.service.ts",
+        "server/services/kiosk.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc.service.ts",
         "server/services/operational-events.service.ts",
@@ -6100,11 +6146,15 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/services/booking-settlement.service.ts",
+        "server/services/bookings.service.ts",
         "server/services/dcs-operations.service.ts",
         "server/services/departure-control.service.ts",
         "server/services/irops-recovery.service.ts",
+        "server/services/ndc.service.ts",
         "server/services/order-servicing.service.ts",
+        "server/services/refunds.service.ts",
         "server/services/seat-map.service.ts",
+        "server/services/split-refund.service.ts",
         "server/services/ticket-documents.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
@@ -6130,6 +6180,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/baggage-entitlement.service.ts",
         "server/services/eticket.service.ts",
         "server/services/outbox.service.ts",
         "server/services/ticket-coupons.service.ts"
@@ -6178,6 +6229,7 @@
           "airlines",
           "airports",
           "bookings",
+          "financialLedger",
           "flights",
           "hash",
           "travelAgents",

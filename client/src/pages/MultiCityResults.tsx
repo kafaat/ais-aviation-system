@@ -5,7 +5,7 @@
  * Users can select flights for each segment and see combined pricing.
  */
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useSearch, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -35,37 +35,10 @@ interface SelectedFlight {
   segmentIndex: number;
   flightId: number;
   cabinClass: "economy" | "business";
-  price: number;
+  fareClassCode?: string;
 }
 
-type FlightResult = {
-  id: number;
-  flightNumber: string;
-  departureTime: Date;
-  arrivalTime: Date;
-  status: string;
-  economyPrice: number;
-  businessPrice: number;
-  economyAvailable: number;
-  businessAvailable: number;
-  airline: {
-    code: string;
-    name: string;
-    logo: string | null;
-  };
-  origin: {
-    code: string;
-    name: string;
-    city: string;
-    timezone?: string | null;
-  };
-  destination: {
-    code: string;
-    name: string;
-    city: string;
-    timezone?: string | null;
-  };
-};
+type PassengerType = "adult" | "child" | "infant";
 
 export default function MultiCityResults() {
   const { t, i18n } = useTranslation();
@@ -77,7 +50,10 @@ export default function MultiCityResults() {
   const [cabinClass, setCabinClass] = useState<"economy" | "business">(
     "economy"
   );
-  const [passengerCount, setPassengerCount] = useState(1);
+  const [passengerTypes, setPassengerTypes] = useState<PassengerType[]>([
+    "adult",
+  ]);
+  const passengerCount = passengerTypes.length;
 
   // Parse URL parameters
   useEffect(() => {
@@ -117,8 +93,8 @@ export default function MultiCityResults() {
     const passengersParam = searchParams.get("passengers");
     if (passengersParam) {
       const parsed = parseInt(passengersParam);
-      if (!isNaN(parsed) && parsed >= 1) {
-        setPassengerCount(parsed);
+      if (parsed >= 1 && parsed <= 9) {
+        setPassengerTypes(Array.from({ length: parsed }, () => "adult"));
       }
     }
   }, [search]);
@@ -131,19 +107,25 @@ export default function MultiCityResults() {
   });
 
   // Calculate price for selected flights
-  const { data: priceResult } = trpc.multiCity.calculatePrice.useQuery(
+  const quote = trpc.multiCity.calculatePrice.useQuery(
     {
       segments: selectedFlights.map(sf => ({
         flightId: sf.flightId,
-        cabinClass,
+        cabinClass: sf.cabinClass,
+        ...(sf.fareClassCode ? { fareClassCode: sf.fareClassCode } : {}),
       })),
       passengerCount,
+      passengerTypes,
     },
     {
+      retry: false,
       enabled:
         selectedFlights.length === segments.length && segments.length >= 2,
     }
   );
+
+  const priceResult =
+    quote.isError || quote.isFetching ? undefined : quote.data;
 
   // Trigger search when segments are loaded
   useEffect(() => {
@@ -158,12 +140,10 @@ export default function MultiCityResults() {
 
   const handleSelectFlight = (
     segmentIndex: number,
-    flight: FlightResult,
-    selectedClass: "economy" | "business"
+    flightId: number,
+    selectedClass: "economy" | "business",
+    fareClassCode?: string
   ) => {
-    const price =
-      selectedClass === "economy" ? flight.economyPrice : flight.businessPrice;
-
     setSelectedFlights(prev => {
       const existing = prev.filter(
         sf =>
@@ -173,9 +153,9 @@ export default function MultiCityResults() {
         ...existing,
         {
           segmentIndex,
-          flightId: flight.id,
+          flightId,
           cabinClass: selectedClass,
-          price,
+          fareClassCode,
         },
       ].sort((a, b) => a.segmentIndex - b.segmentIndex);
     });
@@ -198,7 +178,7 @@ export default function MultiCityResults() {
       return;
     }
 
-    if (selectedFlights.length !== segments.length) {
+    if (!priceResult || selectedFlights.length !== segments.length) {
       toast.error(t("multiCity.selectAllFlights"));
       return;
     }
@@ -208,9 +188,11 @@ export default function MultiCityResults() {
       version: 1,
       sessionId: crypto.randomUUID(),
       passengerCount,
+      passengerTypes,
       segments: selectedFlights.map(sf => ({
         flightId: sf.flightId,
         departureDate: segments[sf.segmentIndex].departureDate.toISOString(),
+        ...(sf.fareClassCode ? { fareClassCode: sf.fareClassCode } : {}),
       })),
       cabinClass,
     };
@@ -234,10 +216,6 @@ export default function MultiCityResults() {
       ? `${hours}s ${minutes}d`
       : `${hours}h ${minutes}m`;
   };
-
-  const totalSelectedPrice = useMemo(() => {
-    return selectedFlights.reduce((sum, sf) => sum + sf.price, 0);
-  }, [selectedFlights]);
 
   if (searchMutation.isPending) {
     return (
@@ -361,12 +339,16 @@ export default function MultiCityResults() {
                   </Card>
                 ) : (
                   <div className="space-y-3">
-                    {segmentResult.flights.map((flight: FlightResult) => {
+                    {segmentResult.flights.map(flight => {
                       const isSelected = isFlightSelected(
                         segmentIndex,
                         flight.id
                       );
 
+                      const selectedFare = isSelected
+                        ? getSelectedFlightForSegment(segmentIndex)
+                            ?.fareClassCode
+                        : undefined;
                       return (
                         <Card
                           key={flight.id}
@@ -448,10 +430,12 @@ export default function MultiCityResults() {
                             {/* Pricing & Select */}
                             <div className="md:col-span-4">
                               <div className="flex gap-2">
-                                {flight.economyAvailable > 0 && (
+                                {flight.economyAvailable >= passengerCount && (
                                   <Button
                                     variant={
-                                      isSelected && cabinClass === "economy"
+                                      isSelected &&
+                                      !selectedFare &&
+                                      cabinClass === "economy"
                                         ? "default"
                                         : "outline"
                                     }
@@ -460,7 +444,7 @@ export default function MultiCityResults() {
                                     onClick={() =>
                                       handleSelectFlight(
                                         segmentIndex,
-                                        flight,
+                                        flight.id,
                                         "economy"
                                       )
                                     }
@@ -475,10 +459,12 @@ export default function MultiCityResults() {
                                     </div>
                                   </Button>
                                 )}
-                                {flight.businessAvailable > 0 && (
+                                {flight.businessAvailable >= passengerCount && (
                                   <Button
                                     variant={
-                                      isSelected && cabinClass === "business"
+                                      isSelected &&
+                                      !selectedFare &&
+                                      cabinClass === "business"
                                         ? "default"
                                         : "outline"
                                     }
@@ -487,7 +473,7 @@ export default function MultiCityResults() {
                                     onClick={() =>
                                       handleSelectFlight(
                                         segmentIndex,
-                                        flight,
+                                        flight.id,
                                         "business"
                                       )
                                     }
@@ -503,6 +489,37 @@ export default function MultiCityResults() {
                                   </Button>
                                 )}
                               </div>
+                              {flight.fareClassAvailability
+                                ?.filter(
+                                  fare => fare.availableSeats >= passengerCount
+                                )
+                                .map(fare => (
+                                  <Button
+                                    key={fare.fareClassId}
+                                    size="sm"
+                                    className="mt-2 mr-2"
+                                    variant={
+                                      selectedFare === fare.code
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    aria-pressed={selectedFare === fare.code}
+                                    onClick={() =>
+                                      handleSelectFlight(
+                                        segmentIndex,
+                                        flight.id,
+                                        fare.cabinClass,
+                                        fare.code
+                                      )
+                                    }
+                                  >
+                                    {t("search." + fare.cabinClass)} ·{" "}
+                                    {fare.fareFamily
+                                      ? fare.fareFamily + " · "
+                                      : ""}
+                                    {fare.code}
+                                  </Button>
+                                ))}
                             </div>
                           </div>
                         </Card>
@@ -521,6 +538,52 @@ export default function MultiCityResults() {
                 {t("multiCity.priceSummary")}
               </h3>
 
+              <label className="mb-2 flex justify-between gap-2 text-sm">
+                {t("booking.passengers")}
+                <select
+                  value={passengerCount}
+                  onChange={event => {
+                    const count = Number(event.target.value);
+                    setPassengerTypes(types =>
+                      Array.from(
+                        { length: count },
+                        (_, i) => types[i] ?? "adult"
+                      )
+                    );
+                  }}
+                >
+                  {Array.from({ length: 9 }, (_, index) => (
+                    <option key={index + 1} value={index + 1}>
+                      {index + 1}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {passengerTypes.map((type, index) => (
+                <label
+                  key={index}
+                  className="mb-2 flex justify-between gap-2 text-sm"
+                >
+                  {t("booking.passengerType")} {index + 1}
+                  <select
+                    value={type}
+                    onChange={event => {
+                      const value = event.target.value as PassengerType;
+                      setPassengerTypes(types =>
+                        types.map((original, i) =>
+                          i === index ? value : original
+                        )
+                      );
+                    }}
+                  >
+                    {(["adult", "child", "infant"] as const).map(value => (
+                      <option key={value} value={value}>
+                        {t("booking." + value)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
               {/* Selected Flights Summary */}
               <div className="space-y-3 mb-6">
                 {segments.map((_, index) => {
@@ -535,7 +598,15 @@ export default function MultiCityResults() {
                       </span>
                       {selected ? (
                         <span className="font-medium">
-                          {formatPrice(selected.price)} {t("common.currency")}
+                          {selected.fareClassCode &&
+                            selected.fareClassCode + " · "}
+                          {priceResult?.segments[index]
+                            ? formatPrice(
+                                priceResult.segments[index].basePrice
+                              ) +
+                              " " +
+                              t("common.currency")
+                            : "—"}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">
@@ -576,20 +647,27 @@ export default function MultiCityResults() {
               <div className="border-t pt-4">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold">{t("booking.total")}</span>
-                  <span className="text-2xl font-bold text-primary">
+                  <span
+                    data-testid="multi-city-quoted-total"
+                    className="text-2xl font-bold text-primary"
+                  >
                     {priceResult
-                      ? formatPrice(priceResult.totalPrice)
-                      : formatPrice(totalSelectedPrice)}{" "}
-                    {t("common.currency")}
+                      ? formatPrice(priceResult.totalPrice) +
+                        " " +
+                        t("common.currency")
+                      : "—"}
                   </span>
                 </div>
               </div>
 
+              {quote.error && <p role="alert">{quote.error.message}</p>}
               {/* Book Button */}
               <Button
                 className="w-full mt-6"
                 size="lg"
-                disabled={selectedFlights.length !== segments.length}
+                disabled={
+                  !priceResult || selectedFlights.length !== segments.length
+                }
                 onClick={handleProceedToBooking}
               >
                 {t("multiCity.proceedToBooking")}

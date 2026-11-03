@@ -334,7 +334,7 @@ export async function releaseBookingSeats(
     .where(eq(bookingSegments.bookingId, booking.id))
     .orderBy(asc(bookingSegments.flightId))
     .for("update");
-  await closeLocalCoupons(
+  const couponTransitions = await closeLocalCoupons(
     tx,
     booking.id,
     terminalState === "refunded" || booking.paymentStatus === "refunded"
@@ -404,6 +404,7 @@ export async function releaseBookingSeats(
     .update(bookings)
     .set({ seatsReserved: false, checkedIn: false })
     .where(eq(bookings.id, booking.id));
+  return couponTransitions;
 }
 
 export async function restoreSeats(
@@ -564,7 +565,7 @@ export async function cancelBookingResources(
       }
     }
   }
-  await releaseBookingSeats(tx, booking);
+  const couponTransitions = await releaseBookingSeats(tx, booking);
   const segments = await tx
     .select()
     .from(bookingSegments)
@@ -617,6 +618,13 @@ export async function cancelBookingResources(
     aggregateId: booking.id,
     tenantId: booking.tenantId,
     eventType: "booking.cancelled",
-    payload: { bookingId: booking.id, reason, actorId },
+    payload: {
+      bookingId: booking.id,
+      reason,
+      actorId,
+      ...(couponTransitions.length
+        ? { localCouponTransitions: couponTransitions }
+        : {}),
+    },
   });
 }

@@ -1,5 +1,6 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
+import { responseContracts as flightContracts } from "./flights";
 import { outputNumber } from "./primitives";
 export const responseContracts = {
   search: z.array(
@@ -17,6 +18,8 @@ export const responseContracts = {
           businessPrice: outputNumber,
           economyAvailable: outputNumber,
           businessAvailable: outputNumber,
+          fareClassAvailability:
+            flightContracts.search.element.shape.fareClassAvailability,
           airline: z.object({
             code: z.string(),
             name: z.string(),

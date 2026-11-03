@@ -477,6 +477,9 @@ export default function SearchResults() {
                     (flight.status as FlightStatusType) ||
                     "scheduled";
 
+                  const namedFares = flight.fareClassAvailability?.filter(
+                    fare => fare.availableSeats > 0
+                  );
                   const canLock =
                     user &&
                     ["scheduled", "delayed"].includes(displayStatus) &&
@@ -869,6 +872,31 @@ export default function SearchResults() {
                               </div>
                             )}
                           </div>
+                          {!!namedFares?.length && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-muted-foreground">
+                                {t("fareRules.fareFamily")}
+                              </span>
+                              {namedFares.map(fare => (
+                                <Button
+                                  key={fare.fareClassId}
+                                  size="sm"
+                                  variant="outline"
+                                  asChild
+                                >
+                                  <Link
+                                    href={`/booking/${flight.id}?class=${fare.cabinClass}&fareClassCode=${encodeURIComponent(fare.code)}`}
+                                  >
+                                    {t(`search.${fare.cabinClass}`)} ·{" "}
+                                    {fare.fareFamily
+                                      ? fare.fareFamily + " · "
+                                      : ""}
+                                    {fare.code}
+                                  </Link>
+                                </Button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </Card>

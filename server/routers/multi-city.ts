@@ -126,6 +126,17 @@ export const multiCityRouter = router({
             z.object({
               flightId: z.number().describe("Flight ID for this segment"),
               departureDate: z.date().describe("Departure date"),
+              seats: z
+                .array(
+                  z
+                    .object({
+                      passengerIndex: z.number().int().nonnegative(),
+                      seatNumber: z.string().trim().min(2).max(5).toUpperCase(),
+                    })
+                    .strict()
+                )
+                .max(100)
+                .optional(),
               fareClassCode: z
                 .string()
                 .trim()
