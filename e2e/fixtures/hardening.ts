@@ -94,6 +94,11 @@ export async function ownedBooking(
   return { booking, flightId, userId: user.id, command };
 }
 
+/** The scoped passenger owns the booking; the reporting administrator is a different account. */
+export function reportBooking(page: Page, funded = false) {
+  return ownedBooking(page, funded, undefined, "departurePassenger");
+}
+
 async function invalidateFlightSearchCache(): Promise<void> {
   const url = process.env.REDIS_URL;
   if (!url) return;
