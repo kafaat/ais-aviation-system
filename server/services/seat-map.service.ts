@@ -792,6 +792,7 @@ export async function selectSeat(
     const c = await lockDepartureContext(db, bookingId, flightId);
     const { booking } = c;
     await assertSeatSelectionContext(db, c);
+    await assertDcsPassengerMutable(db, { bookingId, passengerId, flightId });
     // One flight lock serializes assignments and exchanges without target/old-seat deadlocks.
     await db
       .select({ id: flights.id })

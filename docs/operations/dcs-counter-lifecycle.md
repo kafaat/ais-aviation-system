@@ -31,6 +31,35 @@ an actual airline tenant on the authenticated actor, including administrators.
    changes boarding permission independently of attendance. Offload cannot erase a
    denial or make a passenger eligible to check in again without an allow decision.
 
+Flight, page and passenger selection stay fixed while a scoped desk command or data
+refresh is pending, including a refresh paused by loss of connectivity. A failed
+flight-list read preserves the selected desk. Selection becomes available after
+these operations settle; retry-key retention is scoped to the current mounted form.
+
+### Attendance recovery after a schedule cutoff or cancellation
+
+The scheduled departure time does not prove that a currently boarded passenger
+cannot return to the gate. `DEPLANE` and `OFFLOAD` therefore use a separate recovery
+policy on `scheduled`, `delayed` and `cancelled` flights, including after the recorded
+departure time. The desk enables only the actions appropriate to the passenger's
+current attendance. A change in flight status does not silently change a pending
+boarding instruction into an offload instruction.
+
+Recovery still requires the authorized active tenant, a confirmed paid reservation
+with reserved inventory, an unambiguous active segment and a current checked-in
+seat/nonce. Deplane must precede offload for a boarded passenger. A physical bag
+without verified withdrawal still blocks offload. Denial, coupon changes, command
+receipts and actor/reason history retain their existing authority.
+
+Completed flights, cancelled/ambiguous segments and refunded or otherwise invalid
+reservations require reconciliation rather than this correction path. A financial
+refund is not reversed or hidden to permit recovery. `BOARD`, `DENY`, `ALLOW`, new
+check-in and new baggage acceptance retain their original admission/time rules.
+
+Both free-seat selection and seat changes honor a boarding denial until an
+authorized `ALLOW` decision. Seat release can free an eligible seat but cannot clear
+the denial or permit a fresh check-in or boarding.
+
 The departure history records actor, role, reason and before/after state. The desk
 shows the latest 200 events and explicitly labels truncation; older events remain
 stored. Oversized or ambiguous manifests fail for review instead of silently dropping
@@ -130,7 +159,13 @@ real booking/payment commands and a lost **committed** bag response before retry
 
 The required Production Gates run the additional departure counter acceptance
 against actual MySQL 8.0 and 9.7 and Redis, including competing registration,
-offload and check-in commands. The migration gates replay both fresh and previous
+offload and check-in commands. Recovery acceptance also verifies correction after
+the cutoff/cancellation, exact-key replay, tenant/baggage/completed-flight refusal,
+and the same denial policy through both seat-allocation paths. The authenticated
+browser journeys perform check-in, boarding, deplane and offload through the real
+desk/API after changing only the disposable fixture's flight clock/status; these
+are not provider cancellation or aircraft movement tests.
+The migration gates replay both fresh and previous
 release databases. Unit tests, schema generation and local TypeScript/build checks
 are not substitutes for those CI results or for airport operational acceptance.
 

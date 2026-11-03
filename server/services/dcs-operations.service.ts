@@ -22,6 +22,7 @@ import { getDb } from "../db";
 import type { SettlementTx } from "./booking-settlement.service";
 import {
   assertDepartureOpen,
+  assertFundedDepartureReservation,
   checkInPassengersTx,
   lockDepartureContext,
   refreshBookingCheckIn,
@@ -146,6 +147,20 @@ function currentAttendance(
   if (checkedIn) return "checked_in";
   return state?.state === "offloaded" ? "offloaded" : "not_checked_in";
 }
+
+/**
+ * A schedule cutoff or flight cancellation must not strand current attendance.
+ * Recovery still requires the locked active itinerary, funding and seat; it
+ * never admits new travel or resolves a completed/refunded reservation.
+ */
+function assertDcsRecoveryAllowed(c: DepartureContext) {
+  assertFundedDepartureReservation(c);
+  if (!["scheduled", "delayed", "cancelled"].includes(c.flight.status))
+    reject(
+      "Flight requires departure reconciliation before attendance recovery"
+    );
+}
+
 async function appendEvent(
   tx: SettlementTx,
   value: typeof dcsOperationEvents.$inferInsert
@@ -586,7 +601,9 @@ export async function transitionDcsPassenger(
     actor,
     "dcs.passenger_transition",
     async (tx, c, requestHash) => {
-      assertDepartureOpen(c, "boarding");
+      if (input.action === "deplane" || input.action === "offload")
+        assertDcsRecoveryAllowed(c);
+      else assertDepartureOpen(c, "boarding");
       const before = await readDcsPassengerState(tx, input);
       const seat = await passengerSeat(tx, input);
       const checkedIn =

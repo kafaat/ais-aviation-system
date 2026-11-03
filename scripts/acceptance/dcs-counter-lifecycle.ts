@@ -22,6 +22,11 @@ import {
 } from "../../server/services/baggage-registration.service";
 import { getFlightBaggageCloseout } from "../../server/services/baggage-custody.service";
 import { generateFlightManifest } from "../../server/services/dcs.service";
+import {
+  changeSeat,
+  releaseSeat,
+  selectSeat,
+} from "../../server/services/seat-map.service";
 
 /** Only the guarded, disposable *_test runner calls this. No provider I/O. */
 export async function verifyDcsCounterLifecycle(
@@ -538,6 +543,207 @@ export async function verifyDcsCounterLifecycle(
         booking.userId,
         ownerId,
         "Staff check-in must not impersonate or transfer the owner"
+      );
+    }
+  );
+
+  await check(
+    "DCS: recovery after cutoff or cancellation preserves receipts and cannot reopen boarding",
+    async () => {
+      for (const status of ["delayed", "cancelled"] as const) {
+        const j = await journey();
+        await staffCheckIn(j.key());
+        await transitionDcsPassenger(
+          { ...j.key(), action: "board", ...command() },
+          actor
+        );
+        const nonce = (await storedSeat(j.key())).checkInNonce;
+        assert(nonce);
+        // Preserve the paid active sector and current seat. No movement or
+        // financial event is fabricated by changing this fixture's flight row.
+        await db
+          .update(s.flights)
+          .set({
+            status,
+            departureTime: new Date(Date.now() - 60000),
+          })
+          .where(eq(s.flights.id, j.key().flightId));
+        const deplane = {
+          ...j.key(),
+          action: "deplane" as const,
+          ...command(),
+        };
+        const [first, retry] = await Promise.all([
+          transitionDcsPassenger(deplane, actor),
+          transitionDcsPassenger(deplane, actor),
+        ]);
+        assert.deepEqual(retry, first);
+        assert.equal(first.state, "checked_in");
+        assert.equal((await storedSeat(j.key())).checkInNonce, nonce);
+        for (const action of ["board", "deny", "allow"] as const)
+          await assert.rejects(
+            transitionDcsPassenger({ ...j.key(), action, ...command() }, actor),
+            { code: "PRECONDITION_FAILED" }
+          );
+        const offload = {
+          ...j.key(),
+          action: "offload" as const,
+          ...command(),
+        };
+        const [offloaded, offloadRetry] = await Promise.all([
+          transitionDcsPassenger(offload, actor),
+          transitionDcsPassenger(offload, actor),
+        ]);
+        assert.deepEqual(offloadRetry, offloaded);
+        assert.equal(offloaded.state, "offloaded");
+        assert.equal((await storedSeat(j.key())).status, "occupied");
+        assert.equal((await storedSeat(j.key())).checkInNonce, null);
+        const [coupon] = await db
+          .select()
+          .from(s.ticketCoupons)
+          .where(
+            and(
+              eq(s.ticketCoupons.bookingId, j.bookingId),
+              eq(s.ticketCoupons.passengerId, j.key().passengerId),
+              eq(s.ticketCoupons.flightId, j.key().flightId)
+            )
+          );
+        assert.equal(coupon.status, "O");
+        const events = await db
+          .select()
+          .from(s.dcsOperationEvents)
+          .where(eq(s.dcsOperationEvents.bookingId, j.bookingId));
+        assert.equal(events.filter(e => e.action === "deplane").length, 1);
+        assert.equal(events.filter(e => e.action === "offload").length, 1);
+        assert.equal(events.length, 4);
+        assert(
+          events.every(e => e.actorId === operatorId && e.reason.length >= 5)
+        );
+        const current = await getDcsDesk(j.key().flightId, actor);
+        assert.equal(current.passengers[0].attendanceState, "offloaded");
+        assert.equal(current.passengers[0].checkedIn, false);
+      }
+    }
+  );
+
+  await check(
+    "DCS: recovery retains tenant and baggage guards and refuses completed flights",
+    async () => {
+      const j = await journey();
+      await staffCheckIn(j.key());
+      const bag = await registerBaggage(j.bag(10), bagActor);
+      await transitionDcsPassenger(
+        { ...j.key(), action: "board", ...command() },
+        actor
+      );
+      const nonce = (await storedSeat(j.key())).checkInNonce;
+      await db
+        .update(s.flights)
+        .set({
+          status: "cancelled",
+          departureTime: new Date(Date.now() - 60000),
+        })
+        .where(eq(s.flights.id, j.key().flightId));
+      await assert.rejects(
+        transitionDcsPassenger(
+          { ...j.key(), action: "deplane", ...command() },
+          otherActor
+        ),
+        { code: "FORBIDDEN" }
+      );
+      await transitionDcsPassenger(
+        { ...j.key(), action: "deplane", ...command() },
+        actor
+      );
+      await assert.rejects(
+        transitionDcsPassenger(
+          { ...j.key(), action: "offload", ...command() },
+          actor
+        ),
+        { code: "PRECONDITION_FAILED", message: /baggage/i }
+      );
+      assert.equal((await storedSeat(j.key())).status, "checked_in");
+      assert.equal((await storedSeat(j.key())).checkInNonce, nonce);
+      assert.equal((await bags(j.bookingId))[0].id, bag.id);
+      const blocked = await getDcsDesk(j.key().flightId, actor);
+      assert.equal(blocked.passengers[0].attendanceState, "checked_in");
+      assert.equal(
+        blocked.history.filter(e => e.action === "offload").length,
+        0
+      );
+
+      const completed = await journey();
+      await staffCheckIn(completed.key());
+      await transitionDcsPassenger(
+        { ...completed.key(), action: "board", ...command() },
+        actor
+      );
+      await db
+        .update(s.flights)
+        .set({ status: "completed" })
+        .where(eq(s.flights.id, completed.key().flightId));
+      for (const action of ["deplane", "offload"] as const)
+        await assert.rejects(
+          transitionDcsPassenger(
+            { ...completed.key(), action, ...command() },
+            actor
+          ),
+          { code: "PRECONDITION_FAILED" }
+        );
+      assert.equal((await storedSeat(completed.key())).status, "checked_in");
+      assert.equal(
+        (await getDcsDesk(completed.key().flightId, actor)).passengers[0]
+          .attendanceState,
+        "boarded"
+      );
+    }
+  );
+
+  await check(
+    "DCS: seat selection honors denial while release cannot grant boarding permission",
+    async () => {
+      const j = await journey();
+      const { flightId, passengerId } = j.key();
+      await selectSeat(flightId, "1A", j.bookingId, passengerId);
+      await transitionDcsPassenger(
+        { ...j.key(), action: "deny", ...command() },
+        actor
+      );
+      await assert.rejects(
+        changeSeat(flightId, "1A", "1B", j.bookingId, passengerId),
+        /denied/i
+      );
+      await assert.rejects(
+        selectSeat(flightId, "1B", j.bookingId, passengerId),
+        /denied/i
+      );
+      assert.equal((await storedSeat(j.key())).seatNumber, "1A");
+      await transitionDcsPassenger(
+        { ...j.key(), action: "allow", ...command() },
+        actor
+      );
+      await selectSeat(flightId, "1B", j.bookingId, passengerId);
+      await staffCheckIn(j.key());
+      await transitionDcsPassenger(
+        { ...j.key(), action: "deny", ...command() },
+        actor
+      );
+      await transitionDcsPassenger(
+        { ...j.key(), action: "offload", ...command() },
+        actor
+      );
+      await releaseSeat(flightId, "1B");
+      const current = await getDcsDesk(flightId, actor);
+      assert.equal(current.passengers[0].boardingDenied, true);
+      assert.equal(current.passengers[0].attendanceState, "offloaded");
+      assert.equal(current.passengers[0].seatNumber, null);
+      await assert.rejects(staffCheckIn(j.key()), /denied/i);
+      await assert.rejects(
+        transitionDcsPassenger(
+          { ...j.key(), action: "board", ...command() },
+          actor
+        ),
+        /denied/i
       );
     }
   );

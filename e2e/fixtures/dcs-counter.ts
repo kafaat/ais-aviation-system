@@ -81,6 +81,139 @@ async function prepareCounterBooking(page: Page) {
 }
 
 export function registerDcsCounterTests() {
+  for (const status of ["delayed", "cancelled"] as const) {
+    test(`scoped desk recovers a boarded passenger after departure on a ${status} flight`, async ({
+      page,
+    }) => {
+      test.setTimeout(120000);
+      await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
+      const scope = await prepareCounterBooking(page);
+      await useBrowserSession(page, "ops");
+      const client = rpc(page);
+      const openPassenger = async () => {
+        await page.goto("/airline/dcs");
+        await page
+          .getByLabel("Flight", { exact: true })
+          .selectOption(String(scope.flightId));
+        await page
+          .getByRole("button", { name: "Select Synthetic Journey" })
+          .click();
+      };
+      await openPassenger();
+      await page
+        .getByLabel("Passenger action reason")
+        .fill("Current reservation and documents checked at counter");
+      await page
+        .getByRole("button", { name: "Check in passenger", exact: true })
+        .click();
+      await expect(
+        page.getByLabel("Passenger action", { exact: true })
+      ).toHaveValue("board");
+      await page
+        .getByLabel("Passenger action reason")
+        .fill("Passenger physically boarded before operational interruption");
+      await page
+        .getByRole("button", { name: "Board passenger", exact: true })
+        .click();
+      await expect(
+        page.getByLabel("Passenger action", { exact: true })
+      ).toHaveValue("deplane");
+      // Only the disposable fixture's flight status and clock change in SQL.
+      // Check-in, boarding and both corrections run through the real UI/API.
+      const db = await mysql.createConnection(disposableDatabaseUrl());
+      try {
+        await db.execute(
+          "UPDATE flights SET status = ?, departureTime = UTC_TIMESTAMP() - INTERVAL 1 MINUTE WHERE id = ?",
+          [status, scope.flightId]
+        );
+      } finally {
+        await db.end();
+      }
+      await openPassenger();
+      await expect(
+        page.getByLabel("Passenger action", { exact: true })
+      ).toHaveValue("deplane");
+      await page
+        .getByLabel("Passenger action reason")
+        .fill("Passenger returned to the gate after the interruption");
+      await page
+        .getByRole("button", { name: "Deplane passenger", exact: true })
+        .click();
+      await expect(
+        page.getByLabel("Passenger action", { exact: true })
+      ).toHaveValue("offload");
+      await expect(
+        page
+          .getByLabel("Passenger action", { exact: true })
+          .locator('option[value="board"]')
+      ).toBeDisabled();
+      await expect(
+        client.dcsOperations.transition.mutate({
+          ...scope,
+          action: "board",
+          reason: "New boarding remains unavailable after interruption",
+          idempotencyKey: randomUUID(),
+        })
+      ).rejects.toThrow(/not open/i);
+      await page
+        .getByLabel("Passenger action reason")
+        .fill("Passenger and reservation reviewed for offload without bags");
+      await page
+        .getByRole("button", { name: "Offload passenger", exact: true })
+        .click();
+      await expect
+        .poll(async () => {
+          const desk = await client.dcsOperations.getDesk.query({
+            flightId: scope.flightId,
+          });
+          return desk.passengers.find(p => p.passengerId === scope.passengerId)
+            ?.attendanceState;
+        })
+        .toBe("offloaded");
+      const desk = await client.dcsOperations.getDesk.query({
+        flightId: scope.flightId,
+      });
+      expect(desk.passengers[0]).toMatchObject({
+        bookingId: scope.bookingId,
+        passengerId: scope.passengerId,
+        attendanceState: "offloaded",
+        checkedIn: false,
+      });
+      expect(desk.history.map(row => row.action).sort()).toEqual(
+        ["check_in", "board", "deplane", "offload"].sort()
+      );
+      const seats = await sqlRows<RowDataPacket>(
+        "SELECT status, checkInNonce FROM seat_inventory WHERE flightId = ? AND bookingId = ? AND passengerId = ?",
+        [scope.flightId, scope.bookingId, scope.passengerId]
+      );
+      expect(seats).toHaveLength(1);
+      expect(seats[0]).toMatchObject({
+        status: "occupied",
+        checkInNonce: null,
+      });
+      const coupons = await sqlRows<RowDataPacket>(
+        "SELECT status FROM ticket_coupons WHERE flightId = ? AND bookingId = ? AND passengerId = ?",
+        [scope.flightId, scope.bookingId, scope.passengerId]
+      );
+      expect(coupons).toHaveLength(1);
+      expect(coupons[0].status).toBe("O");
+      await openPassenger();
+      await expect(
+        page.getByLabel("Passenger action", { exact: true })
+      ).toHaveValue("check_in");
+      await expect(page.getByLabel("Passenger action reason")).toBeDisabled();
+      await expect(
+        page.getByRole("button", { name: "Check in passenger", exact: true })
+      ).toBeDisabled();
+      expect(
+        await sqlRows<RowDataPacket>(
+          "SELECT id FROM baggage_items WHERE bookingId = ?",
+          [scope.bookingId]
+        )
+      ).toHaveLength(0);
+    });
+  }
+
   test("scoped desk persists boarding and recovers a received bag after a lost response", async ({
     page,
   }) => {

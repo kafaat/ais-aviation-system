@@ -115,9 +115,9 @@ export async function assertSeatSelectionContext(
     throw new Error("A current checkout hold is required to select seats");
 }
 
-export function assertDepartureOpen(
-  c: Awaited<ReturnType<typeof lockDepartureContext>>,
-  purpose: "check_in" | "boarding"
+/** Admission and attendance recovery require the same current funded booking. */
+export function assertFundedDepartureReservation(
+  c: Awaited<ReturnType<typeof lockDepartureContext>>
 ) {
   if (
     c.booking.status !== "confirmed" ||
@@ -128,6 +128,13 @@ export function assertDepartureOpen(
       code: "PRECONDITION_FAILED",
       message: "An active paid reservation is required",
     });
+}
+
+export function assertDepartureOpen(
+  c: Awaited<ReturnType<typeof lockDepartureContext>>,
+  purpose: "check_in" | "boarding"
+) {
+  assertFundedDepartureReservation(c);
   const remaining = c.flight.departureTime.getTime() - Date.now();
   if (
     !["scheduled", "delayed"].includes(c.flight.status) ||
