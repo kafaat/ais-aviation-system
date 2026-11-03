@@ -1,0 +1,38 @@
+name: Honeywell station spool test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/station/**"
+      - ".github/workflows/honeywell-station.yml"
+      - "server/contracts/kiosk.ts"
+      - "server/services/kiosk.service.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  station:
+    name: Windows RAW routing
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Route both documents to disposable Windows local file ports
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Start-Service Spooler
+          $driver = 'Generic / Text Only'
+          Add-PrinterDriver -Name $driver
+          $env:AIS_TEST_PORT_DIR = (New-Item -Type Directory -Path (Join-Path $env:RUNNER_TEMP 'ais-spool-test')).FullName
+          foreach ($share in ('HWBP', 'HWBT')) {
+            $path = Join-Path $env:AIS_TEST_PORT_DIR "$share.prn"
+            Add-PrinterPort -Name $path
+            Add-Printer -Name "AIS-Test-$share" -DriverName $driver -PortName $path -Shared -ShareName $share
+          }
+          python -m unittest discover -s scripts/station -v
