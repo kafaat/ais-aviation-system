@@ -1205,12 +1205,18 @@ Facial recognition and biometric boarding system.
 
 Airport kiosk check-in operations.
 
-| Endpoint                  | Type     | Auth   | Description             |
-| ------------------------- | -------- | ------ | ----------------------- |
-| `kiosk.checkIn`           | Mutation | Public | Self-service check-in   |
-| `kiosk.selectSeat`        | Mutation | Public | Seat selection at kiosk |
-| `kiosk.printBoardingPass` | Mutation | Public | Print boarding pass     |
-| `kiosk.printBagTag`       | Mutation | Public | Print baggage tag       |
+| Endpoint                  | Type     | Auth   | Description                                |
+| ------------------------- | -------- | ------ | ------------------------------------------ |
+| `kiosk.checkIn`           | Mutation | Public | Self-service check-in                      |
+| `kiosk.selectSeat`        | Mutation | Public | Seat selection at kiosk                    |
+| `kiosk.printBoardingPass` | Mutation | Public | Prepare digital boarding pass              |
+| `kiosk.printBagTag`       | Mutation | Public | Prepare registered baggage tag for reprint |
+
+Both kiosk print operations require a passenger-scoped kiosk capability and return
+`printStatus: "document_ready"`. The boarding pass exposes its ISO issuance time
+in `boardingPass.issuedAt`. Clients that previously displayed `printedAt` as an
+issuance date should use `issuedAt`. The `printedAt` value on each document is
+`null` until physical output can be independently acknowledged.
 
 ---
 

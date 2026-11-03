@@ -127,6 +127,7 @@ export const responseContracts = {
     newSeat: z.string(),
   }),
   printBoardingPass: z.object({
+    printStatus: z.literal("document_ready"),
     boardingPass: z.object({
       passengerName: z.string(),
       ticketNumber: z.union([z.null(), z.string()]),
@@ -158,7 +159,8 @@ export const responseContracts = {
       gate: z.string().nullable(),
       barcodeData: z.string(),
       bcbp: z.string(),
-      printedAt: z.string(),
+      issuedAt: z.string().datetime(),
+      printedAt: z.null(),
     }),
   }),
   printBagTag: z.object({
