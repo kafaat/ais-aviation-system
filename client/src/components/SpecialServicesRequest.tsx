@@ -111,6 +111,15 @@ export default function SpecialServicesRequest({
 }: SpecialServicesRequestProps) {
   const { t } = useTranslation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedFlight, setSelectedFlight] = useState("");
+  const departure = trpc.bookings.getDepartureState.useQuery({ bookingId });
+  const sectors = (departure.data ?? []).filter(
+    leg =>
+      ["scheduled", "delayed"].includes(leg.status) &&
+      leg.departureTime > new Date()
+  );
+  const flightChoice =
+    selectedFlight || (sectors.length === 1 ? String(sectors[0].flightId) : "");
   const [selectedPassenger, setSelectedPassenger] = useState<string>("");
   const [selectedServiceType, setSelectedServiceType] = useState<
     ServiceType | ""
@@ -168,6 +177,7 @@ export default function SpecialServicesRequest({
   });
 
   const resetForm = () => {
+    setSelectedFlight("");
     setSelectedPassenger("");
     setSelectedServiceType("");
     setSelectedServiceCode("");
@@ -175,7 +185,12 @@ export default function SpecialServicesRequest({
   };
 
   const handleSubmit = () => {
-    if (!selectedPassenger || !selectedServiceType || !selectedServiceCode) {
+    if (
+      !sectors.some(sector => String(sector.flightId) === flightChoice) ||
+      !selectedPassenger ||
+      !selectedServiceType ||
+      !selectedServiceCode
+    ) {
       toast.error(t("common.error"), {
         description: t("specialServices.fillAllFields"),
       });
@@ -189,6 +204,7 @@ export default function SpecialServicesRequest({
     requestServiceMutation.mutate({
       bookingId,
       passengerId: parseInt(selectedPassenger),
+      flightId: Number(flightChoice),
       serviceType: selectedServiceType,
       serviceCode: selectedServiceCode,
       details,
@@ -246,6 +262,30 @@ export default function SpecialServicesRequest({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor={`ssr-flight-${bookingId}`}>
+                  {t("specialServices.flightSector")}
+                </Label>
+                <select
+                  id={`ssr-flight-${bookingId}`}
+                  value={flightChoice}
+                  onChange={e => setSelectedFlight(e.target.value)}
+                  className="w-full rounded-md border p-2"
+                >
+                  <option value="">{t("specialServices.chooseSector")}</option>
+                  {sectors.map(leg => (
+                    <option key={leg.flightId} value={leg.flightId}>
+                      {leg.flightNumber} ·{" "}
+                      {leg.departureTime.toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+                {departure.error && (
+                  <OperationalReadState query={departure}>
+                    {null}
+                  </OperationalReadState>
+                )}
+              </div>
               {/* Passenger Selection */}
               <div className="space-y-2">
                 <Label htmlFor={`passenger-${bookingId}`}>
@@ -372,7 +412,11 @@ export default function SpecialServicesRequest({
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={requestServiceMutation.isPending}
+                disabled={
+                  requestServiceMutation.isPending ||
+                  !flightChoice ||
+                  departure.isError
+                }
               >
                 {requestServiceMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -438,6 +482,19 @@ export default function SpecialServicesRequest({
                                   <p className="mt-1 text-sm text-muted-foreground">
                                     {t("specialServices.for")}:{" "}
                                     {service.passengerName}
+                                  </p>
+                                  <p className="mt-1 text-sm text-muted-foreground">
+                                    {service.flightId == null
+                                      ? t("specialServices.unverifiedSector")
+                                      : t("specialServices.requestedFlight", {
+                                          flight:
+                                            departure.data?.find(
+                                              leg =>
+                                                leg.flightId ===
+                                                service.flightId
+                                            )?.flightNumber ??
+                                            `#${service.flightId}`,
+                                        })}
                                   </p>
                                   {service.adminNotes && (
                                     <p className="mt-1 text-sm text-muted-foreground">
