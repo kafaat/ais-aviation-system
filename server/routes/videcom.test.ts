@@ -97,6 +97,12 @@ it("shows the three assigned endpoints and permits only display preferences on s
     "<title>Air &lt;demo&gt; · Airline reservations</title>"
   );
   expect(html).not.toMatch(/private|evil\.invalid|<script|<form/);
+  const yemeniMarket = await (
+    await fetch(active.origin + "/videcom?country=ye&currency=yer")
+  ).text();
+  expect(yemeniMarket).toContain(
+    panels + "requirementsBS.aspx?country=ye&amp;currency=YER"
+  );
   const bad = await (
     await fetch(
       active.origin + "/videcom?country=US&country=DE&currency=invalid"

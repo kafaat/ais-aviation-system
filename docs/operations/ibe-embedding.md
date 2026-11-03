@@ -110,8 +110,9 @@ A normal link from the corporate site to `/videcom` opens the bilingual entry
 page. Its public search and manage-booking panels are served directly by the
 configured provider. Each panel also has a direct link for browsers that block
 cross-site cookies or frames. The agent signs in on the provider's own page.
-Only the optional AIS-supported `country` and `currency` codes are sent to the
-search panel. Videcom receives the browser request directly and determines its
+Only a two-letter `country` and three-letter `currency` can be sent to the
+search panel, for example `?country=ye&currency=YER`. Videcom validates the
+market and currency it supports, receives the browser request directly and determines its
 own location, fares, currency policy and session. AIS never sends the booking
 reference, credentials or AIS session token in a launch URL. Use host-only
 session cookies on separate AIS and provider hosts.

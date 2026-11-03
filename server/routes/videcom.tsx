@@ -1,7 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Router } from "express";
-import { DISPLAY_COUNTRIES, DISPLAY_CURRENCIES } from "../../shared/ibe-search";
 import {
   publicIbeConfiguration,
   videcomBaseUrl,
@@ -51,20 +50,21 @@ export function createVidecomRouter(env = process.env) {
           : "ar";
     const copy = labels[lang];
     const search = new URL("requirementsBS.aspx", panels);
-    for (const [key, allowed] of [
-      ["country", DISPLAY_COUNTRIES],
-      ["currency", DISPLAY_CURRENCIES],
-    ] as const) {
-      const raw = req.query[key];
-      if (
-        typeof raw === "string" &&
-        allowed.some(value => value === raw.toUpperCase())
-      )
-        search.searchParams.set(
-          key,
-          key === "country" ? raw.toLowerCase() : raw.toUpperCase()
-        );
-    }
+    // Videcom owns the supported markets. Native AIS display choices do not
+    // constrain a provider booking (for example, Yemen and the Yemeni rial).
+    const { country, currency } = req.query;
+    if (
+      typeof country === "string" &&
+      country.length === 2 &&
+      /^[a-z]{2}$/i.test(country)
+    )
+      search.searchParams.set("country", country.toLowerCase());
+    if (
+      typeof currency === "string" &&
+      currency.length === 3 &&
+      /^[a-z]{3}$/i.test(currency)
+    )
+      search.searchParams.set("currency", currency.toUpperCase());
 
     // These standalone documents contain no app router, session, scripts or AIS forms.
     res.set({
