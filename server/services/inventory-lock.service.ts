@@ -60,6 +60,7 @@ export async function createInventoryLock(
       const [flight] = await tx
         .select({
           status: flights.status,
+          dcsClosedAt: flights.dcsClosedAt,
           departureTime: flights.departureTime,
           economyAvailable: flights.economyAvailable,
           businessAvailable: flights.businessAvailable,
@@ -76,6 +77,11 @@ export async function createInventoryLock(
         });
       }
 
+      if (flight.dcsClosedAt)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Final DCS closure prevents new inventory holds",
+        });
       if (
         !["scheduled", "delayed"].includes(flight.status) ||
         flight.departureTime <= new Date()

@@ -413,6 +413,12 @@ function FlightDesk({
     { flightId },
     { retry: false }
   );
+  const utils = trpc.useUtils();
+  const refreshDesk = () =>
+    Promise.all([
+      query.refetch(),
+      utils.dcsOperations.stationReport.invalidate({ flightId }),
+    ]);
   const data = query.data;
   const selected = data?.passengers.find(p => p.passengerId === passengerId);
   const needle = search.trim().toLocaleLowerCase();
@@ -427,7 +433,11 @@ function FlightDesk({
     data?.flight.status === "cancelled" &&
     !!data.flight.dcsClosedAt &&
     !data.flight.stationOffBlocksAt;
-  const readReady = !!data && !query.error && !query.isFetching;
+  const readReady =
+    !!data &&
+    !query.error &&
+    !query.isFetching &&
+    query.fetchStatus !== "paused";
   return (
     <OperationalReadState query={query}>
       {data && (
@@ -446,7 +456,7 @@ function FlightDesk({
               <Button
                 variant="outline"
                 disabled={query.isFetching}
-                onClick={() => void query.refetch()}
+                onClick={() => void refreshDesk()}
               >
                 {l("تحديث المكتب", "Refresh desk")}
               </Button>
@@ -491,7 +501,7 @@ function FlightDesk({
               disabled={
                 !readReady || !flightActive || !!data.flight.dcsClosedAt
               }
-              refresh={() => query.refetch()}
+              refresh={refreshDesk}
             />
           </section>
 
@@ -579,6 +589,7 @@ function FlightDesk({
             disabled={
               !readReady || (!flightActive && !canReopenCancelledFlight)
             }
+            reportReady={readReady && !navigationLocked}
             reopenOnly={canReopenCancelledFlight}
           />
           {selected && (
@@ -607,7 +618,7 @@ function FlightDesk({
                 passenger={selected}
                 data={data}
                 disabled={!readReady}
-                refresh={() => query.refetch()}
+                refresh={refreshDesk}
               />
               {selected.segmentId === null ? (
                 <div className="rounded-lg border p-4">

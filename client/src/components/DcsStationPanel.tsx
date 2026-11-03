@@ -28,11 +28,13 @@ export function DcsStationPanel({
   flightId,
   passengers,
   disabled,
+  reportReady,
   reopenOnly,
 }: {
   flightId: number;
   passengers: Passenger[];
   disabled: boolean;
+  reportReady: boolean;
   reopenOnly: boolean;
 }) {
   const l = useOperationalLabels();
@@ -56,6 +58,7 @@ export function DcsStationPanel({
           flightId={flightId}
           passengers={passengers}
           disabled={disabled}
+          reportReady={reportReady}
           reopenOnly={reopenOnly}
           supervisor={["admin", "airline_admin", "super_admin"].includes(
             user.role
@@ -69,6 +72,7 @@ function StationTools({
   flightId,
   passengers,
   disabled,
+  reportReady,
   reopenOnly,
   supervisor,
   expectedActorId,
@@ -79,6 +83,7 @@ function StationTools({
   flightId: number;
   passengers: Passenger[];
   disabled: boolean;
+  reportReady: boolean;
   reopenOnly: boolean;
   supervisor: boolean;
 }) {
@@ -116,6 +121,12 @@ function StationTools({
   const p = passengers.find(v => v.passengerId === Number(passengerId));
   const report = query.data;
   const rows = report?.items.filter(i => !meals || i.category === "meal") ?? [];
+  const exportReady =
+    reportReady &&
+    !saving &&
+    query.fetchStatus === "idle" &&
+    !query.error &&
+    report?.unresolvedServices === 0;
   const finalized = !!report?.closedAt;
   const lock =
     saving ||
@@ -269,13 +280,7 @@ function StationTools({
     }
   }
   function printReport() {
-    if (
-      !report ||
-      query.error ||
-      report.unresolvedServices ||
-      !printTable.current
-    )
-      return;
+    if (!report || !exportReady || !printTable.current) return;
     const page = window.open("", "_blank");
     if (!page) {
       toast.error(
@@ -306,7 +311,7 @@ function StationTools({
     page.print();
   }
   function download() {
-    if (!report || query.error || report.unresolvedServices > 0) return;
+    if (!report || !exportReady) return;
     const csv = [
       [
         "Flight",
@@ -397,18 +402,12 @@ function StationTools({
           {!rows.length && (
             <p>{l("لا توجد سجلات مطابقة", "No matching records")}</p>
           )}
-          <Button
-            variant="outline"
-            disabled={query.isFetching || report.unresolvedServices > 0}
-            onClick={download}
-          >
+          <Button variant="outline" disabled={!exportReady} onClick={download}>
             {l("تنزيل التقرير CSV", "Download CSV report")}
           </Button>
           <Button
             variant="outline"
-            disabled={
-              query.isFetching || !!query.error || report.unresolvedServices > 0
-            }
+            disabled={!exportReady}
             onClick={printReport}
           >
             {l("طباعة التقرير", "Print report")}

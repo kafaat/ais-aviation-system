@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTableName } from "drizzle-orm";
 import { transactionMemory } from "./helpers/transaction-memory";
@@ -577,7 +578,7 @@ describe("scoped counter weight correction", () => {
       reason: "Verified on the counter scale",
       expectedActorId: actor.id,
       expectedTenantId: actor.tenantId,
-      idempotencyKey: "weight-correction-1",
+      idempotencyKey: randomUUID(),
     };
     const receipt = await staff().correctWeight(fix);
     expect(await staff().correctWeight(fix)).toEqual(receipt);
@@ -589,7 +590,7 @@ describe("scoped counter weight correction", () => {
       /different payload/
     );
     await expect(
-      staff().correctWeight({ ...fix, idempotencyKey: "stale-correction-2" })
+      staff().correctWeight({ ...fix, idempotencyKey: randomUUID() })
     ).rejects.toThrow(/changed/);
     expect(fixture.rows("dcs_operation_events")).toHaveLength(1);
   });
@@ -603,7 +604,7 @@ describe("scoped counter weight correction", () => {
       reason: "Counter review",
       expectedActorId: actor.id,
       expectedTenantId: actor.tenantId,
-      idempotencyKey: "weight-correction-3",
+      idempotencyKey: randomUUID(),
     };
     await expect(
       staff().correctWeight({ ...fix, expectedActorId: actor.id + 1 })

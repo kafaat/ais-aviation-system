@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
+import {
+  createInventoryLock,
+  releaseInventoryLock,
+} from "../../server/services/inventory-lock.service";
+import { cancelBooking } from "../../server/services/bookings.service";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
 import {
   settleVerifiedPayment,
@@ -1171,6 +1176,168 @@ export async function verifyDcsCounterLifecycle(
     }
   );
   await check(
+    "DCS station: inventory admission, funded receipts and departure evidence across final closure",
+    async () => {
+      const j = await journey(1, 2);
+      const key = j.key(0, 1);
+      const flightId = key.flightId;
+      const note = { ...key, ...command() };
+      const [, noteReceipt] = await Promise.all([
+        staffCheckIn(key),
+        addDeskNote(note, actor),
+      ]);
+      await transitionDcsPassenger(
+        { ...key, action: "board", ...command() },
+        actor
+      );
+      await changeDcsFlightState(
+        { flightId, action: "close", ...command() },
+        actor
+      );
+      const close = { flightId, action: "close" as const, ...command() };
+      const hold = await createInventoryLock(
+        flightId,
+        1,
+        "economy",
+        randomUUID()
+      );
+      await assert.rejects(
+        finalizeDesk(close, supervisor),
+        /active seat holds/
+      );
+      await releaseInventoryLock(hold.lockId);
+      const [{ id: legacy }] = await db
+        .insert(s.seatHolds)
+        .values({
+          flightId,
+          cabinClass: "economy",
+          seats: 1,
+          sessionId: randomUUID(),
+          expiresAt: new Date(Date.now() + 600000),
+        })
+        .$returningId();
+      await assert.rejects(
+        finalizeDesk(close, supervisor),
+        /active seat holds/
+      );
+      await db
+        .update(s.seatHolds)
+        .set({ status: "expired" })
+        .where(eq(s.seatHolds.id, legacy));
+      const reference = randomUUID()
+        .replaceAll("-", "")
+        .slice(0, 6)
+        .toUpperCase();
+      const [{ id: late }] = await db
+        .insert(s.bookings)
+        .values({
+          tenantId,
+          userId: ownerId,
+          flightId,
+          bookingReference: reference,
+          pnr: reference,
+          cabinClass: "economy",
+          numberOfPassengers: 1,
+          totalAmount: 10000,
+          status: "pending",
+          paymentStatus: "pending",
+          seatsReserved: true,
+        })
+        .$returningId();
+      await assert.rejects(
+        finalizeDesk(close, supervisor),
+        /pending reserved bookings/
+      );
+      await db
+        .update(s.bookings)
+        .set({ seatsReserved: false })
+        .where(eq(s.bookings.id, late));
+      await finalizeDesk(close, supervisor);
+      assert.deepEqual(await addDeskNote(note, actor), noteReceipt);
+      await assert.rejects(
+        createInventoryLock(flightId, 1, "economy", randomUUID()),
+        /Final DCS closure/
+      );
+      await db.transaction(tx =>
+        settleVerifiedPayment(tx, {
+          paymentIntentId: "pi_station_late_" + late,
+          amount: 10000,
+          currency: "sar",
+          eventId: randomUUID(),
+          metadata: { bookingId: String(late), userId: String(ownerId) },
+        })
+      );
+      const [lateReceipt] = await db
+        .select()
+        .from(s.paymentReceipts)
+        .where(eq(s.paymentReceipts.bookingId, late));
+      assert.equal(lateReceipt.settlementStatus, "review_required");
+      const [lateBooking] = await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, late));
+      assert.equal(lateBooking.seatsReserved, false);
+      await assert.rejects(
+        cancelBooking(j.bookingId, ownerId, tenantId),
+        /Final DCS closure/
+      );
+      await finalizeDesk(
+        {
+          flightId,
+          action: "record_out",
+          offBlocksAt: new Date().toISOString(),
+          ...command(),
+        },
+        supervisor
+      );
+      await assert.rejects(
+        cancelBooking(j.bookingId, ownerId, tenantId),
+        /Final DCS closure/
+      );
+      const seat = await storedSeat(key);
+      const [paid] = await db
+        .select()
+        .from(s.paymentReceipts)
+        .where(eq(s.paymentReceipts.bookingId, j.bookingId));
+      const refund = {
+        paymentIntentId: paid.paymentIntentId,
+        chargeId: "ch_station_" + j.bookingId,
+        amount: paid.amount,
+        amountRefunded: paid.amount,
+        currency: "sar",
+        eventId: randomUUID(),
+      };
+      for (let i = 0; i < 2; i++)
+        await db.transaction(tx => settleVerifiedRefund(tx, refund));
+      const [receipt] = await db
+        .select()
+        .from(s.paymentReceipts)
+        .where(eq(s.paymentReceipts.bookingId, j.bookingId));
+      assert.equal(receipt.refundedAmount, paid.amount);
+      assert.equal(receipt.settlementStatus, "review_required");
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(s.financialLedger)
+            .where(eq(s.financialLedger.stripeEventId, refund.eventId))
+        ).length,
+        1
+      );
+      assert.deepEqual(await storedSeat(key), seat);
+      assert.equal(
+        (await getDcsDesk(flightId, actor)).passengers[0].attendanceState,
+        "boarded"
+      );
+      assert.deepEqual(
+        (await generateFlightManifest(flightId)).manifest.passengers.list.map(
+          p => p.id
+        ),
+        [key.passengerId]
+      );
+    }
+  );
+  await check(
     "DCS station: cancellation after final closure allows supervised recovery before OUT",
     async () => {
       const j = await journey(),
@@ -1221,7 +1388,7 @@ export async function verifyDcsCounterLifecycle(
           /outside active station operations/i
         );
       const reopen = { flightId, action: "reopen" as const, ...command() };
-      await assert.rejects(finalizeDesk(reopen, actor), { code: "FORBIDDEN" });
+      assert.throws(() => finalizeDesk(reopen, actor), { code: "FORBIDDEN" });
       const receipt = await finalizeDesk(reopen, supervisor);
       assert.deepEqual(await finalizeDesk(reopen, supervisor), receipt);
       const desk = await getDcsDesk(flightId, actor);
@@ -1350,7 +1517,14 @@ export async function verifyDcsCounterLifecycle(
         .update(s.seatInventory)
         .set({ status: "available" })
         .where(row(idB));
-      const result = await blockDeskSeats(range, supervisor);
+      const [result, opposite] = await Promise.all([
+        blockDeskSeats(range, supervisor),
+        blockDeskSeats(
+          { ...range, ...command(), flightId: idB, seatNumbers: ["2A"] },
+          supervisor
+        ),
+      ]);
+      assert.deepEqual(opposite, { flights: 2, seats: 2 });
       assert.deepEqual(result, { flights: 2, seats: 2 });
       assert.deepEqual(await blockDeskSeats(range, supervisor), result);
       for (const id of [idA, idB]) {
@@ -1358,7 +1532,7 @@ export async function verifyDcsCounterLifecycle(
           .select()
           .from(s.flights)
           .where(eq(s.flights.id, id));
-        assert.equal(f.economyAvailable, source.economyAvailable - 1);
+        assert.equal(f.economyAvailable, source.economyAvailable - 2);
       }
       const [{ id: replacement }] = await db
         .insert(s.seatMaps)

@@ -18,6 +18,8 @@ import {
   payments,
 } from "../../drizzle/schema";
 import {
+  DepartureReleaseError,
+  cancelBookingResources,
   confirmFundedBooking,
   releaseBookingSeats,
   reserveSeats,
@@ -338,7 +340,28 @@ export async function settleVerifiedPayment(
     for (const id of [...new Set([booking.flightId, nextFlight])].sort(
       (a, b) => a - b
     )) {
-      await tx.select().from(flights).where(eq(flights.id, id)).for("update");
+      const [flight] = await tx
+        .select()
+        .from(flights)
+        .where(eq(flights.id, id))
+        .for("update");
+      if (flight?.dcsClosedAt) {
+        await recordReceipt(
+          tx,
+          payment,
+          kind,
+          change.id,
+          booking.userId,
+          booking.id
+        );
+        await requireCollectionReview(
+          tx,
+          payment,
+          booking,
+          "Final DCS closure prevents itinerary modification"
+        );
+        return;
+      }
     }
     if (nextFlight !== booking.flightId || nextCabin !== booking.cabinClass) {
       await reserveSeats(tx, nextFlight, nextCabin, booking.numberOfPassengers);
@@ -431,7 +454,7 @@ export async function settleVerifiedPayment(
 
 async function requireCollectionReview(
   tx: SettlementTx,
-  payment: VerifiedPayment,
+  payment: Pick<VerifiedPayment, "paymentIntentId">,
   booking: typeof bookings.$inferSelect,
   reason: string,
   allBookingCollections = false
@@ -734,28 +757,23 @@ export async function settleVerifiedRefund(
     const allRefunded =
       receipts.length > 0 && receipts.every(r => r.amount === r.refundedAmount);
     if (allRefunded) {
-      couponTransitions = await releaseBookingSeats(tx, booking, "refunded");
-      await tx
-        .update(bookings)
-        .set({ status: "cancelled", paymentStatus: "refunded" })
-        .where(eq(bookings.id, booking.id));
+      try {
+        couponTransitions = await releaseBookingSeats(tx, booking, "refunded");
+        await tx
+          .update(bookings)
+          .set({ status: "cancelled", paymentStatus: "refunded" })
+          .where(eq(bookings.id, booking.id));
+      } catch (error) {
+        if (!(error instanceof DepartureReleaseError)) throw error;
+        await requireCollectionReview(tx, input, booking, error.message);
+      }
     } else if (
       receipt.kind === "split_payment" &&
       booking.status === "pending"
     ) {
       await requireCollectionReview(
         tx,
-        {
-          paymentIntentId: input.paymentIntentId,
-          amount: receipt.amount,
-          currency: receipt.currency,
-          eventId: input.eventId,
-          metadata: {
-            type: "split_payment",
-            bookingId: String(booking.id),
-            splitId: String(receipt.targetId),
-          },
-        },
+        { paymentIntentId: input.paymentIntentId },
         booking,
         "Split funding was refunded before booking confirmation",
         true
@@ -767,7 +785,10 @@ export async function settleVerifiedRefund(
       .update(payments)
       .set({ status: "refunded" })
       .where(eq(payments.stripePaymentIntentId, input.paymentIntentId));
-    if (receipt.settlementStatus === "review_required") {
+    if (
+      receipt.settlementStatus === "review_required" &&
+      receipt.settlementError !== DepartureReleaseError.reason
+    ) {
       await tx
         .update(paymentReceipts)
         .set({ settlementStatus: "review_refunded" })
@@ -791,4 +812,38 @@ export async function settleVerifiedRefund(
         : {}),
     },
   });
+}
+
+/** A provider-confirmed, fee-bearing cancellation keeps its financial receipt
+ * even when final departure prevents releasing the passenger's itinerary. */
+export async function cancelAfterPartialRefund(
+  tx: SettlementTx,
+  booking: typeof bookings.$inferSelect,
+  paymentIntentId: string,
+  actorId: number
+) {
+  const [receipt] = await tx
+    .select({ reason: paymentReceipts.settlementError })
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, paymentIntentId))
+    .for("update");
+  if (receipt?.reason === DepartureReleaseError.reason) return;
+  try {
+    await tx.transaction(inner =>
+      cancelBookingResources(
+        inner,
+        booking,
+        "Cancelled by customer with cancellation-fee refund",
+        actorId
+      )
+    );
+  } catch (error) {
+    if (!(error instanceof DepartureReleaseError)) throw error;
+    await requireCollectionReview(
+      tx,
+      { paymentIntentId },
+      booking,
+      error.message
+    );
+  }
 }

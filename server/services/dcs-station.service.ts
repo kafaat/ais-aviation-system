@@ -8,6 +8,8 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 import type { z } from "zod";
 import {
+  bookings,
+  bookingSegments,
   dcsOperationEvents,
   flights,
   passengers,
@@ -31,7 +33,14 @@ import type {
 } from "../contracts/dcs-station";
 import { getDb } from "../db";
 import type { SettlementTx } from "./booking-settlement.service";
-import { assertFundedDepartureReservation } from "./departure-control.service";
+import {
+  countActiveHolds,
+  inventoryTransactionConfig,
+} from "./inventory-capacity.service";
+import {
+  assertFundedDepartureReservation,
+  lockDepartureContext,
+} from "./departure-control.service";
 import {
   appendEvent,
   getDcsDesk,
@@ -221,7 +230,7 @@ export async function getStationReport(
 
 type Command = z.infer<typeof stationCommand>;
 async function stationMutation<T>(
-  input: Command,
+  input: Command & { bookingId?: number },
   actor: DcsActor,
   scope: string,
   run: (
@@ -256,7 +265,7 @@ async function stationMutation<T>(
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
   return await db.transaction(async tx => {
-    const flight = await scopedFlight(tx, input.flightId, actor, true);
+    await scopedFlight(tx, input.flightId, actor);
     await assertTenantOperational(tx, tenantId);
     const request = { tenantId, input };
     return withTransactionalIdempotency(
@@ -265,7 +274,17 @@ async function stationMutation<T>(
         key: input.idempotencyKey,
         userId: actor.userId,
         request,
-        run: tx => {
+        run: async tx => {
+          // Replays need only scope authorization. New passenger writes take
+          // booking and sorted itinerary locks before the selected flight.
+          if (input.bookingId !== undefined)
+            await lockDepartureContext(tx, input.bookingId, input.flightId);
+          const flight = await scopedFlight(
+            tx,
+            input.flightId,
+            actor,
+            scope !== "dcs.seats.block"
+          );
           if (
             (!["scheduled", "delayed"].includes(flight.status) &&
               !(
@@ -294,7 +313,7 @@ async function stationMutation<T>(
       },
       tx
     );
-  });
+  }, inventoryTransactionConfig);
 }
 export function openDeskCase(
   input: z.infer<typeof openStationCase>,
@@ -393,27 +412,37 @@ export function blockDeskSeats(
         end = new Date(Date.parse(input.endDate) + 86400000);
       if (flight.departureTime < start || flight.departureTime >= end)
         reject("Range must include the selected flight");
-      const instances = await tx
-        .select()
+      const match = and(
+        eq(flights.tenantId, stationTenant(actor)),
+        eq(flights.airlineId, flight.airlineId),
+        eq(flights.originId, flight.originId),
+        eq(flights.destinationId, flight.destinationId),
+        eq(flights.flightNumber, flight.flightNumber),
+        gte(flights.departureTime, start),
+        lt(flights.departureTime, end),
+        inArray(flights.status, ["scheduled", "delayed"])
+      );
+      const candidates = await tx
+        .select({ id: flights.id })
         .from(flights)
-        .where(
-          and(
-            eq(flights.tenantId, stationTenant(actor)),
-            eq(flights.airlineId, flight.airlineId),
-            eq(flights.originId, flight.originId),
-            eq(flights.destinationId, flight.destinationId),
-            eq(flights.flightNumber, flight.flightNumber),
-            gte(flights.departureTime, start),
-            lt(flights.departureTime, end),
-            inArray(flights.status, ["scheduled", "delayed"])
-          )
-        )
+        .where(match)
         .orderBy(asc(flights.id))
-        .limit(101)
-        .for("update");
+        .limit(101);
+      if (candidates.length > 100 || !candidates.some(f => f.id === flight.id))
+        reject(
+          "Range must include the selected flight and at most 100 active flights"
+        );
+      const instances = [];
+      for (const { id } of candidates) {
+        const [current] = await tx
+          .select()
+          .from(flights)
+          .where(and(eq(flights.id, id), match))
+          .for("update");
+        if (!current) reject("Flight range changed; refresh the desk");
+        instances.push(current);
+      }
       if (
-        !instances.length ||
-        instances.length > 100 ||
         instances.some(
           f => f.dcsClosedAt != null || f.departureTime <= new Date()
         )
@@ -656,6 +685,36 @@ export function finalizeDesk(
           reject("Flight is not in the expected DCS state");
         if (flight.departureTime.getTime() > now.getTime() + 48 * 3600000)
           reject("Flight is outside the departure window");
+        if (input.action === "close") {
+          for (const cabin of ["economy", "business"] as const)
+            if (await countActiveHolds(tx, flight.id, cabin, undefined, false))
+              reject("Reconcile active seat holds before final closure");
+          const [reserved] = await tx
+            .select({ id: bookings.id })
+            .from(bookings)
+            .leftJoin(
+              bookingSegments,
+              eq(bookingSegments.bookingId, bookings.id)
+            )
+            .where(
+              and(
+                eq(bookings.status, "pending"),
+                or(
+                  and(
+                    eq(bookings.flightId, flight.id),
+                    eq(bookings.seatsReserved, true)
+                  ),
+                  and(
+                    eq(bookingSegments.flightId, flight.id),
+                    eq(bookingSegments.seatsReserved, true)
+                  )
+                )
+              )
+            )
+            .limit(1);
+          if (reserved)
+            reject("Reconcile pending reserved bookings before final closure");
+        }
         const desk = await getDcsDesk(flight.id, actor, tx);
         if (
           desk.checkInState !== "closed" ||

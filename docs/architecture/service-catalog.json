@@ -1036,6 +1036,7 @@
         "server/services/payment-settlement.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/refunds.service.ts",
+        "server/services/settlement-review.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/split-refund.service.ts",
@@ -1914,6 +1915,7 @@
         "server/services/departure-control.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/inventory-adjustment.service.ts",
+        "server/services/inventory-capacity.service.ts",
         "server/services/order-servicing.service.ts",
         "server/services/retail-offer.service.ts",
         "server/services/seat-map.service.ts",
@@ -1921,6 +1923,8 @@
       ],
       "tableExpressions": {
         "reads": [
+          "bookingSegments",
+          "bookings",
           "dcsOperationEvents",
           "flights",
           "passengers",
@@ -3188,6 +3192,7 @@
         "server/services/bookings.service.ts",
         "server/services/codeshare-allotment.service.ts",
         "server/services/codeshare.service.ts",
+        "server/services/dcs-station.service.ts",
         "server/services/flights.service.ts",
         "server/services/group-booking.service.ts",
         "server/services/inventory-adjustment.service.ts",
@@ -6057,6 +6062,7 @@
         "drizzle/schema.ts",
         "server/_core/logger.ts",
         "server/db.ts",
+        "server/services/booking-settlement.service.ts",
         "server/stripe.ts"
       ],
       "tableExpressions": {

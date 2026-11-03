@@ -1489,6 +1489,62 @@ it("filters meals and prevents printing or exporting an unresolved station repor
   ).toBeDisabled();
 });
 
+it.each(["checkIn", "refresh"] as const)(
+  "refreshes the open station report and gates exports after %s",
+  async source => {
+    const user = userEvent.setup();
+    const fixture = navigationReplies("checkIn");
+    const refresh = deferred<void>();
+    let reads = 0;
+    fixture.replies["dcsOperations.stationReport"] = async () => {
+      const first = ++reads === 1;
+      if (!first) await refresh.promise;
+      return {
+        flightId: 51,
+        flightNumber: "ZZ0051",
+        departureTime,
+        closedAt: null,
+        stationOffBlocksAt: null,
+        unresolvedServices: 0,
+        cases: [],
+        items: [
+          {
+            passengerId: 92,
+            name: "Report passenger",
+            seat: first ? null : "12F",
+            category: "meal",
+            code: "VGML",
+            status: "confirmed",
+            note: null,
+          },
+        ],
+      };
+    };
+    fixture.replies["dcsOperations.checkIn"] = () => ({ eventId: 901 });
+    visitNetworkDesk(fixture.replies);
+    await selectMiddlePagePassenger(user);
+    await user.click(
+      screen.getByRole("button", { name: "Station reports and actions" })
+    );
+    const print = await screen.findByRole("button", { name: "Print report" });
+    const csv = screen.getByRole("button", { name: "Download CSV report" });
+    await waitFor(() => expect(print).toBeEnabled());
+    try {
+      if (source === "checkIn") await submitDeskCommand("checkIn", user);
+      else
+        await user.click(screen.getByRole("button", { name: "Refresh desk" }));
+      await waitFor(() => expect(reads).toBe(2));
+      expect(print).toBeDisabled();
+      expect(csv).toBeDisabled();
+    } finally {
+      await act(async () => refresh.resolve());
+    }
+    await screen.findByText("12F");
+    await waitFor(() => expect(csv).toBeEnabled());
+    expect(print).toBeEnabled();
+  }
+);
+
 function stationRecoveryReplies({
   status = "cancelled",
   closed = true,
