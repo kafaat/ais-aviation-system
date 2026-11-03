@@ -177,7 +177,7 @@ describe("operator duty profiles", () => {
     const futureRule = {
       ...rule,
       minRestMinutes: 1200,
-      maxFlightTime28DayMinutes: 550,
+      maxDuty7DayMinutes: 600,
     };
     const nextOnly = validateDuty(future, [], futureRule);
     expect(nextOnly.compliant).toBe(true);
@@ -186,7 +186,7 @@ describe("operator duty profiles", () => {
     ).toEqual(
       expect.arrayContaining([
         "Insufficient rest between distinct duties",
-        "Rolling 28-day flight-time limit exceeded",
+        "Rolling 168-hour duty limit exceeded",
       ])
     );
     expect(validateDuty(duty, [future], rule, () => undefined).compliant).toBe(
@@ -194,28 +194,10 @@ describe("operator duty profiles", () => {
     );
     expect(validateDuty(duty, [future], rule, () => rule).compliant).toBe(true);
   });
-  it("excludes flight time already outside the future rolling window", () => {
-    const future = d(
-      "2026-10-13T10:00Z",
-      "2026-10-13T11:30Z",
-      "2026-10-13T11:00Z",
-      "2026-10-13T11:20Z"
-    );
-    // At 11:20 only the last 40 minutes from the earlier flight remain.
-    expect(
-      validateDuty(duty, [future], rule, () => ({
-        ...rule,
-        maxFlightTime28DayMinutes: 60,
-      })).compliant
-    ).toBe(true);
-    expect(
-      validateDuty(duty, [future], rule, () => ({
-        ...rule,
-        maxFlightTime28DayMinutes: 59,
-      })).violations
-    ).toContain("Rolling 28-day flight-time limit exceeded");
-  });
-  it("enforces operator-supplied 28 and 365 day flight-time limits", () => {
+  it("carries operator flight-time limits as data for the legality engine without re-evaluating them", () => {
+    // The 28/365-day cumulative flight-time limits are signed operator data;
+    // the crew legality engine is their single authority (see
+    // crew-legality-engine.test.ts "operator flight-time limits").
     const proposed = d(
       "2026-09-15T06:00Z",
       "2026-09-15T08:10Z",
@@ -236,16 +218,15 @@ describe("operator duty profiles", () => {
         "2026-09-01T07:40Z"
       ),
     ];
-    const assessed = validateDuty(proposed, history, {
+    const limited = crewRuleSchema.parse({
       ...rule,
       maxFlightTime28DayMinutes: 100,
       maxFlightTime365DayMinutes: 100,
     });
-    expect(assessed.violations).toEqual(
-      expect.arrayContaining([
-        "Rolling 28-day flight-time limit exceeded",
-        "Rolling 365-day flight-time limit exceeded",
-      ])
-    );
+    expect(limited.maxFlightTime28DayMinutes).toBe(100);
+    expect(limited.maxFlightTime365DayMinutes).toBe(100);
+    const assessed = validateDuty(proposed, history, limited);
+    expect(assessed.compliant).toBe(true);
+    expect(assessed.violations).toEqual([]);
   });
 });

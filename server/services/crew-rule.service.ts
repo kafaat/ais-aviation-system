@@ -17,11 +17,27 @@ import {
 import { assertTenantOperational } from "./tenant.service";
 import { recordEvent } from "./outbox.service";
 import type { SettlementTx } from "./booking-settlement.service";
+import {
+  enforceCrewLegality,
+  type AssignmentPath,
+} from "./crew-legality.service";
+import type { OperatorFlightTimeLimits } from "./crew-legality-engine";
 
-function crewHistoryDays(rule: ReturnType<typeof crewRuleSchema.parse>) {
-  if (rule.maxFlightTime365DayMinutes !== undefined) return 365;
-  if (rule.maxFlightTime28DayMinutes !== undefined) return 28;
-  return 7;
+/** The operator profile evaluates rolling 24 h / 168 h duty windows; the
+ * cumulative flight-time limits it may carry are evaluated by the legality
+ * engine over its own history window. */
+const PROFILE_HISTORY_DAYS = 7;
+
+/** Cumulative flight-time limits from the signed operator profile, handed to
+ * the legality engine as the single authority for those limits. */
+function operatorFlightTimeLimits(
+  rule: ReturnType<typeof crewRuleSchema.parse>
+): OperatorFlightTimeLimits {
+  return {
+    maxFlightMinutes28Days: rule.maxFlightTime28DayMinutes ?? null,
+    maxFlightMinutes365Days: rule.maxFlightTime365DayMinutes ?? null,
+    reference: `operator profile ${rule.version}`,
+  };
 }
 export async function ingestCrewRules(
   e: EvidenceEnvelope,
@@ -83,10 +99,6 @@ async function operatorPolicies(
     row,
     rule: crewRuleSchema.parse(row.payload),
   }));
-  const maxDays = Math.max(
-    7,
-    ...entries.map(entry => crewHistoryDays(entry.rule))
-  );
   function select(date: Date, aircraftType?: string | null) {
     const sources = new Set<string>();
     const matches: Array<{
@@ -120,7 +132,7 @@ async function operatorPolicies(
     );
     return selected;
   }
-  return { select, maxDays };
+  return { select };
 }
 
 export async function getCrewRules(
@@ -205,7 +217,7 @@ export async function evaluateCrewDuty(
         proposed.flightId
           ? ne(crewAssignments.flightId, proposed.flightId)
           : undefined,
-        dutyWindow(duty, policies.maxDays)
+        dutyWindow(duty, PROFILE_HISTORY_DAYS)
       )
     )
     .limit(1001);
@@ -286,6 +298,8 @@ function assessCrewDuty(
       `Operator profile ${profile.rule.version}; dispatch acceptance is separate`,
     ],
     profileEvidenceId: profile.evidenceId,
+    profileTimeZone: profile.rule.timeZone,
+    operatorLimits: operatorFlightTimeLimits(profile.rule),
     duty,
   };
 }
@@ -351,7 +365,7 @@ export async function evaluateCrewCandidates(
         proposed.flightId
           ? ne(crewAssignments.flightId, proposed.flightId)
           : undefined,
-        dutyWindow(duty, policies.maxDays)
+        dutyWindow(duty, PROFILE_HISTORY_DAYS)
       )
     )
     .limit(10001);
@@ -418,7 +432,7 @@ export async function evaluateCrewCandidates(
   });
 }
 
-export async function assignCrewWithRules(input: {
+export interface AssignCrewWithRulesInput {
   flightId: number;
   crewMemberId: number;
   role: "captain" | "first_officer" | "purser" | "cabin_crew";
@@ -427,7 +441,13 @@ export async function assignCrewWithRules(input: {
   notes?: string;
   dutyStartTime?: Date;
   dutyEndTime?: Date;
-}) {
+  /** Which assignment path is writing; every path passes the legality gate. */
+  path?: Exclude<AssignmentPath, "preview">;
+  pairingId?: number | null;
+  standbyId?: number | null;
+}
+
+export async function assignCrewWithRules(input: AssignCrewWithRulesInput) {
   const db = await getDb();
   if (!db) throw new Error("Crew storage unavailable");
   const [hint] = await db
@@ -441,75 +461,126 @@ export async function assignCrewWithRules(input: {
       .from(airlines)
       .where(eq(airlines.id, hint.airlineId))
       .for("update");
-    const [crew] = await tx
-      .select()
-      .from(crewMembers)
-      .where(eq(crewMembers.id, input.crewMemberId))
-      .for("update");
-    const [flight] = await tx
-      .select()
-      .from(flights)
-      .where(eq(flights.id, input.flightId))
-      .for("update");
-    if (
-      !crew ||
-      !flight ||
-      crew.airlineId !== flight.airlineId ||
-      crew.role !== input.role ||
-      (input.tenantId != null && flight.tenantId !== input.tenantId) ||
-      !["scheduled", "delayed"].includes(flight.status) ||
-      flight.departureTime <= new Date()
-    )
-      throw new Error("Crew/flight/operator/role mismatch");
-    await assertTenantOperational(tx, flight.tenantId);
-    const [duplicate] = await tx
-      .select()
-      .from(crewAssignments)
-      .where(
-        and(
-          eq(crewAssignments.crewMemberId, crew.id),
-          eq(crewAssignments.flightId, flight.id),
-          ne(crewAssignments.status, "removed")
-        )
-      )
-      .limit(1);
-    if (duplicate) throw new Error("Crew member already assigned");
-    const check = await evaluateCrewDuty(tx, crew.id, {
-      ...input,
-      departureTime: flight.departureTime,
-      arrivalTime: flight.arrivalTime,
-      aircraftType: flight.aircraftType,
-      tenantId: flight.tenantId,
-    });
-    if (!check.compliant) throw new Error(check.violations.join("; "));
-    const [result] = await tx.insert(crewAssignments).values({
-      flightId: flight.id,
-      crewMemberId: crew.id,
-      role: input.role,
-      assignedBy: input.assignedBy,
-      notes: input.notes,
-      dutyStartTime: check.duty.start,
-      dutyEndTime: check.duty.end,
-      ruleEvidenceId: check.profileEvidenceId,
-    });
-    await recordEvent(tx, {
-      aggregateType: "crewAssignment",
-      aggregateId: Number(result.insertId),
-      tenantId: flight.tenantId,
-      eventType: "crew.assignment_created",
-      payload: {
-        crewMemberId: crew.id,
-        flightId: flight.id,
-        ruleEvidenceId: check.profileEvidenceId,
-        assignedBy: input.assignedBy,
-      },
-    });
-    return {
-      id: Number(result.insertId),
-      flightNumber: flight.flightNumber,
-      crewName: `${crew.firstName} ${crew.lastName}`,
-      role: input.role,
-      ftlWarnings: check.warnings,
-    };
+    return assignCrewWithRulesTx(tx, input);
   });
+}
+
+/** The single writer for crew assignments. Callers hold the operator lock.
+ * Operator profile evidence (crew_rules) and the FTL legality engine are both
+ * hard constraints: the profile governs reporting/release bounds, operator FDP
+ * bands, rest, rolling duty hours, qualifications and minimum crew; the engine
+ * is the single authority for the FTL rule set and for cumulative flight time,
+ * applying the stricter of the rule set and the profile's signed 28/365-day
+ * limits. An illegal verdict blocks unless a documented override applies and
+ * the active rule set allows overrides. */
+export async function assignCrewWithRulesTx(
+  tx: SettlementTx,
+  input: AssignCrewWithRulesInput
+) {
+  const [crew] = await tx
+    .select()
+    .from(crewMembers)
+    .where(eq(crewMembers.id, input.crewMemberId))
+    .for("update");
+  const [flight] = await tx
+    .select()
+    .from(flights)
+    .where(eq(flights.id, input.flightId))
+    .for("update");
+  if (
+    !crew ||
+    !flight ||
+    crew.airlineId !== flight.airlineId ||
+    crew.role !== input.role ||
+    (input.tenantId != null && flight.tenantId !== input.tenantId) ||
+    !["scheduled", "delayed"].includes(flight.status) ||
+    flight.departureTime <= new Date()
+  )
+    throw new Error("Crew/flight/operator/role mismatch");
+  await assertTenantOperational(tx, flight.tenantId);
+  const [duplicate] = await tx
+    .select()
+    .from(crewAssignments)
+    .where(
+      and(
+        eq(crewAssignments.crewMemberId, crew.id),
+        eq(crewAssignments.flightId, flight.id),
+        ne(crewAssignments.status, "removed")
+      )
+    )
+    .limit(1);
+  if (duplicate) throw new Error("Crew member already assigned");
+  const check = await evaluateCrewDuty(tx, crew.id, {
+    ...input,
+    departureTime: flight.departureTime,
+    arrivalTime: flight.arrivalTime,
+    aircraftType: flight.aircraftType,
+    tenantId: flight.tenantId,
+  });
+  if (!check.compliant) throw new Error(check.violations.join("; "));
+  const legality = await enforceCrewLegality(tx, {
+    crewMemberId: crew.id,
+    airlineId: crew.airlineId,
+    tenantId: flight.tenantId,
+    flightId: flight.id,
+    reportAt: check.duty.start,
+    releaseAt: check.duty.end,
+    path: input.path ?? "manual",
+    actorId: input.assignedBy,
+    pairingId: input.pairingId ?? null,
+    standbyId: input.standbyId ?? null,
+    fallbackTimeZone: check.profileTimeZone,
+    operatorLimits: check.operatorLimits,
+  });
+  const [result] = await tx.insert(crewAssignments).values({
+    flightId: flight.id,
+    crewMemberId: crew.id,
+    role: input.role,
+    assignedBy: input.assignedBy,
+    notes: input.notes,
+    dutyStartTime: check.duty.start,
+    dutyEndTime: check.duty.end,
+    ruleEvidenceId: check.profileEvidenceId,
+    pairingId: input.pairingId ?? null,
+    legalityVerdictId: legality.verdictId,
+  });
+  await recordEvent(tx, {
+    aggregateType: "crewAssignment",
+    aggregateId: Number(result.insertId),
+    tenantId: flight.tenantId,
+    eventType: "crew.assignment_created",
+    payload: {
+      crewMemberId: crew.id,
+      flightId: flight.id,
+      ruleEvidenceId: check.profileEvidenceId,
+      assignedBy: input.assignedBy,
+    },
+  });
+  const warnings = [...check.warnings];
+  if (legality.verdict.verdict === "legal_with_extension")
+    warnings.push(
+      "FDP relies on a discretionary extension (counted per 7 days)"
+    );
+  if (legality.overrideId !== null)
+    warnings.push(
+      `Illegal verdict assigned under documented override #${legality.overrideId}`
+    );
+  for (const advisory of legality.verdict.checks.filter(
+    c => c.status === "advisory"
+  ))
+    warnings.push(advisory.detail);
+  return {
+    id: Number(result.insertId),
+    flightNumber: flight.flightNumber,
+    crewName: `${crew.firstName} ${crew.lastName}`,
+    role: input.role,
+    ftlWarnings: warnings,
+    legality: {
+      verdictId: legality.verdictId,
+      verdict: legality.verdict.verdict,
+      ruleSet: legality.verdict.ruleSet,
+      overrideId: legality.overrideId,
+      fatigueLevel: legality.verdict.fatigue.level,
+    },
+  };
 }

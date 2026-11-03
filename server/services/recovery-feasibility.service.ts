@@ -10,6 +10,10 @@ import {
 import type { SettlementTx } from "./booking-settlement.service";
 import { readMaintenance, validateRotation } from "./aircraft-rotation.service";
 import { getCrewRules, evaluateCrewDuty } from "./crew-rule.service";
+import {
+  CrewLegalityError,
+  enforceCrewLegality,
+} from "./crew-legality.service";
 import { calculateRequestHash } from "./idempotency-v2.service";
 import { requireCurrentAviationSource } from "./aviation-evidence.service";
 
@@ -154,6 +158,31 @@ export async function readRecoveryFeasibility(
       throw new Error(
         `Candidate crew not feasible: ${check.violations.join("; ")}`
       );
+    // Recovery crew swaps are an assignment path: the FTL engine is a hard
+    // constraint here too, and its verdict is logged for audit. The verdict id
+    // is deliberately not part of the returned evidence: the recovery plan
+    // digests this evidence and must stay stable between proposal and
+    // execution.
+    try {
+      await enforceCrewLegality(tx, {
+        crewMemberId: member.id,
+        airlineId: flight.airlineId,
+        tenantId: flight.tenantId,
+        flightId: flight.id,
+        reportAt: a.dutyStartTime,
+        releaseAt: a.dutyEndTime,
+        path: "recovery_swap",
+        actorId: null,
+        pairingId: a.pairingId,
+        standbyId: null,
+        fallbackTimeZone: profile.rule.timeZone,
+        operatorLimits: check.operatorLimits,
+      });
+    } catch (error) {
+      if (error instanceof CrewLegalityError)
+        throw new Error(`Candidate crew not feasible: ${error.message}`);
+      throw error;
+    }
     crew.push({ assignment: a, member, duty: check.duty });
   }
   return {
