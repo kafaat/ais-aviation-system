@@ -45,6 +45,11 @@ function visit(path: string, replies: Record<string, Reply> = {}) {
   const route = memoryLocation({ path, record: true });
   const requests: { path: string; input: unknown }[] = [];
   const responses: Record<string, Reply> = {
+    "ibePublic.config": () => ({
+      brandName: "Journey Air",
+      logoPath: null,
+      embedSearchEnabled: false,
+    }),
     "auth.me": () => ({ id: 9, name: "Owner", tenantId: 3, role: "user" }),
     "consent.getMyConsent": () => ({ needsReconsent: false }),
     "payments.getCheckoutState": () => pendingInvoice(),

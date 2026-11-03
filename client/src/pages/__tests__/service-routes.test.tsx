@@ -29,6 +29,11 @@ function visit(
 ) {
   const route = memoryLocation({ path, record: true });
   const responses: Record<string, () => unknown> = {
+    "ibePublic.config": () => ({
+      brandName: "Journey Air",
+      logoPath: null,
+      embedSearchEnabled: false,
+    }),
     "auth.me": () => ({ id: 1, name: "Test user", tenantId: 1, role }),
     "consent.getMyConsent": () => ({ needsReconsent: false }),
     "operations.airlineFlights": () => [],

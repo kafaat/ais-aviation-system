@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { APP_LOGO, getLoginUrl } from "@/const";
+import { getLoginUrl } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { MFAVerify } from "@/components/MFAVerify";
@@ -129,21 +129,9 @@ export default function Login() {
   return (
     <main className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       <Card className="flex flex-col items-center gap-8 p-8 max-w-md w-full mx-4 shadow-xl">
-        <div className="flex flex-col items-center gap-4">
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-purple-500/20 rounded-full blur-xl" />
-            <img
-              src={APP_LOGO}
-              alt={t("common.appName")}
-              className="relative h-20 w-20 rounded-2xl shadow-lg"
-            />
-          </div>
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-              {t("common.appName")}
-            </h1>
-          </div>
-        </div>
+        <h1 className="text-center text-3xl font-bold tracking-tight">
+          {t("common.login")}
+        </h1>
 
         <form onSubmit={handleLoginSubmit} className="w-full space-y-4">
           {loginError && (

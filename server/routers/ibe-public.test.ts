@@ -16,7 +16,6 @@ it("defaults to a neutral identity with external embedding disabled", () => {
   expect(publicIbeConfiguration({})).toEqual({
     brandName: "AIS",
     logoPath: null,
-    videcomEnabled: false,
     embedSearchEnabled: false,
   });
 });
@@ -95,7 +94,6 @@ it("exposes only operator branding to an anonymous caller and ignores request te
   expect(result).toEqual({
     brandName: "Example Airline",
     logoPath: "/branding/airline.svg",
-    videcomEnabled: false,
     embedSearchEnabled: true,
   });
   expect(JSON.stringify(result)).not.toContain("www.airline.example");
