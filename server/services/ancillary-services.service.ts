@@ -7,12 +7,13 @@ import {
   type InvoiceActor,
 } from "./booking-invoice.service";
 import { withTransactionalIdempotency } from "./idempotency-v2.service";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   ancillaryServices,
   bookingAncillaries,
+  bookingFareComponents,
   type InsertAncillaryService,
 } from "../../drizzle/schema";
 
@@ -144,7 +145,12 @@ export async function addAncillaryToBooking(
     userId: actor.userId,
     request: data,
     run: async tx => {
-      const booking = await lockEditableInvoice(tx, data.bookingId, actor);
+      const booking = await lockEditableInvoice(
+        tx,
+        data.bookingId,
+        actor,
+        "addAncillary"
+      );
       return insertInvoiceAncillary(tx, booking, data);
     },
   });
@@ -225,7 +231,12 @@ export async function removeAncillaryFromBooking(
         code: "NOT_FOUND",
         message: "Ancillary not found",
       });
-    const booking = await lockEditableInvoice(tx, identity.bookingId, actor);
+    const booking = await lockEditableInvoice(
+      tx,
+      identity.bookingId,
+      actor,
+      "removeAncillary"
+    );
     const [ancillary] = await tx
       .select()
       .from(bookingAncillaries)
@@ -241,6 +252,18 @@ export async function removeAncillaryFromBooking(
     )
       throw invoiceBlocked("Ancillary charge requires reconciliation");
     const seatSegmentId = await removeInvoiceSeat(tx, ancillary);
+    await tx
+      .update(bookingFareComponents)
+      .set({ reversedAt: sql`CURRENT_TIMESTAMP(0)` })
+      .where(
+        and(
+          eq(bookingFareComponents.bookingId, booking.id),
+          eq(bookingFareComponents.source, "ancillary_catalog"),
+          eq(bookingFareComponents.sourceReference, String(ancillary.id)),
+          eq(bookingFareComponents.componentType, "ancillary"),
+          isNull(bookingFareComponents.reversedAt)
+        )
+      );
     await tx
       .update(bookingAncillaries)
       .set({ status: "cancelled", updatedAt: new Date() })

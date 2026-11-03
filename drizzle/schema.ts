@@ -185,6 +185,7 @@ export const flights = mysqlTable(
     departureTime: timestamp("departureTime").notNull(),
     arrivalTime: timestamp("arrivalTime").notNull(),
     aircraftType: varchar("aircraftType", { length: 50 }), // e.g., "Boeing 777"
+    aircraftRegistrationId: int("aircraftRegistrationId"),
     status: mysqlEnum("status", [
       "scheduled",
       "delayed",

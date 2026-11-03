@@ -1,3 +1,4 @@
+import { BspEvidenceReview } from "./BspEvidenceReview";
 import { PayoutComparison } from "./PayoutComparison";
 import { trpc } from "@/lib/trpc";
 import {
@@ -36,6 +37,7 @@ export function SettlementLedgerDraft() {
           )}
         </OperationalReadState>
       </section>
+      <BspEvidenceReview />
       <PayoutComparison />
     </>
   );

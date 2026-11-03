@@ -580,6 +580,7 @@
     "redeem": "Redeem",
     "redeemNote": "100 miles = 1 SAR, credited to your account for your next booking",
     "redeemSuccess": "Redeemed successfully! {{discount}} SAR was added to your booking credits.",
+    "redemptionStorageUnavailable": "The redemption retry key could not be accessed. Check your credit balance and transactions before retrying.",
     "invalidMiles": "Please enter a valid number of miles",
     "insufficientMiles": "Insufficient miles balance",
     "transactionHistory": "Transaction History",
@@ -1334,6 +1335,7 @@
     }
   },
   "multiCity": {
+    "invalidItinerary": "This itinerary link is incomplete or outdated. Search again to review the current flights.",
     "oneWay": "One Way",
     "multiCity": "Multi-City",
     "segment": "Segment",
@@ -2179,6 +2181,14 @@
       "aircraftTypes": "Aircraft Types"
     },
     "manifest": {
+      "checkBaggage": "Check departure baggage evidence",
+      "closeoutUnavailable": "Baggage reconciliation unavailable",
+      "closeoutMatched": "All expected bags have matching evidence. Station acceptance is required.",
+      "closeoutIncomplete": "Baggage evidence is incomplete or inconsistent.",
+      "closeoutCounts": "Loaded {{loaded}} / expected {{expected}}. Unexpected bags {{unexpected}}.",
+      "missingEntry": "Missing acceptance or transfer",
+      "missingLoading": "Missing loading",
+      "duplicateScans": "Duplicate scans",
       "flightId": "Flight ID",
       "enterFlightId": "Enter flight ID",
       "generate": "Generate Manifest",

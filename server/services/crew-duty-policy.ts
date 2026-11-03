@@ -61,12 +61,18 @@ export const crewRuleSchema = z
   .refine(p => Date.parse(p.effectiveFrom) < Date.parse(p.effectiveTo));
 export type CrewRule = z.infer<typeof crewRuleSchema>;
 export interface Duty {
+  aircraftType?: string | null;
   start: Date;
   end: Date;
   departure: Date;
   arrival: Date;
 }
-export function validateDuty(proposed: Duty, other: Duty[], rule: CrewRule) {
+export function validateDuty(
+  proposed: Duty,
+  other: Duty[],
+  rule: CrewRule,
+  futureProfile: (duty: Duty) => CrewRule | undefined = () => rule
+) {
   const violations: string[] = [];
   const valid = (d: Duty) =>
     [d.start, d.end, d.departure, d.arrival].every(v =>
@@ -101,90 +107,121 @@ export function validateDuty(proposed: Duty, other: Duty[], rule: CrewRule) {
   const duties = [...grouped.values()]
     .map(group => ({ start: group[0].start, end: group[0].end, legs: group }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
-  for (let i = 1; i < duties.length; i++)
+  const futureRules = new Map<Duty, CrewRule | undefined>();
+  for (const d of other) {
+    if (d.end < proposed.start) continue;
+    const profile = futureProfile(d);
+    futureRules.set(d, profile);
     if (
-      duties[i].start.getTime() - duties[i - 1].end.getTime() <
-      rule.minRestMinutes * 60000
+      !profile ||
+      d.start.getTime() < Date.parse(profile.effectiveFrom) ||
+      d.end.getTime() > Date.parse(profile.effectiveTo)
     )
+      violations.push(
+        "An affected assignment is missing an effective operator profile"
+      );
+  }
+  for (let i = 1; i < duties.length; i++) {
+    const before = duties[i - 1],
+      after = duties[i];
+    if (!before.legs.includes(proposed) && !after.legs.includes(proposed))
+      continue;
+    const minRest = Math.max(
+      rule.minRestMinutes,
+      ...after.legs.map(leg => futureRules.get(leg)?.minRestMinutes ?? 0)
+    );
+    if (after.start.getTime() - before.end.getTime() < minRest * 60000)
       violations.push("Insufficient rest between distinct duties");
+  }
   for (const duty of duties) {
+    if (!duty.legs.includes(proposed)) continue;
     const legs = [...duty.legs].sort(
       (a, b) => a.departure.getTime() - b.departure.getTime()
     );
     for (let i = 1; i < legs.length; i++)
       if (legs[i].departure < legs[i - 1].arrival)
         violations.push("Overlapping flight assignments");
-    const hour = Number(
-      new Intl.DateTimeFormat("en-GB", {
-        hour: "2-digit",
-        hourCycle: "h23",
-        timeZone: rule.timeZone,
-      }).format(duty.start)
-    );
-    const bands = rule.fdpBands.filter(
-      b =>
-        hour >= b.startHour &&
-        hour < b.endHour &&
-        legs.length >= b.minSegments &&
-        legs.length <= b.maxSegments
-    );
-    if (bands.length !== 1)
-      violations.push(
-        "The report time and segment count require one explicit FDP rule"
+    const applicable = new Set([
+      rule,
+      ...legs
+        .map(leg => futureRules.get(leg))
+        .filter((r): r is CrewRule => r !== undefined),
+    ]);
+    for (const profile of applicable) {
+      const hour = Number(
+        new Intl.DateTimeFormat("en-GB", {
+          hour: "2-digit",
+          hourCycle: "h23",
+          timeZone: profile.timeZone,
+        }).format(duty.start)
       );
-    else if (
-      (Math.max(...legs.map(l => l.arrival.getTime())) - duty.start.getTime()) /
-        60000 >
-      bands[0].maxMinutes
-    )
-      violations.push("Flight duty period exceeds the configured band");
-  }
-  for (const [days, limit] of [
-    [28, rule.maxFlightTime28DayMinutes],
-    [365, rule.maxFlightTime365DayMinutes],
-  ] as const) {
-    if (limit === undefined) continue;
-    const windowStart = proposed.end.getTime() - days * 86400000;
-    const flightMinutes = [...other, proposed].reduce((sum, flight) => {
-      if (
-        flight.arrival.getTime() <= windowStart ||
-        flight.departure.getTime() >= proposed.end.getTime()
+      const bands = profile.fdpBands.filter(
+        b =>
+          hour >= b.startHour &&
+          hour < b.endHour &&
+          legs.length >= b.minSegments &&
+          legs.length <= b.maxSegments
+      );
+      if (bands.length !== 1)
+        violations.push(
+          "The report time and segment count require one explicit FDP rule"
+        );
+      else if (
+        (legs[legs.length - 1].arrival.getTime() - duty.start.getTime()) /
+          60000 >
+        bands[0].maxMinutes
       )
-        return sum;
-      return (
-        sum +
-        (Math.min(proposed.end.getTime(), flight.arrival.getTime()) -
-          Math.max(windowStart, flight.departure.getTime())) /
-          60000
-      );
-    }, 0);
-    if (flightMinutes > limit)
-      violations.push(`Rolling ${days}-day flight-time limit exceeded`);
+        violations.push("Flight duty period exceeds the configured band");
+    }
+  }
+  const allLegs = [...other, proposed];
+  function inWindow(start: number, end: number, from: Date, to: Date) {
+    return (
+      Math.max(
+        0,
+        Math.min(end, to.getTime()) - Math.max(start, from.getTime())
+      ) / 60000
+    );
   }
   let proposed24 = 0;
-  for (const endpoint of duties.map(d => d.end.getTime()))
-    for (const days of [1, 7]) {
-      const start = endpoint - days * 86400000;
-      const minutes = duties.reduce(
-        (sum, d) =>
-          sum +
-          Math.max(
-            0,
-            Math.min(endpoint, d.end.getTime()) -
-              Math.max(start, d.start.getTime())
-          ) /
-            60000,
+  // A rolling total can increase only while a flight/duty is in progress.
+  // Check affected interval endpoints under the rule effective for that leg.
+  for (const leg of allLegs) {
+    const profile = leg === proposed ? rule : futureRules.get(leg);
+    if (!profile) continue;
+    for (const [days, limit] of [
+      [28, profile.maxFlightTime28DayMinutes],
+      [365, profile.maxFlightTime365DayMinutes],
+    ] as const) {
+      if (limit === undefined) continue;
+      const end = leg.arrival.getTime(),
+        start = end - days * 86400000;
+      if (!inWindow(start, end, proposed.departure, proposed.arrival)) continue;
+      const total = allLegs.reduce(
+        (sum, l) => sum + inWindow(start, end, l.departure, l.arrival),
         0
       );
-      if (endpoint === proposed.end.getTime() && days === 1)
-        proposed24 = minutes;
+      if (total > limit)
+        violations.push(`Rolling ${days}-day flight-time limit exceeded`);
+    }
+    for (const days of [1, 7]) {
+      const end = leg.end.getTime(),
+        start = end - days * 86400000;
+      if (!inWindow(start, end, proposed.start, proposed.end)) continue;
+      const minutes = duties.reduce(
+        (sum, d) => sum + inWindow(start, end, d.start, d.end),
+        0
+      );
+      if (leg === proposed && days === 1) proposed24 = minutes;
       if (
-        minutes > (days === 1 ? rule.maxDuty24Minutes : rule.maxDuty7DayMinutes)
+        minutes >
+        (days === 1 ? profile.maxDuty24Minutes : profile.maxDuty7DayMinutes)
       )
         violations.push(
           `Rolling ${days === 1 ? 24 : 168}-hour duty limit exceeded`
         );
     }
+  }
   return {
     compliant: violations.length === 0,
     violations: [...new Set(violations)],

@@ -4,6 +4,8 @@ import type { TrpcContext } from "../_core/context";
 
 const boundary = vi.hoisted(() => ({
   ownerId: 101,
+  bookingTenantId: 1,
+  passengerTenantId: 1,
   exists: true,
   available: true,
   submit: vi.fn(),
@@ -30,8 +32,20 @@ vi.mock("../db", () => ({
                   !boundary.exists
                     ? []
                     : table === "bookings"
-                      ? [{ userId: boundary.ownerId }]
-                      : [{ bookingId: 800, ownerId: boundary.ownerId }]
+                      ? [
+                          {
+                            userId: boundary.ownerId,
+                            tenantId: boundary.bookingTenantId,
+                          },
+                        ]
+                      : [
+                          {
+                            bookingId: 800,
+                            ownerId: boundary.ownerId,
+                            bookingTenantId: boundary.bookingTenantId,
+                            passengerTenantId: boundary.passengerTenantId,
+                          },
+                        ]
                 ),
             };
             return query;
@@ -133,6 +147,8 @@ const cases = [
 beforeEach(() => {
   vi.clearAllMocks();
   boundary.ownerId = 101;
+  boundary.bookingTenantId = 1;
+  boundary.passengerTenantId = 1;
   boundary.exists = true;
   boundary.available = true;
   for (const entry of cases) entry.target.mockResolvedValue(entry.result);
@@ -158,8 +174,18 @@ describe.each(cases)(
       }
     );
 
+    it("rejects a matching owner in a different booking tenant", async () => {
+      boundary.bookingTenantId = 2;
+      await expect(call(context())).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      });
+      expect(target).not.toHaveBeenCalled();
+    });
+
     it("preserves the existing platform-admin support permission", async () => {
       boundary.ownerId = 202;
+      boundary.bookingTenantId = 2;
+      boundary.passengerTenantId = 2;
       await expect(call(context("admin"))).resolves.toEqual(result);
       expect(target).toHaveBeenCalledTimes(1);
     });
@@ -188,3 +214,13 @@ describe.each(cases)(
     });
   }
 );
+
+describe.each(
+  cases.filter(entry => entry.name !== "multi-city itinerary read")
+)("$name tenant boundary", ({ call, target }) => {
+  it("rejects a matching owner with a passenger in a different tenant", async () => {
+    boundary.passengerTenantId = 2;
+    await expect(call(context())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(target).not.toHaveBeenCalled();
+  });
+});

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { provisionRbd } from "../db/provision-rbd";
 import type { Request, Response } from "express";
 import { asc, eq, inArray } from "drizzle-orm";
 import type Stripe from "stripe";
@@ -7,6 +8,8 @@ import type { TrpcContext } from "../../server/_core/context";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
 import { bspReportingRouter } from "../../server/routers/bsp-reporting";
 import { ancillaryRouter } from "../../server/routers/ancillary";
+import { multiCityRouter } from "../../server/routers/multi-city";
+import { aiChatRouter } from "../../server/routers/ai-chat";
 import { eticketRouter } from "../../server/routers/eticket";
 import { modificationsRouter } from "../../server/routers/modifications";
 import { paymentsRouter } from "../../server/routers/payments";
@@ -68,10 +71,12 @@ export async function verifyPaidSectorExchange(
   assert(ctx.user && ctx.tenantId === id);
   const userId = ctx.user.id;
   const [first, old, replacement] = [id + 185, id + 186, id + 187];
-  const bookingId = id + 195;
-  const passengerId = id + 196;
-  const now = Date.now();
-  const when = (h: number) => new Date(now + (240 + h) * 3600000);
+  const localDepartureDay = new Date(Date.now() + 10 * 86400_000)
+    .toISOString()
+    .slice(0, 10);
+  const midnightAtOrigin = new Date(localDepartureDay + "T00:00:00+03:00");
+  const when = (h: number) =>
+    new Date(midnightAtOrigin.getTime() + (h * 60 + 15) * 60_000);
   await db.insert(s.flights).values(
     [first, old, replacement].map((flightId, i) => ({
       id: flightId,
@@ -91,6 +96,36 @@ export async function verifyPaidSectorExchange(
       aircraftType: "A320",
     }))
   );
+  // Only the affected second sector uses a class bucket; the anchor stays cabin-only.
+  const [rbd] = await db
+    .insert(s.fareClasses)
+    .values({
+      airlineId: id,
+      code: "Q",
+      name: "Synthetic exchange Q",
+      cabinClass: "economy",
+    })
+    .$returningId();
+  const allocation = {
+    reference: "synthetic-sector-allocation",
+    tenantId: id,
+    airlineId: id,
+    rows: [old, replacement].map(flightId => ({
+      flightId,
+      fareClassId: rbd.id,
+      cabin: "economy",
+      expectedCabinAvailable: 10,
+      capacity: 1,
+      availableSeats: 1,
+    })),
+  };
+  const preview = await provisionRbd(db, allocation);
+  assert.deepEqual(
+    preview.rows.map(row => row.action),
+    ["would_create", "would_create"]
+  );
+  await assert.rejects(provisionRbd(db, allocation, "bad-digest"), /digest/);
+  await provisionRbd(db, allocation, preview.digest);
   await db.insert(s.seatInventory).values(
     [old, replacement].map(flightId => ({
       flightId,
@@ -105,38 +140,72 @@ export async function verifyPaidSectorExchange(
       seatPrice: 2000,
     }))
   );
-  await db.insert(s.bookings).values({
-    id: bookingId,
-    tenantId: id,
-    userId,
-    flightId: first,
-    bookingReference: "SECX01",
-    pnr: "SECX01",
-    status: "pending",
-    paymentStatus: "pending",
-    seatsReserved: false,
-    cabinClass: "economy",
-    numberOfPassengers: 1,
-    totalAmount: 20000,
+  const sale = multiCityRouter.createCaller(ctx);
+  const search = await sale.search({
+    segments: [
+      { originId: id, destinationId: id + 1, departureDate: midnightAtOrigin },
+      {
+        originId: id + 1,
+        destinationId: id + 2,
+        departureDate: midnightAtOrigin,
+      },
+    ],
   });
-  await db.insert(s.passengers).values({
-    id: passengerId,
-    bookingId,
-    tenantId: id,
-    firstName: "Synthetic",
-    lastName: "Exchange",
+  assert(search[0].flights.some(f => f.id === first));
+  assert(search[1].flights.some(f => f.id === old));
+  const segments = [
+    { flightId: first, departureDate: when(0) },
+    { flightId: old, departureDate: when(4), fareClassCode: "Q" },
+  ];
+  const cabinClass = "economy" as const;
+  const passengers = [
+    { type: "adult" as const, firstName: "Synthetic", lastName: "Exchange" },
+  ];
+  const price = await sale.calculatePrice({
+    segments: segments.map(s => ({ ...s, cabinClass })),
+    passengerCount: 1,
+    passengerTypes: ["adult"],
   });
-  await db.insert(s.bookingSegments).values(
-    [first, old].map((flightId, i) => ({
-      bookingId,
-      flightId,
-      segmentOrder: i + 1,
-      segmentAmount: 10000,
-      status: "pending" as const,
-      seatsReserved: false,
-      departureDate: when(i * 4),
-    }))
+  const command = {
+    segments,
+    cabinClass,
+    passengers,
+    sessionId: "two-sector-passenger-save",
+    checkoutContractVersion: 1 as const,
+    expectedTotalMinor: price.totalPrice,
+  };
+  // Change the actual inventory price after shopping, then restore the synthetic
+  // fixture so the original reviewed offer can be accepted later in this test.
+  await db
+    .update(s.flights)
+    .set({ economyPrice: 20000 })
+    .where(eq(s.flights.id, first));
+  await assert.rejects(sale.create(command), { code: "CONFLICT" });
+  await db
+    .update(s.flights)
+    .set({ economyPrice: 10000 })
+    .where(eq(s.flights.id, first));
+  await assert.rejects(
+    sale.create({ ...command, checkoutContractVersion: 2 as 1 }),
+    { code: "BAD_REQUEST" }
   );
+  await assert.rejects(
+    sale.create({ ...command, cabinClass: "premium_economy" as "economy" }),
+    { code: "BAD_REQUEST" }
+  );
+
+  const created = await sale.create(command);
+  // The client lost the successful create response. The same immutable command
+  // must recover both persisted segments and the original passenger, even if
+  // the last Q seat is held and a new quote can no longer be produced.
+  assert.deepEqual(await sale.create(command), created);
+  const { bookingId } = created;
+  const savedPassengers = await db
+    .select()
+    .from(s.passengers)
+    .where(eq(s.passengers.bookingId, bookingId));
+  assert.equal(savedPassengers.length, 1);
+  const passengerId = savedPassengers[0].id;
   const [service] = await db
     .insert(s.ancillaryServices)
     .values({
@@ -160,7 +229,8 @@ export async function verifyPaidSectorExchange(
   const purchase = await seats.addToBooking(seatRequest);
   assert.equal(purchase.totalPrice, 2000);
   const originalIntent = "pi_sector_original";
-  await deliverPayment("evt_sector_original", originalIntent, 22000, {
+  const fundedMinor = created.totalAmount + purchase.totalPrice;
+  await deliverPayment("evt_sector_original", originalIntent, fundedMinor, {
     type: "booking",
     bookingId: String(bookingId),
     userId: String(userId),
@@ -182,6 +252,22 @@ export async function verifyPaidSectorExchange(
   const [firstCoupon, oldCoupon] = await coupons();
   assert.equal(oldCoupon.flightId, old);
   const originalLegs = await legs();
+  const { revenueAccountingRouter } =
+    await import("../../server/routers/revenue-accounting");
+  const revenueReview = revenueAccountingRouter.createCaller({
+    ...ctx,
+    user: { ...ctx.user, role: "finance" },
+  });
+  const review = () =>
+    revenueReview.couponMonthReview({
+      bookingId,
+      month: new Date().toISOString().slice(0, 7),
+    });
+  const beforeExchange = await review();
+  assert.deepEqual(beforeExchange.issues, []);
+  assert.equal(beforeExchange.cashNetThroughCutoffMinor, fundedMinor);
+  assert.equal(beforeExchange.transportRecognizedThroughCutoffMinor, 0);
+  assert((beforeExchange.transportDeferredMinor ?? 0) > 0);
   const [beforeSeat] = await db
     .select()
     .from(s.bookingAncillaries)
@@ -203,7 +289,7 @@ export async function verifyPaidSectorExchange(
     (await changes.requestChangeDate(request)).modificationId,
     quote.modificationId
   );
-  assert.equal(quote.originalAmount, 22000);
+  assert.equal(quote.originalAmount, fundedMinor);
   assert.equal(quote.currency, "SAR");
   assert(quote.seatExchange);
   assert.equal(quote.seatExchange.retainedAmount, 2000);
@@ -285,6 +371,27 @@ export async function verifyPaidSectorExchange(
   assert.equal(finalLegs.length, 2);
   assert.deepEqual(finalLegs[0], originalLegs[0]);
   assert.equal(finalLegs[1].flightId, replacement);
+  assert.equal(finalLegs[1].fareClassId, rbd.id);
+  const buckets = await db
+    .select()
+    .from(s.flightFareClassInventory)
+    .where(eq(s.flightFareClassInventory.fareClassId, rbd.id))
+    .orderBy(asc(s.flightFareClassInventory.flightId));
+  assert.deepEqual(
+    buckets.map(b => [b.flightId, b.availableSeats]),
+    [
+      [old, 1],
+      [replacement, 0],
+    ]
+  );
+  const provisionReplay = await provisionRbd(db, allocation, preview.digest);
+  assert.deepEqual(
+    provisionReplay.rows.map(row => [row.action, row.availableSeats]),
+    [
+      ["unchanged", 1],
+      ["unchanged", 0],
+    ]
+  );
   const finalCoupons = await coupons();
   assert.equal(finalCoupons.length, 3);
   assert.deepEqual(finalCoupons[0], firstCoupon);
@@ -335,11 +442,11 @@ export async function verifyPaidSectorExchange(
       intent: l.stripePaymentIntentId,
     })),
     [
-      { op: "charge", minor: 22000, intent: originalIntent },
+      { op: "charge", minor: fundedMinor, intent: originalIntent },
       { op: "charge", minor: quote.totalCost, intent },
     ]
   );
-  assert.equal(quote.newAmount, 22000 + quote.totalCost);
+  assert.equal(quote.newAmount, fundedMinor + quote.totalCost);
   const finance = bspReportingRouter.createCaller({
     ...ctx,
     user: { ...ctx.user, role: "finance" },
@@ -384,6 +491,22 @@ export async function verifyPaidSectorExchange(
     .select()
     .from(s.users)
     .where(eq(s.users.id, foreignStaff.id));
+  const familyChat = aiChatRouter.createCaller({
+    ...ctx,
+    user: otherUser,
+    tenantId: foreignTenant.id,
+  });
+  const conversation = await familyChat.startConversation({});
+  const referrals = await familyChat.sendMessage({
+    conversationId: conversation.conversationId,
+    message: "Change my return flight for PNR " + created.pnr,
+  });
+  assert(Array.isArray(referrals.exchangeBookings));
+  assert(
+    !referrals.exchangeBookings.some(
+      b => b.id === bookingId || b.bookingReference === created.bookingReference
+    )
+  );
   const foreignFinance = bspReportingRouter.createCaller({
     ...ctx,
     user: otherUser,
@@ -410,8 +533,56 @@ export async function verifyPaidSectorExchange(
       false
     );
   }
+  const recorded = await db
+    .select()
+    .from(s.bookingFareComponents)
+    .where(eq(s.bookingFareComponents.bookingId, bookingId));
+  const retired = recorded.filter(r => r.flightId === old);
+  const replacementRows = recorded.filter(r => r.flightId === replacement);
+  assert(retired.length > 0 && replacementRows.length > 0);
+  const firstReplacementTime = Math.min(
+    ...replacementRows.map(r => r.createdAt.getTime())
+  );
+  for (const line of retired)
+    assert(
+      line.reversedAt && line.reversedAt.getTime() <= firstReplacementTime,
+      "Reversal must be recorded by the time the replacement is created"
+    );
+  const active = recorded.filter(r => !r.reversedAt);
+  assert.equal(
+    active.reduce((sum, r) => sum + r.amount, 0),
+    quote.newAmount
+  );
+  assert(active.every(r => r.flightId === first || r.flightId === replacement));
+  const close = await review();
+  assert.equal(
+    close.coupons.find(c => c.flightId === first)?.baseFareMinor,
+    beforeExchange.coupons.find(c => c.flightId === first)?.baseFareMinor
+  );
+  assert(close.coupons.some(c => c.flightId === first && c.status === "O"));
+  assert(
+    close.coupons.some(c => c.flightId === replacement && c.status === "O")
+  );
+  assert.deepEqual(close.issues, []);
+  assert.equal(close.cashNetThroughCutoffMinor, fundedMinor + quote.totalCost);
+  assert.equal(close.transportRecognizedThroughCutoffMinor, 0);
+  const unused = close.coupons.filter(c => c.status === "O");
+  assert.equal(unused.length, 2);
+  assert(unused.every(c => c.baseFareMinor !== null && c.baseFareMinor > 0));
+  assert.equal(
+    close.transportDeferredMinor,
+    unused.reduce((sum, c) => sum + (c.baseFareMinor ?? 0), 0)
+  );
+
   return {
+    twoSectorDeferredTransportMinor: close.transportDeferredMinor,
     foreignTenantLedgerIdentityHidden: true,
+    foreignFamilyBookingHiddenFromAssistant: true,
+    savedPassengerCountAfterRetry: savedPassengers.length,
+    originDepartureDay: localDepartureDay,
+    priceDriftRejected: true,
+    unsupportedCheckoutVersionRejected: true,
+    unsupportedCabinRejectedBeforeWrite: true,
     syntheticPayoutComparison: {
       reference: comparison.payoutReference,
       statementLineId: comparison.statementLineId,

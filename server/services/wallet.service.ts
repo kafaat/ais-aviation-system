@@ -1,3 +1,8 @@
+import { withTransactionalIdempotency } from "./idempotency-v2.service";
+import {
+  providerRequestOptions,
+  requireSafeCheckoutReplay,
+} from "../_core/idempotency";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -74,7 +79,8 @@ export async function getWalletBalance(userId: number) {
 export async function topUpWallet(
   userId: number,
   amount: number,
-  description: string
+  description: string,
+  requestKey: string
 ) {
   if (!Number.isSafeInteger(amount) || amount < 1000 || amount > 1000000)
     throw new TRPCError({
@@ -85,21 +91,50 @@ export async function topUpWallet(
   if (!db) throw new Error("Database unavailable");
   const wallet = await getOrCreateWallet(userId);
   if (wallet.status !== "active") throw new Error("Wallet is not active");
-  const [request] = await db.insert(walletTransactions).values({
-    walletId: wallet.id,
+  const claim = await withTransactionalIdempotency({
+    scope: "wallet.top-up",
+    key: requestKey,
     userId,
-    type: "top_up",
-    amount,
-    balanceAfter: wallet.balance,
-    description,
-    status: "pending",
+    request: { amount },
+    run: async tx => {
+      const [request] = await tx.insert(walletTransactions).values({
+        walletId: wallet.id,
+        userId,
+        type: "top_up",
+        amount,
+        balanceAfter: wallet.balance,
+        description,
+        status: "pending",
+      });
+      return {
+        topUpId: request.insertId,
+        requestedAt: Date.now(),
+        baseUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+      };
+    },
   });
+  const [pending] = await db
+    .select()
+    .from(walletTransactions)
+    .where(
+      and(
+        eq(walletTransactions.id, claim.topUpId),
+        eq(walletTransactions.userId, userId)
+      )
+    )
+    .limit(1);
+  if (!pending || pending.status !== "pending")
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "This wallet top-up is no longer pending",
+    });
+  requireSafeCheckoutReplay(claim.requestedAt);
   const metadata = {
     type: "wallet_topup",
-    topUpId: String(request.insertId),
+    topUpId: String(claim.topUpId),
     userId: String(userId),
   };
-  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const baseUrl = claim.baseUrl;
   // Balance changes only after the signed provider event settles this request.
   const session = await stripe.checkout.sessions.create(
     {
@@ -120,7 +155,7 @@ export async function topUpWallet(
       success_url: `${baseUrl}/my-bookings?wallet=pending`,
       cancel_url: `${baseUrl}/my-bookings?wallet=cancelled`,
     },
-    { idempotencyKey: `wallet-topup:${request.insertId}` }
+    providerRequestOptions(`wallet-topup:${claim.topUpId}`)
   );
   return {
     status: "pending" as const,

@@ -19,6 +19,7 @@ export async function findApprovedLoyaltyPolicy(
       and(
         eq(loyaltyPolicyProfiles.tenantId, tenantId),
         eq(loyaltyPolicyProfiles.status, "approved"),
+        lte(loyaltyPolicyProfiles.approvedAt, at),
         lte(loyaltyPolicyProfiles.effectiveAt, at)
       )
     )
@@ -43,6 +44,7 @@ export async function findApprovedLoyaltyPolicy(
     effectiveAt: row.effectiveAt,
     approvedBy: row.approvedBy,
     approvedAt: row.approvedAt,
+    sourceReferences: row.sourceReferences,
   };
   validateApprovedLoyaltyPolicy(policy, at);
   return policy;

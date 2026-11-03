@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { prepareRedemption } from "@/lib/redemption-intent";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import {
@@ -274,6 +275,7 @@ export default function LoyaltyDashboard() {
   const { user, loading: authLoading } = useAuth();
   const [milesToRedeem, setMilesToRedeem] = useState("");
 
+  const utils = trpc.useUtils();
   const [mfaToken, setMfaToken] = useState("");
   const mfa = trpc.mfa.getStatus.useQuery(undefined, { enabled: !!user });
 
@@ -285,20 +287,7 @@ export default function LoyaltyDashboard() {
   const { data: transactions, isLoading: transactionsLoading } =
     trpc.loyalty.myTransactions.useQuery({ limit: 50 }, { enabled: !!user });
 
-  const redeemMiles = trpc.loyalty.redeemMiles.useMutation({
-    onSuccess: data => {
-      toast.success(
-        t("loyalty.redeemSuccess", {
-          discount: (data.discountAmount / 100).toFixed(2),
-        })
-      );
-      setMilesToRedeem("");
-      setMfaToken("");
-    },
-    onError: error => {
-      toast.error(error.message);
-    },
-  });
+  const redeemMiles = trpc.loyalty.redeemMiles.useMutation();
 
   // Transaction type from the API
   type Transaction = {
@@ -415,20 +404,56 @@ export default function LoyaltyDashboard() {
 
   const TierIcon = currentTierConfig.icon;
 
-  const handleRedeem = () => {
-    const miles = parseInt(milesToRedeem);
-    if (isNaN(miles) || miles <= 0) {
+  const handleRedeem = async () => {
+    const miles = Number(milesToRedeem);
+    if (
+      !user ||
+      !Number.isSafeInteger(miles) ||
+      miles < 100 ||
+      miles > 100_000
+    ) {
       toast.error(t("loyalty.invalidMiles"));
       return;
     }
-    if (miles > availableMiles) {
+    let intent;
+    try {
+      intent = prepareRedemption(
+        window.sessionStorage,
+        user.id,
+        miles,
+        availableMiles
+      );
+    } catch {
+      toast.error(t("loyalty.redemptionStorageUnavailable"));
+      return;
+    }
+    if (!intent) {
       toast.error(t("loyalty.insufficientMiles"));
       return;
     }
-    redeemMiles.mutate({
-      milesToRedeem: miles,
-      mfaToken: mfaToken || undefined,
-    });
+    try {
+      const receipt = await redeemMiles.mutateAsync({
+        idempotencyKey: intent.key,
+        milesToRedeem: miles,
+        mfaToken: mfaToken || undefined,
+      });
+      setMilesToRedeem("");
+      setMfaToken("");
+      toast.success(
+        t("loyalty.redeemSuccess", {
+          discount: (receipt.discountAmount / 100).toFixed(2),
+        })
+      );
+      void utils.loyalty.myAccount.invalidate();
+      void utils.loyalty.myTransactions.invalidate();
+      try {
+        intent.acknowledge();
+      } catch {
+        toast.error(t("loyalty.redemptionStorageUnavailable"));
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("common.retry"));
+    }
   };
 
   return (
@@ -899,8 +924,8 @@ export default function LoyaltyDashboard() {
                       placeholder="1000"
                       value={milesToRedeem}
                       onChange={e => setMilesToRedeem(e.target.value)}
-                      min="0"
-                      max={availableMiles}
+                      min="100"
+                      max="100000"
                       className="text-lg"
                     />
                     {milesToRedeem && parseInt(milesToRedeem) > 0 && (

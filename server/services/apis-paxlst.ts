@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { zoneOffsetMs } from "./civil-day";
 
@@ -30,6 +31,7 @@ function localFlightTime(instant: Date, zone: string): string {
 }
 
 export function generatePAXLST(data: {
+  authorityRecipient: string;
   flight: {
     id: number;
     flightNumber: string;
@@ -49,6 +51,7 @@ export function generatePAXLST(data: {
 }): string {
   const { flight, origin, destination, airline, passengers, apisMap } = data;
 
+  const control = randomBytes(7).toString("hex").toUpperCase();
   const now = new Date();
   const dateStr = formatEdifactDate(now);
   const timeStr = now.toISOString().slice(11, 16).replace(":", "");
@@ -57,14 +60,14 @@ export function generatePAXLST(data: {
 
   // UNB - Interchange Header
   lines.push(
-    `UNB+UNOA:4+${element(airline.code)}+${element(destination.country)}GOVT+${dateStr}:${timeStr}+${flight.id}++APIS'`
+    `UNB+UNOA:4+${element(airline.code)}+${element(data.authorityRecipient, "authorityRecipient")}+${dateStr}:${timeStr}+${control}++APIS'`
   );
 
   // UNH - Message Header
-  lines.push(`UNH+1+PAXLST:D:05B:UN:IATA+${flight.id}+01:F'`);
+  lines.push(`UNH+1+PAXLST:D:05B:UN:IATA+${control}+01:F'`);
 
   // BGM - Beginning of Message
-  lines.push(`BGM+745'`);
+  lines.push(`BGM+745'`, `RFF+TN:${control}'`);
 
   // NAD - Name and Address (carrier)
   lines.push(`NAD+MS+++${element(airline.name, "airline.name")}'`);
@@ -124,7 +127,7 @@ export function generatePAXLST(data: {
   lines.push(`UNT+${lines.length}+1'`);
 
   // UNZ - Interchange Trailer
-  lines.push(`UNZ+1+${flight.id}'`);
+  lines.push(`UNZ+1+${control}'`);
 
   return lines.join("\n");
 }

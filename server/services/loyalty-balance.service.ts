@@ -5,6 +5,7 @@ import {
   loyaltyCreditLots,
   milesTransactions,
 } from "../../drizzle/schema";
+import { recordLotMovement } from "./loyalty-liability-ledger.service";
 import type { SettlementTx } from "./booking-settlement.service";
 
 type Account = typeof loyaltyAccounts.$inferSelect;
@@ -256,12 +257,13 @@ export async function expireMilesLots(
   let expired = 0;
   for (const lot of ordered(state.lots)) {
     if (!lot.expiresAt || lot.expiresAt > now || !lot.remainingMiles) continue;
+    const before = { ...lot };
     const amount = lot.remainingMiles;
     lot.remainingMiles = 0;
     lot.expiredMiles += amount;
     state.account.currentMilesBalance -= amount;
     expired += amount;
-    await tx.insert(milesTransactions).values({
+    const [created] = await tx.insert(milesTransactions).values({
       userId: state.account.userId,
       loyaltyAccountId: state.account.id,
       bookingId: lot.bookingId,
@@ -271,6 +273,14 @@ export async function expireMilesLots(
       description: "Unused miles expired",
       reason: `credit-expiry:${lot.transactionId}`,
     });
+    await recordLotMovement(
+      tx,
+      state.account.userId,
+      before,
+      lot,
+      created.insertId,
+      { type: "expire" }
+    );
   }
   if (expired) await saveState(tx, state);
   return expired;
@@ -317,7 +327,12 @@ export async function spendMiles(
   tx: SettlementTx,
   state: MilesState,
   amount: number,
-  input: { type: "redeem" | "adjustment"; bookingId?: number; reason: string }
+  input: {
+    type: "redeem" | "adjustment";
+    bookingId?: number;
+    reason: string;
+    onDebit?: (id: number) => void;
+  }
 ) {
   requireMiles(amount);
   if (amount > state.account.currentMilesBalance)
@@ -325,17 +340,30 @@ export async function spendMiles(
       code: "BAD_REQUEST",
       message: "Insufficient miles balance",
     });
+  const before =
+    input.type === "adjustment" ? state.lots.map(l => ({ ...l })) : [];
   if (spendAvailable(state, amount))
     throw new Error("Miles spending exceeds available lots");
   state.account.currentMilesBalance -= amount;
-  await tx.insert(milesTransactions).values({
+  const { onDebit, ...entry } = input;
+  const [created] = await tx.insert(milesTransactions).values({
     userId: state.account.userId,
     loyaltyAccountId: state.account.id,
-    ...input,
+    ...entry,
     description: input.reason,
     amount: -amount,
     balanceAfter: state.account.currentMilesBalance,
   });
+  onDebit?.(created.insertId);
+  for (const [i, lot] of before.entries())
+    await recordLotMovement(
+      tx,
+      state.account.userId,
+      lot,
+      state.lots[i],
+      created.insertId,
+      { type: "adjustment" }
+    );
   if (input.type === "redeem") {
     state.account.milesRedeemed += amount;
     await tx
@@ -350,11 +378,13 @@ export async function reverseBookingMilesCredit(
   tx: SettlementTx,
   state: MilesState,
   bookingId: number,
-  grossMiles: number
+  grossMiles: number,
+  fullyRefunded = false
 ) {
   requireMiles(grossMiles);
+  const before = state.lots.map(l => ({ ...l }));
   const debit = reverseCredit(state, bookingId, grossMiles);
-  await tx.insert(milesTransactions).values({
+  const [created] = await tx.insert(milesTransactions).values({
     userId: state.account.userId,
     loyaltyAccountId: state.account.id,
     bookingId,
@@ -364,6 +394,18 @@ export async function reverseBookingMilesCredit(
     description: `Reverse ${grossMiles} net booking miles; ${grossMiles - debit} already expired`,
     reason: `booking-net:${bookingId}`,
   });
+  for (const [i, lot] of before.entries())
+    await recordLotMovement(
+      tx,
+      state.account.userId,
+      lot,
+      state.lots[i],
+      created.insertId,
+      {
+        type: "reverse",
+        fullyRefunded: fullyRefunded && lot.bookingId === bookingId,
+      }
+    );
   await saveState(tx, state);
   return debit;
 }

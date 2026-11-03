@@ -81,7 +81,7 @@ describe("PNRGOV 21.1 structural draft", () => {
     ["MSG+23+8'\nERC+102", "rejected"],
   ])("maps ACKRES %s to %s", (body, status) => {
     const result = parseAuthorityAcknowledgment(
-      `UNB+IATA:1+GOV+SV+261103:0102+1'\nUNH+1+ACKRES:21:1:IA+ABC'\n${body}'\nUNT+3+1'\nUNZ+1+1'`
+      `UNB+IATA:1+GOV+SV+261103:0102+1'\nUNH+1+ACKRES:21:1:IA+ABC'\n${body}'\nUNT+${body.includes("ERC+") ? 4 : 3}+1'\nUNZ+1+1'`
     );
     expect(result.status).toBe(status);
     if (status === "rejected") expect(result.errorCodes).toEqual(["102"]);
@@ -98,5 +98,87 @@ describe("PNRGOV 21.1 structural draft", () => {
         "UNH+1+CONTRL:4:1:UN'\nUCI+1+GOV+SV+4+18'\nUNT+3+1'"
       ).status
     ).toBe("rejected");
+  });
+});
+
+describe("authority response correlation", () => {
+  const outgoing = {
+    messageType: "PAXLST",
+    messageContent:
+      "UNB+UNOA:4+AIR+AUTH+20261103:0102+INT1'UNH+M1+PAXLST:D:05B:UN:IATA+CA1'BGM+745'RFF+TN:TX1::2'UNT+4+M1'UNZ+1+INT1'",
+  };
+  const wrapper = (body: string[]) =>
+    "UNB+UNOA:4+AUTH+AIR+20261103:0102+REPLY'" +
+    body.join("'") +
+    "'UNZ+1+REPLY'";
+  const cusres = (tn: string, code: string, point = "1") =>
+    wrapper([
+      "UNH+R1+CUSRES:D:12B:UN:IATA",
+      "BGM+962",
+      "RFF+TN:" + tn,
+      "ERP+" + point,
+      "ERC+" + code,
+      "UNT+6+R1",
+    ]);
+
+  it("accepts the matching transaction and revision as receipt only", () => {
+    expect(
+      parseAuthorityAcknowledgment(cusres("TX1::2", "ACK"), outgoing).status
+    ).toBe("received");
+    expect(
+      parseAuthorityAcknowledgment(cusres("TX1::2", "X"), outgoing).status
+    ).toBe("rejected");
+    for (const invalid of [
+      cusres("REPLY", "ACK"),
+      cusres("TX1::1", "ACK"),
+      cusres("TX1::2", "ZZ"),
+      cusres("TX1::2", "ACK", "2"),
+      cusres("TX1::2", "ACK").replace("+AUTH+AIR", "+WRONG+AIR"),
+    ])
+      expect(() => parseAuthorityAcknowledgment(invalid, outgoing)).toThrow();
+  });
+
+  it("scopes syntax rejections to the original interchange and message", () => {
+    const reply = wrapper([
+      "UNH+C+CONTRL:4:1:UN",
+      "UCI+INT1+AIR+AUTH+8",
+      "UCM+M1+PAXLST:D:05B:UN:IATA+4+15",
+      "UNT+4+C",
+    ]);
+    expect(parseAuthorityAcknowledgment(reply, outgoing)).toMatchObject({
+      status: "rejected",
+      errorCodes: ["15"],
+    });
+    for (const invalid of [
+      reply.replace("UCI+INT1", "UCI+WRONG"),
+      reply.replace("UCM+M1", "UCM+M2"),
+      reply.replace("UCI+INT1+AIR", "UCI+INT1+WRONG"),
+    ])
+      expect(() => parseAuthorityAcknowledgment(invalid, outgoing)).toThrow();
+  });
+
+  it("rejects ambiguous or escaped fake controls and checks PNR common reference", () => {
+    const pnrgov = {
+      messageType: "PNRGOV",
+      messageContent: generatePNRGOV(input()),
+    };
+    const reference = pnrgov.messageContent.match(/UNH\+([^+]+)/)![1];
+    const reply = wrapper([
+      "UNH+R+ACKRES:21:1:IA+" + reference,
+      "MSG+:23+3",
+      "UNT+3+R",
+    ]).replace("+AUTH+AIR", "+SAGOV+SV");
+    expect(parseAuthorityAcknowledgment(reply, pnrgov).status).toBe(
+      "acknowledged"
+    );
+    for (const invalid of [
+      reply.replace(reference, "OTHER"),
+      reply.replace("MSG+:23+3", "FTX+ZZZ+++FAKE?'MSG?+:23?+3"),
+      reply
+        .replace("MSG+:23+3", "MSG+:23+3'MSG+:23+8")
+        .replace("UNT+3", "UNT+4"),
+      reply.replace("UNT+3", "UNT+4"),
+    ])
+      expect(() => parseAuthorityAcknowledgment(invalid, pnrgov)).toThrow();
   });
 });

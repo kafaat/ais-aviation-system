@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { transactionMemory } from "./helpers/transaction-memory";
 const boundary = vi.hoisted(() => ({
@@ -330,7 +331,19 @@ describe("verified payment settlement", () => {
   });
 
   it("creates a pending Checkout without minting balance; verified replay credits once", async () => {
-    const result = await topUpWallet(9, 10000, "Top-up");
+    const key = randomUUID();
+    boundary.checkout.mockRejectedValueOnce(new Error("lost checkout reply"));
+    await expect(topUpWallet(9, 10000, "Top-up", key)).rejects.toThrow(
+      "lost checkout reply"
+    );
+    const result = await topUpWallet(9, 10000, "Top-up", key);
+    expect(boundary.checkout.mock.calls[0]).toEqual(
+      boundary.checkout.mock.calls[1]
+    );
+    await expect(topUpWallet(9, 11000, "Top-up", key)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(fixture.rows("wallet_transactions")).toHaveLength(1);
     expect(result.status).toBe("pending");
     expect(fixture.rows("wallets")[0].balance).toBe(150000);
     expect(fixture.rows("wallet_transactions")[0].status).toBe("pending");
@@ -338,6 +351,29 @@ describe("verified payment settlement", () => {
     await event("checkout.session.completed", payment(metadata, 10000));
     await event("checkout.session.completed", payment(metadata, 10000));
     expect(fixture.rows("wallets")[0].balance).toBe(160000);
+    await expect(topUpWallet(9, 10000, "Top-up", key)).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    expect(boundary.checkout).toHaveBeenCalledTimes(2);
+  });
+  it("refuses a wallet retry after the provider key window without creating another top-up", async () => {
+    const key = randomUUID();
+    vi.useFakeTimers();
+    try {
+      boundary.checkout.mockRejectedValueOnce(new Error("lost reply"));
+      await expect(topUpWallet(9, 10000, "Top-up", key)).rejects.toThrow(
+        "lost reply"
+      );
+      vi.setSystemTime(Date.now() + 23 * 3600_000);
+      await expect(topUpWallet(9, 10000, "Top-up", key)).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+      });
+      expect(boundary.checkout).toHaveBeenCalledTimes(1);
+      expect(fixture.rows("wallet_transactions")).toHaveLength(1);
+      expect(fixture.rows("wallets")[0].balance).toBe(150000);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("debits the server price once and rejects another owner's booking", async () => {
     await expect(payFromWallet(8, 7)).rejects.toMatchObject({

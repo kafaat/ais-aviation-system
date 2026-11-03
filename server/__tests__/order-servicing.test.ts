@@ -155,7 +155,9 @@ beforeEach(() => {
         airlineId: 1,
         status: "confirmed",
         totalAmount: 10000,
-        orderPayload: "{}",
+        orderPayload: JSON.stringify({ ndcVersion: "21.3" }),
+        channel: "direct",
+        currency: "SAR",
       },
     ],
   });

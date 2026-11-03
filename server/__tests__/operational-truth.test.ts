@@ -139,6 +139,7 @@ describe("operational truth", () => {
       ],
     };
     const fixture = transactionMemory({
+      flights: [{ id: 4, aircraftRegistrationId: null }],
       load_plan_details: [
         { flightId: 4, version: 1, data: { plan, nextItemId: 2 } },
       ],

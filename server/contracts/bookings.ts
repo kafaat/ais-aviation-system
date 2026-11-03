@@ -31,6 +31,7 @@ export const responseContracts = {
   }),
   myBookings: z.array(
     z.object({
+      canExchange: z.boolean(),
       passengers: z.array(
         z.object({
           id: outputNumber,

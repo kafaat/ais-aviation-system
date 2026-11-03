@@ -580,6 +580,7 @@
     "redeem": "استرداد",
     "redeemNote": "100 ميل = 1 ريال سعودي، يُضاف إلى رصيدك لحجزك القادم",
     "redeemSuccess": "تم الاسترداد بنجاح! أُضيف {{discount}} ر.س إلى رصيد حجوزاتك.",
+    "redemptionStorageUnavailable": "تعذّر الوصول إلى مفتاح إعادة محاولة الاسترداد. راجع الرصيد وسجل العمليات قبل إعادة المحاولة.",
     "invalidMiles": "الرجاء إدخال عدد صحيح من الأميال",
     "insufficientMiles": "رصيد الأميال غير كافٍ",
     "transactionHistory": "سجل المعاملات",
@@ -1241,6 +1242,7 @@
     "organizerAccount": "حساب المنظّم المطابق لبريد الطلب"
   },
   "multiCity": {
+    "invalidItinerary": "رابط مسار الرحلة غير مكتمل أو قديم. ابحث مجدداً لمراجعة الرحلات المتاحة.",
     "oneWay": "ذهاب فقط",
     "multiCity": "متعدد المدن",
     "segment": "مرحلة",
@@ -2179,6 +2181,14 @@
       "aircraftTypes": "أنواع الطائرات"
     },
     "manifest": {
+      "checkBaggage": "فحص أدلة أمتعة المغادرة",
+      "closeoutUnavailable": "تعذّر الحصول على مطابقة الأمتعة",
+      "closeoutMatched": "تطابقت أدلة جميع الحقائب المتوقعة. يلزم قبول المحطة.",
+      "closeoutIncomplete": "أدلة الأمتعة ناقصة أو متعارضة.",
+      "closeoutCounts": "المحمّل {{loaded}} من {{expected}} متوقعة. حقائب غير متوقعة {{unexpected}}.",
+      "missingEntry": "ينقصها إثبات التسلم أو التحويل",
+      "missingLoading": "ينقصها إثبات التحميل",
+      "duplicateScans": "مسوحات مكررة",
       "flightId": "رقم الرحلة",
       "enterFlightId": "أدخل رقم الرحلة",
       "generate": "إنشاء البيان",

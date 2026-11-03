@@ -421,6 +421,13 @@
       "when": 1793671010754,
       "tag": "0059_airline_standards_readiness",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "5",
+      "when": 1793696285071,
+      "tag": "0060_aircraft_assignment_and_bsp_evidence",
+      "breakpoints": true
     }
   ]
 }

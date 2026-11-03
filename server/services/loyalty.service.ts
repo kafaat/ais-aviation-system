@@ -1,3 +1,4 @@
+import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import {
   lockMilesState,
   expireMilesLots,
@@ -7,6 +8,10 @@ import {
   requireMiles,
   rebaseMilesExpiry,
 } from "./loyalty-balance.service";
+import {
+  postApprovedBookingGrant,
+  recordLotMovement,
+} from "./loyalty-liability-ledger.service";
 import { resolveMilesExpiry } from "./loyalty-accounting-policy";
 import { findApprovedLoyaltyPolicy } from "./loyalty-policy-repository";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -236,6 +241,7 @@ export async function syncBookingMiles(
     const expiry = resolveMilesExpiry(policy, now, now);
     if (policy?.expiryMode === "activity" && expiry)
       rebaseMilesExpiry(state, expiry);
+    const originalGrant = !state.lots.some(lot => lot.bookingId === bookingId);
     await creditMiles(tx, state, {
       amount: delta,
       type: "earn",
@@ -244,8 +250,54 @@ export async function syncBookingMiles(
       reason: `booking-net:${bookingId}`,
       expiresAt: expiry,
     });
+    const lot = state.lots[state.lots.length - 1];
+    if (
+      policy &&
+      originalGrant &&
+      !accrual.awardedMiles &&
+      !lot.spentMiles &&
+      net === booking.totalAmount &&
+      receipts.length &&
+      !wallet.length &&
+      receipts.every(
+        r =>
+          r.kind === "booking" &&
+          r.userId === userId &&
+          r.currency === "SAR" &&
+          r.amount > 0 &&
+          !r.refundedAmount
+      )
+    ) {
+      await postApprovedBookingGrant(tx, {
+        policy,
+        bookingId,
+        userId,
+        lotId: lot.transactionId,
+        awardedMiles: delta,
+        contractAt: booking.createdAt,
+        occurredAt: now,
+        totalAmount: booking.totalAmount,
+        settlementReferences: receipts.map(r => "receipt:" + r.paymentIntentId),
+      });
+    }
   } else if (delta < 0)
-    await reverseBookingMilesCredit(tx, state, bookingId, -delta);
+    await reverseBookingMilesCredit(
+      tx,
+      state,
+      bookingId,
+      -delta,
+      net === 0 &&
+        !wallet.length &&
+        receipts.length > 0 &&
+        receipts.every(
+          r =>
+            r.kind === "booking" &&
+            r.userId === userId &&
+            r.currency === "SAR" &&
+            r.amount > 0 &&
+            r.amount === r.refundedAmount
+        )
+    );
   const newBalance = state.account.currentMilesBalance;
   const tierPoints = Math.max(0, account.tierPoints + tierDelta);
   const newTier = calculateTier(tierPoints);
@@ -294,16 +346,14 @@ export async function awardMilesForBooking(
 export async function redeemMiles(
   userId: number,
   milesToRedeem: number,
-  bookingId?: number,
-  mfaToken?: string
+  bookingId: number | undefined,
+  mfaToken: string | undefined,
+  idempotencyKey: string
 ): Promise<{ discountAmount: number; newBalance: number }> {
   requireMiles(milesToRedeem);
   try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
     // Use a transaction to prevent race conditions on balance updates
-    return await database.transaction(async tx => {
+    const redeem = async (tx: SettlementTx) => {
       if (!(await consumeActionTotp(tx, userId, mfaToken, "if-enrolled")))
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -324,10 +374,15 @@ export async function redeemMiles(
       }
       const state = await lockMilesState(tx, userId);
       await expireMilesLots(tx, state);
+      const originalLots = state.lots.map(lot => ({ ...lot }));
+      let movementId = 0;
       const newBalance = await spendMiles(tx, state, milesToRedeem, {
         type: "redeem",
         bookingId,
         reason: "Miles redeemed for discount",
+        onDebit: id => {
+          movementId = id;
+        },
       });
       // 1 mile = 1 cent. The value must exist somewhere the customer can
       // spend it: a booking credit lot in the same transaction as the miles
@@ -336,7 +391,7 @@ export async function redeemMiles(
       const discountAmount = milesToRedeem;
       const expiresAt = new Date();
       expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + 1);
-      await tx.insert(userCredits).values({
+      const [createdCredit] = await tx.insert(userCredits).values({
         userId,
         amount: discountAmount,
         source: "bonus",
@@ -346,10 +401,26 @@ export async function redeemMiles(
         createdBy: null,
         usedAmount: 0,
       });
+      for (const [index, lot] of state.lots.entries())
+        await recordLotMovement(
+          tx,
+          userId,
+          originalLots[index],
+          lot,
+          movementId,
+          { type: "redeem", creditId: createdCredit.insertId }
+        );
       return {
         discountAmount,
         newBalance,
       };
+    };
+    return await withTransactionalIdempotency({
+      scope: "loyalty.redeem",
+      key: idempotencyKey,
+      userId,
+      request: { milesToRedeem, bookingId },
+      run: redeem,
     });
   } catch (error) {
     if (error instanceof TRPCError) {

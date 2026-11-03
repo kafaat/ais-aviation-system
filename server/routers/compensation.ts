@@ -1,7 +1,15 @@
+import { getDb } from "../db";
+import { evaluatePassengerRights } from "../services/passenger-rights-policy";
+import { findApprovedPassengerRightsProfile } from "../services/passenger-rights-policy-repository";
 import { getClaimTargets } from "../services/booking-flight-membership.service";
 import { responseContracts } from "../contracts/compensation";
 import { z } from "zod";
-import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
+import {
+  protectedProcedure,
+  adminProcedure,
+  airlineFinanceProcedure,
+  router,
+} from "../_core/trpc";
 import {
   createClaim,
   processClaim,
@@ -21,6 +29,64 @@ import { TRPCError } from "@trpc/server";
  * Handles EU261/DOT compensation claims for flight disruptions
  */
 export const compensationRouter = router({
+  // Reviewer preview only. No claim state or payment changes on this route.
+  previewApprovedPolicy: airlineFinanceProcedure
+    .input(
+      z.object({
+        jurisdiction: z.enum([
+          "gaca-2023",
+          "eu261-2004",
+          "uk261",
+          "us-dot-14-cfr-260",
+        ]),
+        event: z.enum([
+          "delay",
+          "cancellation",
+          "denied_boarding",
+          "downgrade",
+          "baggage",
+          "refund",
+        ]),
+        occurredAt: z.date(),
+        delayMinutes: z.number().int().nonnegative().optional(),
+        distanceKm: z.number().int().nonnegative().optional(),
+        fareMinor: z.number().int().min(0).max(2147483647).optional(),
+        currency: z
+          .string()
+          .regex(/^[A-Z]{3}$/)
+          .optional(),
+        conditionsSatisfied: z
+          .array(z.string().trim().min(1).max(100))
+          .max(100),
+      })
+    )
+    .output(
+      z.object({
+        status: z.enum(["needs_review", "eligible_non_monetary", "calculated"]),
+        reason: z.string(),
+        amountMinor: z.number().nullable(),
+        currency: z.string().nullable(),
+        policyVersion: z.string().nullable(),
+        refundDeadlineBusinessDays: z.number().nullable().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      if (ctx.tenantId == null) throw new TRPCError({ code: "FORBIDDEN" });
+      if (input.occurredAt.getTime() > Date.now())
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Event must already have occurred",
+        });
+      const db = await getDb();
+      if (!db) throw new Error("Passenger-rights policy storage unavailable");
+      const policy = await findApprovedPassengerRightsProfile(
+        db,
+        ctx.tenantId,
+        input.jurisdiction,
+        input.occurredAt
+      );
+      return evaluatePassengerRights(policy, input);
+    }),
   claimTargets: protectedProcedure
     .input(z.object({ bookingId: z.number().int().positive() }))
     .output(

@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
+  bookings,
   bookingFareComponents,
   zatcaInvoiceDrafts,
   type InsertBookingFareComponent,
@@ -9,6 +11,7 @@ import type { SettlementTx } from "./booking-settlement.service";
 import {
   retailOfferPayloadSchema,
   type RetailOffer,
+  type OfferPayload,
 } from "./retail-offer.service";
 
 type ComponentSource = InsertBookingFareComponent["source"];
@@ -20,6 +23,8 @@ export type InitialFareComponentInput = {
   passengerIds: number[];
   totalAmount: number;
   offer?: RetailOffer;
+  sectorQuote?: Pick<OfferPayload, "fareLines"> & { policy: { name: string } };
+  bookingSegmentId?: number;
   source: ComponentSource;
   sourceReference?: string;
   ancillaries?: Array<{ amount: number; code?: string }>;
@@ -47,15 +52,17 @@ export function composeInitialFareComponents(
   const common = {
     bookingId: input.bookingId,
     tenantId: input.tenantId,
-    bookingSegmentId: null,
+    bookingSegmentId: input.bookingSegmentId ?? null,
     flightId: input.flightId,
     currency: "SAR",
     source: input.source,
     sourceReference: input.sourceReference ?? null,
   } as const;
   const rows: InsertBookingFareComponent[] = [];
-  if (input.offer) {
-    const payload = retailOfferPayloadSchema.parse(input.offer.payload);
+  const payload = input.offer
+    ? retailOfferPayloadSchema.parse(input.offer.payload)
+    : input.sectorQuote;
+  if (payload) {
     if (
       payload.fareLines &&
       payload.fareLines.length === input.passengerIds.length
@@ -220,11 +227,19 @@ export async function createZatcaInvoiceDraft(
 ) {
   draftGate();
   if (
-    !input.components.length ||
+    !input.invoiceNumber.trim() ||
+    input.invoiceNumber.length > 64 ||
+    !Number.isFinite(input.supplyTimestamp.getTime()) ||
+    // Tag 5 is the VAT total. An omitted tax line or a generic airport/route
+    // levy cannot establish a VAT determination for this draft.
+    !input.components.some(
+      line => line.componentType === "tax" && line.code === "VAT-S"
+    ) ||
     input.components.some(
       line =>
         line.componentType === "unclassified" ||
-        line.code === "OFFER_TAX_ESTIMATE" ||
+        !line.code?.trim() ||
+        (line.componentType === "tax" && line.code !== "VAT-S") ||
         !Number.isSafeInteger(line.amount) ||
         line.amount < 0
     )
@@ -278,6 +293,71 @@ export async function createZatcaInvoiceDraft(
     egsAcceptanceEvidenceId:
       process.env.AIS_ZATCA_EGS_ACCEPTANCE_EVIDENCE_ID ?? null,
   };
-  await tx.insert(zatcaInvoiceDrafts).values(row);
-  return row;
+  await tx
+    .insert(zatcaInvoiceDrafts)
+    .values(row)
+    .onDuplicateKeyUpdate({ set: { id: sql`${zatcaInvoiceDrafts.id}` } });
+  const [stored] = await tx
+    .select()
+    .from(zatcaInvoiceDrafts)
+    .where(eq(zatcaInvoiceDrafts.invoiceNumber, input.invoiceNumber))
+    .limit(1)
+    .for("update");
+  if (
+    !stored ||
+    stored.bookingId !== row.bookingId ||
+    stored.tenantId !== row.tenantId ||
+    stored.componentDigest !== row.componentDigest ||
+    stored.previewQrSha256 !== row.previewQrSha256 ||
+    Math.floor(stored.supplyTimestamp.getTime() / 1000) !==
+      Math.floor(row.supplyTimestamp.getTime() / 1000)
+  ) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Invoice number already reserved for different draft data",
+    });
+  }
+  return stored;
+}
+
+/** Only the stored, active components of this tenant's invoice may enter review. */
+export async function draftStoredBookingInvoice(
+  tx: SettlementTx,
+  tenantId: number,
+  input: Omit<
+    Parameters<typeof createZatcaInvoiceDraft>[1],
+    "components" | "tenantId"
+  >
+) {
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(
+      and(eq(bookings.id, input.bookingId), eq(bookings.tenantId, tenantId))
+    )
+    .limit(1)
+    .for("update");
+  if (!booking) throw new TRPCError({ code: "NOT_FOUND" });
+  const components = await tx
+    .select()
+    .from(bookingFareComponents)
+    .where(
+      and(
+        eq(bookingFareComponents.bookingId, booking.id),
+        eq(bookingFareComponents.tenantId, tenantId),
+        isNull(bookingFareComponents.reversedAt)
+      )
+    )
+    .orderBy(bookingFareComponents.id);
+  if (
+    !components.length ||
+    components.some(line => line.currency !== "SAR") ||
+    components.reduce((sum, line) => sum + line.amount, 0) !==
+      booking.totalAmount
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Stored components do not reconcile with the booking",
+    });
+  return createZatcaInvoiceDraft(tx, { ...input, tenantId, components });
 }

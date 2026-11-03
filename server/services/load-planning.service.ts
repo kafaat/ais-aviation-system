@@ -1,3 +1,4 @@
+import { lockSimulatedLoadPlanFlight } from "./load-sheet-lifecycle.service";
 /**
  * Load Planning Service
  *
@@ -281,20 +282,27 @@ async function getStoredPlan(
   flightId: number
 ): Promise<StoredLoadPlan | undefined> {
   const db = await requireDb();
-  const [row] = await db
-    .select()
-    .from(loadPlanDetails)
-    .where(eq(loadPlanDetails.flightId, flightId))
-    .limit(1);
-  return row
-    ? { ...(row.data as Omit<StoredLoadPlan, "version">), version: row.version }
-    : undefined;
+  return db.transaction(async tx => {
+    await lockSimulatedLoadPlanFlight(tx, flightId);
+    const [row] = await tx
+      .select()
+      .from(loadPlanDetails)
+      .where(eq(loadPlanDetails.flightId, flightId))
+      .limit(1);
+    return row
+      ? {
+          ...(row.data as Omit<StoredLoadPlan, "version">),
+          version: row.version,
+        }
+      : undefined;
+  });
 }
 
 async function saveStoredPlan(flightId: number, stored: StoredLoadPlan) {
   const db = await requireDb();
   const data = { plan: stored.plan, nextItemId: stored.nextItemId };
   await db.transaction(async tx => {
+    await lockSimulatedLoadPlanFlight(tx, flightId);
     if (!stored.version)
       await tx.insert(loadPlanDetails).values({ flightId, version: 1, data });
     else {

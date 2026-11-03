@@ -1,3 +1,5 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import { prepareValueIntent } from "@/lib/redemption-intent";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -21,6 +23,7 @@ const QUICK_AMOUNTS = [5000, 10000, 25000, 50000]; // SAR cents
 
 export function WalletCard() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [customAmount, setCustomAmount] = useState("");
   const [showHistory, setShowHistory] = useState(false);
 
@@ -33,18 +36,27 @@ export function WalletCard() {
     { enabled: showHistory, retry: false }
   );
 
-  const topUp = trpc.wallet.topUp.useMutation({
-    onSuccess: data => {
-      if (data.url) window.location.assign(data.url);
-      else toast.error(t("wallet.topUpError"));
-    },
-    onError: error => {
-      toast.error(error.message);
-    },
-  });
-
-  const handleTopUp = (amountCents: number) => {
-    topUp.mutate({ amount: amountCents });
+  const topUp = trpc.wallet.topUp.useMutation();
+  const handleTopUp = async (amountCents: number) => {
+    if (!user || topUp.isPending) return;
+    try {
+      const intent = prepareValueIntent(
+        sessionStorage,
+        `ais:wallet:topup:${user.id}:${amountCents}`
+      );
+      if (!intent) return;
+      const result = await topUp.mutateAsync({
+        amount: amountCents,
+        idempotencyKey: intent.key,
+      });
+      if (!result.url) throw new Error(t("wallet.topUpError"));
+      window.location.assign(result.url);
+      intent.acknowledge();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("wallet.topUpError")
+      );
+    }
   };
 
   if (isLoading) {

@@ -158,6 +158,8 @@ export const multiCityRouter = router({
           )
           .min(1)
           .describe("List of passengers"),
+        checkoutContractVersion: z.literal(1).optional(),
+        expectedTotalMinor: z.number().int().nonnegative().optional(),
         sessionId: z.string().describe("Booking session ID"),
       })
     )
@@ -170,6 +172,9 @@ export const multiCityRouter = router({
         cabinClass: input.cabinClass,
         passengers: input.passengers,
         sessionId: input.sessionId,
+        ...(input.expectedTotalMinor !== undefined && {
+          expectedTotalMinor: input.expectedTotalMinor,
+        }),
       });
 
       // Audit log: Multi-city booking created
@@ -197,7 +202,12 @@ export const multiCityRouter = router({
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
     .output(responseContracts["getSegments"])
     .query(async ({ input, ctx }) => {
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        { tenantId: ctx.tenantId }
+      );
       return await multiCityService.getBookingSegments(input.bookingId);
     }),
 

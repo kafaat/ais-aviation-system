@@ -1,3 +1,4 @@
+import { canServiceOrder } from "./services/ndc-capabilities";
 import {
   and,
   asc,
@@ -22,6 +23,9 @@ import mysql from "mysql2/promise";
 import { readFileSync } from "node:fs";
 import * as schema from "../drizzle/schema";
 import {
+  agentBookings,
+  corporateBookings,
+  ndcOrders,
   InsertUser,
   users,
   airlines,
@@ -746,6 +750,8 @@ export async function getBookingsByUserId(
 
   const result = await db
     .select({
+      seatsReserved: bookings.seatsReserved,
+      partnerIssued: sql<number>`EXISTS (SELECT 1 FROM ${agentBookings} WHERE ${agentBookings.bookingId} = ${bookings.id}) OR EXISTS (SELECT 1 FROM ${corporateBookings} WHERE ${corporateBookings.bookingId} = ${bookings.id})`,
       id: bookings.id,
       bookingReference: bookings.bookingReference,
       pnr: bookings.pnr,
@@ -795,6 +801,26 @@ export async function getBookingsByUserId(
     .from(passengers)
     .where(passengerWhere);
 
+  // Project only the version from the order payload. It also contains travel documents.
+  const linkedOrders = await db
+    .select({
+      bookingId: ndcOrders.bookingId,
+      airlineId: ndcOrders.airlineId,
+      distributorId: ndcOrders.distributorId,
+      channel: ndcOrders.channel,
+      currency: ndcOrders.currency,
+      ticketNumbers: ndcOrders.ticketNumbers,
+      emdNumbers: ndcOrders.emdNumbers,
+      orderPayload: sql<string>`CASE WHEN JSON_VALID(${ndcOrders.orderPayload}) THEN JSON_OBJECT('ndcVersion', JSON_UNQUOTE(JSON_EXTRACT(${ndcOrders.orderPayload}, '$.ndcVersion'))) ELSE '{}' END`,
+    })
+    .from(ndcOrders)
+    .where(inArray(ndcOrders.bookingId, bookingIds));
+  const restrictedBookings = new Set(
+    linkedOrders
+      .filter(order => !canServiceOrder(order, "exchange"))
+      .map(order => order.bookingId)
+  );
+
   // Group passengers by bookingId
   const passengersByBookingId = new Map<
     number,
@@ -810,10 +836,19 @@ export async function getBookingsByUserId(
   }
 
   // Map grouped passengers onto bookings
-  const bookingsWithPassengers = result.map(booking => ({
-    ...booking,
-    passengers: passengersByBookingId.get(booking.id) ?? [],
-  }));
+  const bookingsWithPassengers = result.map(
+    ({ partnerIssued, seatsReserved, ...booking }) => ({
+      ...booking,
+      canExchange:
+        !Number(partnerIssued) &&
+        seatsReserved &&
+        booking.status === "confirmed" &&
+        booking.paymentStatus === "paid" &&
+        !booking.checkedIn &&
+        !restrictedBookings.has(booking.id),
+      passengers: passengersByBookingId.get(booking.id) ?? [],
+    })
+  );
 
   return bookingsWithPassengers;
 }

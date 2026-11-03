@@ -81,6 +81,15 @@ describe("loyalty accounting policy", () => {
     ).toThrow("not effective");
   });
 
+  it("rejects a policy that was effective but not yet approved on the credit date", () => {
+    expect(() =>
+      resolveMilesExpiry(
+        { ...policy, approvedAt: new Date("2026-07-01T00:00:00Z") },
+        new Date("2026-06-01T00:00:00Z")
+      )
+    ).toThrow("approval evidence");
+  });
+
   it("derives stable allocation receipts from the business state", () => {
     const input = {
       tenantId: 2,

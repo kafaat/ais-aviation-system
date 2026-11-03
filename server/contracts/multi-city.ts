@@ -26,11 +26,13 @@ export const responseContracts = {
             code: z.string(),
             name: z.string(),
             city: z.string(),
+            timezone: z.string().nullable().optional(),
           }),
           destination: z.object({
             code: z.string(),
             name: z.string(),
             city: z.string(),
+            timezone: z.string().nullable().optional(),
           }),
         })
       ),

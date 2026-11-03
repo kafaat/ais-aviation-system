@@ -1,10 +1,14 @@
+import { canServiceOrder, type NdcAction } from "./ndc-capabilities";
 import { holdInvoiceSeat, seatFeesBySegment } from "./seat-exchange.service";
 import { TRPCError } from "@trpc/server";
 import { and, eq, asc } from "drizzle-orm";
 import {
   bookings,
+  agentBookings,
+  corporateBookings,
   bookingSegments,
   bookingAncillaries,
+  bookingFareComponents,
   ancillaryServices,
   passengers,
   flights,
@@ -32,11 +36,29 @@ export function storedJson<T>(value: string | null, fallback: T): T {
     throw invoiceBlocked("Stored invoice data requires reconciliation");
   }
 }
+export async function hasPartnerBooking(tx: SettlementTx, bookingId: number) {
+  // Agency sales and corporate approval records exist independently of NDC orders.
+  const [agency] = await tx
+    .select({ id: agentBookings.id })
+    .from(agentBookings)
+    .where(eq(agentBookings.bookingId, bookingId))
+    .limit(1)
+    .for("update");
+  const [corporate] = await tx
+    .select({ id: corporateBookings.id })
+    .from(corporateBookings)
+    .where(eq(corporateBookings.bookingId, bookingId))
+    .limit(1)
+    .for("update");
+  return Boolean(agency || corporate);
+}
+
 /** Shared lock order: booking -> checkout -> NDC -> segments -> flights. */
 export async function lockEditableInvoice(
   tx: SettlementTx,
   bookingId: number,
-  actor: InvoiceActor
+  actor: InvoiceActor,
+  action?: NdcAction
 ) {
   const [booking] = await tx
     .select()
@@ -56,6 +78,8 @@ export async function lockEditableInvoice(
     });
   await assertTenantOperational(tx, booking.tenantId);
   await assertInvoiceEditable(tx, booking);
+  if (action && (await hasPartnerBooking(tx, booking.id)))
+    throw invoiceBlocked("Issuing channel must service this booking");
   const orders = await tx
     .select()
     .from(ndcOrders)
@@ -63,6 +87,8 @@ export async function lockEditableInvoice(
     .orderBy(asc(ndcOrders.id))
     .for("update");
   for (const order of orders) {
+    if (action && !canServiceOrder(order, action))
+      throw invoiceBlocked("Issuing channel must service this order");
     if (
       order.status !== "pending" ||
       order.currency !== "SAR" ||
@@ -371,6 +397,18 @@ export async function insertInvoiceAncillary(
           ? "entitlement_created"
           : "pending_payment",
     }),
+  });
+  await tx.insert(bookingFareComponents).values({
+    bookingId: booking.id,
+    tenantId: booking.tenantId,
+    passengerId: data.passengerId,
+    bookingSegmentId: scopedSegment?.id,
+    flightId: data.flightId ?? booking.flightId,
+    componentType: "ancillary",
+    code: "ANCILLARY",
+    amount: totalPrice,
+    source: "ancillary_catalog",
+    sourceReference: String(result.insertId),
   });
   await setInvoiceTotal(
     tx,

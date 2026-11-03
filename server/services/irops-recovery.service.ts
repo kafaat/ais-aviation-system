@@ -32,6 +32,7 @@ import {
   restoreSeats,
   type SettlementTx,
 } from "./booking-settlement.service";
+import { getFlightRbdAvailability } from "./rbd-inventory.service";
 import { countActiveHolds } from "./inventory-capacity.service";
 import { assertBaggageNotInCustody } from "./baggage-custody.service";
 import { recordReaccommodation } from "./irops.service";
@@ -157,7 +158,11 @@ async function readInputs(
     if (!actions.some(a => a.details.bookingId === id))
       throw new Error("Plan passenger protection before solving recovery");
     for (const f of legs) flightIds.add(f);
-    records.push({ booking, segments, legs });
+    const affected = segments.find(
+      segment => segment.flightId === event.flightId
+    );
+    const fareClassId = affected ? affected.fareClassId : booking.fareClassId;
+    records.push({ booking, segments, legs, fareClassId });
   }
   const locked = [];
   for (const id of [...flightIds].sort((a, b) => a - b)) {
@@ -186,6 +191,16 @@ async function readInputs(
         (cabin === "business" ? f.businessAvailable : f.economyAvailable) -
           (await countActiveHolds(tx, f.id, cabin))
       );
+  if (records.some(r => r.fareClassId != null)) {
+    const classes = await getFlightRbdAvailability(
+      tx,
+      input.candidateFlightIds
+    );
+    for (const [flightId, buckets] of classes)
+      for (const bucket of buckets)
+        capacities[`${flightId}:rbd:${bucket.fareClassId}`] =
+          bucket.availableSeats;
+  }
   const old = requireValue(locked.find(f => f.id === event.flightId));
   for (const r of records) {
     const idx = r.legs.indexOf(old.id),
@@ -215,6 +230,9 @@ async function readInputs(
       )
       .map(f => ({
         key: `${f.id}:${r.booking.cabinClass}`,
+        ...(r.fareClassId != null
+          ? { classKey: `${f.id}:rbd:${r.fareClassId}` }
+          : {}),
         delayMinutes: Math.max(
           0,
           Math.ceil(
@@ -363,23 +381,22 @@ export async function executeRecovery(
       const r = requireValue(
         state.records.find(r => r.booking.id === choice.bookingId)
       );
-      if (r.booking.fareClassId != null)
-        throw new Error(
-          "RBD-aware disruption recovery requires an operator-approved class mapping"
-        );
       const newId = Number(choice.key.split(":")[0]),
         target = requireValue(state.locked.find(f => f.id === newId));
       await reserveSeats(
         tx,
         newId,
         r.booking.cabinClass,
-        r.booking.numberOfPassengers
+        r.booking.numberOfPassengers,
+        undefined,
+        r.fareClassId
       );
       await restoreSeats(
         tx,
         state.event.flightId,
         r.booking.cabinClass,
-        r.booking.numberOfPassengers
+        r.booking.numberOfPassengers,
+        r.fareClassId
       );
       const retainedDocument = await exchangeLocalCoupons(
         tx,

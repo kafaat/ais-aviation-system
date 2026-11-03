@@ -10,7 +10,82 @@ import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import * as wbService from "../services/weight-balance.service";
 
+import {
+  loadSheetReview,
+  assignmentInput,
+  sheetInput,
+  reviewInput,
+  assignLoadSheetAircraft,
+  evaluateLoadSheet,
+  verifyCurrentLoadSheet,
+} from "../services/load-sheet-lifecycle.service";
+
 export const weightBalanceRouter = router({
+  reviewFlight: adminProcedure
+    .input(z.object({ flightId: z.number().int().positive() }))
+    .output(
+      z.object({
+        flightId: z.number(),
+        flightNumber: z.string(),
+        registrationId: z.number().nullable(),
+        edition: z.number(),
+        status: z.enum(["draft", "signed_draft", "superseded"]).nullable(),
+        assignment: z
+          .object({
+            id: z.number(),
+            userId: z.number().nullable(),
+            reason: z.string().nullable(),
+          })
+          .nullable(),
+        evaluatedBy: z.number().nullable(),
+        violations: z.array(z.string()),
+        dispatchAcceptanceRequired: z.literal(true),
+      })
+    )
+    .query(({ input, ctx }) =>
+      loadSheetReview(input.flightId, {
+        userId: ctx.user.id,
+        tenantId: ctx.tenantId,
+      })
+    ),
+  assignAircraft: adminProcedure
+    .input(assignmentInput)
+    .output(z.object({ flightId: z.number(), registrationId: z.number() }))
+    .mutation(({ input, ctx }) =>
+      assignLoadSheetAircraft(input, {
+        userId: ctx.user.id,
+        tenantId: ctx.tenantId,
+      })
+    ),
+  evaluateDraft: adminProcedure
+    .input(sheetInput)
+    .output(
+      z.object({
+        edition: z.number(),
+        withinLimits: z.boolean(),
+        violations: z.array(z.string()),
+        dispatchAcceptanceRequired: z.literal(true),
+      })
+    )
+    .mutation(({ input, ctx }) =>
+      evaluateLoadSheet(input, { userId: ctx.user.id, tenantId: ctx.tenantId })
+    ),
+  verifyCurrentDraft: adminProcedure
+    .input(reviewInput)
+    .output(
+      z.object({
+        edition: z.number(),
+        registrationId: z.number(),
+        digestSha256: z.string(),
+        dispatchAcceptanceRequired: z.literal(true),
+      })
+    )
+    .query(({ input, ctx }) =>
+      verifyCurrentLoadSheet(input, {
+        userId: ctx.user.id,
+        tenantId: ctx.tenantId,
+      })
+    ),
   // ========================================================================
   // Calculate Weight & Balance
   // ========================================================================

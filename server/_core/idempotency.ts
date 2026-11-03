@@ -29,6 +29,7 @@
  * be cached locally and concurrent attempts refused, and `traceId()` only for
  * logging and span attributes.
  */
+import { TRPCError } from "@trpc/server";
 import { createServiceLogger } from "./logger";
 import { currentTrace } from "./trace";
 import { newTraceContext } from "../../shared/trace-context";
@@ -116,6 +117,15 @@ export function operationKey(
  */
 export function traceId(): string {
   return currentTrace()?.traceId ?? newTraceContext().traceId;
+}
+
+export function requireSafeCheckoutReplay(startedAt: number) {
+  const age = Date.now() - startedAt;
+  if (!Number.isFinite(age) || age < 0 || age >= 23 * 3600_000)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Checkout outcome requires provider reconciliation",
+    });
 }
 
 /** Stripe request options for a keyed call. Retries are owned by the caller's

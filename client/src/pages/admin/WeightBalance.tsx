@@ -1,3 +1,4 @@
+import { ControlledLoadSheetReview } from "@/components/ControlledLoadSheetReview";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
@@ -360,7 +361,12 @@ export default function WeightBalance() {
       {activeTab === "calculate" && <CalculateTab />}
       {activeTab === "current" && <CurrentWBTab />}
       {activeTab === "limits" && <CheckLimitsTab />}
-      {activeTab === "loadsheet" && <LoadSheetTab />}
+      {activeTab === "loadsheet" && (
+        <div className="space-y-6">
+          <ControlledLoadSheetReview />
+          <LoadSheetTab />
+        </div>
+      )}
       {activeTab === "history" && <HistoryTab />}
     </div>
   );

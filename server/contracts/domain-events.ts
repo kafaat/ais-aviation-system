@@ -18,6 +18,7 @@ export const aviationEvidenceKinds = z.enum([
   "travel_rules",
   "travel_clearance",
   "flight_cost",
+  "coupon_uplift",
 ]);
 const evidenceReceipt = z.looseObject({
   evidenceId: id,

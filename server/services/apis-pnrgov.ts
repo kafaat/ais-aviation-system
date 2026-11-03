@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { createHash } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { zoneOffsetMs } from "./civil-day";
 
 export const PNRGOV_VERSION = "21:1";
@@ -101,13 +101,7 @@ export function generatePNRGOV(data: PnrgovDraftInput): string {
     data.flight.arrivalTime,
     data.destination.timezone
   );
-  const control = createHash("sha256")
-    .update(
-      `${data.flight.id}:${generatedAt.toISOString()}:${data.passengers.length}`
-    )
-    .digest("hex")
-    .slice(0, 14)
-    .toUpperCase();
+  const control = randomBytes(7).toString("hex").toUpperCase();
   const pnrGroups = new Map<string, typeof data.passengers>();
   for (const passenger of data.passengers) {
     const key = passenger.bookingReference.trim().toUpperCase();
@@ -215,55 +209,211 @@ export function generatePNRGOV(data: PnrgovDraftInput): string {
 }
 
 export type AcknowledgmentDecision = {
-  kind: "ACKRES" | "CONTRL";
+  kind: "ACKRES" | "CONTRL" | "CUSRES";
   status: "received" | "acknowledged" | "rejected";
   responseCode: string;
   errorCodes: string[];
   commonAccessReference: string | null;
 };
 
-/** Parses the small ACK/NAK surface needed by the durable state machine. */
+type Segment = { tag: string; fields: string[][] };
+
+// Interpret releases while tokenizing so an apostrophe in a name or FTX
+// cannot introduce a new segment. Only the local default UNA profile is supported.
+function ediSegments(content: string, maxBytes: number): Segment[] {
+  if (content.length > maxBytes || /[^\x20-\x7e\r\n]/.test(content))
+    throw new Error("Invalid authority message envelope");
+  const body = content.replace(/^UNA:\+\.\?[ *]'/, "");
+  const segments: Segment[] = [];
+  let fields: string[][] = [[]];
+  let token = "";
+  let escaped = false;
+  for (const c of body) {
+    if (c === "\r" || c === "\n") {
+      if (escaped || token || fields.length !== 1 || fields[0].length)
+        throw new Error("Unexpected line break inside EDIFACT segment");
+      continue;
+    }
+    if (escaped) {
+      token += c;
+      escaped = false;
+    } else if (c === "?") escaped = true;
+    else if (c === "+" || c === ":" || c === "'") {
+      fields[fields.length - 1].push(token);
+      token = "";
+      if (c === "+") fields.push([]);
+      if (c === "'") {
+        const [tag, ...rest] = fields;
+        if (tag.length !== 1 || !/^[A-Z]{3}$/.test(tag[0]))
+          throw new Error("Invalid EDIFACT segment tag");
+        segments.push({ tag: tag[0], fields: rest });
+        fields = [[]];
+      }
+    } else token += c;
+  }
+  if (escaped || token || fields.length !== 1 || fields[0].length)
+    throw new Error("Unterminated EDIFACT segment");
+  return segments;
+}
+
+function single(segments: Segment[], tag: string) {
+  const matches = segments.filter(s => s.tag === tag);
+  if (matches.length !== 1) throw new Error(`Exactly one ${tag} required`);
+  return matches[0];
+}
+
+function field(segment: Segment, index: number) {
+  return segment.fields[index]?.[0] ?? "";
+}
+
+function transactionRef(segments: Segment[]) {
+  const refs = segments.filter(s => s.tag === "RFF" && field(s, 0) === "TN");
+  if (refs.length !== 1 || !refs[0].fields[0][1])
+    throw new Error("One transaction reference required");
+  return refs[0].fields[0].slice(1);
+}
+
+/** With a durable outbound message supplied, require the authority to quote this
+ * specific transmission and reverse its sender and recipient in the reply. */
 export function parseAuthorityAcknowledgment(
-  content: string
+  content: string,
+  outbound?: { messageType: string; messageContent: string }
 ): AcknowledgmentDecision {
-  if (content.length > 100_000 || /[\0\r]/.test(content))
-    throw new Error("Invalid authority response envelope");
-  const segments = content
-    .split("'")
-    .map(segment => segment.trim())
-    .filter(Boolean);
-  const unh = segments.find(segment => segment.startsWith("UNH+"));
-  const messageType = unh?.match(/\+(ACKRES|CONTRL):/)?.[1];
-  if (!messageType) throw new Error("ACKRES or CONTRL response required");
-  const errors = segments
-    .filter(segment => segment.startsWith("ERC+"))
-    .map(segment => segment.slice(4).split(/[+:]/)[0])
-    .filter(Boolean);
-  if (messageType === "CONTRL") {
-    const uci = segments.find(segment => segment.startsWith("UCI+"));
-    if (!uci) throw new Error("CONTRL response missing UCI");
-    const code = uci.split("+").at(-1) ?? "";
+  const segments = ediSegments(content, 100_000);
+  const unh = single(segments, "UNH");
+  const unt = single(segments, "UNT");
+  const first = segments.indexOf(unh),
+    last = segments.indexOf(unt);
+  if (
+    !field(unh, 0) ||
+    field(unt, 1) !== field(unh, 0) ||
+    field(unt, 0) !== String(last - first + 1)
+  )
+    throw new Error("Invalid authority message trailer");
+  const body = segments.slice(first + 1, last);
+  const kind = field(unh, 1);
+  if (!["ACKRES", "CONTRL", "CUSRES"].includes(kind))
+    throw new Error("Unsupported authority response type");
+  const uci = kind === "CONTRL" ? single(body, "UCI") : undefined;
+  const tn = kind === "CUSRES" ? transactionRef(body) : undefined;
+  const reference = uci ? field(uci, 0) : tn ? tn[0] : field(unh, 2);
+  if (!reference) throw new Error("Missing original transmission reference");
+  if (outbound) {
+    const sent = ediSegments(outbound.messageContent, 2_000_000);
+    const unb = single(sent, "UNB"),
+      original = single(sent, "UNH"),
+      reply = single(segments, "UNB");
+    const replyTrailer = single(segments, "UNZ");
+    if (
+      segments[0] !== reply ||
+      segments.at(-1) !== replyTrailer ||
+      !field(reply, 4) ||
+      field(replyTrailer, 1) !== field(reply, 4) ||
+      field(replyTrailer, 0) !== "1"
+    )
+      throw new Error("Invalid authority interchange trailer");
+    if (
+      !["PAXLST", "PNRGOV"].includes(outbound.messageType) ||
+      field(original, 1) !== outbound.messageType ||
+      !field(unb, 1) ||
+      !field(unb, 2) ||
+      JSON.stringify(unb.fields[1]) !== JSON.stringify(reply.fields[2]) ||
+      JSON.stringify(unb.fields[2]) !== JSON.stringify(reply.fields[1])
+    )
+      throw new Error("Authority response does not match outbound envelope");
+    const expected = uci
+      ? field(unb, 4)
+      : tn
+        ? transactionRef(sent)[0]
+        : field(original, 2);
+    if (
+      !expected ||
+      reference !== expected ||
+      (uci &&
+        (JSON.stringify(uci.fields[1]) !== JSON.stringify(unb.fields[1]) ||
+          JSON.stringify(uci.fields[2]) !== JSON.stringify(unb.fields[2]))) ||
+      (tn &&
+        (outbound.messageType !== "PAXLST" ||
+          JSON.stringify(tn) !== JSON.stringify(transactionRef(sent)))) ||
+      (kind === "ACKRES" && outbound.messageType !== "PNRGOV")
+    )
+      throw new Error(
+        "Authority response reference does not match original transmission"
+      );
+  }
+  if (uci) {
+    const details = body.filter(s => s.tag === "UCM");
+    if (
+      details.length > 1 ||
+      body.some(s => s.tag === "UCF" || s.tag === "UCS" || s.tag === "UCD")
+    )
+      throw new Error("Unsupported CONTRL detail profile");
+    const detail = details[0];
+    if (detail && outbound) {
+      const original = single(
+        ediSegments(outbound.messageContent, 2_000_000),
+        "UNH"
+      );
+      if (
+        field(detail, 0) !== field(original, 0) ||
+        JSON.stringify(detail.fields[1]) !== JSON.stringify(original.fields[1])
+      )
+        throw new Error(
+          "CONTRL message reference does not match original transmission"
+        );
+    }
+    const code = field(uci, 3);
+    if (!["4", "7", "8"].includes(code))
+      throw new Error("Unsupported CONTRL action");
+    if (detail && !["4", "7"].includes(field(detail, 2)))
+      throw new Error("Unsupported CONTRL message action");
+    const rejected = code === "4" || (detail && field(detail, 2) === "4");
+    const errors = [field(uci, 4), detail && field(detail, 3)].filter(
+      (v): v is string => Boolean(v)
+    );
+    if (errors.some(e => !/^[A-Z0-9]{1,3}$/.test(e)))
+      throw new Error("Invalid CONTRL error code");
     return {
       kind: "CONTRL",
-      status: code === "7" ? "received" : "rejected",
-      responseCode: code,
+      status: rejected ? "rejected" : "received",
+      responseCode: rejected ? "4" : code,
       errorCodes: errors,
-      commonAccessReference: null,
+      commonAccessReference: reference,
     };
   }
-  const msg = segments.find(segment => segment.startsWith("MSG+"));
-  const fields = msg?.split("+") ?? [];
-  if (fields[1]?.replace(/^:/, "") !== "23")
+  if (kind === "CUSRES") {
+    // IATA MIG section 5.7: a header-level ERC+ACK means receipt only.
+    // Passenger-level boarding instructions require a bilateral profile.
+    const code = field(single(body, "ERC"), 0);
+    if (
+      field(single(body, "BGM"), 0) !== "962" ||
+      field(single(body, "ERP"), 0) !== "1" ||
+      !["ACK", "X"].includes(code)
+    )
+      throw new Error("Unsupported CUSRES header response");
+    return {
+      kind,
+      status: code === "ACK" ? "received" : "rejected",
+      responseCode: code,
+      errorCodes: code === "ACK" ? [] : [code],
+      commonAccessReference: reference,
+    };
+  }
+  const msg = single(body, "MSG");
+  if (!["23", ":23"].includes(msg.fields[0]?.join(":")))
     throw new Error("ACKRES MSG function 23 required");
-  const code = fields[2] ?? "";
+  const code = field(msg, 1);
   if (!["2", "3", "7", "8"].includes(code))
     throw new Error("Unsupported ACKRES response code");
+  const errors = body.filter(s => s.tag === "ERC").map(s => field(s, 0));
+  if (errors.some(e => !/^[A-Z0-9_-]{1,16}$/.test(e)))
+    throw new Error("Invalid ACKRES error code");
   return {
     kind: "ACKRES",
     status:
       code === "3" ? "acknowledged" : code === "2" ? "received" : "rejected",
     responseCode: code,
     errorCodes: errors,
-    commonAccessReference: unh?.split("+")[3] ?? null,
+    commonAccessReference: reference,
   };
 }

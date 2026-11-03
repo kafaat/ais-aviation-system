@@ -1,3 +1,4 @@
+import { ndcActions, ndcCapability } from "../services/ndc-capabilities";
 import { seatExchangeSchema } from "../services/seat-exchange.service";
 import { cancelOrderServiceQuote } from "../services/order-service-checkout.service";
 import {
@@ -96,6 +97,25 @@ const serviceItemSchema = z.object({
  * and ancillary service management through a standards-compliant interface.
  */
 export const ndcRouter = router({
+  // A catalog lookup never supplies authorization to a write endpoint.
+  lookupCapability: protectedProcedure
+    .input(
+      z.object({
+        carrier: z.string().min(1).max(16),
+        seller: z.string().min(1).max(64),
+        channel: z.string().min(1).max(32),
+        version: z.string().min(1).max(12),
+        action: z.enum(ndcActions),
+      })
+    )
+    .output(
+      z.object({
+        executable: z.boolean(),
+        published: z.string(),
+        source: z.string().nullable(),
+      })
+    )
+    .query(({ input }) => ndcCapability(input, input.action)),
   cancelPaidService: protectedProcedure
     .input(z.object({ modificationId: z.number().int().positive() }))
     .output(z.object({ cancelled: z.boolean() }))

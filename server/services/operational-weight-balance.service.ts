@@ -66,6 +66,7 @@ export const operationalWeightBalanceInputSchema = z
       ["profile", input.profile],
     ] as const) {
       if (
+        instant < Date.parse(controlled.approvedAt) ||
         instant < Date.parse(controlled.effectiveFrom) ||
         (controlled.effectiveTo !== null &&
           instant >= Date.parse(controlled.effectiveTo))
@@ -276,7 +277,16 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+export function loadSheetInputsDigest(inputs: unknown) {
+  return createHash("sha256").update(canonicalJson(inputs)).digest("hex");
+}
+
 export function createSignedLoadSheetDraft(input: {
+  source?: {
+    registrationId: number;
+    balanceProfileId: number;
+    inputsDigest: string;
+  };
   flightId: number;
   edition: number;
   issuedAt: string;
@@ -297,6 +307,7 @@ export function createSignedLoadSheetDraft(input: {
     issuedAt: new Date(input.issuedAt).toISOString(),
     issuedBy: input.issuedBy,
     calculation: input.calculation,
+    ...(input.source ? { source: input.source } : {}),
     dispatchAcceptanceRequired: true,
   } as const;
   const canonical = canonicalJson(payload);
@@ -318,7 +329,7 @@ export function verifySignedLoadSheetDraft(
     .digest("hex");
   return (
     digest === draft.digestSha256 &&
-    signature.length === draft.signature.length &&
+    /^[0-9a-f]{64}$/.test(draft.signature) &&
     timingSafeEqual(Buffer.from(signature), Buffer.from(draft.signature))
   );
 }

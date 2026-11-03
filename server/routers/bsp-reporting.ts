@@ -4,6 +4,18 @@ import {
 } from "../../shared/payout-comparison";
 import { comparePayoutEvidence } from "../services/payout-comparison.service";
 import { requireValue } from "../services/required-value";
+import {
+  bspDay,
+  bspReference,
+  localRetDraft,
+  inboundBspEvidence,
+  bspEvidenceComparison,
+} from "../../shared/bsp-local-evidence";
+import {
+  stageDailyRet,
+  importBspEvidence,
+  reconcileBspEvidence,
+} from "../services/bsp-local-evidence";
 import { isAdmin } from "../services/rbac.service";
 import { getFinancialSummary } from "../services/financial-reporting.service";
 import { responseContracts } from "../contracts/bsp-reporting";
@@ -12,7 +24,7 @@ import { responseContracts } from "../contracts/bsp-reporting";
  *
  * Admin endpoints for IATA BSP (Billing and Settlement Plan) reporting,
  * AHC (Airlines Handling Charges) reports, settlement cycle management,
- * reconciliation, HOT file exports, and IATA compliance validation.
+ * reconciliation, RET drafts and inbound HOT evidence.
  */
 
 import { z } from "zod";
@@ -28,6 +40,43 @@ import {
 } from "../services/bsp-reporting.service";
 
 export const bspReportingRouter = router({
+  stageDailyRet: airlineFinanceProcedure
+    .input(z.strictObject({ day: bspDay }))
+    .output(
+      z.object({ reference: bspDay, digest: z.string(), draft: localRetDraft })
+    )
+    .mutation(({ input, ctx }) =>
+      stageDailyRet(input.day, {
+        tenantId: requireValue(ctx.tenantId),
+        userId: ctx.user.id,
+      })
+    ),
+  importEvidence: airlineFinanceProcedure
+    .input(inboundBspEvidence)
+    .output(z.object({ reference: bspReference, digest: z.string() }))
+    .mutation(({ input, ctx }) =>
+      importBspEvidence(input, {
+        tenantId: requireValue(ctx.tenantId),
+        userId: ctx.user.id,
+      })
+    ),
+  reconcileEvidence: airlineFinanceProcedure
+    .input(
+      z.strictObject({
+        day: bspDay,
+        settlementReference: bspReference,
+        statementLineId: bspReference,
+      })
+    )
+    .output(bspEvidenceComparison)
+    .query(({ input, ctx }) =>
+      reconcileBspEvidence(
+        input.day,
+        input.settlementReference,
+        input.statementLineId,
+        requireValue(ctx.tenantId)
+      )
+    ),
   comparePayout: airlineFinanceProcedure
     .input(payoutEvidence)
     .output(payoutComparison)
@@ -325,7 +374,7 @@ export const bspReportingRouter = router({
     }),
 
   /**
-   * Export IATA HOT (Hand Off Tape) file for the current cycle
+   * Compatibility endpoint for older clients that attempted outbound HOT
    */
   exportHOT: adminProcedure
     .output(responseContracts["exportHOT"])

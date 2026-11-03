@@ -48,12 +48,13 @@ async function getDbOrThrow() {
 export async function assertBookingOwnership(
   bookingId: number,
   userId: number,
-  userRole?: string
+  userRole?: string,
+  scope?: { tenantId: number | null }
 ): Promise<number> {
   const db = await getDbOrThrow();
 
   const [booking] = await db
-    .select({ userId: bookings.userId })
+    .select({ userId: bookings.userId, tenantId: bookings.tenantId })
     .from(bookings)
     .where(eq(bookings.id, bookingId))
     .limit(1);
@@ -65,6 +66,8 @@ export async function assertBookingOwnership(
   if (booking.userId !== userId && !(userRole && isAdmin(userRole))) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
   }
+
+  if (scope) assertTenant(booking.tenantId, scope.tenantId, userRole);
 
   return booking.userId;
 }

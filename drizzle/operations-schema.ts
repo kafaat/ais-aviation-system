@@ -563,3 +563,25 @@ export const bagDropTags = mysqlTable(
     bag: uniqueIndex("bag_drop_session_bag").on(t.sessionId, t.bagNumber),
   })
 );
+
+/** Immutable internal finance evidence. Never stores a raw DISH or bank file. */
+export const bspEvidenceFiles = mysqlTable(
+  "bsp_evidence_files",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenant_id").notNull(),
+    kind: mysqlEnum("kind", ["ret_draft", "hot_input", "bank_input"]).notNull(),
+    reference: varchar("reference", { length: 96 }).notNull(),
+    digest: varchar("digest", { length: 64 }).notNull(),
+    content: json("content").notNull(),
+    recordedBy: int("recorded_by").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  t => ({
+    identity: uniqueIndex("bsp_evidence_identity").on(
+      t.tenantId,
+      t.kind,
+      t.reference
+    ),
+  })
+);

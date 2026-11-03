@@ -15,7 +15,9 @@ that finance can reconcile them without inferring a tax treatment.
 - `buildZatcaPreviewQr()` encodes the first five TLV fields for review. It is
   deliberately named **preview** and is not a Phase 2 QR code.
 - draft creation is disabled unless `AIS_ZATCA_DRAFT_MODE=true`. Production also
-  requires an operator acceptance evidence identifier. An offer line coded
+  requires an operator acceptance evidence identifier. The preview accepts a
+  standard-rated internal VAT classification (`VAT-S`) only. Missing VAT lines,
+  other levies and unhandled VAT categories require fiscal review. An offer line coded
   `OFFER_TAX_ESTIMATE` or any `unclassified` amount blocks draft creation.
 
 ## External acceptance still required

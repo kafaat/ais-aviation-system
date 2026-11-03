@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState, useMemo } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation, useSearch, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -22,8 +22,7 @@ import {
   Loader2,
   ArrowRight,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
+import { formatFlightTime } from "@/lib/flight-time";
 import { toast } from "sonner";
 
 interface SegmentSearchParams {
@@ -58,18 +57,21 @@ type FlightResult = {
     code: string;
     name: string;
     city: string;
+    timezone?: string | null;
   };
   destination: {
     code: string;
     name: string;
     city: string;
+    timezone?: string | null;
   };
 };
 
 export default function MultiCityResults() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
+  const search = useSearch();
   const [segments, setSegments] = useState<SegmentSearchParams[]>([]);
   const [selectedFlights, setSelectedFlights] = useState<SelectedFlight[]>([]);
   const [cabinClass, setCabinClass] = useState<"economy" | "business">(
@@ -77,11 +79,9 @@ export default function MultiCityResults() {
   );
   const [passengerCount, setPassengerCount] = useState(1);
 
-  const currentLocale = i18n.language === "ar" ? ar : enUS;
-
   // Parse URL parameters
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.split("?")[1]);
+    const searchParams = new URLSearchParams(search);
     const segmentsParam = searchParams.get("segments");
 
     if (segmentsParam) {
@@ -96,7 +96,11 @@ export default function MultiCityResults() {
             }) => ({
               originId: parseInt(s.originId),
               destinationId: parseInt(s.destinationId),
-              departureDate: new Date(s.departureDate),
+              departureDate: new Date(
+                /^\d{4}-\d{2}-\d{2}$/.test(s.departureDate)
+                  ? s.departureDate + "T00:00:00Z"
+                  : s.departureDate
+              ),
             })
           )
         );
@@ -117,7 +121,7 @@ export default function MultiCityResults() {
         setPassengerCount(parsed);
       }
     }
-  }, [location]);
+  }, [search]);
 
   // Search mutation for multi-city flights
   const searchMutation = trpc.multiCity.search.useMutation({
@@ -161,7 +165,10 @@ export default function MultiCityResults() {
       selectedClass === "economy" ? flight.economyPrice : flight.businessPrice;
 
     setSelectedFlights(prev => {
-      const existing = prev.filter(sf => sf.segmentIndex !== segmentIndex);
+      const existing = prev.filter(
+        sf =>
+          sf.segmentIndex !== segmentIndex && sf.cabinClass === selectedClass
+      );
       return [
         ...existing,
         {
@@ -198,6 +205,9 @@ export default function MultiCityResults() {
 
     // Navigate to booking page with selected flights
     const bookingData = {
+      version: 1,
+      sessionId: crypto.randomUUID(),
+      passengerCount,
       segments: selectedFlights.map(sf => ({
         flightId: sf.flightId,
         departureDate: segments[sf.segmentIndex].departureDate.toISOString(),
@@ -208,10 +218,6 @@ export default function MultiCityResults() {
     setLocation(
       `/booking/multi-city?data=${encodeURIComponent(JSON.stringify(bookingData))}`
     );
-  };
-
-  const formatTime = (date: Date) => {
-    return format(new Date(date), "HH:mm", { locale: currentLocale });
   };
 
   const formatPrice = (price: number) => {
@@ -322,9 +328,15 @@ export default function MultiCityResults() {
                     </h2>
                     {segments[segmentIndex] && (
                       <p className="text-sm text-muted-foreground">
-                        {format(segments[segmentIndex].departureDate, "PPP", {
-                          locale: currentLocale,
-                        })}
+                        {new Intl.DateTimeFormat(i18n.language, {
+                          dateStyle: "long",
+                          timeZone: "UTC",
+                        }).format(
+                          new Date(
+                            segments[segmentIndex].departureDate.getTime() +
+                              12 * 3600_000
+                          )
+                        )}
                       </p>
                     )}
                   </div>
@@ -395,7 +407,11 @@ export default function MultiCityResults() {
                               <div className="flex items-center justify-between">
                                 <div className="text-center">
                                   <p className="text-xl font-bold">
-                                    {formatTime(flight.departureTime)}
+                                    {formatFlightTime(
+                                      flight.departureTime,
+                                      flight.origin.timezone,
+                                      i18n.language
+                                    )}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
                                     {flight.origin.code}
@@ -416,7 +432,11 @@ export default function MultiCityResults() {
                                 </div>
                                 <div className="text-center">
                                   <p className="text-xl font-bold">
-                                    {formatTime(flight.arrivalTime)}
+                                    {formatFlightTime(
+                                      flight.arrivalTime,
+                                      flight.destination.timezone,
+                                      i18n.language
+                                    )}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
                                     {flight.destination.code}

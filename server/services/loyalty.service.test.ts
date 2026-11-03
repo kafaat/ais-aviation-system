@@ -295,8 +295,23 @@ describe("Loyalty Service", () => {
     const fixture = funded(accountWithMiles, testBookingId, 10000);
 
     const { redeemMiles } = await import("./loyalty.service");
-    const result = await redeemMiles(testUserId, milesToRedeem);
+    const result = await redeemMiles(
+      testUserId,
+      milesToRedeem,
+      undefined,
+      undefined,
+      "unit-redeem-0"
+    );
 
+    expect(
+      await redeemMiles(
+        testUserId,
+        milesToRedeem,
+        undefined,
+        undefined,
+        "unit-redeem-0"
+      )
+    ).toEqual(result);
     // 1 mile = 1 cent = 0.01 SAR
     expect(result.discountAmount).toBe(1000); // 10 SAR in cents
     expect(result.newBalance).toBe(10500);
@@ -333,21 +348,21 @@ describe("Loyalty Service", () => {
       secret: encryptSecret("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"),
     });
     try {
-      await expect(redeemMiles(testUserId, 100)).rejects.toThrow(
-        "authenticator code"
-      );
       await expect(
-        redeemMiles(testUserId, 100, undefined, "000000")
+        redeemMiles(testUserId, 100, undefined, undefined, "unit-redeem-1")
       ).rejects.toThrow("authenticator code");
       await expect(
-        redeemMiles(testUserId, 501, undefined, "287082")
+        redeemMiles(testUserId, 100, undefined, "000000", "unit-redeem-2")
+      ).rejects.toThrow("authenticator code");
+      await expect(
+        redeemMiles(testUserId, 501, undefined, "287082", "unit-redeem-3")
       ).rejects.toThrow("Insufficient miles");
       expect(fixture.rows("mfa_settings")[0].lastUsedStep).toBeNull();
       await expect(
-        redeemMiles(testUserId, 100, undefined, "287082")
+        redeemMiles(testUserId, 100, undefined, "287082", "unit-redeem-4")
       ).resolves.toMatchObject({ newBalance: 400 });
       await expect(
-        redeemMiles(testUserId, 100, undefined, "287082")
+        redeemMiles(testUserId, 100, undefined, "287082", "unit-redeem-5")
       ).rejects.toThrow("authenticator code");
       expect(fixture.rows("user_credits")).toHaveLength(1);
     } finally {
@@ -363,9 +378,9 @@ describe("Loyalty Service", () => {
       1000
     );
     fixture.rows("bookings")[0].userId++;
-    await expect(redeemMiles(testUserId, 100, testBookingId)).rejects.toThrow(
-      "Booking not found"
-    );
+    await expect(
+      redeemMiles(testUserId, 100, testBookingId, undefined, "unit-redeem-6")
+    ).rejects.toThrow("Booking not found");
     expect(fixture.rows("user_credits")).toHaveLength(0);
     expect(fixture.rows("loyalty_accounts")[0].currentMilesBalance).toBe(500);
   });
@@ -379,9 +394,9 @@ describe("Loyalty Service", () => {
     funded(accountWithMiles, testBookingId, 10000);
 
     const { redeemMiles } = await import("./loyalty.service");
-    await expect(redeemMiles(testUserId, 999999999)).rejects.toThrow(
-      "Insufficient miles balance"
-    );
+    await expect(
+      redeemMiles(testUserId, 999999999, undefined, undefined, "unit-redeem-7")
+    ).rejects.toThrow("Insufficient miles balance");
   });
 
   it("should get loyalty account details with next tier info", async () => {

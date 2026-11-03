@@ -36,6 +36,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
+    i18n: { language: "en" },
     t: (key: string, fallback?: string) => fallback ?? key,
   }),
 }));

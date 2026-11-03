@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { eq, inArray } from "drizzle-orm";
-import { flights, inventoryLocks } from "../../drizzle/schema";
+import {
+  flights,
+  inventoryLocks,
+  fareClasses,
+  flightFareClassInventory,
+} from "../../drizzle/schema";
 import { getDb } from "../../server/db";
 import {
   countActiveHolds,
@@ -108,6 +113,56 @@ export async function verifyInventoryHoldConcurrency(
       ).length,
       1
     );
+    await cleanup();
+
+    // A generous cabin cannot hide a sold-out RBD. Competing commands use separate connections.
+    const [flight] = await db
+      .select()
+      .from(flights)
+      .where(eq(flights.id, first));
+    const [fare] = await db
+      .insert(fareClasses)
+      .values({
+        airlineId: flight.airlineId,
+        code: "Q",
+        name: "Synthetic final class seat",
+        cabinClass: "economy",
+      })
+      .$returningId();
+    await db.insert(flightFareClassInventory).values({
+      flightId: first,
+      fareClassId: fare.id,
+      capacity: 1,
+      availableSeats: 1,
+    });
+    try {
+      const classHolds = await Promise.allSettled(
+        keys
+          .slice(4)
+          .map(key =>
+            createInventoryLock(
+              first,
+              1,
+              "economy",
+              key,
+              userId,
+              undefined,
+              undefined,
+              fare.id
+            )
+          )
+      );
+      assert.equal(classHolds.filter(r => r.status === "fulfilled").length, 1);
+      const loser = classHolds.find(r => r.status === "rejected");
+      assert.equal(loser?.reason.code, "BAD_REQUEST");
+      assert.match(loser?.reason.message, /booking class is unavailable/);
+    } finally {
+      await cleanup();
+      await db
+        .delete(flightFareClassInventory)
+        .where(eq(flightFareClassInventory.fareClassId, fare.id));
+      await db.delete(fareClasses).where(eq(fareClasses.id, fare.id));
+    }
   } finally {
     await cleanup();
   }

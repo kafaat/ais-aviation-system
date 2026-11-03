@@ -1,6 +1,14 @@
+import {
+  couponMonthInput,
+  couponMonthResult,
+  reviewCouponMonth,
+} from "../services/coupon-month-review";
+import { TRPCError } from "@trpc/server";
+import { getDb } from "../db";
+import { draftStoredBookingInvoice } from "../services/fare-components.service";
 import { responseContracts } from "../contracts/revenue-accounting";
 import { z } from "zod";
-import { adminProcedure, router } from "../_core/trpc";
+import { adminProcedure, airlineFinanceProcedure, router } from "../_core/trpc";
 import * as revenueService from "../services/revenue-accounting.service";
 
 /**
@@ -9,6 +17,42 @@ import * as revenueService from "../services/revenue-accounting.service";
  * All monetary values are in SAR cents (100 = 1 SAR).
  */
 export const revenueAccountingRouter = router({
+  couponMonthReview: airlineFinanceProcedure
+    .input(couponMonthInput)
+    .output(couponMonthResult)
+    .query(({ input, ctx }) => {
+      if (ctx.tenantId == null) throw new TRPCError({ code: "FORBIDDEN" });
+      return reviewCouponMonth(input, ctx.tenantId);
+    }),
+  prepareZatcaDraft: airlineFinanceProcedure
+    .input(
+      z.object({
+        bookingId: z.number().int().positive(),
+        invoiceNumber: z.string().trim().min(1).max(64),
+        issueTimestamp: z.date(),
+        supplyTimestamp: z.date(),
+        sellerName: z.string().trim().min(1).max(255),
+        sellerVatNumber: z.string().regex(/^3\d{13}3$/),
+      })
+    )
+    .output(
+      z.object({
+        id: z.string(),
+        invoiceNumber: z.string(),
+        totalAmount: z.number(),
+        taxAmount: z.number(),
+        previewQrPayload: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const tenantId = ctx.tenantId;
+      if (tenantId == null) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new Error("Booking invoice storage unavailable");
+      return db.transaction(tx =>
+        draftStoredBookingInvoice(tx, tenantId, input)
+      );
+    }),
   /**
    * Get revenue dashboard overview with KPIs
    */

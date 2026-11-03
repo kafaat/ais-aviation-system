@@ -47,6 +47,39 @@ test.describe("Funded journeys and truthful operational reads", () => {
     );
   });
 
+  test("issuer capability hides the exchange button and rejects a direct command for the same booking", async ({
+    page,
+  }) => {
+    const { booking, flightId } = await ownedBooking(page, true);
+    const client = rpc(page);
+    const card = page
+      .locator('[data-slot="card"]')
+      .filter({ hasText: booking.bookingReference });
+    await page.goto("/my-bookings");
+    await expect(
+      card.getByRole("button", { name: "Modify", exact: true })
+    ).toBeVisible();
+    const ref = randomUUID();
+    await sqlRows<RowDataPacket>(
+      "INSERT INTO ndc_orders(orderId,offerId,bookingId,airlineId,passengers,contactInfo,totalAmount,orderPayload,channel,distributorId) SELECT ?,?,b.id,f.airlineId,'[]','{}',b.totalAmount,?, 'ndc_aggregator','synthetic-seller' FROM bookings b JOIN flights f ON f.id=b.flightId WHERE b.id=?",
+      [ref, ref, JSON.stringify({ ndcVersion: "24.1" }), booking.bookingId]
+    );
+    await page.goto(`/my-bookings?exchange=${booking.bookingId}`);
+    await expect(card).toBeVisible();
+    await expect(
+      card.getByRole("button", { name: "Modify", exact: true })
+    ).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(
+      client.ndc.quotePaidService.mutate({
+        bookingId: booking.bookingId,
+        replaceFlightId: flightId,
+        offerIds: [randomUUID()],
+        idempotencyKey: randomUUID(),
+      })
+    ).rejects.toThrow(/Issuing channel/);
+  });
+
   test("second-sector exchange recovers the completed change after its response is lost", async ({
     page,
   }) => {
@@ -76,18 +109,46 @@ test.describe("Funded journeys and truthful operational reads", () => {
     );
     if (!firstFlight || !secondFlight || !newFlight)
       throw new Error("Incomplete fixture itinerary");
-    const booking = await client.multiCity.create.mutate({
+    const itinerary = {
+      version: 1,
+      passengerCount: 1,
+      sessionId: randomUUID(),
+      cabinClass: "economy",
       segments: [firstFlight, secondFlight].map(f => ({
         flightId: f.id,
-        departureDate: f.departureTime,
+        departureDate: f.departureTime.toISOString(),
       })),
-      cabinClass: "economy",
-      passengers: [{ type: "adult", firstName: "Test", lastName: "Exchange" }],
-      sessionId: randomUUID(),
+    };
+    const query = new URLSearchParams({ data: JSON.stringify(itinerary) });
+    await page.goto("/booking/multi-city?" + query);
+    await page.getByLabel("First Name", { exact: true }).fill("Test");
+    await page.getByLabel("Last Name", { exact: true }).fill("Exchange");
+    let bookingAttempts = 0;
+    await page.route("**/api/trpc/*multiCity.create*", async route => {
+      bookingAttempts++;
+      if (bookingAttempts === 1) {
+        const reply = await route.fetch();
+        expect(reply.ok()).toBe(true);
+        await route.abort("failed");
+      } else await route.continue();
     });
-    const [passenger] = await client.bookings.getPassengers.query({
+    const submit = page.getByRole("button", { name: "Book Now", exact: true });
+    await submit.click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await submit.click();
+    await expect(page).toHaveURL(/\/my-bookings/);
+    expect(bookingAttempts).toBe(2);
+    const bookingsAfterRetry = await sqlRows<RowDataPacket>(
+      "SELECT id AS bookingId, bookingReference, totalAmount FROM bookings WHERE userId=? AND flightId=?",
+      [user.id, first]
+    );
+    expect(bookingsAfterRetry).toHaveLength(1);
+    const [booking] = bookingsAfterRetry;
+    const saved = await client.bookings.getPassengers.query({
       bookingId: booking.bookingId,
     });
+    expect(saved).toHaveLength(1);
+    const [passenger] = saved;
     const service = (
       await client.ancillary.getAvailable.query({ category: "seat" })
     ).find(s => s.code === "SEAT_EXTRA_LEG");

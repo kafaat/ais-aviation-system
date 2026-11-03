@@ -45,6 +45,7 @@ export const baggageRouter = router({
       z.object({
         flightId: z.number().int(),
         expectedBags: z.number().int(),
+        unexpectedBags: z.number().int(),
         acceptedOrTransferred: z.number().int(),
         loadedBags: z.number().int(),
         readyToClose: z.boolean(),
