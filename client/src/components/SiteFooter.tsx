@@ -71,6 +71,14 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link
+                  href="/codeshare-flights"
+                  className="hover:text-white transition-colors"
+                >
+                  {t("codeshare.codeshareFlights")}
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/my-bookings"
                   className="hover:text-white transition-colors"
                 >

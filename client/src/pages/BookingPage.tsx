@@ -109,6 +109,8 @@ function BookingForm({
   const cabinClass = (searchParams.get("class") || "economy") as
     | "economy"
     | "business";
+  const fareClassCode =
+    searchParams.get("fareClassCode")?.trim().toUpperCase() || undefined;
   const rebookParam = searchParams.get("rebook");
   const rebookFromId = rebookParam ? parseInt(rebookParam) : null;
 
@@ -186,6 +188,7 @@ function BookingForm({
   const offerFingerprint = JSON.stringify({
     flightId,
     cabinClass,
+    fareClassCode,
     types: passengers.map(p => p.type),
   });
   const activeOffer =
@@ -203,6 +206,7 @@ function BookingForm({
     const fingerprint = JSON.stringify({
       flightId,
       cabinClass,
+      fareClassCode,
       passengers,
       ancillaries: ancillaryCommandLines(selectedAncillaries),
       selectedSeats,
@@ -214,12 +218,13 @@ function BookingForm({
       command.current = {
         fingerprint,
         key: crypto.randomUUID(),
-        priceLockId: priceLockStatus?.lock?.id,
+        priceLockId: fareClassCode ? undefined : priceLockStatus?.lock?.id,
       };
     }
     return {
       sessionId: command.current.key,
       idempotencyKey: command.current.key,
+      fareClassCode,
       priceLockId: command.current.priceLockId,
       offerId: command.current.priceLockId ? undefined : activeOffer?.offerId,
     };
@@ -594,7 +599,7 @@ function BookingForm({
     );
   }
 
-  const activePriceLock = priceLockStatus?.lock;
+  const activePriceLock = fareClassCode ? undefined : priceLockStatus?.lock;
   const price =
     activePriceLock?.lockedPrice ??
     (cabinClass === "economy" ? flight.economyPrice : flight.businessPrice);
@@ -1355,6 +1360,11 @@ function BookingForm({
               </div>
 
               <div className="space-y-3">
+                {fareClassCode && (
+                  <p>
+                    {t("fareRules.fareFamily")} · {fareClassCode}
+                  </p>
+                )}
                 {!activePriceLock && !groupBookingId && (
                   <>
                     <Button
@@ -1367,10 +1377,12 @@ function BookingForm({
                           const offer = await createOffer.mutateAsync({
                             flightId,
                             cabinClass,
+                            fareClassCode,
                             passengerTypes: passengers.map(p => p.type),
                           });
                           setSelectedOffer({ ...offer, fingerprint });
                         } catch (error) {
+                          setSelectedOffer(null);
                           toast.error(
                             error instanceof Error
                               ? error.message

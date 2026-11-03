@@ -196,6 +196,9 @@ async function activePayload(
   };
   return { payload, seat, context: c, passenger: p };
 }
+// Other departure documents use the same current passenger/sector eligibility.
+export { activePayload as getCheckedInPassengerContext };
+
 type Flight = typeof flights.$inferSelect;
 /** Carrier designator, airport codes and departure zone for the BCBP leg. */
 async function bcbpReference(tx: SettlementTx, flight: Flight) {

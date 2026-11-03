@@ -94,13 +94,9 @@ export const AVAILABLE_SERVICES: Record<
       description: "Child traveling alone (typically ages 5-14)",
     },
   ],
-  extra_legroom: [
-    {
-      code: "EXST",
-      name: "Extra Legroom Seat",
-      description: "Request for seat with additional legroom",
-    },
-  ],
+  // Legroom is sold on a named seat through the seat ancillary checkout.
+  // Keep the empty category readable by older clients and historical requests.
+  extra_legroom: [],
   pet_in_cabin: [
     {
       code: "PETC",
@@ -172,6 +168,13 @@ export async function requestService(data: {
         message: "Passenger not found or does not belong to this booking",
       });
     }
+
+    if (data.serviceCode === "EXST" || data.serviceType === "extra_legroom")
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Extra seats cannot be reserved through special requests. Select an available seat in Manage Services for extra legroom.",
+      });
 
     // Validate service code is valid for the service type
     const validServices = AVAILABLE_SERVICES[data.serviceType];
@@ -451,6 +454,12 @@ export async function updateServiceStatus(
     });
   }
 
+  if (status === "confirmed" && service.serviceCode === "EXST")
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "A legacy EXST request cannot confirm a seat reservation",
+    });
+
   const updateData: Partial<InsertSpecialService> = {
     status,
   };
@@ -544,6 +553,24 @@ export async function bulkUpdateServiceStatus(
 
   if (serviceIds.length === 0) {
     return { success: true, updated: 0 };
+  }
+
+  if (status === "confirmed") {
+    const [legacy] = await db
+      .select({ id: specialServices.id })
+      .from(specialServices)
+      .where(
+        and(
+          inArray(specialServices.id, serviceIds),
+          eq(specialServices.serviceCode, "EXST")
+        )
+      )
+      .limit(1);
+    if (legacy)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "A legacy EXST request cannot confirm a seat reservation",
+      });
   }
 
   const updateData: Partial<InsertSpecialService> = {

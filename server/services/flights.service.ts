@@ -54,7 +54,7 @@ export type FlightSearchResult =
       : never
     : never;
 
-async function attachRbdAvailability<
+export async function attachRbdAvailability<
   T extends { id: number; economyAvailable: number; businessAvailable: number },
 >(
   rows: T[]

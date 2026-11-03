@@ -7,6 +7,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import ExcelJS from "exceljs";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { reportsRouter } from "../routers/reports";
 
 /** Parse an .xlsx buffer back into { sheetNames, cells-per-sheet } for assertions. */
 async function readWorkbook(buffer: Buffer) {
@@ -34,7 +36,7 @@ import { getDb } from "../db";
 import {
   exportBookingsToCSV,
   exportRevenueToCSV,
-  _exportFlightPerformanceToCSV,
+  exportFlightPerformanceToCSV,
   exportRefundsToCSV,
   exportBookingsToExcel,
   exportRevenueToExcel,
@@ -83,25 +85,30 @@ describe("Report Export Service", () => {
     },
   ];
 
-  const mockRevenueData = [
-    {
-      date: "2024-01-10",
-      totalBookings: 5,
-      totalRevenue: 250000,
-      confirmedRevenue: 200000,
-      refundedAmount: 50000,
-    },
-    {
-      date: "2024-01-11",
-      totalBookings: 3,
-      totalRevenue: 150000,
-      confirmedRevenue: 150000,
-      refundedAmount: 0,
-    },
-  ];
+  function mockRevenueDatabase() {
+    const day = Date.parse("2024-01-10") / 86400000;
+    const invoices = [{ day, amount: "10000", count: 1, unreconciled: 0 }];
+    const settlements = [
+      { day: day + 1, collected: 0, refunded: "1575", unclassified: 0 },
+    ];
+    const tx = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      groupBy: vi.fn().mockReturnThis(),
+      limit: vi
+        .fn()
+        .mockResolvedValueOnce(invoices)
+        .mockResolvedValueOnce(settlements),
+    };
+    vi.mocked(getDb).mockResolvedValue({
+      transaction: (read: (source: typeof tx) => unknown) => read(tx),
+    } as unknown as Awaited<ReturnType<typeof getDb>>);
+  }
 
   const mockFlightsData = [
     {
+      id: 421,
       flightNumber: "SV100",
       airlineName: "Saudi Airlines",
       originCity: "Jeddah",
@@ -244,23 +251,14 @@ describe("Report Export Service", () => {
 
     describe("exportRevenueToCSV", () => {
       it("should export revenue data to CSV format", async () => {
-        const mockDb = {
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          groupBy: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockResolvedValue(mockRevenueData),
-        };
-
-        vi.mocked(getDb).mockResolvedValue(
-          mockDb as unknown as ReturnType<typeof getDb>
-        );
+        mockRevenueDatabase();
 
         const csv = await exportRevenueToCSV({});
 
         expect(csv).toContain("Date");
-        expect(csv).toContain("Total Bookings");
-        expect(csv).toContain("Total Revenue (SAR)");
+        expect(csv).toContain("Bookings created");
+        expect(csv).toContain("Net cash collected (SAR)");
+        expect(csv).toContain("2024-01-11,0,0.00,0.00,15.75,-15.75");
         expect(csv).toContain("2024-01-10");
       });
     });
@@ -343,17 +341,7 @@ describe("Report Export Service", () => {
 
     describe("exportRevenueToExcel", () => {
       it("should export revenue data to Excel buffer", async () => {
-        const mockDb = {
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          groupBy: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockResolvedValue(mockRevenueData),
-        };
-
-        vi.mocked(getDb).mockResolvedValue(
-          mockDb as unknown as ReturnType<typeof getDb>
-        );
+        mockRevenueDatabase();
 
         const buffer = await exportRevenueToExcel({});
 
@@ -420,18 +408,9 @@ describe("Report Export Service", () => {
   describe("PDF Export Functions", () => {
     describe("generateBookingsPDF", () => {
       it("should generate PDF buffer for bookings", async () => {
-        const mockSummary = {
-          totalBookings: 10,
-          totalRevenue: 500000,
-          confirmedBookings: 8,
-          cancelledBookings: 2,
-          totalPassengers: 25,
-        };
-
         const mockDb = {
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockResolvedValue([mockSummary]),
+          ..._createMockQueryBuilder(mockBookingsData),
+          limit: vi.fn().mockResolvedValue(mockBookingsData),
         };
 
         vi.mocked(getDb).mockResolvedValue(
@@ -458,17 +437,7 @@ describe("Report Export Service", () => {
 
     describe("generateRevenuePDF", () => {
       it("should generate PDF buffer for revenue", async () => {
-        const mockDb = {
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          groupBy: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockResolvedValue(mockRevenueData),
-        };
-
-        vi.mocked(getDb).mockResolvedValue(
-          mockDb as unknown as ReturnType<typeof getDb>
-        );
+        mockRevenueDatabase();
 
         const buffer = await generateRevenuePDF({});
 
@@ -525,29 +494,90 @@ describe("Report Export Service", () => {
   });
 
   describe("Filter handling", () => {
-    it("should apply date filters correctly", async () => {
-      const mockDb = {
+    it("rejects oversized flight selections uniformly instead of quietly truncating the file", async () => {
+      const query = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         leftJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([]),
+        limit: vi.fn().mockResolvedValue(Array(1001).fill(mockFlightsData[0])),
       };
-
       vi.mocked(getDb).mockResolvedValue(
-        mockDb as unknown as ReturnType<typeof getDb>
+        query as unknown as Awaited<ReturnType<typeof getDb>>
       );
+      for (const writer of [
+        exportFlightPerformanceToCSV,
+        exportFlightPerformanceToExcel,
+        generateFlightPerformancePDF,
+      ]) {
+        await expect(writer({})).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message: expect.stringContaining("1,000 flights"),
+        });
+      }
+    });
+    it("validates booking report filters and preserves exact instants in every format", async () => {
+      const query = _createMockQueryBuilder([]);
+      query.limit.mockResolvedValue([]);
+      vi.mocked(getDb).mockResolvedValue(
+        query as unknown as Awaited<ReturnType<typeof getDb>>
+      );
+      const api = reportsRouter.createCaller({
+        user: { id: 9, role: "admin" },
+        authMethod: "jwt",
+        tenantId: null,
+        req: { headers: {} },
+        res: {},
+      } as unknown as Parameters<typeof reportsRouter.createCaller>[0]);
+      for (const run of [
+        api.exportBookingsCSV,
+        api.exportBookingsExcel,
+        api.generateBookingsPDF,
+      ]) {
+        for (const invalid of [
+          { startDate: "2026-02-30" },
+          { startDate: "2026-11-04", endDate: "2026-11-03" },
+          { status: "paid" },
+        ]) {
+          await expect(run(invalid)).rejects.toMatchObject({
+            code: "BAD_REQUEST",
+          });
+        }
+        expect(query.where).not.toHaveBeenCalled();
+        await run({
+          startDate: "2026-11-03",
+          endDate: "2026-11-03T17:15:00+03:00",
+          status: "cancelled",
+        });
+        const params = new MySqlDialect().sqlToQuery(
+          query.where.mock.calls[0][0]
+        ).params;
+        expect(params).toEqual([
+          "2026-11-03 00:00:00.000",
+          "2026-11-03 14:15:00.000",
+          "cancelled",
+        ]);
+        query.where.mockClear();
+      }
+    });
 
-      const filters: ReportFilters = {
-        startDate: new Date("2024-01-01"),
-        endDate: new Date("2024-01-31"),
-        status: "confirmed",
-      };
-
-      await exportBookingsToCSV(filters);
-
-      expect(mockDb.where).toHaveBeenCalled();
+    it("rejects oversized booking exports in all formats before rendering partial totals", async () => {
+      const query = _createMockQueryBuilder([]);
+      query.limit.mockResolvedValue(Array(10001).fill(mockBookingsData[0]));
+      vi.mocked(getDb).mockResolvedValue(
+        query as unknown as Awaited<ReturnType<typeof getDb>>
+      );
+      for (const run of [
+        exportBookingsToCSV,
+        exportBookingsToExcel,
+        generateBookingsPDF,
+      ]) {
+        await expect(run({})).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message: expect.stringContaining("10,000 bookings"),
+        });
+      }
     });
 
     it("should handle missing filters gracefully", async () => {
