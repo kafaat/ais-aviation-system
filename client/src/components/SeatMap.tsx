@@ -16,6 +16,8 @@ interface SeatMapProps {
   flightId?: number;
   cabinClass?: "economy" | "business";
   maxSeats?: number;
+  selectedSeatNumbers?: string[];
+  excludedSeatNumbers?: string[];
   aircraftType?: string;
   onSeatSelect?: (seats: Seat[]) => void;
 }
@@ -25,6 +27,8 @@ export function SeatMap({
   flightId,
   cabinClass = "economy",
   maxSeats = 1,
+  selectedSeatNumbers,
+  excludedSeatNumbers = [],
   onSeatSelect,
 }: SeatMapProps) {
   const { t } = useTranslation();
@@ -38,9 +42,10 @@ export function SeatMap({
     ids: string[];
   }>({ flightId, cabin: cabinClass, ids: [] });
   const selected =
-    selection.flightId === flightId && selection.cabin === cabinClass
+    selectedSeatNumbers ??
+    (selection.flightId === flightId && selection.cabin === cabinClass
       ? selection.ids
-      : [];
+      : []);
   const rows =
     query.data?.cabins.find(c => c.cabinClass === cabinClass)?.rows ?? [];
   const seats = useMemo(() => rows.flatMap(row => row.seats), [rows]);
@@ -53,9 +58,11 @@ export function SeatMap({
     const current = selected.filter(n => available.has(n));
     const next = current.includes(id)
       ? current.filter(n => n !== id)
-      : current.length < maxSeats
-        ? [...current, id]
-        : current;
+      : selectedSeatNumbers && maxSeats === 1
+        ? [id]
+        : current.length < maxSeats
+          ? [...current, id]
+          : current;
     setSelection({ flightId, cabin: cabinClass, ids: next });
     onSeatSelect?.(
       next.flatMap(n => {
@@ -104,6 +111,7 @@ export function SeatMap({
                     disabled={
                       seat.status !== "available" ||
                       seat.seatPrice !== 0 ||
+                      excludedSeatNumbers.includes(seat.seatNumber) ||
                       query.isFetching
                     }
                     title={`${seat.seatNumber} · ${seat.seatType} · ${(seat.seatPrice / 100).toFixed(2)} SAR`}

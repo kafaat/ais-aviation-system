@@ -411,6 +411,7 @@
     "noResultsHint": "Try adjusting your filters to see more results"
   },
   "checkIn": {
+    "removeSeat": "Remove seat",
     "title": "Check-in",
     "subtitle": "Enter your PNR to check-in",
     "pnrLabel": "Booking Reference (PNR)",

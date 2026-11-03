@@ -1,3 +1,7 @@
+import {
+  InitialSectorSeats,
+  type SectorSeat,
+} from "@/components/InitialSectorSeats";
 import AncillarySelection, {
   ancillaryCommandLines,
   type SelectedAncillary,
@@ -74,6 +78,7 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
   const booking = trpc.multiCity.create.useMutation();
   const [submittedAmount, setSubmittedAmount] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [seats, setSeats] = useState<SectorSeat[]>([]);
   const [extras, setExtras] = useState<SelectedAncillary[]>([]);
   const extrasTotal = extras.reduce((sum, row) => sum + row.totalPrice, 0);
 
@@ -81,6 +86,8 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
     submittedAmount ??
     (quote.data ? quote.data.totalPrice + extrasTotal : undefined);
   function edit(index: number, patch: Partial<Passenger>) {
+    if (patch.type === "infant")
+      setSeats(current => current.filter(s => s.passengerIndex !== index));
     setPassengers(current =>
       current.map((p, i) => (i === index ? { ...p, ...patch } : p))
     );
@@ -99,7 +106,17 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
           setSubmittedAmount(total);
           try {
             await booking.mutateAsync({
-              segments: data.segments,
+              segments: data.segments.map((segment, index) => {
+                const choices = seats
+                  .filter(s => s.segmentIndex === index)
+                  .map(({ passengerIndex, seatNumber }) => ({
+                    passengerIndex,
+                    seatNumber,
+                  }));
+                return choices.length
+                  ? { ...segment, seats: choices }
+                  : segment;
+              }),
               cabinClass: data.cabinClass,
               passengers,
               sessionId: data.sessionId,
@@ -123,12 +140,16 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
             if (
               code === "CONFLICT" ||
               code === "BAD_REQUEST" ||
+              code === "NOT_FOUND" ||
               code === "PRECONDITION_FAILED"
             ) {
               setSubmittedAmount(null);
               await Promise.all([
                 quote.refetch(),
                 utils.ancillary.getAvailable.invalidate(),
+                ...(seats.length
+                  ? [utils.seatMap.getFlightSeatMap.invalidate()]
+                  : []),
               ]);
             }
           }
@@ -178,6 +199,14 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
             </label>
           </fieldset>
         ))}
+        <InitialSectorSeats
+          flightIds={data.segments.map(s => s.flightId)}
+          cabinClass={data.cabinClass}
+          passengers={passengers}
+          value={seats}
+          onChange={setSeats}
+          disabled={submittedAmount !== null}
+        />
         <AncillarySelection
           cabinClass={data.cabinClass}
           flightIds={data.segments.map(s => s.flightId)}

@@ -143,6 +143,21 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const bag = catalog.find(item => item.code === "BAG_20KG");
     const meal = catalog.find(item => item.code === "MEAL_VEG");
     if (!bag || !meal) throw new Error("Seed passenger extras missing");
+    const mapName = "Scoped initial seats " + randomUUID();
+    await sqlRows<RowDataPacket>(
+      "INSERT INTO seat_maps(aircraftType,airlineId,configName,cabinLayout,totalSeats,economySeats) VALUES ('B737',?,?,'[]',2,2)",
+      [outbound.airline.id, mapName]
+    );
+    const [map] = await sqlRows<RowDataPacket>(
+      "SELECT id FROM seat_maps WHERE configName=?",
+      [mapName]
+    );
+    for (const id of [outboundId, returnId]) {
+      await sqlRows<RowDataPacket>(
+        "INSERT INTO seat_inventory(flightId,seatMapId,seatNumber,`row`,`column`,cabinClass,seatType,priceTier,seatPrice) VALUES (?,?,'12A',12,'A','economy','window','free',0), (?,?,'12B',12,'B','economy','middle','preferred',500)",
+        [id, map.id, id, map.id]
+      );
+    }
     const itinerary = {
       version: 1,
       passengerCount: 2,
@@ -167,6 +182,20 @@ test.describe("Funded journeys and truthful operational reads", () => {
         .nth(index)
         .fill("Journey");
     }
+    const seats = page.getByRole("region", { name: "Seat Assignments" });
+    await seats.getByRole("button", { name: "Select Your Seats" }).click();
+    for (const index of [0, 1]) {
+      await seats.getByLabel("Flight sector").selectOption(String(index));
+      await seats.getByLabel("Passenger").selectOption(String(index));
+      await expect(
+        seats.getByRole("button", { name: "12B available" })
+      ).toBeDisabled();
+      await seats.getByRole("button", { name: "12A available" }).click();
+      await expect(
+        seats.getByRole("button", { name: "12A available" })
+      ).toHaveAttribute("aria-pressed", "true");
+    }
+    await expect(seats.getByRole("listitem")).toHaveCount(2);
     for (const [index, item] of [bag, meal].entries()) {
       await page.getByTestId("ancillary-segment").selectOption(String(index));
       await page.getByTestId("ancillary-passenger").selectOption(String(index));
@@ -190,6 +219,14 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const ahmed = passengers.find(p => p.firstName === "Ahmed");
     const sara = passengers.find(p => p.firstName === "Sara");
     if (!ahmed || !sara) throw new Error("Missing travellers");
+    const assigned = await sqlRows<RowDataPacket>(
+      "SELECT flightId, passengerId, seatNumber FROM seat_inventory WHERE bookingId=? ORDER BY flightId",
+      [booking.id]
+    );
+    expect(assigned).toEqual([
+      { flightId: outboundId, passengerId: ahmed.id, seatNumber: "12A" },
+      { flightId: returnId, passengerId: sara.id, seatNumber: "12A" },
+    ]);
     const currentItems = () =>
       client.ancillary.getBookingAncillaries.query({ bookingId: booking.id });
     const invoiceTotal = async () =>
