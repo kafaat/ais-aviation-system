@@ -1711,6 +1711,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/routers/bookings.ts",
         "server/services/baggage-registration.service.ts",
         "server/services/boarding-pass.service.ts",
         "server/services/dcs-operations.service.ts",

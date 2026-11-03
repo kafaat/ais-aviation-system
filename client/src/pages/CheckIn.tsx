@@ -152,7 +152,11 @@ export default function CheckIn() {
   const [pnr, setPnr] = useState("");
   const [searched, setSearched] = useState("");
   const [flightId, setFlightId] = useState<number>();
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selection, setSelection] = useState<{
+    key: string;
+    seats: string[];
+  }>();
+  const [excluded, setExcluded] = useState<number[]>([]);
   const utils = trpc.useUtils();
   const booking = trpc.bookings.getByPNR.useQuery(
     { pnr: searched },
@@ -168,14 +172,30 @@ export default function CheckIn() {
   );
   const leg =
     states.data?.find(l => l.flightId === flightId) ?? states.data?.[0];
+  const eligible =
+    leg?.passengers.filter(
+      p =>
+        p.departureState === "not_checked_in" ||
+        p.departureState === "offloaded"
+    ) ?? [];
+  const chosen = eligible.filter(p => !excluded.includes(p.passengerId));
+  const seatMapKey = [
+    booking.data?.id,
+    leg?.flightId,
+    ...chosen.map(p => p.passengerId),
+  ].join(":");
   const checkIn = trpc.bookings.checkIn.useMutation({
     onSuccess: async () => {
-      setSelected([]);
+      setSelection(undefined);
+      setExcluded([]);
       await utils.bookings.getDepartureState.invalidate();
       await utils.seatMap.invalidate();
       toast.success(t("checkIn.successMessage"));
     },
-    onError: error => toast.error(error.message),
+    onError: async error => {
+      toast.error(error.message);
+      await utils.bookings.getDepartureState.invalidate();
+    },
   });
   if (!isAuthenticated)
     return (
@@ -196,7 +216,8 @@ export default function CheckIn() {
             return;
           }
           setFlightId(undefined);
-          setSelected([]);
+          setSelection(undefined);
+          setExcluded([]);
           setSearched(pnr);
         }}
       >
@@ -231,7 +252,8 @@ export default function CheckIn() {
                 variant={l.flightId === leg?.flightId ? "default" : "outline"}
                 onClick={() => {
                   setFlightId(l.flightId);
-                  setSelected([]);
+                  setSelection(undefined);
+                  setExcluded([]);
                 }}
               >
                 {l.flightNumber} ·{" "}
@@ -246,13 +268,42 @@ export default function CheckIn() {
                 {new Date(leg.departureTime).toLocaleString()}
               </p>
               <div className="space-y-2 print:hidden">
-                {passengers.data?.map(p => (
-                  <p key={p.id}>
-                    {p.firstName} {p.lastName} ·{" "}
-                    {leg.passengers.find(s => s.passengerId === p.id)
-                      ?.seatNumber ?? t("checkIn.autoAssign")}
-                  </p>
-                ))}
+                {passengers.data?.map(p => {
+                  const row = leg.passengers.find(s => s.passengerId === p.id);
+                  if (!row) return null;
+                  const name = p.firstName + " " + p.lastName;
+                  return (
+                    <div key={p.id}>
+                      {leg.open &&
+                      eligible.some(e => e.passengerId === p.id) ? (
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={!excluded.includes(p.id)}
+                            disabled={checkIn.isPending}
+                            onChange={event => {
+                              setExcluded(
+                                event.target.checked
+                                  ? excluded.filter(id => id !== p.id)
+                                  : [...excluded, p.id]
+                              );
+                              setSelection(undefined);
+                            }}
+                          />{" "}
+                          {name}
+                        </label>
+                      ) : (
+                        name
+                      )}
+                      {" · "}
+                      {row.departureState === "boarding_denied"
+                        ? t("checkIn.boardingDenied")
+                        : row.departureState === "boarded"
+                          ? t("checkIn.alreadyBoarded")
+                          : (row.seatNumber ?? t("checkIn.autoAssign"))}
+                    </div>
+                  );
+                })}
               </div>
               {passengers.data && (
                 <PassengerTravelDocuments
@@ -264,33 +315,41 @@ export default function CheckIn() {
                   )}
                 />
               )}
-              {leg.passengers.some(p => !p.checkedIn) && (
+              {eligible.length > 0 && (
                 <section className="space-y-4 print:hidden">
                   {leg.open ? (
                     <>
-                      <SeatMap
-                        key={`${booking.data.id}:${leg.flightId}`}
-                        flightId={leg.flightId}
-                        cabinClass={booking.data.cabinClass}
-                        maxSeats={
-                          leg.passengers.filter(p => !p.checkedIn).length
-                        }
-                        onSeatSelect={seats =>
-                          setSelected(seats.map(s => s.id))
-                        }
-                      />
+                      {chosen.length > 0 && (
+                        <SeatMap
+                          key={seatMapKey}
+                          flightId={leg.flightId}
+                          cabinClass={booking.data.cabinClass}
+                          maxSeats={chosen.length}
+                          onSeatSelect={seats =>
+                            setSelection({
+                              key: seatMapKey,
+                              seats: seats.map(s => s.id),
+                            })
+                          }
+                        />
+                      )}
                       <Button
-                        disabled={checkIn.isPending || !passengers.data?.length}
+                        disabled={
+                          checkIn.isPending ||
+                          states.isFetching ||
+                          !chosen.length ||
+                          !passengers.data?.length
+                        }
                         onClick={() => {
-                          let next = 0;
                           checkIn.mutate({
                             bookingId: booking.data.id,
                             flightId: leg.flightId,
-                            seatAssignments: leg.passengers.map(p => ({
+                            seatAssignments: chosen.map((p, index) => ({
                               passengerId: p.passengerId,
-                              seatNumber: p.checkedIn
-                                ? (p.seatNumber ?? undefined)
-                                : selected[next++],
+                              seatNumber:
+                                selection?.key === seatMapKey
+                                  ? selection.seats[index]
+                                  : undefined,
                             })),
                           });
                         }}
@@ -306,7 +365,7 @@ export default function CheckIn() {
                 </section>
               )}
               {leg.passengers
-                .filter(p => p.checkedIn)
+                .filter(p => p.departureState === "checked_in")
                 .map(
                   p =>
                     booking.data && (
