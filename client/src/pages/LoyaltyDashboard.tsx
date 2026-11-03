@@ -947,8 +947,8 @@ export default function LoyaltyDashboard() {
                     onClick={handleRedeem}
                     disabled={
                       !milesToRedeem ||
-                      !mfa.data ||
-                      (mfa.data.enabled && mfaToken.length !== 6) ||
+                      mfa.isLoading ||
+                      (mfa.data?.enabled && mfaToken.length !== 6) ||
                       redeemMiles.isPending
                     }
                     className="w-full bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90"

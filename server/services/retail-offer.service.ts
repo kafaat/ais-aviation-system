@@ -52,6 +52,10 @@ export function offerDigest(payload: Record<string, unknown>) {
     .digest("hex");
 }
 /** Channel differences are explicit policies over the same dynamic fare authority. */
+/** Statutory VAT applied by the NDC channel when a fare class declares no
+ * rate of its own. Shared with the NDC service so both channels agree. */
+export const DEFAULT_TAX_RATE = 0.15;
+
 export function composeOfferPolicy(
   baseAmount: number,
   policy: OfferPayload["policy"]
@@ -121,7 +125,7 @@ export async function createRetailOffer(
       ? {
           name: `ndc:${input.ndcPolicy?.fareClassId ?? "default"}:v1`,
           fareMultiplier: input.ndcPolicy?.fareMultiplier ?? 1,
-          taxRate: input.ndcPolicy?.taxRate ?? 0,
+          taxRate: input.ndcPolicy?.taxRate ?? DEFAULT_TAX_RATE,
         }
       : { name: "direct:v1", fareMultiplier: 1, taxRate: 0 };
   const fareLines = price.fareLines?.map(line => {

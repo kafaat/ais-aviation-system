@@ -1009,8 +1009,16 @@ export async function generateAPISMessage(
     }
     messageContent = generatePAXLST({
       flight,
-      origin: { ...origin, timezone: origin.timezone },
-      destination: { ...destination, timezone: destination.timezone },
+      origin: {
+        code: origin.code,
+        country: origin.country,
+        timezone: origin.timezone,
+      },
+      destination: {
+        code: destination.code,
+        country: destination.country,
+        timezone: destination.timezone,
+      },
       airline,
       passengers: passengerData,
       apisMap,

@@ -239,20 +239,24 @@ export async function sendMessage(
       .orderBy(desc(chatMessages.id))
       .limit(CHAT_HISTORY_WINDOW - 1)
   ).reverse();
+  const lastReply = history.at(-1);
   const referral = chatReferral(
     input.message,
-    history.at(-1)?.metadata?.intent
+    lastReply?.role === "assistant" && lastReply.metadata?.trigger === "keyword"
+      ? lastReply.metadata.intent
+      : undefined
   );
   if (referral) {
-    const { intent, language } = referral;
+    const { intent, language, trigger } = referral;
     const isExchange = intent === "exchange_review";
     const message = (isExchange ? exchangeGuidance : passengerPolicyGuidance)[
       language
     ];
     const metadata = isExchange
-      ? { intent }
+      ? { intent, trigger }
       : {
           intent,
+          trigger,
           entities: { source: passengerRightsSource[language], article: 5 },
         };
 
@@ -280,7 +284,6 @@ export async function sendMessage(
           .limit(10)
       : undefined;
     // Record the referral without retaining passenger-supplied claims or identifiers.
-    // Follow-ups remain local even if they contain no explicit policy keyword.
     await db.transaction(async tx => {
       await tx.insert(chatMessages).values([
         {

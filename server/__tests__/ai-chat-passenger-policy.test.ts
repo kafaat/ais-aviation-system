@@ -207,3 +207,19 @@ it("keeps currency exchange questions in ordinary chat", async () => {
   expect(result.exchangeBookings).toBeUndefined();
   expect(state.invoke).toHaveBeenCalledOnce();
 });
+
+it("returns to ordinary shopping after one local rights follow-up", async () => {
+  const chat = caller();
+  await chat.sendMessage({ conversationId: 7, message: "My refund rights" });
+  await chat.sendMessage({ conversationId: 7, message: "And my child?" });
+  state.invoke.mockResolvedValue({
+    result: { choices: [{ message: { content: "Choose a destination." } }] },
+  });
+  const third = await chat.sendMessage({
+    conversationId: 7,
+    message: "I need an economy seat.",
+  });
+  expect(third.policySourceLanguage).toBeUndefined();
+  expect(third.message).toBe("Choose a destination.");
+  expect(state.invoke).toHaveBeenCalledOnce();
+});

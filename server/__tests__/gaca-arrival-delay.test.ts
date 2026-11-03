@@ -1,10 +1,10 @@
-import type { TrpcContext } from "./_core/context";
-import { compensationRouter } from "./routers/compensation";
-import { transactionMemory } from "./__tests__/helpers/transaction-memory";
-import { processClaim } from "./services/compensation.service";
+import type { TrpcContext } from "../_core/context";
+import { compensationRouter } from "../routers/compensation";
+import { transactionMemory } from "./helpers/transaction-memory";
+import { processClaim } from "../services/compensation.service";
 
 import { describe, expect, it, vi } from "vitest";
-import { arrivalDelayTariffXdr } from "../shared/gaca-arrival-delay";
+import { arrivalDelayTariffXdr } from "../../shared/gaca-arrival-delay";
 
 describe("GACA article 10 arrival-delay tariff in SDR", () => {
   it.each([
@@ -23,8 +23,8 @@ describe("GACA article 10 arrival-delay tariff in SDR", () => {
 });
 
 const { getDb } = vi.hoisted(() => ({ getDb: vi.fn() }));
-vi.mock("./db", () => ({ getDb }));
-vi.mock("./_core/middleware/procedure-rate-limit", () => ({
+vi.mock("../db", () => ({ getDb }));
+vi.mock("../_core/middleware/procedure-rate-limit", () => ({
   enforceProcedureRateLimit: vi.fn(),
 }));
 
@@ -66,6 +66,7 @@ function setup(regulationType = "local") {
         regulationType,
       },
     ],
+    flights: [{ id: 19, arrivalTime: new Date("2025-01-01T06:00:00Z") }],
   });
   getDb.mockReturnValue(fixture.db);
   return fixture;
@@ -109,6 +110,19 @@ describe("GACA assessed claim transaction", () => {
       processClaim({
         ...approval,
         gacaArrivalEvidence: { ...evidence, ...changed },
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+  it("rejects a booked arrival that contradicts the flight record", async () => {
+    setup();
+    await expect(
+      processClaim({
+        ...approval,
+        gacaArrivalEvidence: {
+          ...evidence,
+          scheduledArrivalUtc: "2025-01-02T06:00:00Z",
+          actualArrivalUtc: "2025-01-02T12:00:01Z",
+        },
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });

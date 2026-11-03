@@ -1338,6 +1338,7 @@
         "server/services/financial-reporting.service.ts",
         "server/services/lineage.service.ts",
         "server/services/rbac.service.ts",
+        "shared/csv.ts",
         "shared/lineage.ts"
       ],
       "tableExpressions": {

@@ -87,6 +87,8 @@ export const chatMessages = mysqlTable(
       }>;
       suggestions?: number[];
       intent?: string;
+      /** Passenger-rights referrals: a keyword match, or the one follow-up kept local. */
+      trigger?: "keyword" | "follow_up";
       entities?: Record<string, unknown>;
     }>(),
 

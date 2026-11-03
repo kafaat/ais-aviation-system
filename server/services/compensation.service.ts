@@ -506,6 +506,25 @@ export async function processClaim(input: {
           message: "Actual arrival cannot be in the future",
         });
       }
+      // The reviewer types the booked arrival; the claim already names the
+      // flight. An award that contradicts the system's own schedule is not
+      // auditable, so the typed value must match the flight record.
+      const [flight] = await tx
+        .select({ arrivalTime: flights.arrivalTime })
+        .from(flights)
+        .where(eq(flights.id, claim.flightId))
+        .limit(1);
+      if (
+        flight &&
+        Math.abs(
+          Date.parse(gaca.scheduledArrivalUtc) - flight.arrivalTime.getTime()
+        ) > 60_000
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Booked arrival does not match the flight record (${flight.arrivalTime.toISOString()})`,
+        });
+      }
       try {
         award = gacaArrivalAward(
           gaca.scheduledArrivalUtc,

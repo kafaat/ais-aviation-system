@@ -1,10 +1,20 @@
+import { TRPCError } from "@trpc/server";
 import { zoneOffsetMs } from "./civil-day";
+
+export const PAXLST_UNOA_MESSAGE =
+  "PAXLST field contains unsupported UNOA characters";
+
+class PaxlstFieldError extends Error {
+  constructor(readonly field: string) {
+    super(PAXLST_UNOA_MESSAGE);
+  }
+}
 
 // The local draft uses UNOA syntax 4. Reject unsupported characters instead
 // of silently changing names or letting input create additional segments.
-function element(value: string): string {
+function element(value: string, field = "field"): string {
   if (/[^A-Za-z0-9 .,()=/+'?:*-]/.test(value)) {
-    throw new Error("PAXLST field contains unsupported UNOA characters");
+    throw new PaxlstFieldError(field);
   }
   return value.toUpperCase().replace(/[?+:'*]/g, "?$&");
 }
@@ -57,7 +67,7 @@ export function generatePAXLST(data: {
   lines.push(`BGM+745'`);
 
   // NAD - Name and Address (carrier)
-  lines.push(`NAD+MS+++${element(airline.name)}'`);
+  lines.push(`NAD+MS+++${element(airline.name, "airline.name")}'`);
 
   // TDT - Transport Information
   lines.push(
@@ -79,14 +89,52 @@ export function generatePAXLST(data: {
     `DTM+232:${localFlightTime(flight.arrivalTime, destination.timezone)}:201'`
   );
 
-  // Passenger segments
+  // Passenger segments. One record with a non-UNOA name or an unsupported
+  // document must not abort the draft for the whole flight silently: collect
+  // the offending records and report them so they can be transliterated.
+  const rejected: Array<{ passengerId: number; field: string }> = [];
+  const passengerLines: string[] = [];
   let segCount = 0;
   for (const pax of passengers) {
     const apis = apisMap.get(pax.passengerId);
     if (!apis) continue;
+    try {
+      passengerLines.push(...passengerSegment(pax, apis));
+      segCount++;
+    } catch (error) {
+      if (error instanceof PaxlstFieldError)
+        rejected.push({ passengerId: pax.passengerId, field: error.field });
+      else throw error;
+    }
+  }
+  if (rejected.length) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `${rejected.length} passenger record(s) contain characters outside UNOA (A-Z, 0-9, space . , ( ) = / + ' ? : * -) or an unsupported document; transliterate before drafting: ${rejected
+        .map(r => `passenger ${r.passengerId} (${r.field})`)
+        .join(", ")}`,
+    });
+  }
+  lines.push(...passengerLines);
 
-    segCount++;
+  // CNT - Passenger Count
+  lines.push(`CNT+42:${segCount}'`);
 
+  // UNT - Message Trailer
+  lines.push(`UNT+${lines.length}+1'`);
+
+  // UNZ - Interchange Trailer
+  lines.push(`UNZ+1+${flight.id}'`);
+
+  return lines.join("\n");
+}
+
+function passengerSegment(
+  pax: { passengerId: number; firstName: string; lastName: string },
+  apis: Record<string, unknown>
+): string[] {
+  const lines: string[] = [];
+  {
     const surname = (apis["surname"] as string) ?? pax.lastName;
     const givenNames = (apis["given_names"] as string) ?? pax.firstName;
     const dob = apis["date_of_birth"]
@@ -105,14 +153,15 @@ export function generatePAXLST(data: {
       visa: "V",
     };
     const docType = documentCodes[String(apis["document_type"])];
-    if (!docType) throw new Error("Unsupported PAXLST document type");
+    if (!docType) throw new PaxlstFieldError("document_type");
 
     // NAD - Passenger Name
-    lines.push(`NAD+FL+++${element(surname)}:${element(givenNames)}'`);
+    lines.push(
+      `NAD+FL+++${element(surname, "surname")}:${element(givenNames, "given_names")}'`
+    );
 
     // ATT - Gender
-    if (!["M", "F", "U"].includes(gender))
-      throw new Error("Unsupported PAXLST gender");
+    if (!["M", "F", "U"].includes(gender)) throw new PaxlstFieldError("gender");
     lines.push(`ATT+2++${gender}'`);
 
     // DTM - Date of Birth
@@ -123,16 +172,16 @@ export function generatePAXLST(data: {
     // LOC - Residence country
     const resCountry = apis["residence_country"] as string | null;
     if (resCountry) {
-      lines.push(`LOC+174+${element(resCountry)}'`);
+      lines.push(`LOC+174+${element(resCountry, "residence_country")}'`);
     }
 
     // NAT - Nationality
     if (nationality) {
-      lines.push(`NAT+2+${element(nationality)}'`);
+      lines.push(`NAT+2+${element(nationality, "nationality")}'`);
     }
 
     // DOC - Travel Document
-    lines.push(`DOC+${docType}+${element(docNumber)}'`);
+    lines.push(`DOC+${docType}+${element(docNumber, "document_number")}'`);
 
     // DTM - Document Expiry
     if (expiryDate) {
@@ -141,18 +190,8 @@ export function generatePAXLST(data: {
 
     // LOC - Document Issuing Country
     if (issuingCountry) {
-      lines.push(`LOC+91+${element(issuingCountry)}'`);
+      lines.push(`LOC+91+${element(issuingCountry, "issuing_country")}'`);
     }
   }
-
-  // CNT - Passenger Count
-  lines.push(`CNT+42:${segCount}'`);
-
-  // UNT - Message Trailer
-  lines.push(`UNT+${lines.length}+1'`);
-
-  // UNZ - Interchange Trailer
-  lines.push(`UNZ+1+${flight.id}'`);
-
-  return lines.join("\n");
+  return lines;
 }
