@@ -1,3 +1,4 @@
+import { LOCAL_NDC_VERSION as NDC_VERSION } from "./ndc-capabilities";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import {
   createRetailOffer,
@@ -38,11 +39,6 @@ import crypto from "crypto";
 
 /** Default offer expiry window in minutes */
 const OFFER_EXPIRY_MINUTES = 30;
-
-/** Tax rate applied to base fares (15% VAT for Saudi Arabia) */
-
-/** NDC message version */
-const NDC_VERSION = "21.3";
 
 /** Maximum passengers per NDC order */
 const MAX_PASSENGERS = 9;

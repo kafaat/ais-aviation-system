@@ -13,6 +13,7 @@ export interface ApprovedLoyaltyPolicy {
   effectiveAt: Date;
   approvedBy: number;
   approvedAt: Date;
+  sourceReferences?: unknown;
 }
 
 export interface LoyaltyAllocation {
@@ -36,7 +37,7 @@ export function validateApprovedLoyaltyPolicy(
     throw new Error("Loyalty policy ID is invalid");
   if (!Number.isSafeInteger(policy.tenantId) || policy.tenantId <= 0)
     throw new Error("Loyalty policy tenant is invalid");
-  if (!policy.version.trim())
+  if (policy.status !== "approved" || !policy.version.trim())
     throw new Error("Loyalty policy version is empty");
   if (!/^[A-Z]{3}$/.test(policy.currency))
     throw new Error("Loyalty policy currency must be an ISO 4217 code");
@@ -64,7 +65,9 @@ export function validateApprovedLoyaltyPolicy(
   if (
     !Number.isSafeInteger(policy.approvedBy) ||
     policy.approvedBy <= 0 ||
-    Number.isNaN(policy.approvedAt.getTime())
+    !Number.isFinite(at.getTime()) ||
+    !Number.isFinite(policy.approvedAt.getTime()) ||
+    policy.approvedAt > at
   )
     throw new Error("Loyalty policy approval evidence is incomplete");
 }
@@ -87,8 +90,9 @@ export function resolveMilesExpiry(
   creditAt: Date,
   activityAt = creditAt
 ) {
-  if (!policy || policy.expiryMode === "none") return null;
+  if (!policy) return null;
   validateApprovedLoyaltyPolicy(policy, creditAt);
+  if (policy.expiryMode === "none") return null;
   if (policy.expiryMonths === null)
     throw new Error("Approved expiry policy has no duration");
   return addUtcMonths(
@@ -116,15 +120,18 @@ export function allocateLoyaltyContractLiability(input: {
   if (!Number.isSafeInteger(loyaltyStandaloneValueMinor))
     throw new Error("Loyalty standalone value exceeds safe integer bounds");
   const totalStandalone =
-    input.travelStandalonePriceMinor + loyaltyStandaloneValueMinor;
-  const allocatedAmountMinor = totalStandalone
-    ? Math.round(
-        (input.transactionPriceMinor * loyaltyStandaloneValueMinor) /
-          totalStandalone
-      )
-    : 0;
-  const expectedBreakageMinor = Math.floor(
-    (allocatedAmountMinor * input.policy.expectedBreakageBasisPoints) / 10_000
+    BigInt(input.travelStandalonePriceMinor) +
+    BigInt(loyaltyStandaloneValueMinor);
+  const numerator =
+    BigInt(input.transactionPriceMinor) * BigInt(loyaltyStandaloneValueMinor);
+  const allocatedAmountMinor =
+    totalStandalone === 0n
+      ? 0
+      : Number((2n * numerator + totalStandalone) / (2n * totalStandalone));
+  const expectedBreakageMinor = Number(
+    (BigInt(allocatedAmountMinor) *
+      BigInt(input.policy.expectedBreakageBasisPoints)) /
+      10000n
   );
   return {
     transactionPriceMinor: input.transactionPriceMinor,

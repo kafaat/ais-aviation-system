@@ -205,6 +205,20 @@ describe("BCBP M1 encoding", () => {
     expect(() => decodeBcbpM1(`${v.base}^1`)).toThrow(BcbpFormatError);
     expect(() => decodeBcbpM1(`${v.base}^140abc`)).toThrow(BcbpFormatError);
     expect(() => decodeBcbpM1(`${v.base}x`)).toThrow(BcbpFormatError);
+    expect(() => decodeBcbpM1(v.bcbp + "ignored")).toThrow(BcbpFormatError);
+    expect(() =>
+      decodeBcbpM1(v.base.slice(0, 58) + "1Z" + v.base.slice(60))
+    ).toThrow(BcbpFormatError);
+    expect(() => decodeBcbpM1(v.base.replace(">60B", ">6FE"))).toThrow(
+      BcbpFormatError
+    );
+    expect(() => decodeBcbpM1(v.base.slice(0, -2) + "FF")).toThrow(
+      BcbpFormatError
+    );
+    expect(() => decodeBcbpM1(v.base + "^110" + "x".repeat(15))).toThrow(
+      BcbpFormatError
+    );
+    expect(() => decodeBcbpM1(v.base + "^11Zx")).toThrow(BcbpFormatError);
     expect(() => appendBcbpSecurityData(v.base, "")).toThrow(BcbpFormatError);
     expect(() => appendBcbpSecurityData(v.base, "a".repeat(101))).toThrow(
       BcbpFormatError

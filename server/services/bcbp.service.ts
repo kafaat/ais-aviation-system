@@ -316,13 +316,27 @@ export function decodeBcbpM1(barcode: string): DecodedBcbpM1 {
     throw new BcbpFormatError(
       "Only single-leg (M1) boarding passes are accepted"
     );
-  const conditionalSize = parseInt(barcode.slice(58, 60), 16);
-  if (Number.isNaN(conditionalSize))
+  const sizeText = barcode.slice(58, 60);
+  if (!/^[0-9A-F]{2}$/i.test(sizeText))
     throw new BcbpFormatError("Conditional item size is not hexadecimal");
-  const baseLength = 60 + conditionalSize;
+  const baseLength = 60 + parseInt(sizeText, 16);
   if (barcode.length < baseLength)
     throw new BcbpFormatError("Conditional items are truncated");
   const base = barcode.slice(0, baseLength);
+  if (base[60] === ">") {
+    // Resolution 792 fields 10 and 17 count unique and repeated conditional
+    // bytes separately. The residual part of field 6 is airline-use data.
+    const uniqueSize = base.slice(62, 64);
+    if (!/^[0-9]$/.test(base[61]) || !/^[0-9A-F]{2}$/i.test(uniqueSize))
+      throw new BcbpFormatError("Malformed unique conditional section");
+    const repeatedOffset = 64 + parseInt(uniqueSize, 16);
+    const repeatedSize = base.slice(repeatedOffset, repeatedOffset + 2);
+    if (
+      !/^[0-9A-F]{2}$/i.test(repeatedSize) ||
+      repeatedOffset + 2 + parseInt(repeatedSize, 16) > baseLength
+    )
+      throw new BcbpFormatError("Malformed repeated conditional section");
+  }
   const parsed = decode(barcode);
   const leg = parsed.data?.legs?.[0];
   if (!leg || parsed.meta?.electronicTicketIndicator !== "E")
@@ -341,11 +355,19 @@ export function decodeBcbpM1(barcode: string): DecodedBcbpM1 {
   if (rest.length) {
     if (rest[0] !== "^" || rest.length < 4)
       throw new BcbpFormatError("Malformed security section");
-    const size = parseInt(rest.slice(2, 4), 16);
-    if (Number.isNaN(size) || rest.length < 4 + size)
-      throw new BcbpFormatError("Security data is truncated");
+    const declaredSize = rest.slice(2, 4);
+    const size = parseInt(declaredSize, 16);
+    if (
+      !/^[0-9A-F]{2}$/i.test(declaredSize) ||
+      !size ||
+      size > SECURITY_DATA_MAX ||
+      rest.length !== 4 + size
+    )
+      throw new BcbpFormatError(
+        "Security data length does not match the scanner payload"
+      );
     securityDataType = rest[1];
-    securityData = rest.slice(4, 4 + size).trimEnd();
+    securityData = rest.slice(4, 4 + size);
   }
   return {
     passengerName: need(parsed.data?.passengerName, "passenger name"),

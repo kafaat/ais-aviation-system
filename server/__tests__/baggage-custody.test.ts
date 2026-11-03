@@ -121,6 +121,17 @@ describe("baggage handover evidence", () => {
     });
     expect(fixture.rows("baggage_tracking")).toHaveLength(6);
   });
+  it("refuses to reuse a device event identity for a different sector", async () => {
+    const first = await scan("acceptance", 11, 1, null);
+    const changed = { ...first.e, flightId: 12 };
+    const signature = createHmac("sha256", "test-only-source-key-32-characters")
+      .update(calculateRequestHash(changed))
+      .digest("hex");
+    await expect(ingestBaggageCustody(changed, signature)).rejects.toThrow(
+      "identity was reused"
+    );
+    expect(fixture.rows("baggage_custody_events")).toHaveLength(1);
+  });
   it("routes around cancelled legs and never reports an empty itinerary complete", async () => {
     const actor = { id: 1, role: "user", tenantId: 3 };
     const [firstLeg] = fixture.rows("booking_segments");

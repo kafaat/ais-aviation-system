@@ -9,6 +9,7 @@ export const recoveryProblem = z.object({
           .array(
             z.object({
               key: z.string(),
+              classKey: z.string().optional(),
               delayMinutes: z.number().int().nonnegative(),
             })
           )
@@ -21,6 +22,27 @@ export const recoveryProblem = z.object({
 });
 export type RecoveryProblem = z.infer<typeof recoveryProblem>;
 export type RecoveryChoice = { bookingId: number; key: string | null };
+type Candidate = RecoveryProblem["groups"][number]["candidates"][number];
+function hasCapacity(
+  remaining: Record<string, number>,
+  candidate: Candidate,
+  count: number
+) {
+  return (
+    remaining[candidate.key] >= count &&
+    (candidate.classKey === undefined ||
+      (candidate.classKey !== candidate.key &&
+        remaining[candidate.classKey] >= count))
+  );
+}
+function adjustCapacity(
+  remaining: Record<string, number>,
+  candidate: Candidate,
+  count: number
+) {
+  remaining[candidate.key] += count;
+  if (candidate.classKey !== undefined) remaining[candidate.classKey] += count;
+}
 export function validateRecoverySolution(
   problem: RecoveryProblem,
   choices: RecoveryChoice[]
@@ -43,13 +65,9 @@ export function validateRecoverySolution(
       continue;
     }
     const candidate = group.candidates.find(c => c.key === chosen.key);
-    if (
-      !candidate ||
-      !Number.isInteger(remaining[chosen.key]) ||
-      remaining[chosen.key] < group.passengers
-    )
+    if (!candidate || !hasCapacity(remaining, candidate, group.passengers))
       throw new Error("Infeasible recovery solution");
-    remaining[chosen.key] -= group.passengers;
+    adjustCapacity(remaining, candidate, -group.passengers);
     passengerDelayMinutes += candidate.delayMinutes * group.passengers;
   }
   return { unassignedPassengers, passengerDelayMinutes };
@@ -98,16 +116,15 @@ export function solveRecovery(raw: RecoveryProblem, nodeBudget = 50000) {
     for (const c of [...g.candidates].sort(
       (a, b) => a.delayMinutes - b.delayMinutes || a.key.localeCompare(b.key)
     )) {
-      if (remaining[c.key] < g.passengers || remaining[c.key] === undefined)
-        continue;
-      remaining[c.key] -= g.passengers;
+      if (!hasCapacity(remaining, c, g.passengers)) continue;
+      adjustCapacity(remaining, c, -g.passengers);
       search(
         i + 1,
         [...choices, { bookingId: g.bookingId, key: c.key }],
         missing,
         delay + c.delayMinutes * g.passengers
       );
-      remaining[c.key] += g.passengers;
+      adjustCapacity(remaining, c, g.passengers);
       if (exhausted) break;
     }
     if (!exhausted)

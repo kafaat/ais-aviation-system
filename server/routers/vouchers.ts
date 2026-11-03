@@ -373,8 +373,18 @@ export const vouchersRouter = router({
     })
     .input(
       z.object({
-        userId: z.number().describe("User ID to add credit to"),
-        amount: z.number().min(1).describe("Credit amount in cents"),
+        idempotencyKey: z.string().min(8).max(128),
+        userId: z
+          .number()
+          .int()
+          .positive()
+          .describe("User ID to add credit to"),
+        amount: z
+          .number()
+          .int()
+          .positive()
+          .max(2147483647)
+          .describe("Credit amount in cents"),
         source: z
           .enum(["refund", "promo", "compensation", "bonus"])
           .describe("Source of credit"),
@@ -392,6 +402,7 @@ export const vouchersRouter = router({
         {
           expiresAt: input.expiresAt,
           createdBy: ctx.user.id,
+          idempotencyKey: input.idempotencyKey,
         }
       );
     }),

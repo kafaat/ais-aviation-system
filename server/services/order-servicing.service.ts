@@ -1,3 +1,5 @@
+import { persistInitialFareComponents } from "./fare-components.service";
+import { canServiceOrder, type NdcAction } from "./ndc-capabilities";
 import { withInventoryTransaction } from "./inventory-capacity.service";
 import {
   quoteSeatExchange,
@@ -10,14 +12,13 @@ import { calculateModificationFee } from "./modification-fee";
 import { allocateProportional } from "./seat-economics.service";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { getDb, getFlightById } from "../db";
 import {
   bookings,
-  agentBookings,
-  corporateBookings,
   bookingSegments,
   bookingModifications,
+  bookingFareComponents,
   bookingAncillaries,
   flights,
   inventoryLocks,
@@ -27,7 +28,12 @@ import {
   retailOffers,
   type Booking,
 } from "../../drizzle/schema";
-import { lockRetailOffer, consumeRetailOffer } from "./retail-offer.service";
+import {
+  offerFareLineSchema,
+  retailOfferPayloadSchema,
+  lockRetailOffer,
+  consumeRetailOffer,
+} from "./retail-offer.service";
 import { createInventoryLock } from "./inventory-lock.service";
 import {
   reserveSeats,
@@ -40,6 +46,7 @@ import {
   withTransactionalIdempotency,
 } from "./idempotency-v2.service";
 import {
+  hasPartnerBooking,
   quoteInvoiceAncillary,
   insertInvoiceAncillary,
   storedJson,
@@ -74,10 +81,19 @@ const segment = z.object({
   flightId: z.number().int().positive(),
   cabinClass: z.enum(["economy", "business"]),
   amount: z.number().int().nonnegative(),
+  fareClassId: z.number().int().positive().optional(),
   holdId: z.number().int().positive().nullable(),
   departureTime: z.iso.datetime(),
   arrivalTime: z.iso.datetime(),
   offerId: z.string().uuid().nullable(),
+  commercialQuote: z
+    .object({
+      amount: z.number().int().nonnegative(),
+      lines: z.array(offerFareLineSchema).optional(),
+      policy: z.string(),
+      changeFee: z.number().int().nonnegative(),
+    })
+    .optional(),
   airlineId: z.number().int().optional(),
   originId: z.number().int().optional(),
   destinationId: z.number().int().optional(),
@@ -111,6 +127,7 @@ async function itinerary(tx: SettlementTx, booking: Booking) {
         id: l.id,
         flightId: l.flightId,
         amount: l.segmentAmount,
+        fareClassId: l.fareClassId ?? null,
         reserved: l.seatsReserved,
         status: l.status,
       }))
@@ -119,6 +136,7 @@ async function itinerary(tx: SettlementTx, booking: Booking) {
           id: null,
           flightId: booking.flightId,
           amount: booking.totalAmount,
+          fareClassId: booking.fareClassId ?? null,
           reserved: booking.seatsReserved,
           status: booking.status,
         },
@@ -137,42 +155,25 @@ function fingerprint(
     legs: legs.map(l => ({
       flightId: l.flightId,
       amount: l.amount,
+      ...(l.fareClassId != null ? { fareClassId: l.fareClassId } : {}),
       reserved: l.reserved,
       status: l.status,
     })),
   });
 }
-async function assertDirectExchange(tx: SettlementTx, bookingId: number) {
-  // Agency sales and corporate approval records exist independently of NDC orders.
-  const [agency] = await tx
-    .select({ id: agentBookings.id })
-    .from(agentBookings)
-    .where(eq(agentBookings.bookingId, bookingId))
-    .limit(1)
-    .for("update");
-  const [corporate] = await tx
-    .select({ id: corporateBookings.id })
-    .from(corporateBookings)
-    .where(eq(corporateBookings.bookingId, bookingId))
-    .limit(1)
-    .for("update");
-  if (agency || corporate)
+async function assertIssuingChannel(
+  tx: SettlementTx,
+  bookingId: number,
+  action: NdcAction
+) {
+  if (await hasPartnerBooking(tx, bookingId))
     throw unavailable("Issuing channel must service this booking");
   const orders = await tx
     .select()
     .from(ndcOrders)
     .where(eq(ndcOrders.bookingId, bookingId))
     .for("update");
-  if (
-    orders.some(
-      o =>
-        (o.channel && o.channel !== "direct") ||
-        o.distributorId ||
-        (o.currency && o.currency !== "SAR") ||
-        storedJson<unknown[]>(o.emdNumbers, []).length ||
-        storedJson<unknown[]>(o.ticketNumbers, []).length
-    )
-  )
+  if (orders.some(order => !canServiceOrder(order, action)))
     throw unavailable("Issuing channel must service this booking");
 }
 
@@ -263,6 +264,11 @@ export async function quotePaidOrderService(
             .limit(1);
           if (pending)
             throw unavailable("Resolve the existing servicing request first");
+          await assertIssuingChannel(
+            tx,
+            booking.id,
+            input.offerIds ? "exchange" : "addAncillary"
+          );
           const old = await itinerary(tx, booking);
           if (old.some(l => !l.reserved || l.status !== "confirmed"))
             throw unavailable(
@@ -284,11 +290,14 @@ export async function quotePaidOrderService(
           let fareDifference = 0;
           const expiry = new Date(Date.now() + 10 * 60000);
           if (input.offerIds) {
-            if (booking.fareClassId != null)
+            if (
+              old.some(leg => leg.fareClassId != null) &&
+              input.replaceFlightId === undefined &&
+              input.offerIds.length !== old.length
+            )
               throw unavailable(
-                "RBD-aware replacement offers are not configured for this booking"
+                "A changed RBD itinerary requires a class mapping for each sector"
               );
-            await assertDirectExchange(tx, booking.id);
             await assertBaggageNotInCustody(tx, booking.id);
             const offers = await tx
               .select()
@@ -374,7 +383,13 @@ export async function quotePaidOrderService(
               targets.map(t => t.flightId),
               cabin
             );
-            for (const target of targets) {
+            for (const [index, target] of targets.entries()) {
+              const fareClassId = old[index]?.fareClassId ?? undefined;
+              const retained = old.find(l => l.flightId === target.flightId);
+              if (retained && retained.fareClassId !== (fareClassId ?? null))
+                throw unavailable(
+                  "Reordering different booking classes requires a new class mapping"
+                );
               const offer = target.offerId
                 ? await lockRetailOffer(tx, target.offerId, {
                     flightId: target.flightId,
@@ -382,6 +397,7 @@ export async function quotePaidOrderService(
                     tenantId: booking.tenantId,
                     userId,
                     channel: "direct",
+                    fareClassId,
                     passengerTypes: pax.map(p => p.type),
                   })
                 : null;
@@ -411,16 +427,43 @@ export async function quotePaidOrderService(
                       key: input.idempotencyKey,
                     }),
                     userId,
-                    tx
+                    tx,
+                    undefined,
+                    fareClassId
                   );
               const amount = offer?.totalAmount ?? target.retainedAmount;
               if (amount == null) throw unavailable("Unverified sector amount");
+              const accepted = offer
+                ? retailOfferPayloadSchema.parse(offer.payload)
+                : null;
+              const unmatched = accepted?.fareLines?.slice();
+              const orderedLines = unmatched
+                ? pax.map(p => {
+                    const index = unmatched.findIndex(
+                      line => line.type === p.type
+                    );
+                    if (index < 0)
+                      throw unavailable(
+                        "Offer passenger fares differ from booked party"
+                      );
+                    return unmatched.splice(index, 1)[0];
+                  })
+                : undefined;
               segments.push({
                 flightId: flight.id,
                 cabinClass: cabin,
                 amount,
+                fareClassId,
                 holdId: hold?.lockId ?? null,
                 offerId: target.offerId,
+                commercialQuote: accepted
+                  ? {
+                      amount: accepted.totalAmount,
+                      lines: orderedLines,
+                      policy: accepted.policy.name,
+                      changeFee: 0,
+                    }
+                  : undefined,
                 originId: flight.originId,
                 destinationId: flight.destinationId,
                 airlineId: flight.airlineId,
@@ -492,14 +535,20 @@ export async function quotePaidOrderService(
               originalChanged.departureTime
             );
             newAmount = fareAmount + modificationFee;
-            if (replacedIndex >= 0)
+            if (replacedIndex >= 0) {
               segments[replacedIndex].amount += modificationFee;
-            else {
+              const quote = segments[replacedIndex].commercialQuote;
+              if (quote) quote.changeFee = modificationFee;
+            } else {
               const fees = allocateProportional(
                 modificationFee,
                 segments.map(s => s.amount)
               );
-              for (const [i, leg] of segments.entries()) leg.amount += fees[i];
+              for (const [i, leg] of segments.entries()) {
+                leg.amount += fees[i];
+                if (leg.commercialQuote)
+                  leg.commercialQuote.changeFee = fees[i];
+              }
             }
           } else
             for (const item of input.ancillaries ?? []) {
@@ -637,8 +686,12 @@ export async function validatePaidServiceQuote(
       throw unavailable("Passenger composition changed after quote");
   }
   await assertTenantOperational(tx, booking.tenantId);
+  await assertIssuingChannel(
+    tx,
+    booking.id,
+    plan.segments.length ? "exchange" : "addAncillary"
+  );
   if (plan.segments.length) {
-    await assertDirectExchange(tx, booking.id);
     await assertBaggageNotInCustody(tx, booking.id);
     const cabin = plan.segments[0].cabinClass;
     const instances: (typeof flights.$inferSelect)[] = [];
@@ -728,6 +781,7 @@ export async function applyPaidOrderModification(
         hold.expiresAt <= new Date() ||
         hold.userId !== booking.userId ||
         hold.flightId !== leg.flightId ||
+        (hold.fareClassId ?? null) !== (leg.fareClassId ?? null) ||
         hold.cabinClass !== cabin ||
         hold.numberOfSeats !== booking.numberOfPassengers
       )
@@ -737,7 +791,8 @@ export async function applyPaidOrderModification(
         leg.flightId,
         cabin,
         booking.numberOfPassengers,
-        hold.id
+        hold.id,
+        leg.fareClassId
       );
       await tx
         .update(inventoryLocks)
@@ -753,7 +808,8 @@ export async function applyPaidOrderModification(
           tx,
           leg.flightId,
           booking.cabinClass,
-          booking.numberOfPassengers
+          booking.numberOfPassengers,
+          leg.fareClassId
         );
     const retainedDocuments = await exchangeLocalCoupons(
       tx,
@@ -775,6 +831,30 @@ export async function applyPaidOrderModification(
       );
     // A sector change must retain segment IDs used by ancillary entitlements.
     // For a full re-route, preserve a row for each unchanged flight where possible.
+    const replacedFares = old
+      .filter(
+        l =>
+          !plan.segments.some(
+            newLeg => newLeg.flightId === l.flightId && !newLeg.offerId
+          )
+      )
+      .map(l => l.flightId);
+    if (replacedFares.length)
+      await tx
+        .update(bookingFareComponents)
+        .set({ reversedAt: sql`CURRENT_TIMESTAMP(0)` })
+        .where(
+          and(
+            eq(bookingFareComponents.bookingId, booking.id),
+            inArray(bookingFareComponents.flightId, replacedFares),
+            isNull(bookingFareComponents.reversedAt)
+          )
+        );
+    const party = await tx
+      .select({ id: passengers.id })
+      .from(passengers)
+      .where(eq(passengers.bookingId, booking.id))
+      .orderBy(asc(passengers.id));
     const retainedIds = new Set<number>();
     for (const [index, leg] of plan.segments.entries()) {
       const previous =
@@ -786,15 +866,18 @@ export async function applyPaidOrderModification(
         segmentOrder: index + 1,
         flightId: leg.flightId,
         segmentAmount: leg.amount,
+        fareClassId: leg.fareClassId ?? null,
         departureDate: new Date(leg.departureTime),
         seatsReserved: true,
         status: "confirmed" as const,
       };
+      let segmentId = previous?.id;
       if (previous?.id != null) {
         retainedIds.add(previous.id);
         if (
           plan.replaceFlightId !== undefined &&
-          previous.flightId === leg.flightId
+          previous.flightId === leg.flightId &&
+          !leg.offerId
         )
           continue;
         await tx
@@ -808,9 +891,63 @@ export async function applyPaidOrderModification(
           })
           .where(eq(bookingSegments.id, previous.id));
       } else {
-        await tx
+        const [inserted] = await tx
           .insert(bookingSegments)
           .values({ ...record, inventoryLockId: leg.holdId });
+        segmentId = inserted.insertId;
+      }
+      if (leg.offerId && segmentId) {
+        const quote = leg.commercialQuote;
+        const seats =
+          plan.seatExchange?.seats.filter(
+            seat => seat.toFlightId === leg.flightId
+          ) ?? [];
+        const seatTotal = seats.reduce((sum, seat) => sum + seat.amount, 0);
+        if (quote && leg.amount !== quote.amount + quote.changeFee + seatTotal)
+          throw unavailable(
+            "Sector fare evidence differs from accepted servicing terms"
+          );
+        await persistInitialFareComponents(tx, {
+          bookingId: booking.id,
+          tenantId: booking.tenantId,
+          flightId: leg.flightId,
+          bookingSegmentId: segmentId,
+          passengerIds: party.map(p => p.id),
+          totalAmount: quote?.amount ?? leg.amount,
+          source: "servicing",
+          sourceReference: leg.offerId,
+          sectorQuote: quote
+            ? { fareLines: quote.lines, policy: { name: quote.policy } }
+            : undefined,
+        });
+        if (quote) {
+          const common = {
+            bookingId: booking.id,
+            tenantId: booking.tenantId,
+            flightId: leg.flightId,
+            bookingSegmentId: segmentId,
+            currency: "SAR",
+          } as const;
+          for (const seat of seats)
+            await tx.insert(bookingFareComponents).values({
+              ...common,
+              passengerId: seat.passengerId,
+              componentType: "ancillary",
+              amount: seat.amount,
+              code: "PAID_SEAT",
+              source: "ancillary_catalog",
+              sourceReference: String(seat.ancillaryId),
+            });
+          if (quote.changeFee)
+            await tx.insert(bookingFareComponents).values({
+              ...common,
+              componentType: "booking_fee",
+              amount: quote.changeFee,
+              code: "CHANGE_FEE",
+              source: "servicing",
+              sourceReference: leg.offerId,
+            });
+        }
       }
     }
     const removedIds = old.flatMap(l =>
@@ -860,6 +997,7 @@ export async function applyPaidOrderModification(
       .update(bookings)
       .set({
         flightId: plan.segments[0].flightId,
+        fareClassId: plan.segments[0].fareClassId ?? null,
         cabinClass: cabin,
         inventoryLockId: anchorChanged ? null : booking.inventoryLockId,
         totalAmount: change.newAmount,

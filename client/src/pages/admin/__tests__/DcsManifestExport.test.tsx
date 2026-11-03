@@ -8,12 +8,18 @@ vi.mock("@/components/ui/select", () => ({}));
 vi.mock("@/lib/downloadFile", () => ({ downloadFile: vi.fn() }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
+    t: (key: string, fallback?: unknown) =>
+      typeof fallback === "string" ? fallback : key,
   }),
 }));
-const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+const { query, closeoutQuery, refetch } = vi.hoisted(() => ({
+  query: vi.fn(),
+  closeoutQuery: vi.fn(),
+  refetch: vi.fn(),
+}));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    baggage: { flightCloseout: { useQuery: closeoutQuery } },
     dcs: {
       getStats: { useQuery: () => ({}) },
       getFlightManifest: { useQuery: query },
@@ -52,12 +58,34 @@ it("exports the selected manifest with UTC times, escaped names and only allowli
       },
     },
   });
+  closeoutQuery.mockReturnValue({
+    refetch,
+    data: {
+      flightId: 42,
+      readyToClose: false,
+      expectedBags: 1,
+      loadedBags: 0,
+      unexpectedBags: 1,
+      missingEntry: ["0000000001"],
+      missingLoading: [],
+      duplicates: [],
+    },
+  });
   render(<DcsDashboard />);
   fireEvent.click(screen.getByRole("button", { name: "Flight Manifest" }));
   const flightId = screen.getByRole("spinbutton");
   const exportButton = { name: "reports.exportCSV" };
   fireEvent.change(flightId, { target: { value: "42" } });
   expect(query).toHaveBeenLastCalledWith({ flightId: 42 }, { enabled: true });
+  expect(closeoutQuery).toHaveBeenLastCalledWith(
+    { flightId: 42 },
+    { enabled: false, retry: false }
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "dcs.manifest.checkBaggage" })
+  );
+  expect(refetch).toHaveBeenCalledOnce();
+  expect(screen.getByText("0000000001")).toBeInTheDocument();
   expect(screen.getByText(passenger.name)).toBeInTheDocument();
   expect(screen.getByText(passenger.seat)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", exportButton));
@@ -70,4 +98,5 @@ it("exports the selected manifest with UTC times, escaped names and only allowli
   // A cached response for flight 42 must not be exported as flight 43.
   fireEvent.change(flightId, { target: { value: "43" } });
   expect(screen.queryByRole("button", exportButton)).not.toBeInTheDocument();
+  expect(screen.queryByText("0000000001")).not.toBeInTheDocument();
 });

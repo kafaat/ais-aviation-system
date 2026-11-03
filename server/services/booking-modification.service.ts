@@ -1,12 +1,13 @@
 import { withInventoryTransaction } from "./inventory-capacity.service";
-import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   bookings,
+  bookingSegments,
   bookingModifications,
   passengers,
 } from "../../drizzle/schema";
+import { getFlightRbdAvailability } from "./rbd-inventory.service";
 import { eq, and } from "drizzle-orm";
 import { createRetailOffer } from "./retail-offer.service";
 import { quotePaidOrderService } from "./order-servicing.service";
@@ -34,7 +35,6 @@ export interface UpgradeCabinInput {
 async function requestService(
   input: ChangeFlightDateInput | UpgradeCabinInput
 ) {
-  const key = input.idempotencyKey ?? randomUUID();
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
   return withInventoryTransaction(db, async tx => {
@@ -55,6 +55,7 @@ async function requestService(
       });
     // Preserve the original digest for existing direct-client retries.
     const { tenantId: _tenantId, ...request } = input;
+    const key = input.idempotencyKey ?? calculateRequestHash(request);
     return withTransactionalIdempotency(
       {
         scope: "booking.modification.quote",
@@ -71,14 +72,49 @@ async function requestService(
             .select()
             .from(passengers)
             .where(eq(passengers.bookingId, booking.id));
+          const targetFlight =
+            "newFlightId" in input ? input.newFlightId : booking.flightId;
+          const cabin =
+            "newCabinClass" in input ? input.newCabinClass : booking.cabinClass;
+          const sourceFlight =
+            "replaceFlightId" in input && input.replaceFlightId != null
+              ? input.replaceFlightId
+              : booking.flightId;
+          const [sourceSegment] = await tx
+            .select({ fareClassId: bookingSegments.fareClassId })
+            .from(bookingSegments)
+            .where(
+              and(
+                eq(bookingSegments.bookingId, booking.id),
+                eq(bookingSegments.flightId, sourceFlight)
+              )
+            )
+            .limit(1);
+          const classId = sourceSegment
+            ? sourceSegment.fareClassId
+            : booking.fareClassId;
+          let fareClass;
+          if (classId != null) {
+            const buckets = await getFlightRbdAvailability(tx, [targetFlight]);
+            const bucket = buckets
+              .get(targetFlight)
+              ?.find(b => b.fareClassId === classId && b.cabinClass === cabin);
+            if (!bucket)
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message:
+                  "Replacement flight requires a matching active booking class",
+              });
+            fareClass = {
+              fareClassId: classId,
+              fareMultiplier: bucket.basePriceMultiplier,
+            };
+          }
           const offer = await createRetailOffer(
             {
-              flightId:
-                "newFlightId" in input ? input.newFlightId : booking.flightId,
-              cabinClass:
-                "newCabinClass" in input
-                  ? input.newCabinClass
-                  : booking.cabinClass,
+              flightId: targetFlight,
+              cabinClass: cabin,
+              fareClass,
               passengerTypes: pax.map(p => p.type),
               userId: input.userId,
               channel: "direct",

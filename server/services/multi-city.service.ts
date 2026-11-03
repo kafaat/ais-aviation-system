@@ -1,6 +1,11 @@
+import { persistInitialFareComponents } from "./fare-components.service";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { assertTenantOperational } from "./tenant.service";
-import { DEFAULT_TAX_RATE, priceOfferLines } from "./retail-offer.service";
+import {
+  DEFAULT_TAX_RATE,
+  priceOfferLines,
+  type OfferPayload,
+} from "./retail-offer.service";
 import { allocateProportional } from "./seat-economics.service";
 import { createInventoryLock } from "./inventory-lock.service";
 import {
@@ -9,10 +14,11 @@ import {
 } from "./idempotency-v2.service";
 import { recordEvent } from "./outbox.service";
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import * as db from "../db";
 import {
   bookingSegments,
+  bookingFareComponents,
   bookings,
   passengers,
   flights,
@@ -53,6 +59,7 @@ export interface MultiCityPriceResult {
     flightId: number;
     basePrice: number;
     discountedPrice: number;
+    fareLines?: OfferPayload["fareLines"];
     cabinClass: "economy" | "business";
     fareClassCode?: string;
   }>;
@@ -66,6 +73,7 @@ export interface MultiCityBookingInput {
   userId: number;
   tenantId?: number | null;
   idempotencyKey?: string;
+  expectedTotalMinor?: number;
   segments: Array<{
     flightId: number;
     departureDate: Date;
@@ -304,20 +312,25 @@ export async function calculateMultiCityPrice(
               : undefined)
         );
 
+        const adjusted = segment.fareClassCode
+          ? priceOfferLines(
+              pricingResult,
+              {
+                name: "direct:rbd",
+                fareMultiplier,
+                taxRate: pricingResult.fareLines ? DEFAULT_TAX_RATE : 0,
+              },
+              "direct"
+            )
+          : null;
         return {
           segmentIndex: index,
           flightId: segment.flightId,
-          basePrice: segment.fareClassCode
-            ? priceOfferLines(
-                pricingResult,
-                {
-                  name: "direct:rbd",
-                  fareMultiplier,
-                  taxRate: pricingResult.fareLines ? DEFAULT_TAX_RATE : 0,
-                },
-                "direct"
-              ).totalAmount
-            : pricingResult.price,
+          basePrice: adjusted?.totalAmount ?? pricingResult.price,
+          fareLines:
+            adjusted && "fareLines" in adjusted
+              ? (adjusted.fareLines as OfferPayload["fareLines"])
+              : pricingResult.fareLines,
           cabinClass: segment.cabinClass,
           fareClassCode: segment.fareClassCode?.toUpperCase(),
         };
@@ -405,6 +418,17 @@ export async function createMultiCityBooking(
       input.passengers.length,
       input.passengers.map(p => p.type)
     );
+
+    if (
+      input.expectedTotalMinor !== undefined &&
+      priceResult.totalPrice !== input.expectedTotalMinor
+    ) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message:
+          "The itinerary price has changed. Review the new total before booking.",
+      });
+    }
 
     // Generate booking reference and PNR
     const bookingReference = db.generateBookingReference();
@@ -568,6 +592,46 @@ export async function createMultiCityBooking(
         }));
 
         await tx.insert(passengers).values(passengersData);
+        const insertedPassengers = await tx
+          .select({ id: passengers.id })
+          .from(passengers)
+          .where(eq(passengers.bookingId, bookingId))
+          .orderBy(asc(passengers.id));
+        for (const [index, sector] of segmentResults.entries()) {
+          const quoted = priceResult.segments[index];
+          // The itinerary policy allocates its discount to sectors, not to fare or tax.
+          const fareLines = quoted.fareLines;
+          const adjustment = segmentAmounts[index] - quoted.basePrice;
+          await persistInitialFareComponents(tx, {
+            bookingId,
+            tenantId: first.tenantId,
+            bookingSegmentId: sector.segmentId,
+            flightId: sector.flightId,
+            totalAmount: quoted.basePrice,
+            passengerIds: insertedPassengers.map(p => p.id),
+            source: "retail_offer",
+            sourceReference: `multi-city:${bookingId}:${sector.segmentId}`,
+            sectorQuote: {
+              fareLines,
+              policy: {
+                name: quoted.fareClassCode ? "direct:rbd" : "direct:multi-city",
+              },
+            },
+          });
+          if (adjustment)
+            await tx.insert(bookingFareComponents).values({
+              bookingId,
+              tenantId: first.tenantId,
+              bookingSegmentId: sector.segmentId,
+              flightId: sector.flightId,
+              componentType: "discount",
+              code: "MULTICITY_DISCOUNT",
+              amount: adjustment,
+              source: "group_allocation",
+              sourceReference: `multi-city:${bookingId}:${sector.segmentId}`,
+              policyVersion: "multi-city:sector-proportional",
+            });
+        }
         await recordEvent(tx, {
           aggregateType: "booking",
           aggregateId: bookingId,

@@ -116,7 +116,7 @@ export default function MyBookings() {
     const id = url.searchParams.get("exchange");
     if (!id) return;
     const owned = bookings.find(b => String(b.id) === id);
-    if (owned) {
+    if (owned?.canExchange) {
       setSelectedBooking(owned);
       setModifyDialogOpen(true);
     }
@@ -883,17 +883,19 @@ export default function MyBookings() {
                                 booking.status !== "completed" && (
                                   <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3">
                                     <div className="flex gap-2">
-                                      <Button
-                                        variant="outline"
-                                        className="flex-1 rounded-xl hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 dark:hover:bg-blue-950/30 dark:hover:text-blue-400"
-                                        onClick={() => {
-                                          setSelectedBooking(booking);
-                                          setModifyDialogOpen(true);
-                                        }}
-                                      >
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        {t("myBookings.modify")}
-                                      </Button>
+                                      {booking.canExchange && (
+                                        <Button
+                                          variant="outline"
+                                          className="flex-1 rounded-xl hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 dark:hover:bg-blue-950/30 dark:hover:text-blue-400"
+                                          onClick={() => {
+                                            setSelectedBooking(booking);
+                                            setModifyDialogOpen(true);
+                                          }}
+                                        >
+                                          <Edit className="mr-2 h-4 w-4" />
+                                          {t("myBookings.modify")}
+                                        </Button>
+                                      )}
                                       <Button
                                         variant="outline"
                                         className="flex-1 rounded-xl hover:bg-red-50 hover:text-red-700 hover:border-red-200 dark:hover:bg-red-950/30 dark:hover:text-red-400"

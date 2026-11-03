@@ -139,6 +139,42 @@ describe("ZATCA draft boundary", () => {
     );
   });
 
+  it.each([null, "AIRPORT_LEVY", "OFFER_TAX_ESTIMATE"])(
+    "rejects missing VAT evidence and refuses to count %s as VAT",
+    async code => {
+      vi.stubEnv("AIS_ZATCA_DRAFT_MODE", "true");
+      const fixture = transactionMemory({});
+      const input = {
+        bookingId: 9,
+        tenantId: 3,
+        invoiceNumber: "DRAFT",
+        issueTimestamp: new Date(),
+        supplyTimestamp: new Date(),
+        sellerName: "Synthetic",
+        sellerVatNumber: "300000000000003",
+      };
+      const base = {
+        componentType: "base_fare" as const,
+        code: "AIR_FARE",
+        amount: 1000,
+      };
+      await expect(
+        createZatcaInvoiceDraft(fixture.db, { ...input, components: [base] })
+      ).rejects.toThrow(/tax classifications/);
+      await expect(
+        createZatcaInvoiceDraft(fixture.db, {
+          ...input,
+          components: [
+            base,
+            { componentType: "tax", code: "VAT-S", amount: 150 },
+            { componentType: "tax", code, amount: 10 },
+          ],
+        })
+      ).rejects.toThrow(/tax classifications/);
+      expect(fixture.rows("zatca_invoice_drafts")).toHaveLength(0);
+    }
+  );
+
   it("persists an auditable draft while leaving EGS reporting pending", async () => {
     vi.stubEnv("AIS_ZATCA_DRAFT_MODE", "true");
     const fixture = transactionMemory({});

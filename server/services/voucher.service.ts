@@ -1,3 +1,4 @@
+import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -619,50 +620,39 @@ export async function addCredit(
   amount: number,
   source: "refund" | "promo" | "compensation" | "bonus",
   description: string,
-  options?: {
+  options: {
     expiresAt?: Date;
     bookingId?: number;
-    createdBy?: number;
+    createdBy: number;
+    idempotencyKey: string;
   }
 ) {
-  const database = await getDb();
-  if (!database) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  try {
-    const [result] = await database.insert(userCredits).values({
-      userId,
-      amount,
-      source,
-      description,
-      expiresAt: options?.expiresAt || null,
-      bookingId: options?.bookingId || null,
-      createdBy: options?.createdBy || null,
-      usedAmount: 0,
-    });
-
-    const [newCredit] = await database
-      .select()
-      .from(userCredits)
-      .where(eq(userCredits.id, (result as { insertId: number }).insertId))
-      .limit(1);
-
-    console.info(
-      `[Credits] Added ${amount} cents credit to user ${userId}: ${description}`
-    );
-
-    return newCredit;
-  } catch (error) {
-    console.error("Error adding credit:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to add credit",
-    });
-  }
+  const credit = {
+    userId,
+    amount,
+    source,
+    description,
+    expiresAt: options.expiresAt ?? null,
+    bookingId: options.bookingId ?? null,
+    createdBy: options.createdBy,
+    usedAmount: 0,
+  };
+  return await withTransactionalIdempotency({
+    scope: "credit.add",
+    key: options.idempotencyKey,
+    userId: options.createdBy,
+    request: credit,
+    run: async tx => {
+      const [result] = await tx.insert(userCredits).values(credit);
+      const [row] = await tx
+        .select()
+        .from(userCredits)
+        .where(eq(userCredits.id, result.insertId))
+        .limit(1);
+      if (!row) throw new Error("Created credit unavailable");
+      return row;
+    },
+  });
 }
 
 /**

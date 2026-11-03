@@ -141,6 +141,7 @@ async function getFlightWithAircraft(flightId: number) {
       departureTime: flights.departureTime,
       arrivalTime: flights.arrivalTime,
       aircraftType: flights.aircraftType,
+      aircraftRegistrationId: flights.aircraftRegistrationId,
       status: flights.status,
       economySeats: flights.economySeats,
       businessSeats: flights.businessSeats,
@@ -1348,6 +1349,12 @@ export async function generateLoadSheet(flightId: number): Promise<{
 
   // Get flight details
   const flight = await getFlightWithAircraft(flightId);
+  if (flight.aircraftRegistrationId != null)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Use the current controlled load sheet for the assigned aircraft",
+    });
 
   // Get airline info
   const [airline] = await db

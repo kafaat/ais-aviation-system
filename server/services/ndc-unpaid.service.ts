@@ -1,3 +1,4 @@
+import { type NdcAction } from "./ndc-capabilities";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { lockRetailOffer, consumeRetailOffer } from "./retail-offer.service";
 import { z } from "zod";
@@ -43,7 +44,7 @@ import { allocateProportional } from "./seat-economics.service";
 import { recordEvent } from "./outbox.service";
 
 type Command = { orderId: string; userId: number; idempotencyKey: string };
-async function lockOrder(tx: SettlementTx, input: Command) {
+async function lockOrder(tx: SettlementTx, input: Command, action: NdcAction) {
   const [identity] = await tx
     .select()
     .from(ndcOrders)
@@ -53,9 +54,14 @@ async function lockOrder(tx: SettlementTx, input: Command) {
       code: "NOT_FOUND",
       message: "Owned NDC booking not found",
     });
-  const booking = await lockEditableInvoice(tx, identity.bookingId, {
-    userId: input.userId,
-  });
+  const booking = await lockEditableInvoice(
+    tx,
+    identity.bookingId,
+    {
+      userId: input.userId,
+    },
+    action
+  );
   const [order] = await tx
     .select()
     .from(ndcOrders)
@@ -426,7 +432,11 @@ export async function changeUnpaidOrder(
     userId: input.userId,
     request: input,
     run: async tx => {
-      const context = await lockOrder(tx, input);
+      const context = await lockOrder(
+        tx,
+        input,
+        input.changes.replacementOfferId ? "exchange" : "updateDetails"
+      );
       const replacementOfferId = changes.replacementOfferId;
       if (replacementOfferId)
         await replaceItinerary(
@@ -531,7 +541,7 @@ export async function serviceUnpaidOrder(
     userId: input.userId,
     request: input,
     run: async tx => {
-      const context = await lockOrder(tx, input);
+      const context = await lockOrder(tx, input, "addAncillary");
       const segments =
         storedJson<{ segments?: NdcSegment[] }>(context.order.orderPayload, {})
           .segments ?? [];

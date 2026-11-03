@@ -4,6 +4,7 @@ import { transactionMemory } from "./helpers/transaction-memory";
 const boundary = vi.hoisted(() => ({
   db: null as any,
   getFlight: vi.fn(),
+  price: vi.fn(),
   reference: 0,
 }));
 vi.mock("../db", () => ({
@@ -21,7 +22,7 @@ vi.mock("../services/metrics.service", () => ({
   trackBookingCancelled: vi.fn(),
 }));
 vi.mock("../services/flights.service", () => ({
-  calculateFlightPrice: async () => ({ price: 10000 }),
+  calculateFlightPrice: boundary.price,
   checkFlightAvailability: async (id: number) => ({
     available: true,
     flight: await boundary.getFlight(id),
@@ -92,6 +93,7 @@ beforeEach(() => {
     ],
   });
   boundary.db = fixture.db;
+  boundary.price.mockReset().mockResolvedValue({ price: 10000 });
   boundary.getFlight
     .mockReset()
     .mockImplementation(async id =>
@@ -221,6 +223,64 @@ describe("complete itinerary inventory", () => {
         departureDate: new Date("2030-01-01"),
       })),
     });
+  it("keeps each quoted passenger fare, tax and fee with its segment on command replay", async () => {
+    boundary.price.mockImplementation(async (flight: { id: number }) => {
+      const baseFare = flight.id === 11 ? 8000 : 9000;
+      return {
+        price: baseFare + 6500,
+        fareLines: [
+          {
+            type: "adult",
+            baseFare,
+            tax: 1000,
+            bookingFee: 100,
+            total: baseFare + 1100,
+          },
+          {
+            type: "child",
+            baseFare: 5000,
+            tax: 350,
+            bookingFee: 50,
+            total: 5400,
+          },
+        ],
+      };
+    });
+    const request = {
+      ...input,
+      passengers: [
+        ...input.passengers,
+        { type: "child" as const, firstName: "Lina", lastName: "Saleh" },
+      ],
+      segments: [11, 12].map(flightId => ({
+        flightId,
+        departureDate: new Date("2030-01-01"),
+      })),
+    };
+    const result = await createMultiCityBooking(request);
+    expect(await createMultiCityBooking(request)).toEqual(result);
+    const rows = fixture.rows("booking_fare_components");
+    expect(rows).toHaveLength(12);
+    expect(rows.reduce((sum, r) => sum + r.amount, 0)).toBe(result.totalAmount);
+    for (const { segmentId, flightId } of result.segments) {
+      for (const p of fixture.rows("passengers")) {
+        const scoped = rows.filter(
+          r =>
+            r.passengerId === p.id &&
+            r.bookingSegmentId === segmentId &&
+            r.flightId === flightId
+        );
+        expect(scoped.map(r => [r.componentType, r.amount])).toEqual([
+          [
+            "base_fare",
+            p.type === "adult" ? (flightId === 11 ? 8000 : 9000) : 5000,
+          ],
+          ["tax", p.type === "adult" ? 1000 : 350],
+          ["booking_fee", p.type === "adult" ? 100 : 50],
+        ]);
+      }
+    }
+  });
   it("holds, settles and cancels every segment exactly once", async () => {
     await multi();
     expect(fixture.rows("inventory_locks")).toHaveLength(2);
@@ -346,6 +406,28 @@ describe("seat replacement", () => {
     ]);
     expect(fixture.rows("passengers")[0].seatNumber).toBe("1B");
   });
+});
+
+it("declines a changed multi-city total before saving a passenger or acquiring a hold", async () => {
+  const command = {
+    ...input,
+    segments: [11, 12].map(flightId => ({
+      flightId,
+      departureDate: new Date("2030-01-01"),
+    })),
+    expectedTotalMinor: 19999,
+  };
+  await expect(createMultiCityBooking(command)).rejects.toMatchObject({
+    code: "CONFLICT",
+  });
+  expect(fixture.rows("bookings")).toHaveLength(0);
+  expect(fixture.rows("passengers")).toHaveLength(0);
+  expect(fixture.rows("inventory_locks")).toHaveLength(0);
+  const accepted = { ...command, expectedTotalMinor: 20000 };
+  const created = await createMultiCityBooking(accepted);
+  expect(await createMultiCityBooking(accepted)).toEqual(created);
+  expect(fixture.rows("passengers")).toHaveLength(1);
+  expect(fixture.rows("booking_segments")).toHaveLength(2);
 });
 
 it("rolls back earlier legs before retaining a later-leg payment failure for review", async () => {

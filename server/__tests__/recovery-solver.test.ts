@@ -35,6 +35,31 @@ describe("bounded recovery", () => {
         .unassignedPassengers
     ).toBe(2);
   });
+  it("keeps mixed booking classes inside both the cabin and the RBD limits", () => {
+    const problem = {
+      groups: ["Q", "Q", "Y", "absent"].map((classKey, i) => ({
+        bookingId: i + 1,
+        passengers: 1,
+        candidates: [{ key: "economy", classKey, delayMinutes: 0 }],
+      })),
+      capacities: { economy: 2, Q: 1, Y: 4 },
+    };
+    const result = solveRecovery(problem);
+    expect(result.unassignedPassengers).toBe(2);
+    expect(result.choices.find(c => c.bookingId === 3)?.key).toBe("economy");
+    expect(() =>
+      validateRecoverySolution(problem, result.choices)
+    ).not.toThrow();
+    expect(() =>
+      validateRecoverySolution(
+        problem,
+        problem.groups.map(g => ({
+          bookingId: g.bookingId,
+          key: g.bookingId <= 2 ? "economy" : null,
+        }))
+      )
+    ).toThrow("Infeasible");
+  });
   it("does not claim optimality when the search budget is exhausted", () => {
     const r = solveRecovery(problem, 1);
     expect(r.optimal).toBe(false);
@@ -138,6 +163,57 @@ describe("operator duty profiles", () => {
         ],
       }).compliant
     ).toBe(false);
+  });
+  it("enforces the next assignment's own rest and cumulative rules when adding earlier duties", () => {
+    const future = {
+      ...d(
+        "2026-09-16T06:00Z",
+        "2026-09-16T12:30Z",
+        "2026-09-16T07:00Z",
+        "2026-09-16T12:00Z"
+      ),
+      aircraftType: "B737",
+    };
+    const futureRule = {
+      ...rule,
+      minRestMinutes: 1200,
+      maxFlightTime28DayMinutes: 550,
+    };
+    const nextOnly = validateDuty(future, [], futureRule);
+    expect(nextOnly.compliant).toBe(true);
+    expect(
+      validateDuty(duty, [future], rule, () => futureRule).violations
+    ).toEqual(
+      expect.arrayContaining([
+        "Insufficient rest between distinct duties",
+        "Rolling 28-day flight-time limit exceeded",
+      ])
+    );
+    expect(validateDuty(duty, [future], rule, () => undefined).compliant).toBe(
+      false
+    );
+    expect(validateDuty(duty, [future], rule, () => rule).compliant).toBe(true);
+  });
+  it("excludes flight time already outside the future rolling window", () => {
+    const future = d(
+      "2026-10-13T10:00Z",
+      "2026-10-13T11:30Z",
+      "2026-10-13T11:00Z",
+      "2026-10-13T11:20Z"
+    );
+    // At 11:20 only the last 40 minutes from the earlier flight remain.
+    expect(
+      validateDuty(duty, [future], rule, () => ({
+        ...rule,
+        maxFlightTime28DayMinutes: 60,
+      })).compliant
+    ).toBe(true);
+    expect(
+      validateDuty(duty, [future], rule, () => ({
+        ...rule,
+        maxFlightTime28DayMinutes: 59,
+      })).violations
+    ).toContain("Rolling 28-day flight-time limit exceeded");
   });
   it("enforces operator-supplied 28 and 365 day flight-time limits", () => {
     const proposed = d(

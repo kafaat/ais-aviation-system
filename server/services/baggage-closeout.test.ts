@@ -28,7 +28,10 @@ describe("Resolution 753 departure inventory", () => {
       { baggageId: 1, flightId: 9, stage: "loading" },
       { baggageId: 1, flightId: 9, stage: "loading" },
       { baggageId: 2, flightId: 9, stage: "transfer" },
+      { baggageId: 3, flightId: 9, stage: "loading" },
+      { baggageId: 4, flightId: 10, stage: "loading" },
     ]);
+    expect(result.unexpectedBags).toBe(1);
     expect(result.readyToClose).toBe(false);
     expect(result.missingLoading).toEqual(["0065000002"]);
     expect(result.duplicates).toEqual([

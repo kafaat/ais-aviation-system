@@ -1,3 +1,4 @@
+import { CouponMonthReview } from "@/components/CouponMonthReview";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -1165,6 +1166,7 @@ export function RevenueAccounting() {
           </div>
         )}
 
+        <CouponMonthReview />
         {/* Deferred Revenue Detail */}
         {activeTab === "route" && (
           <Card>

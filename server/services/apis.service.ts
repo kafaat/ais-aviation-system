@@ -18,7 +18,7 @@ import {
   airports,
   airlines,
 } from "../../drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -896,8 +896,14 @@ export async function flagIncompletePassengers(flightId: number) {
  */
 export async function generateAPISMessage(
   flightId: number,
-  format: APISMessageFormat
+  format: APISMessageFormat,
+  tenantId: number | null
 ) {
+  if (!tenantId)
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "A tenant context is required for passenger message drafts",
+    });
   const db = await requireDb();
 
   // Get flight details with airports
@@ -907,9 +913,12 @@ export async function generateAPISMessage(
       flightNumber: flights.flightNumber,
       departureTime: flights.departureTime,
       arrivalTime: flights.arrivalTime,
+      originId: flights.originId,
+      destinationId: flights.destinationId,
+      airlineId: flights.airlineId,
     })
     .from(flights)
-    .where(eq(flights.id, flightId))
+    .where(and(eq(flights.id, flightId), eq(flights.tenantId, tenantId)))
     .limit(1);
 
   if (!flight) {
@@ -917,16 +926,6 @@ export async function generateAPISMessage(
   }
 
   // Get origin and destination airports
-  const [flightRoute] = await db
-    .select({
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-      airlineId: flights.airlineId,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
   const [origin] = await db
     .select({
       code: airports.code,
@@ -934,7 +933,7 @@ export async function generateAPISMessage(
       timezone: airports.timezone,
     })
     .from(airports)
-    .where(eq(airports.id, flightRoute.originId))
+    .where(eq(airports.id, flight.originId))
     .limit(1);
 
   const [destination] = await db
@@ -944,13 +943,13 @@ export async function generateAPISMessage(
       timezone: airports.timezone,
     })
     .from(airports)
-    .where(eq(airports.id, flightRoute.destinationId))
+    .where(eq(airports.id, flight.destinationId))
     .limit(1);
 
   const [airline] = await db
     .select({ code: airlines.code, name: airlines.name })
     .from(airlines)
-    .where(eq(airlines.id, flightRoute.airlineId))
+    .where(eq(airlines.id, flight.airlineId))
     .limit(1);
 
   // Get all validated APIS data for passengers on this flight
@@ -963,7 +962,13 @@ export async function generateAPISMessage(
     })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(manifestBookingCondition(flightId));
+    .where(
+      and(
+        manifestBookingCondition(flightId),
+        eq(bookings.tenantId, tenantId),
+        eq(passengers.tenantId, tenantId)
+      )
+    );
 
   const passengerIds = passengerData.map(p => p.passengerId);
 
@@ -995,7 +1000,9 @@ export async function generateAPISMessage(
   let messageContent: string;
 
   if (format === "paxlst") {
+    const authorityRecipient = process.env.AIS_PAXLST_DRAFT_RECIPIENT?.trim();
     if (
+      !authorityRecipient ||
       !origin ||
       !destination ||
       !airline ||
@@ -1005,10 +1012,11 @@ export async function generateAPISMessage(
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message:
-          "PAXLST requires carrier and route airports with valid time zones.",
+          "PAXLST requires an AIS_PAXLST_DRAFT_RECIPIENT, carrier and route airports with valid time zones.",
       });
     }
     messageContent = generatePAXLST({
+      authorityRecipient,
       flight,
       origin: {
         code: origin.code,

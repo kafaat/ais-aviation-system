@@ -30,6 +30,7 @@ const CompareFlights = lazy(() => import("./pages/CompareFlights"));
 const SavedPassengers = lazy(() => import("./pages/SavedPassengers"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const MyWaitlist = lazy(() => import("./pages/MyWaitlist"));
+const MultiCityCheckout = lazy(() => import("./pages/MultiCityCheckout"));
 const MultiCityResults = lazy(() => import("./pages/MultiCityResults"));
 const LiveFlightTracking = lazy(() => import("./pages/LiveFlightTracking"));
 const RebookPage = lazy(() => import("./pages/RebookPage"));
@@ -215,6 +216,11 @@ function Router() {
             <Suspense fallback={<PageLoadingFallback variant="search" />}>
               <SearchResults />
             </Suspense>
+          </Route>
+          <Route path="/booking/multi-city">
+            <ProtectedRoute>
+              <MultiCityCheckout />
+            </ProtectedRoute>
           </Route>
           <Route path="/booking/:id">
             <Suspense fallback={<PageLoadingFallback variant="form" />}>

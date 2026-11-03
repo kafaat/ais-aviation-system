@@ -122,7 +122,8 @@ export const emergencyHotelRouter = router({
       await assertPassengerOwnership(
         input.passengerId,
         ctx.user.id,
-        ctx.user.role
+        ctx.user.role,
+        { tenantId: ctx.tenantId }
       );
       try {
         return await getHotelBookingsByPassenger(input.passengerId);

@@ -2,8 +2,7 @@
  * BSP (Billing and Settlement Plan) & AHC Reporting Service
  *
  * Implements IATA BSP settlement reporting, Airlines Handling Charges (AHC)
- * reports, agent commission calculations, and HOT (Hand Off Tape) file
- * generation for the aviation booking system.
+ * reports and agent commission calculations. Contractual output is gated.
  *
  * All monetary amounts are in SAR cents (100 = 1 SAR) unless otherwise noted.
  */
@@ -125,20 +124,6 @@ export interface IATAComplianceCheck {
   details: string;
 }
 
-export interface HOTFileRecord {
-  recordType: string;
-  transactionCode: string;
-  documentNumber: string;
-  agentCode: string;
-  issueDate: string;
-  passengerName: string;
-  routeCode: string;
-  fareAmount: string;
-  taxAmount: string;
-  commissionAmount: string;
-  netAmount: string;
-}
-
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -190,33 +175,6 @@ function getCyclePeriod(cycleNumber: number): { start: Date; end: Date } {
     : new Date(year, month, 15, 23, 59, 59, 999);
 
   return { start, end };
-}
-
-/**
- * Format a monetary amount from SAR cents to a fixed-width string
- * for HOT file output (12 chars, right-justified, zero-padded).
- */
-function formatHOTAmount(amountInCents: number): string {
-  const absAmount = Math.abs(Math.round(amountInCents));
-  const sign = amountInCents < 0 ? "-" : "+";
-  return sign + absAmount.toString().padStart(11, "0");
-}
-
-/**
- * Format a date as DDMMYY for HOT file
- */
-function formatHOTDate(date: Date): string {
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yy = String(date.getFullYear()).slice(-2);
-  return `${dd}${mm}${yy}`;
-}
-
-/**
- * Pad or truncate a string to a fixed width for HOT file fields
- */
-function fixedWidth(value: string, width: number): string {
-  return value.slice(0, width).padEnd(width, " ");
 }
 
 // ============================================================================
@@ -927,142 +885,20 @@ export async function reconcileBSPTransactions(periodId: number): Promise<{
   };
 }
 
-/**
- * Generate an IATA HOT (Hand Off Tape) format export.
- *
- * HOT is a fixed-width text format used for electronic data interchange
- * between BSP participants. Each line is a fixed-length record with
- * specific field positions defined by IATA standards.
- */
-export async function generateHOTFile(): Promise<{
+/** Legacy callers must import BSP-originated HOT accounting data. */
+export function generateHOTFile(): Promise<{
   filename: string;
   content: string;
   recordCount: number;
   generatedAt: Date;
 }> {
-  requireBspDocumentAuthority();
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  // Get the current cycle period
-  const now = new Date();
-  const cycleNumber = calculateCycleNumber(now);
-  const period = getCyclePeriod(cycleNumber);
-
-  // Fetch all transactions in the current cycle
-  const results = await db
-    .select({
-      bookingReference: bookings.bookingReference,
-      pnr: bookings.pnr,
-      totalAmount: bookings.totalAmount,
-      paymentStatus: bookings.paymentStatus,
-      createdAt: bookings.createdAt,
-      flightNumber: flights.flightNumber,
-      departureTime: flights.departureTime,
-      originCode: sql<string>`origin_airport.code`,
-      destCode: sql<string>`dest_airport.code`,
-      airlineCode: airlines.code,
-      userName: users.name,
+  return Promise.reject(
+    new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "HOT is received from the BSP. Use the normalized finance evidence import for local comparison.",
     })
-    .from(bookings)
-    .leftJoin(flights, eq(bookings.flightId, flights.id))
-    .leftJoin(users, eq(bookings.userId, users.id))
-    .leftJoin(airlines, eq(flights.airlineId, airlines.id))
-    .leftJoin(
-      sql`${airports} AS origin_airport`,
-      sql`origin_airport.id = ${flights.originId}`
-    )
-    .leftJoin(
-      sql`${airports} AS dest_airport`,
-      sql`dest_airport.id = ${flights.destinationId}`
-    )
-    .where(
-      and(
-        sql`EXISTS (SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${bookings.id} AND l.type = 'charge' AND l.currency = 'SAR')`,
-        gte(bookings.createdAt, period.start),
-        lte(bookings.createdAt, period.end),
-        eq(bookings.status, "confirmed")
-      )
-    )
-    .orderBy(bookings.createdAt)
-    .limit(99999);
-
-  const lines: string[] = [];
-
-  // Header record (BHD)
-  const headerDate = formatHOTDate(now);
-  const cycleStr = String(cycleNumber).padStart(6, "0");
-  lines.push(
-    `BHD${headerDate}${cycleStr}${fixedWidth("AIS-AVIATION", 20)}${fixedWidth("SAR", 3)}${String(results.length).padStart(6, "0")}${"".padEnd(82, " ")}`
   );
-
-  // Transaction records (BKP for sales, BRF for refunds)
-  for (const row of results) {
-    const amount = Number(row.totalAmount) || 0;
-    const isRefund = row.paymentStatus === "refunded";
-    const recordType = isRefund ? "BRF" : "BKP";
-    const transactionCode = isRefund ? "RFND" : "TKTT";
-
-    const taxRate = 0.15;
-    const fareBeforeTax = Math.round(amount / (1 + taxRate));
-    const taxAmount = amount - fareBeforeTax;
-    const commissionAmount = 0;
-    const netAmount = amount - commissionAmount;
-
-    const docNumber = fixedWidth(row.pnr || row.bookingReference || "", 10);
-    const agentCode = fixedWidth("DIRECT", 8);
-    const issueDate = row.createdAt
-      ? formatHOTDate(new Date(row.createdAt))
-      : formatHOTDate(now);
-    const passengerName = fixedWidth(
-      (row.userName || "UNKNOWN").toUpperCase(),
-      30
-    );
-    const routeCode = fixedWidth(
-      `${row.originCode || "???"}${row.destCode || "???"}`,
-      6
-    );
-
-    const line = [
-      recordType,
-      fixedWidth(transactionCode, 4),
-      docNumber,
-      agentCode,
-      issueDate,
-      passengerName,
-      routeCode,
-      formatHOTAmount(isRefund ? -fareBeforeTax : fareBeforeTax),
-      formatHOTAmount(isRefund ? -taxAmount : taxAmount),
-      formatHOTAmount(isRefund ? -commissionAmount : commissionAmount),
-      formatHOTAmount(isRefund ? -netAmount : netAmount),
-    ].join("");
-
-    lines.push(line);
-  }
-
-  // Trailer record (BTL)
-  const totalAmount = results.reduce(
-    (sum, r) => sum + (Number(r.totalAmount) || 0),
-    0
-  );
-  lines.push(
-    `BTL${String(results.length).padStart(6, "0")}${formatHOTAmount(totalAmount)}${"".padEnd(111, " ")}`
-  );
-
-  const timestamp = now.toISOString().replace(/[:.]/g, "-");
-  const filename = `HOT-BSP-${cycleStr}-${timestamp}.hot`;
-
-  return {
-    filename,
-    content: lines.join("\n"),
-    recordCount: results.length,
-    generatedAt: now,
-  };
 }
 
 /**

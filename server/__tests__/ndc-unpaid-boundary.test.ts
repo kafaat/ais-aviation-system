@@ -82,6 +82,7 @@ beforeEach(() => {
           phoneNumber: "123",
         }),
         orderPayload: JSON.stringify({
+          ndcVersion: "21.3",
           passengers: [pax],
           segments: [4, 5].map(segment),
           pricing: { totalAmount: 10000 },
@@ -323,4 +324,13 @@ describe("unpaid NDC invoice commands", () => {
     await expect(add()).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
     expect(fixture.rows("booking_ancillaries")).toHaveLength(0);
   });
+});
+
+it("rejects a partner-issued amendment before any inventory or invoice change", async () => {
+  fixture.rows("ndc_orders")[0].distributorId = "partner";
+  await expect(
+    changeOrder({ ...command, changes: { replacementOfferId: "NEW" } })
+  ).rejects.toThrow("Issuing channel");
+  expect(fixture.rows("ndc_orders")[0].offerId).toBe("OLD");
+  expect(fixture.rows("ndc_offers")[1].status).toBe("active");
 });

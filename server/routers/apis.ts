@@ -70,7 +70,9 @@ export const apisRouter = router({
     .output(responseContracts["submitInfo"])
     .mutation(async ({ input, ctx }) => {
       const { passengerId, ...data } = input;
-      await assertPassengerOwnership(passengerId, ctx.user.id, ctx.user.role);
+      await assertPassengerOwnership(passengerId, ctx.user.id, ctx.user.role, {
+        tenantId: ctx.tenantId,
+      });
       return await apisService.collectPassengerInfo(passengerId, data);
     }),
 
@@ -88,7 +90,8 @@ export const apisRouter = router({
       await assertPassengerOwnership(
         input.passengerId,
         ctx.user.id,
-        ctx.user.role
+        ctx.user.role,
+        { tenantId: ctx.tenantId }
       );
       return await apisService.getPassengerAPISStatus(input.passengerId);
     }),
@@ -137,10 +140,11 @@ export const apisRouter = router({
       })
     )
     .output(responseContracts["generateMessage"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       return await apisService.generateAPISMessage(
         input.flightId,
-        input.format
+        input.format,
+        ctx.tenantId
       );
     }),
 

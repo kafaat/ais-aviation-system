@@ -29,14 +29,21 @@ export const walletRouter = router({
   topUp: protectedProcedure
     .input(
       z.object({
+        idempotencyKey: z.uuid(),
         amount: z.number().int().min(1000).max(1000000), // 10 SAR to 10,000 SAR in cents
       })
     )
     .output(responseContracts["topUp"])
     .mutation(async ({ ctx, input }) => {
       try {
-        return await topUpWallet(ctx.user.id, input.amount, "Wallet top-up");
+        return await topUpWallet(
+          ctx.user.id,
+          input.amount,
+          "Wallet top-up",
+          input.idempotencyKey
+        );
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:

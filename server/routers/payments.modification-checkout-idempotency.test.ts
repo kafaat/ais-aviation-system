@@ -73,6 +73,7 @@ beforeEach(() => {
         status: "pending",
         totalCost: 5000,
         servicingPayload: null,
+        createdAt: new Date(),
       },
     ],
     payment_receipts: [],
@@ -95,7 +96,11 @@ describe("legacy modification checkout idempotency", () => {
     const caller = paymentsRouter.createCaller(context());
     const input = { bookingId: 10, modificationId: 17 };
     await caller.createModificationCheckout(input);
-    await caller.createModificationCheckout(input);
+    const changedContext = context();
+    changedContext.user!.email = "changed@example.test";
+    await paymentsRouter
+      .createCaller(changedContext)
+      .createModificationCheckout(input);
 
     expect(mocks.checkout).toHaveBeenCalledTimes(2);
     const [firstParams, firstOptions] = mocks.checkout.mock.calls[0];
@@ -113,22 +118,32 @@ describe("legacy modification checkout idempotency", () => {
     expect(firstParams.line_items[0].price_data.unit_amount).toBe(5000);
   });
 
-  it("changes the key only when the authoritative amount changes", async () => {
+  it("rejects a repriced claim and an expired legacy operation without contacting the provider", async () => {
     const caller = paymentsRouter.createCaller(context());
-    await caller.createModificationCheckout({
-      bookingId: 10,
-      modificationId: 17,
-    });
+    const input = { bookingId: 10, modificationId: 17 };
+    await caller.createModificationCheckout(input);
     fixture.rows("booking_modifications")[0].totalCost = 7000;
-    await caller.createModificationCheckout({
-      bookingId: 10,
-      modificationId: 17,
-    });
-    expect(mocks.checkout.mock.calls[0][1].idempotencyKey).toBe(
-      "modification.checkout:17:5000"
+    await expect(
+      caller.createModificationCheckout(input)
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    fixture.rows("booking_modifications")[0].createdAt = new Date(
+      Date.now() - 24 * 3600_000
     );
-    expect(mocks.checkout.mock.calls[1][1].idempotencyKey).toBe(
-      "modification.checkout:17:7000"
+    await expect(
+      caller.createModificationCheckout(input)
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(mocks.checkout).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mint a new key for a historical pending modification without a saved claim", async () => {
+    fixture.rows("booking_modifications")[0].createdAt = new Date(
+      Date.now() - 24 * 3600_000
     );
+    await expect(
+      paymentsRouter
+        .createCaller(context())
+        .createModificationCheckout({ bookingId: 10, modificationId: 17 })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(mocks.checkout).not.toHaveBeenCalled();
   });
 });

@@ -79,12 +79,14 @@ export const loyaltyRouter = router({
     })
     .input(
       z.object({
+        idempotencyKey: z.string().min(8).max(128),
         mfaToken: z
           .string()
           .regex(/^\d{6}$/)
           .optional(),
         milesToRedeem: z
           .number()
+          .int()
           .min(100)
           .max(100000)
           .describe("Number of miles to redeem"),
@@ -100,7 +102,8 @@ export const loyaltyRouter = router({
         ctx.user.id,
         input.milesToRedeem,
         input.bookingId,
-        input.mfaToken
+        input.mfaToken,
+        input.idempotencyKey
       );
     }),
 

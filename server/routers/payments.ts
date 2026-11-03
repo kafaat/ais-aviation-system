@@ -13,7 +13,13 @@ import {
   router,
 } from "../_core/trpc";
 import { stripe } from "../stripe";
-import { operationKey, providerRequestOptions } from "../_core/idempotency";
+import type Stripe from "stripe";
+import { withTransactionalIdempotency } from "../services/idempotency-v2.service";
+import {
+  operationKey,
+  providerRequestOptions,
+  requireSafeCheckoutReplay,
+} from "../_core/idempotency";
 import { getDb } from "../db";
 import {
   bookings,
@@ -281,45 +287,40 @@ export const paymentsRouter = router({
 
       const providerId = (input.provider || "stripe") as PaymentProviderType;
 
-      // Legacy (pre-servicing) modifications have no frozen checkout claim,
-      // so this call used to create a fresh payable session on every
-      // client retry. The operation is "collect this modification's
-      // authoritative amount once": key it by the modification and the
-      // amount it was quoted at, never by anything minted per attempt.
+      // A pre-upgrade checkout could already have used the old amount-based key
+      // at any time since this row was created. Never replay beyond its safe age.
+      requireSafeCheckoutReplay(modification.createdAt?.getTime());
       const checkoutKey = operationKey("modification.checkout", [
         input.modificationId,
         authoritativeAmount,
       ]);
       if (providerId === "stripe") {
-        const session = await stripe.checkout.sessions.create(
-          {
-            payment_method_types: ["card"],
-            line_items: [
-              {
-                price_data: {
-                  currency: "sar",
-                  product_data: {
-                    name: `Booking Modification - ${bookingData.bookingReference}`,
-                    description: `Modification #${input.modificationId}`,
+        const params = await withTransactionalIdempotency({
+          scope: "checkout.legacy-modification",
+          key: String(input.modificationId),
+          userId: ctx.user.id,
+          request: { bookingId: input.bookingId, amount: authoritativeAmount },
+          run: () =>
+            Promise.resolve({
+              payment_method_types: ["card"],
+              line_items: [
+                {
+                  price_data: {
+                    currency: "sar",
+                    product_data: {
+                      name: `Booking Modification - ${bookingData.bookingReference}`,
+                      description: `Modification #${input.modificationId}`,
+                    },
+                    unit_amount: authoritativeAmount,
                   },
-                  unit_amount: authoritativeAmount,
+                  quantity: 1,
                 },
-                quantity: 1,
-              },
-            ],
-            mode: "payment",
-            success_url: `${appBaseUrl}/my-bookings?modification=success&session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${appBaseUrl}/my-bookings?modification=cancelled`,
-            customer_email: ctx.user.email || undefined,
-            client_reference_id: ctx.user.id.toString(),
-            metadata: {
-              bookingId: input.bookingId.toString(),
-              modificationId: input.modificationId.toString(),
-              userId: ctx.user.id.toString(),
-              type: "modification",
-              authoritativeAmount: authoritativeAmount.toString(),
-            },
-            payment_intent_data: {
+              ],
+              mode: "payment",
+              success_url: `${appBaseUrl}/my-bookings?modification=success&session_id={CHECKOUT_SESSION_ID}`,
+              cancel_url: `${appBaseUrl}/my-bookings?modification=cancelled`,
+              customer_email: ctx.user.email || undefined,
+              client_reference_id: ctx.user.id.toString(),
               metadata: {
                 bookingId: input.bookingId.toString(),
                 modificationId: input.modificationId.toString(),
@@ -327,8 +328,20 @@ export const paymentsRouter = router({
                 type: "modification",
                 authoritativeAmount: authoritativeAmount.toString(),
               },
-            },
-          },
+              payment_intent_data: {
+                metadata: {
+                  bookingId: input.bookingId.toString(),
+                  modificationId: input.modificationId.toString(),
+                  userId: ctx.user.id.toString(),
+                  type: "modification",
+                  authoritativeAmount: authoritativeAmount.toString(),
+                },
+              },
+            } satisfies Stripe.Checkout.SessionCreateParams),
+        });
+        requireSafeCheckoutReplay(modification.createdAt.getTime());
+        const session = await stripe.checkout.sessions.create(
+          params,
           providerRequestOptions(checkoutKey)
         );
 

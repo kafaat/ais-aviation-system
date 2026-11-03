@@ -1221,6 +1221,27 @@ try {
       const { calculateRequestHash } =
         await import("../../server/services/idempotency-v2.service");
       await booking(30, 14);
+      const [recoveryFare] = await db
+        .insert(s.fareClasses)
+        .values({
+          airlineId: id,
+          code: "L",
+          name: "Synthetic protected fare",
+          cabinClass: "economy",
+        })
+        .$returningId();
+      await db
+        .update(s.bookings)
+        .set({ fareClassId: recoveryFare.id })
+        .where(eq(s.bookings.id, id + 30));
+      await db.insert(s.flightFareClassInventory).values(
+        [14, 15].map(f => ({
+          flightId: id + f,
+          fareClassId: recoveryFare.id,
+          capacity: 1,
+          availableSeats: f === 14 ? 0 : 1,
+        }))
+      );
       await db
         .update(s.flights)
         .set({ economyAvailable: 9 })
@@ -1398,6 +1419,19 @@ try {
           .from(s.bookings)
           .where(eq(s.bookings.id, id + 30));
         assert.equal(moved.flightId, id + 15);
+        assert.equal(moved.fareClassId, recoveryFare.id);
+        const buckets = await db
+          .select()
+          .from(s.flightFareClassInventory)
+          .where(eq(s.flightFareClassInventory.fareClassId, recoveryFare.id));
+        assert.equal(
+          buckets.find(b => b.flightId === id + 14)?.availableSeats,
+          1
+        );
+        assert.equal(
+          buckets.find(b => b.flightId === id + 15)?.availableSeats,
+          0
+        );
         return {
           missingTailRejected: true,
           missingCrewRejected: true,
@@ -1553,6 +1587,72 @@ try {
     }
   );
   await record(
+    "fiscal-draft-replay",
+    "Identical local invoice drafts converge and conflicting fiscal totals are rejected",
+    async () => {
+      const { createZatcaInvoiceDraft } =
+        await import("../../server/services/fare-components.service");
+      const before = process.env.AIS_ZATCA_DRAFT_MODE;
+      process.env.AIS_ZATCA_DRAFT_MODE = "true";
+      const input = {
+        bookingId: id,
+        tenantId: id,
+        invoiceNumber: "SYNTHETIC-AUDIT",
+        issueTimestamp: new Date("2026-11-01T00:00:00Z"),
+        supplyTimestamp: new Date("2026-11-01T00:00:00Z"),
+        sellerName: "Synthetic operator",
+        sellerVatNumber: "300000000000003",
+        components: [
+          {
+            componentType: "base_fare" as const,
+            code: "SYNTHETIC-BASE",
+            amount: 1000,
+          },
+          { componentType: "tax" as const, code: "VAT-S", amount: 150 },
+        ],
+      };
+      try {
+        const draft = () =>
+          db.transaction(tx => createZatcaInvoiceDraft(tx, input));
+        const [first, second] = await Promise.all([draft(), draft()]);
+        assert.equal(first.id, second.id);
+        await assert.rejects(
+          db.transaction(tx =>
+            createZatcaInvoiceDraft(tx, {
+              ...input,
+              components: [
+                { ...input.components[0], amount: 2000 },
+                input.components[1],
+              ],
+            })
+          ),
+          /already reserved/
+        );
+        return { distinctDrafts: 1 };
+      } finally {
+        if (before === undefined) delete process.env.AIS_ZATCA_DRAFT_MODE;
+        else process.env.AIS_ZATCA_DRAFT_MODE = before;
+      }
+    }
+  );
+  await record(
+    "credit-add-replay",
+    "A retried administrative grant creates a single credit",
+    async () => {
+      const { addCredit } =
+        await import("../../server/services/voucher.service");
+      const options = { createdBy: id, idempotencyKey: "audit-admin-credit" };
+      const grant = () => addCredit(id, 1, "bonus", "Synthetic grant", options);
+      const [a, b] = await Promise.all([grant(), grant()]);
+      assert.equal(a.id, b.id);
+      await assert.rejects(
+        addCredit(id, 2, "bonus", "Synthetic grant", options),
+        /different payload/
+      );
+      return { distinctCredits: 1 };
+    }
+  );
+  await record(
     "R18",
     "Concurrent redemptions and a later refund preserve the net miles balance",
     async () => {
@@ -1576,13 +1676,26 @@ try {
         (await awardMilesForBooking(id, id + 31, id + 17, 10000)).newBalance,
         100
       );
-      await assert.rejects(redeemMiles(id, -1), /positive whole/);
+      await assert.rejects(
+        redeemMiles(id, -1, undefined, undefined, "redeem-invalid"),
+        /positive whole/
+      );
       const redemptions = await Promise.allSettled([
-        redeemMiles(id, 80),
-        redeemMiles(id, 80),
+        redeemMiles(id, 80, undefined, undefined, "redeem-first"),
+        redeemMiles(id, 80, undefined, undefined, "redeem-second"),
       ]);
       assert.equal(redemptions.filter(r => r.status === "fulfilled").length, 1);
       assert.equal(redemptions.filter(r => r.status === "rejected").length, 1);
+      const completedIndex = redemptions.findIndex(
+        result => result.status === "fulfilled"
+      );
+      const replayKey = ["redeem-first", "redeem-second"][completedIndex];
+      const replay = await redeemMiles(id, 80, undefined, undefined, replayKey);
+      assert.equal(replay.newBalance, 20);
+      await assert.rejects(
+        redeemMiles(id, 79, undefined, undefined, replayKey),
+        /different payload/
+      );
       await db.transaction(tx =>
         settleVerifiedRefund(tx, {
           paymentIntentId: "pi_audit_redeemed_refund",
@@ -1609,7 +1722,10 @@ try {
         .where(eq(s.loyaltyAccounts.userId, id));
       assert.equal(account.currentMilesBalance, -80);
       assert.equal(account.milesRedeemed, 80);
-      await assert.rejects(redeemMiles(id, 1), /Insufficient miles/);
+      await assert.rejects(
+        redeemMiles(id, 1, undefined, undefined, "redeem-short"),
+        /Insufficient miles/
+      );
       return {
         concurrentRedemptions: 2,
         successfulRedemptions: 1,
@@ -1634,7 +1750,41 @@ try {
       await db
         .insert(s.users)
         .values({ id: ownerId, tenantId: id, openId: "audit-miles-expiry" });
+      await db.insert(s.loyaltyPolicyProfiles).values({
+        tenantId: id,
+        version: "synthetic-ssp-r19",
+        status: "approved",
+        expiryMode: "none",
+        mileStandaloneValueMinor: 1,
+        expectedBreakageBasisPoints: 0,
+        currency: "SAR",
+        approvedBy: id,
+        approvedAt: hour(-2),
+        effectiveAt: hour(-2),
+        sourceReferences: {
+          loyaltyAllocations: [
+            {
+              bookingId: id + 40,
+              currency: "SAR",
+              transactionPriceMinor: 10000,
+              travelStandalonePriceMinor: 10000,
+              reference: "synthetic-finance-R19",
+            },
+          ],
+        },
+      });
       await booking(40, 17);
+      await db.insert(s.bookingFareComponents).values({
+        bookingId: id + 40,
+        tenantId: id,
+        flightId: id + 17,
+        passengerId: id + 40 * 20,
+        componentType: "base_fare",
+        amount: 10000,
+        currency: "SAR",
+        source: "retail_offer",
+        sourceReference: "synthetic-R19",
+      });
       await db
         .update(s.bookings)
         .set({ userId: ownerId })
@@ -1653,7 +1803,7 @@ try {
           .newBalance,
         100
       );
-      await redeemMiles(ownerId, 40);
+      await redeemMiles(ownerId, 40, undefined, undefined, "redeem-expire");
       // Advance this synthetic credit's expiry; no application clock or other account is changed.
       await db
         .update(s.loyaltyCreditLots)
@@ -1699,6 +1849,32 @@ try {
         30
       );
       assert.equal(ledger.filter(t => t.type === "expire").length, 1);
+      const postings = (
+        await db
+          .select()
+          .from(s.loyaltyContractLiabilityEvents)
+          .where(eq(s.loyaltyContractLiabilityEvents.bookingId, id + 40))
+      ).sort((a, b) => a.id - b.id);
+      assert.deepEqual(
+        postings.map(row => row.eventType),
+        ["allocate", "redeem", "expire", "reverse"]
+      );
+      assert.equal(postings[0].allocatedAmountMinor, 99);
+      assert.ok(
+        postings.every(
+          row =>
+            row.deferredAmountAfterMinor === 99 &&
+            row.recognizedAmountMinor === 0
+        )
+      );
+      const [credit] = await db
+        .select()
+        .from(s.userCredits)
+        .where(eq(s.userCredits.userId, ownerId));
+      assert.equal(
+        (postings[1].evidence as { creditId: number }).creditId,
+        credit.id
+      );
       return {
         credited: 100,
         spent: 40,
@@ -1762,7 +1938,7 @@ try {
       const concurrent = await Promise.allSettled([
         awardBonusMiles(ownerId, 30, "Concurrent bonus A"),
         awardBonusMiles(ownerId, 50, "Concurrent bonus B"),
-        redeemMiles(ownerId, 20),
+        redeemMiles(ownerId, 20, undefined, undefined, "redeem-pool"),
       ]);
       assert(
         concurrent.every(r => r.status === "fulfilled"),
@@ -1887,11 +2063,30 @@ try {
   await booking(70, 0, 2);
   const { verifyBaggageEntitlements } = await import("./baggage-entitlements");
   await verifyBaggageEntitlements(db, id + 70, id, record);
+  const { verifyBaggageCustodyReplay } =
+    await import("./baggage-custody-replay");
+  await record(
+    "BAGGAGE-SECTOR-01",
+    "Concurrent station retries are idempotent and sector changes are reconciled",
+    () => verifyBaggageCustodyReplay(db, id)
+  );
   const { verifyPaidSectorExchange } = await import("./paid-sector-exchange");
   await record(
     "EXCHANGE-SECTOR-01",
     "Second-sector checkout recovery, paid seat, unchanged coupon and ledger replay",
     () => verifyPaidSectorExchange(db, ctx, id)
+  );
+  const { verifyCouponMonthClose } = await import("./coupon-month-close");
+  await record(
+    "COUPON-CLOSE-01",
+    "Signed coupon uplift separates cash, unused carriage, flown carriage and loyalty at a synthetic month close",
+    () => verifyCouponMonthClose(db, ctx, id)
+  );
+  const { verifyBspLocalEvidence } = await import("./bsp-local-evidence");
+  await record(
+    "BSP-LOCAL-01",
+    "Daily agency moves are compared with immutable RET, HOT and bank evidence",
+    () => verifyBspLocalEvidence(db, ctx, id)
   );
   await writeFile(
     reportPath,

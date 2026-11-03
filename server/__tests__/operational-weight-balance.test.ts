@@ -90,6 +90,15 @@ describe("operator-controlled weight and balance", () => {
     expect(() =>
       calculateOperationalWeightBalance({
         ...input,
+        registration: {
+          ...input.registration,
+          approvedAt: "2026-12-01T00:00:00.000Z",
+        },
+      })
+    ).toThrow("outside its effective interval");
+    expect(() =>
+      calculateOperationalWeightBalance({
+        ...input,
         profile: {
           ...input.profile,
           effectiveTo: "2026-11-01T00:00:00.000Z",

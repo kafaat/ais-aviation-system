@@ -1,14 +1,17 @@
 import { createHash, randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import {
   operationalMessageRoutes,
   operationalMessageTransmissions,
 } from "../../drizzle/operations-schema";
+import { providerBoundary } from "../_core/provider-boundary";
 import { getDb } from "../db";
 import { parseAuthorityAcknowledgment } from "./apis-pnrgov";
 import {
   assertTransmissionTransition,
+  parseOperationalDraft,
+  operationalMessageTypes,
   requireAcceptedOperationalRoute,
   type TransmissionStatus,
 } from "./operational-messaging.service";
@@ -71,12 +74,49 @@ export async function createTransmissionDraft(input: {
         )
       )
       .limit(1);
-    if (!row || row.messageDigest !== digest)
+    if (
+      !row ||
+      row.messageDigest !== digest ||
+      row.direction !== "outbound" ||
+      row.routeId !== (input.routeId ?? null) ||
+      row.flightId !== (input.flightId ?? null) ||
+      row.messageType !== input.messageType
+    )
       throw new TRPCError({
         code: "CONFLICT",
         message: "Transmission idempotency key was reused with different data",
       });
     return { transmissionId: row.id, messageDigest: row.messageDigest };
+  });
+}
+
+function assertTypeBRoute(
+  row: typeof operationalMessageTransmissions.$inferSelect,
+  route: typeof operationalMessageRoutes.$inferSelect,
+  now: Date
+) {
+  const envelope = parseOperationalDraft(row.messageContent);
+  if (
+    providerBoundary() !== "open" ||
+    !route.acceptedBy ||
+    !route.acceptedAt ||
+    route.acceptedAt > now ||
+    row.direction !== "outbound" ||
+    envelope.messageType !== row.messageType ||
+    route.messageType !== row.messageType ||
+    envelope.originAddress !== route.originAddress ||
+    envelope.destinationAddress !== route.destinationAddress
+  )
+    throw new Error(
+      "Operational message has no matching accepted Type B route"
+    );
+  requireAcceptedOperationalRoute({
+    originAddress: route.originAddress,
+    destinationAddress: route.destinationAddress,
+    stationCode: route.stationCode,
+    transportProfile: route.transportProfile,
+    enabled: route.enabled,
+    acceptedAt: route.acceptedAt.toISOString(),
   });
 }
 
@@ -115,16 +155,7 @@ export async function queueTransmission(input: {
       .limit(1)
       .for("update");
     if (!route) throw new Error("Operational message route unavailable");
-    if (route.messageType !== row.messageType)
-      throw new Error("Operational route does not accept this message type");
-    requireAcceptedOperationalRoute({
-      originAddress: route.originAddress,
-      destinationAddress: route.destinationAddress,
-      stationCode: route.stationCode,
-      transportProfile: route.transportProfile,
-      enabled: route.enabled,
-      acceptedAt: route.acceptedAt?.toISOString() ?? null,
-    });
+    assertTypeBRoute(row, route, new Date());
     assertTransmissionTransition(row.status as TransmissionStatus, "queued");
     await tx
       .update(operationalMessageTransmissions)
@@ -136,7 +167,10 @@ export async function queueTransmission(input: {
 
 /** Claims one due message. The adapter must later record success or failure. */
 export async function claimDueTransmission(now = new Date()) {
-  if (process.env.AIS_TYPE_B_TRANSPORT_ENABLED !== "true")
+  if (
+    process.env.AIS_TYPE_B_TRANSPORT_ENABLED !== "true" ||
+    providerBoundary() !== "open"
+  )
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "Operational message transport is disabled",
@@ -144,11 +178,38 @@ export async function claimDueTransmission(now = new Date()) {
   const db = await getDb();
   if (!db) throw new Error("Aviation message storage unavailable");
   return db.transaction(async tx => {
-    const [row] = await tx
-      .select()
+    const [match] = await tx
+      .select({
+        row: operationalMessageTransmissions,
+        route: operationalMessageRoutes,
+      })
       .from(operationalMessageTransmissions)
+      .innerJoin(
+        operationalMessageRoutes,
+        and(
+          eq(
+            operationalMessageRoutes.id,
+            operationalMessageTransmissions.routeId
+          ),
+          eq(
+            operationalMessageRoutes.tenantId,
+            operationalMessageTransmissions.tenantId
+          ),
+          eq(
+            operationalMessageRoutes.messageType,
+            operationalMessageTransmissions.messageType
+          )
+        )
+      )
       .where(
         and(
+          eq(operationalMessageTransmissions.direction, "outbound"),
+          inArray(operationalMessageTransmissions.messageType, [
+            ...operationalMessageTypes,
+          ]),
+          eq(operationalMessageRoutes.enabled, true),
+          isNotNull(operationalMessageRoutes.acceptedBy),
+          lte(operationalMessageRoutes.acceptedAt, now),
           or(
             eq(operationalMessageTransmissions.status, "queued"),
             eq(operationalMessageTransmissions.status, "retry_scheduled")
@@ -165,7 +226,21 @@ export async function claimDueTransmission(now = new Date()) {
       )
       .limit(1)
       .for("update", { skipLocked: true });
-    if (!row) return null;
+    if (!match) return null;
+    const { row, route } = match;
+    // A changed route must never release an earlier draft to a different station.
+    try {
+      assertTypeBRoute(row, route, now);
+    } catch {
+      await tx
+        .update(operationalMessageTransmissions)
+        .set({
+          status: "failed",
+          errorMessage: "Type B route no longer matches this draft",
+        })
+        .where(eq(operationalMessageTransmissions.id, row.id));
+      return null;
+    }
     const leaseKey = randomUUID();
     await tx
       .update(operationalMessageTransmissions)
@@ -226,6 +301,11 @@ export async function recordTransportResult(input: {
         .where(eq(operationalMessageTransmissions.id, row.id));
       return { status };
     }
+    if (
+      !input.providerMessageId?.trim() ||
+      input.providerMessageId.length > 128
+    )
+      throw new Error("A transport receipt reference is required");
     assertTransmissionTransition(row.status, "sent");
     await tx
       .update(operationalMessageTransmissions)
@@ -248,7 +328,6 @@ export async function recordAuthorityAcknowledgment(input: {
   responseContent: string;
   now?: Date;
 }) {
-  const decision = parseAuthorityAcknowledgment(input.responseContent);
   const db = await getDb();
   if (!db) throw new Error("Aviation message storage unavailable");
   const now = input.now ?? new Date();
@@ -269,6 +348,14 @@ export async function recordAuthorityAcknowledgment(input: {
         code: "NOT_FOUND",
         message: "Transmission not found",
       });
+    if (row.direction !== "outbound")
+      throw new Error("Outbound transmission required");
+    const decision = parseAuthorityAcknowledgment(input.responseContent, row);
+    const responseDigest = createHash("sha256")
+      .update(input.responseContent)
+      .digest("hex");
+    if (row.responseDigest === responseDigest && row.status === decision.status)
+      return decision;
     assertTransmissionTransition(
       row.status as TransmissionStatus,
       decision.status
@@ -278,9 +365,7 @@ export async function recordAuthorityAcknowledgment(input: {
       .set({
         status: decision.status,
         acknowledgmentCode: decision.responseCode,
-        responseDigest: createHash("sha256")
-          .update(input.responseContent)
-          .digest("hex"),
+        responseDigest,
         acknowledgedAt: now,
         errorMessage: decision.errorCodes.length
           ? `Authority error codes: ${decision.errorCodes.join(",")}`

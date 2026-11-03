@@ -3,6 +3,7 @@ import { generatePAXLST } from "../services/apis-paxlst";
 
 function draft(lastName = "O'Neal", firstName = "A+B:C?D*E") {
   return generatePAXLST({
+    authorityRecipient: "TESTGOV",
     flight: {
       id: 1,
       flightNumber: "XX1",

@@ -1,3 +1,4 @@
+import { ingestCouponUplift } from "../services/coupon-uplift";
 import { ingestTravelEvidence } from "../services/travel-evidence.service";
 import {
   ingestTravelClearance,
@@ -113,6 +114,12 @@ export const aviationIntegrationsRouter = router({
       })
     )
     .query(({ input, ctx }) => premiumResults(input.id, ctx.tenantId)),
+  ingestCouponUplift: publicProcedure
+    .input(signedEvidenceInput)
+    .output(evidenceReceipt)
+    .mutation(({ input }) =>
+      ingestCouponUplift(input.envelope, input.signature)
+    ),
   ingestFlightCost: publicProcedure
     .input(signedEvidenceInput)
     .output(evidenceReceipt)

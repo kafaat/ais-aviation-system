@@ -54,6 +54,7 @@ export async function findApprovedPassengerRightsProfile(
         eq(passengerRightsPolicyProfiles.tenantId, tenantId),
         eq(passengerRightsPolicyProfiles.jurisdiction, jurisdiction),
         eq(passengerRightsPolicyProfiles.status, "approved"),
+        lte(passengerRightsPolicyProfiles.approvedAt, at),
         lte(passengerRightsPolicyProfiles.effectiveAt, at)
       )
     )

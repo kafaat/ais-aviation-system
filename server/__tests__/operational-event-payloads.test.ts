@@ -19,6 +19,7 @@ const evidenceKinds = [
   "travel_rules",
   "travel_clearance",
   "flight_cost",
+  "coupon_uplift",
 ];
 const receipts: Array<[string, Record<string, unknown>]> = [
   ...evidenceKinds.map(

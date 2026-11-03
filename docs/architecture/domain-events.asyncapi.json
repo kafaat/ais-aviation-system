@@ -8,7 +8,7 @@
   },
   "x-ais-producer-coverage": {
     "callSites": 70,
-    "eventTypes": 87,
+    "eventTypes": 88,
     "unregistered": []
   },
   "defaultContentType": "application/cloudevents+json",
@@ -54,6 +54,9 @@
         },
         "aviation_flight_cost_v1": {
           "$ref": "#/components/messages/aviation_flight_cost_v1"
+        },
+        "aviation_coupon_uplift_v1": {
+          "$ref": "#/components/messages/aviation_coupon_uplift_v1"
         },
         "crew_rules_accepted_v1": {
           "$ref": "#/components/messages/crew_rules_accepted_v1"
@@ -1528,6 +1531,107 @@
               "const": "application/json"
             },
             "dataschema": { "const": "urn:ais:events:aviation.flight_cost:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_coupon_uplift_v1": {
+        "name": "aviation.coupon_uplift v1",
+        "title": "aviation.coupon_uplift",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.coupon_uplift.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aviation.coupon_uplift:v1"
+            },
             "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
@@ -8602,6 +8706,7 @@
                   "org.ais.aviation.travel_rules.v1",
                   "org.ais.aviation.travel_clearance.v1",
                   "org.ais.aviation.flight_cost.v1",
+                  "org.ais.aviation.coupon_uplift.v1",
                   "org.ais.crew.rules_accepted.v1",
                   "org.ais.crew.assignment_created.v1",
                   "org.ais.aircraft.rotation_planned.v1",

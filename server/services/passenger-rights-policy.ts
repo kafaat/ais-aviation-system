@@ -71,6 +71,8 @@ export function validatePassengerRightsProfile(
     throw new Error("Passenger-rights profile ID is invalid");
   if (!Number.isSafeInteger(profile.tenantId) || profile.tenantId <= 0)
     throw new Error("Passenger-rights tenant is invalid");
+  if (profile.status !== "approved" || !profile.version.trim())
+    throw new Error("Passenger-rights policy version is not approved");
   if (
     profile.sourceUri !== PASSENGER_RIGHTS_PRIMARY_SOURCES[profile.jurisdiction]
   )
@@ -82,7 +84,9 @@ export function validatePassengerRightsProfile(
     profile.effectiveAt > at ||
     !Number.isSafeInteger(profile.approvedBy) ||
     profile.approvedBy <= 0 ||
-    Number.isNaN(profile.approvedAt.getTime())
+    Number.isNaN(profile.approvedAt.getTime()) ||
+    profile.approvedAt > at ||
+    !Number.isFinite(at.getTime())
   )
     throw new Error("Passenger-rights approval evidence is incomplete");
   for (const rule of profile.rules) {
@@ -155,15 +159,18 @@ export function evaluatePassengerRights(
       ) &&
       within(facts.distanceKm, rule.minimumDistanceKm, rule.maximumDistanceKm)
   );
-  const rule = candidates.find(item =>
+  const matches = candidates.filter(item =>
     item.conditions.every(condition =>
       facts.conditionsSatisfied.includes(condition)
     )
   );
-  if (!rule)
+  const [rule] = matches;
+  if (matches.length !== 1)
     return {
       status: "needs_review" as const,
-      reason: "No approved rule matches the recorded facts and conditions",
+      reason: matches.length
+        ? "Multiple approved rules match the facts"
+        : "No approved rule matches the recorded facts and conditions",
       amountMinor: null,
       currency: null,
       policyVersion: profile.version,
@@ -190,12 +197,21 @@ export function evaluatePassengerRights(
         currency: rule.currency,
         policyVersion: profile.version,
       };
+    const award =
+      (BigInt(facts.fareMinor) * BigInt(rule.amount.basisPoints) + 5000n) /
+      10000n;
+    if (award > BigInt(Number.MAX_SAFE_INTEGER))
+      return {
+        status: "needs_review" as const,
+        reason: "Calculated award exceeds the supported monetary range",
+        amountMinor: null,
+        currency: rule.currency,
+        policyVersion: profile.version,
+      };
     return {
       status: "calculated" as const,
       reason: "Approved fare-percentage rule matched",
-      amountMinor: Math.round(
-        (facts.fareMinor * rule.amount.basisPoints) / 10_000
-      ),
+      amountMinor: Number(award),
       currency: rule.currency,
       policyVersion: profile.version,
     };

@@ -1,3 +1,4 @@
+import { lockSimulatedLoadPlanFlight } from "./load-sheet-lifecycle.service";
 import { manifestBookingCondition } from "./flight-state.service";
 import { assignCrewWithRules } from "./crew-rule.service";
 /**
@@ -730,41 +731,18 @@ export async function getLoadPlan(flightId: number) {
   };
 }
 
-export async function approveLoadPlan(loadPlanId: number, approvedBy: number) {
-  requireDemoCapability("Weight and balance simulation");
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const [plan] = await db
-    .select()
-    .from(loadPlans)
-    .where(eq(loadPlans.id, loadPlanId))
-    .limit(1);
-  if (!plan)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Load plan not found" });
-
-  if (!plan.withinLimits) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot approve load plan with safety warnings",
-    });
-  }
-
-  await db
-    .update(loadPlans)
-    .set({ status: "approved", approvedBy, approvedAt: new Date() })
-    .where(eq(loadPlans.id, loadPlanId));
-
-  return { success: true };
+export function approveLoadPlan(loadPlanId: number, approvedBy: number) {
+  return transitionSimulatedLoadPlan(loadPlanId, approvedBy, "approved");
 }
 
-export async function finalizeLoadPlan(
+export function finalizeLoadPlan(loadPlanId: number, finalizedBy: number) {
+  return transitionSimulatedLoadPlan(loadPlanId, finalizedBy, "finalized");
+}
+
+async function transitionSimulatedLoadPlan(
   loadPlanId: number,
-  finalizedBy: number
+  actorId: number,
+  status: "approved" | "finalized"
 ) {
   requireDemoCapability("Weight and balance simulation");
   const db = await getDb();
@@ -773,27 +751,48 @@ export async function finalizeLoadPlan(
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
-
-  const [plan] = await db
-    .select()
+  const [hint] = await db
+    .select({ flightId: loadPlans.flightId })
     .from(loadPlans)
     .where(eq(loadPlans.id, loadPlanId))
     .limit(1);
-  if (!plan)
+  if (!hint)
     throw new TRPCError({ code: "NOT_FOUND", message: "Load plan not found" });
-  if (plan.status !== "approved") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Load plan must be approved before finalizing",
-    });
-  }
-
-  await db
-    .update(loadPlans)
-    .set({ status: "finalized", finalizedBy, finalizedAt: new Date() })
-    .where(eq(loadPlans.id, loadPlanId));
-
-  return { success: true };
+  return db.transaction(async tx => {
+    await lockSimulatedLoadPlanFlight(tx, hint.flightId);
+    const [plan] = await tx
+      .select()
+      .from(loadPlans)
+      .where(
+        and(eq(loadPlans.id, loadPlanId), eq(loadPlans.flightId, hint.flightId))
+      )
+      .limit(1)
+      .for("update");
+    if (!plan)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Load plan not found",
+      });
+    if (!plan.withinLimits)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Cannot approve load plan with safety warnings",
+      });
+    if (status === "finalized" && plan.status !== "approved")
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Load plan must be approved before finalizing",
+      });
+    await tx
+      .update(loadPlans)
+      .set(
+        status === "approved"
+          ? { status, approvedBy: actorId, approvedAt: new Date() }
+          : { status, finalizedBy: actorId, finalizedAt: new Date() }
+      )
+      .where(eq(loadPlans.id, loadPlanId));
+    return { success: true };
+  });
 }
 
 // ============================================================================

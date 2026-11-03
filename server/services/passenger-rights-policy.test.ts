@@ -85,6 +85,23 @@ describe("versioned passenger-rights policy", () => {
     });
   });
 
+  it("sends overlapping approved awards to review instead of paying the first", () => {
+    const rule = profile.rules[0];
+    const result = evaluatePassengerRights(
+      {
+        ...profile,
+        rules: [rule, { ...rule, amount: { kind: "fixed", minor: 900 } }],
+      },
+      {
+        event: "cancellation",
+        occurredAt: new Date("2026-05-01T00:00:00Z"),
+        fareMinor: 5000,
+        currency: "SAR",
+        conditionsSatisfied: rule.conditions,
+      }
+    );
+    expect(result).toMatchObject({ status: "needs_review", amountMinor: null });
+  });
   it("rejects a profile whose primary source was replaced", () => {
     expect(() =>
       evaluatePassengerRights(
@@ -97,4 +114,15 @@ describe("versioned passenger-rights policy", () => {
       )
     ).toThrow("pinned primary source");
   });
+});
+
+it("keeps an award outside the representable balance in review", () => {
+  const result = evaluatePassengerRights(profile, {
+    event: "cancellation",
+    occurredAt: new Date("2026-05-01T00:00:00Z"),
+    fareMinor: Number.MAX_SAFE_INTEGER,
+    currency: "SAR",
+    conditionsSatisfied: profile.rules[0].conditions,
+  });
+  expect(result).toMatchObject({ status: "needs_review", amountMinor: null });
 });

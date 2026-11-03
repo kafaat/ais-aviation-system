@@ -19,6 +19,11 @@ import { openPrivacyDownload } from "../../server/services/privacy-export.servic
 import { getFinancialSummary } from "../../server/services/financial-reporting.service";
 import { getRefundStats } from "../../server/services/refunds-stats.service";
 import {
+  assignLoadSheetAircraft,
+  evaluateLoadSheet,
+  verifyCurrentLoadSheet,
+} from "../../server/services/load-sheet-lifecycle.service";
+import {
   evaluateCrewCandidates,
   evaluateCrewDuty,
   ingestCrewRules,
@@ -56,6 +61,167 @@ export async function verifyProjectHardening(
       departureTime: new Date("2020-01-01T10:00:00Z"),
       arrivalTime: new Date("2020-01-01T12:00:00Z"),
     }))
+  );
+  await check(
+    "A controlled aircraft swap invalidates the signed sheet and recalculates a new edition",
+    async () => {
+      const flags = {
+        demos: process.env.AIS_ENABLE_DEMOS,
+        key: process.env.AIS_LOAD_SHEET_DRAFT_KEY,
+      };
+      try {
+        process.env.AIS_ENABLE_DEMOS = "true";
+        process.env.AIS_LOAD_SHEET_DRAFT_KEY =
+          "synthetic-only-acceptance-load-sheet-key";
+        const flightId = id + 20;
+        const tenancy = id;
+        await db.insert(s.flights).values({
+          ...template,
+          id: flightId,
+          flightNumber: "LSTEST",
+          airlineId: id,
+          tenantId: tenancy,
+          aircraftType: "WBTEST",
+          status: "scheduled",
+        });
+        const [type] = await db.insert(s.aircraftTypes).values({
+          code: "WBTEST",
+          name: "WB fixture",
+          manufacturer: "Fixture",
+          maxTakeoffWeight: 70000,
+          maxLandingWeight: 65000,
+          maxZeroFuelWeight: 60000,
+          operatingEmptyWeight: 40000,
+          maxPayload: 20000,
+          maxFuelCapacity: 15000,
+          totalSeats: 10,
+          economySeats: 10,
+          businessSeats: 0,
+        });
+        const controlled = {
+          airlineId: id,
+          aircraftTypeId: type.insertId,
+          effectiveFrom: new Date(Date.now() - 86400000),
+          approvedAt: new Date(Date.now() - 86400000),
+          approvedBy: id,
+          evidenceId: id,
+          status: "accepted" as const,
+        };
+        const registrationIds: number[] = [];
+        for (const weight of [40000, 40500]) {
+          const [reg] = await db.insert(s.aircraftRegistrations).values({
+            ...controlled,
+            registration: `TEST-${weight}`,
+            dataVersion: "v1",
+            dryOperatingWeightKg: String(weight),
+            dryOperatingIndex: "10",
+          });
+          registrationIds.push(reg.insertId);
+        }
+        const [profile] = await db.insert(s.aircraftBalanceProfiles).values({
+          ...controlled,
+          version: "WB-1",
+          referenceStationMm: "10000",
+          lemacMm: "10000",
+          macLengthMm: "4000",
+          indexConstant: "0",
+          indexCoefficient: "100000",
+          maxLmcWeightKg: "500",
+          maxLmcIndex: "1",
+          envelope: (["zfw", "tow", "law"] as const).flatMap(phase =>
+            [30000, 70000].map(weightKg => ({
+              phase,
+              weightKg,
+              forwardMacPercent: 0,
+              aftMacPercent: 100,
+            }))
+          ),
+        });
+        const [a, b] = registrationIds;
+        const actor = { userId: id, tenantId: tenancy };
+        const command = {
+          flightId,
+          registrationId: a,
+          expectedEdition: 0,
+          profileId: profile.insertId,
+          load: {
+            trafficLoadKg: 8000,
+            trafficIndex: 2,
+            takeoffFuelKg: 10000,
+            takeoffFuelIndex: 3,
+            tripFuelKg: 5000,
+            tripFuelIndex: 1,
+          },
+        };
+        await assignLoadSheetAircraft(
+          {
+            flightId,
+            registrationId: a,
+            expectedRegistrationId: null,
+            reason: "Initial synthetic assignment",
+          },
+          actor
+        );
+        assert.equal(
+          (await evaluateLoadSheet(command, actor)).withinLimits,
+          true
+        );
+        const first = await verifyCurrentLoadSheet(
+          { flightId, edition: 1 },
+          actor
+        );
+        await assignLoadSheetAircraft(
+          {
+            flightId,
+            registrationId: b,
+            expectedRegistrationId: a,
+            reason: "Replacement synthetic aircraft",
+          },
+          actor
+        );
+        await assert.rejects(
+          verifyCurrentLoadSheet({ flightId, edition: 1 }, actor),
+          /reevaluation/
+        );
+        const attempts = await Promise.allSettled(
+          [1, 2].map(() =>
+            evaluateLoadSheet(
+              { ...command, registrationId: b, expectedEdition: 1 },
+              actor
+            )
+          )
+        );
+        assert.equal(attempts.filter(r => r.status === "fulfilled").length, 1);
+        const second = await verifyCurrentLoadSheet(
+          { flightId, edition: 2 },
+          actor
+        );
+        assert.notEqual(first.digestSha256, second.digestSha256);
+        assert.equal(second.registrationId, b);
+        const logs = await db
+          .select()
+          .from(s.auditLogs)
+          .where(
+            and(
+              eq(s.auditLogs.resourceId, String(flightId)),
+              eq(s.auditLogs.eventType, "LOAD_SHEET_AIRCRAFT_ASSIGNED")
+            )
+          );
+        assert(
+          logs.some(
+            log =>
+              log.userId === id &&
+              log.changeDescription === "Replacement synthetic aircraft"
+          )
+        );
+      } finally {
+        if (flags.demos === undefined) delete process.env.AIS_ENABLE_DEMOS;
+        else process.env.AIS_ENABLE_DEMOS = flags.demos;
+        if (flags.key === undefined)
+          delete process.env.AIS_LOAD_SHEET_DRAFT_KEY;
+        else process.env.AIS_LOAD_SHEET_DRAFT_KEY = flags.key;
+      }
+    }
   );
   await db.insert(s.bookings).values({
     id,
@@ -242,6 +408,15 @@ export async function verifyProjectHardening(
                 departureTime: new Date("2029-12-31T22:00:00Z"),
                 arrivalTime: new Date("2030-01-01T01:00:00Z"),
               },
+              {
+                ...template,
+                id: id + 12,
+                airlineId: id,
+                aircraftType: "B737",
+                flightNumber: "HDNEXT",
+                departureTime: new Date("2030-01-01T17:00:00Z"),
+                arrivalTime: new Date("2030-01-01T18:00:00Z"),
+              },
             ]);
             await db.insert(s.crewAssignments).values([
               {
@@ -259,6 +434,14 @@ export async function verifyProjectHardening(
                 assignedBy: id + 1,
                 dutyStartTime: new Date("2029-12-31T21:30:00Z"),
                 dutyEndTime: new Date("2030-01-01T01:15:00Z"),
+              },
+              {
+                flightId: id + 12,
+                crewMemberId: id + 2,
+                role: "captain",
+                assignedBy: id + 1,
+                dutyStartTime: new Date("2030-01-01T16:30:00Z"),
+                dutyEndTime: new Date("2030-01-01T18:15:00Z"),
               },
             ]);
             let reads = 0;
@@ -279,7 +462,14 @@ export async function verifyProjectHardening(
             );
             assert.equal(reads, 2);
             assert.equal(batch.length, 20);
-            assert.equal(batch.filter(c => c.compliant).length, 17);
+            assert(
+              batch
+                .find(c => c.crewMemberId === id + 2)
+                ?.violations.includes(
+                  "Insufficient rest between distinct duties"
+                )
+            );
+            assert.equal(batch.filter(c => c.compliant).length, 16);
             const missingAircraft = await evaluateCrewCandidates(
               db,
               candidates,

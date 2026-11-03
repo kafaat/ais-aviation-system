@@ -59,12 +59,10 @@ export async function ingestCrewRules(
     return receipt;
   });
 }
-export async function getCrewRules(
+async function operatorPolicies(
   tx: SettlementTx,
   airlineId: number,
-  tenantId: number | null | undefined,
-  date: Date,
-  aircraftType?: string | null
+  tenantId: number | null | undefined
 ) {
   const rows = await tx
     .select()
@@ -81,38 +79,70 @@ export async function getCrewRules(
     .orderBy(desc(aviationEvidence.observedAt), desc(aviationEvidence.id))
     .limit(201);
   if (rows.length > 200) throw new Error("Narrow the operator policy history");
-  const sources = new Set<string>();
-  const matches: Array<{
-    evidenceId: number;
-    rule: ReturnType<typeof crewRuleSchema.parse>;
-  }> = [];
-  for (const row of rows) {
-    const rule = crewRuleSchema.parse(row.payload);
-    if (
-      rule.airlineId !== airlineId ||
-      Date.parse(rule.effectiveFrom) > date.getTime() ||
-      Date.parse(rule.effectiveTo) <= date.getTime() ||
-      (aircraftType && !rule.aircraftTypes.includes(aircraftType)) ||
-      sources.has(row.sourceId)
-    )
-      continue;
-    sources.add(row.sourceId);
-    matches.push({ evidenceId: row.id, rule });
-  }
-  if (matches.length !== 1)
-    throw new Error(
-      "Exactly one effective operator-approved crew profile is required"
-    );
-  const selected = matches[0];
-  const evidence = rows.find(r => r.id === selected.evidenceId);
-  if (!evidence) throw new Error("Crew profile receipt missing");
-  requireCurrentAviationSource(
-    evidence.sourceId,
-    "crew_rules",
-    evidence.tenantId,
-    airlineId
+  const entries = rows.map(row => ({
+    row,
+    rule: crewRuleSchema.parse(row.payload),
+  }));
+  const maxDays = Math.max(
+    7,
+    ...entries.map(entry => crewHistoryDays(entry.rule))
   );
-  return selected;
+  function select(date: Date, aircraftType?: string | null) {
+    const sources = new Set<string>();
+    const matches: Array<{
+      evidenceId: number;
+      rule: ReturnType<typeof crewRuleSchema.parse>;
+    }> = [];
+    for (const { row, rule } of entries) {
+      if (
+        rule.airlineId !== airlineId ||
+        Date.parse(rule.effectiveFrom) > date.getTime() ||
+        Date.parse(rule.effectiveTo) <= date.getTime() ||
+        (aircraftType && !rule.aircraftTypes.includes(aircraftType)) ||
+        sources.has(row.sourceId)
+      )
+        continue;
+      sources.add(row.sourceId);
+      matches.push({ evidenceId: row.id, rule });
+    }
+    if (matches.length !== 1)
+      throw new Error(
+        "Exactly one effective operator-approved crew profile is required"
+      );
+    const selected = matches[0];
+    const evidence = rows.find(r => r.id === selected.evidenceId);
+    if (!evidence) throw new Error("Crew profile receipt missing");
+    requireCurrentAviationSource(
+      evidence.sourceId,
+      "crew_rules",
+      evidence.tenantId,
+      airlineId
+    );
+    return selected;
+  }
+  return { select, maxDays };
+}
+
+export async function getCrewRules(
+  tx: SettlementTx,
+  airlineId: number,
+  tenantId: number | null | undefined,
+  date: Date,
+  aircraftType?: string | null
+) {
+  return (await operatorPolicies(tx, airlineId, tenantId)).select(
+    date,
+    aircraftType
+  );
+}
+
+// Include duties before and after insertion; reporting/release can extend beyond
+// the flight legs. Missing duty times still surface via the flight timestamps.
+function dutyWindow(duty: Duty, days: number) {
+  return and(
+    sql`GREATEST(COALESCE(${crewAssignments.dutyEndTime}, ${flights.arrivalTime}), ${flights.arrivalTime}) > ${new Date(duty.start.getTime() - days * 86400000)}`,
+    sql`LEAST(COALESCE(${crewAssignments.dutyStartTime}, ${flights.departureTime}), ${flights.departureTime}) < ${new Date(duty.end.getTime() + days * 86400000)}`
+  );
 }
 export async function evaluateCrewDuty(
   tx: SettlementTx,
@@ -133,10 +163,12 @@ export async function evaluateCrewDuty(
     .where(eq(crewMembers.id, crewMemberId))
     .limit(1);
   if (!crew) throw new Error("Crew member not found");
-  const profile = await getCrewRules(
+  const policies = await operatorPolicies(
     tx,
     crew.airlineId,
-    proposed.tenantId,
+    proposed.tenantId
+  );
+  const profile = policies.select(
     proposed.departureTime,
     proposed.aircraftType
   );
@@ -158,6 +190,7 @@ export async function evaluateCrewDuty(
   };
   const rows = await tx
     .select({
+      aircraftType: flights.aircraftType,
       start: crewAssignments.dutyStartTime,
       end: crewAssignments.dutyEndTime,
       departure: flights.departureTime,
@@ -172,10 +205,7 @@ export async function evaluateCrewDuty(
         proposed.flightId
           ? ne(crewAssignments.flightId, proposed.flightId)
           : undefined,
-        sql`${flights.arrivalTime} > ${new Date(
-          duty.start.getTime() - crewHistoryDays(profile.rule) * 86400000
-        )}`,
-        sql`${flights.departureTime} < ${duty.end}`
+        dutyWindow(duty, policies.maxDays)
       )
     )
     .limit(1001);
@@ -188,9 +218,11 @@ export async function evaluateCrewDuty(
     rows.map(r => ({
       start: r.start ?? new Date(NaN),
       end: r.end ?? new Date(NaN),
+      aircraftType: r.aircraftType,
       departure: r.departure,
       arrival: r.arrival,
-    }))
+    })),
+    policies.select
   );
 }
 
@@ -199,11 +231,19 @@ function assessCrewDuty(
   profile: Awaited<ReturnType<typeof getCrewRules>>,
   proposed: Parameters<typeof evaluateCrewDuty>[2],
   duty: Duty,
-  history: Duty[]
+  history: Duty[],
+  selectProfile: Awaited<ReturnType<typeof operatorPolicies>>["select"]
 ) {
   const crewMemberId = crew.id;
 
-  const checked = validateDuty(duty, history, profile.rule);
+  const checked = validateDuty(duty, history, profile.rule, d => {
+    if (!d.aircraftType) return undefined;
+    try {
+      return selectProfile(d.departure, d.aircraftType).rule;
+    } catch {
+      return undefined;
+    }
+  });
   const violations = [...checked.violations];
   if (crew.status !== "active") violations.push("Crew member is not active");
   if (!crew.medicalExpiry || crew.medicalExpiry < duty.end)
@@ -257,10 +297,12 @@ export async function evaluateCrewCandidates(
     candidates.some(c => c.airlineId !== candidates[0].airlineId)
   )
     throw new Error("Narrow the replacement crew pool");
-  const profile = await getCrewRules(
+  const policies = await operatorPolicies(
     tx,
     candidates[0].airlineId,
-    proposed.tenantId,
+    proposed.tenantId
+  );
+  const profile = policies.select(
     proposed.departureTime,
     proposed.aircraftType
   );
@@ -285,6 +327,7 @@ export async function evaluateCrewCandidates(
       crewMemberId: crewAssignments.crewMemberId,
       flightId: flights.id,
       flightNumber: flights.flightNumber,
+      aircraftType: flights.aircraftType,
       start: crewAssignments.dutyStartTime,
       end: crewAssignments.dutyEndTime,
       departure: flights.departureTime,
@@ -302,10 +345,7 @@ export async function evaluateCrewCandidates(
         proposed.flightId
           ? ne(crewAssignments.flightId, proposed.flightId)
           : undefined,
-        sql`${flights.arrivalTime} > ${new Date(
-          duty.start.getTime() - crewHistoryDays(profile.rule) * 86400000
-        )}`,
-        sql`${flights.departureTime} < ${duty.end}`
+        dutyWindow(duty, policies.maxDays)
       )
     )
     .limit(10001);
@@ -326,10 +366,18 @@ export async function evaluateCrewCandidates(
     const history = own.map(r => ({
       start: r.start ?? new Date(NaN),
       end: r.end ?? new Date(NaN),
+      aircraftType: r.aircraftType,
       departure: r.departure,
       arrival: r.arrival,
     }));
-    const assessment = assessCrewDuty(crew, profile, proposed, duty, history);
+    const assessment = assessCrewDuty(
+      crew,
+      profile,
+      proposed,
+      duty,
+      history,
+      policies.select
+    );
     const duties = new Map(
       history
         .filter(
