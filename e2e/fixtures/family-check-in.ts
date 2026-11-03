@@ -10,10 +10,15 @@ export function registerFamilyCheckInTests() {
   }) => {
     test.setTimeout(120000);
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
-    const { booking, flightId } = await ownedBooking(page, true, [
-      { firstName: "Nora", lastName: "Family", type: "adult" },
-      { firstName: "Sami", lastName: "Family", type: "adult" },
-    ]);
+    const { booking, flightId } = await ownedBooking(
+      page,
+      true,
+      [
+        { firstName: "Nora", lastName: "Family", type: "adult" },
+        { firstName: "Sami", lastName: "Family", type: "adult" },
+      ],
+      "departurePassenger"
+    );
     const client = rpc(page);
     const bookingId = booking.bookingId;
     const passengers = await client.bookings.getPassengers.query({ bookingId });
@@ -71,7 +76,7 @@ export function registerFamilyCheckInTests() {
       idempotencyKey: randomUUID(),
     });
 
-    await useBrowserSession(page, "regular");
+    await useBrowserSession(page, "departurePassenger");
     await page.goto("/check-in");
     await page.getByLabel("Passenger Name Record (PNR)").fill(booking.pnr);
     await page.getByRole("button", { name: "Search", exact: true }).click();

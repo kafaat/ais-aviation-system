@@ -194,7 +194,14 @@ test("flight exports use the same flight IDs, departure day, status and seat tot
 test("revenue downloads reconcile a paid ticket and a later partial refund by UTC day", async ({
   page,
 }, info) => {
-  const { booking, userId, flightId } = await ownedBooking(page);
+  // The reporting account owns these fixtures so parallel customer journeys
+  // can exercise their own booking quota independently.
+  const { booking, userId, flightId } = await ownedBooking(
+    page,
+    false,
+    undefined,
+    "admin"
+  );
   const passenger = rpc(page);
   const db = await mysql.createConnection(disposableDatabaseUrl());
   const date = new Date(Date.UTC(2034, 4, 1 + (info.parallelIndex % 12) * 2));
@@ -221,8 +228,7 @@ test("revenue downloads reconcile a paid ticket and a later partial refund by UT
       bookingId: booking.bookingId,
       passengerId: traveller.id,
     });
-    const credit = await ownedBooking(page, true);
-    await useBrowserSession(page, "admin");
+    const credit = await ownedBooking(page, true, undefined, "admin");
     const refund = await rpc(page).refunds.refundInternalFunding.mutate({
       bookingId: booking.bookingId,
       amount: 1234,

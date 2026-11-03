@@ -999,14 +999,14 @@ test.describe("Funded journeys and truthful operational reads", () => {
         reason: "Attempt",
         cancelItinerary: true,
       })
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ data: { code: "FORBIDDEN" } });
     await loginAsAdmin(page);
     await expect(
       rpc(page).vouchers.useCredits.mutate({
         bookingId: booking.bookingId,
         amount: booking.totalAmount,
       })
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
     const [row] = await sqlRows<RowDataPacket>(
       "SELECT paymentStatus FROM bookings WHERE id=?",
       [booking.bookingId]
