@@ -67,6 +67,8 @@
 | ndcExternalFulfillment | blocked | Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts |
 | kioskHardware | blocked | Authenticated device heartbeat and physical printer/scanner acceptance; digital documents are separate |
 | dcsDispatch | demo | Verified departure-control provider and dispatch acceptance |
+| dcsCounterLifecycle | implemented | Tenant-scoped paid passenger/flight check-in, open/close/reopen, board/deplane/deny/allow/offload with transactional command receipts and actor/reason history. Existing document, seat and time-window rules remain required. Physical baggage blocks offload until a verified withdrawal workflow exists; station/device and dispatch acceptance remain external. |
+| staffBaggageRegistration | implemented | Scoped airline staff, exact confirmed passenger/flight/segment, current check-in, funded cumulative allowance and payload-bound transactional idempotency. Configured carrier numeric code required; ambiguous legacy baggage requires review. Counter receipts do not replace signed device custody or certified hardware acceptance. |
 | gdsSynchronization | demo | Contracted GDS connection and round-trip order synchronization |
 | biometricIdentity | demo | Approved biometric processor, measured verification and privacy controls |
 | multiRegionFailover | demo | Infrastructure adapter, replication evidence and controlled failover drill |

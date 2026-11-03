@@ -475,6 +475,9 @@ try {
     "supplier bank versions, independent approvals and immutable evidence",
     () => verifySupplierFinance(db)
   );
+  const { verifyDcsCounterLifecycle } =
+    await import("./acceptance/dcs-counter-lifecycle");
+  await verifyDcsCounterLifecycle(db, id, check);
   completed = true;
 } finally {
   const report = {

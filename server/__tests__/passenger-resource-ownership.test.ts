@@ -10,6 +10,7 @@ const boundary = vi.hoisted(() => ({
   available: true,
   submit: vi.fn(),
   status: vi.fn(),
+  journey: vi.fn(),
   hotels: vi.fn(),
   segments: vi.fn(),
 }));
@@ -59,6 +60,9 @@ vi.mock("../_core/middleware/procedure-rate-limit", () => ({
 vi.mock("../services/apis.service", () => ({
   collectPassengerInfo: boundary.submit,
   getPassengerAPISStatus: boundary.status,
+}));
+vi.mock("../services/travel-clearance.service", () => ({
+  getPassengerJourneyStatus: boundary.journey,
 }));
 vi.mock("../services/emergency-hotel.service", () => ({
   getHotelBookingsByPassenger: boundary.hotels,
@@ -222,5 +226,46 @@ describe.each(
     boundary.passengerTenantId = 2;
     await expect(call(context())).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(target).not.toHaveBeenCalled();
+  });
+});
+
+describe("passenger APIS journey ownership", () => {
+  const call = (ctx = context()) =>
+    apisRouter
+      .createCaller(ctx)
+      .getMyJourneyStatus({ passengerId: 700, flightId: 44 });
+  it("derives the booking from the owned passenger and scopes the requested flight", async () => {
+    const result = {
+      bookingId: 800,
+      passengerId: 700,
+      flightId: 44,
+      flightNumber: "AIS44",
+      originAirport: "ADE",
+      destinationAirport: "AUH",
+      originCountry: "YE",
+      destinationCountry: "AE",
+      clearanceRequired: true,
+      clearanceStatus: "not_cleared",
+      checkedAt: "2026-11-03T12:00:00Z",
+    };
+    boundary.journey.mockResolvedValue(result);
+    await expect(call()).resolves.toEqual(result);
+    expect(boundary.journey).toHaveBeenCalledExactlyOnceWith(800, 700, 44, 1);
+  });
+  it.each(["owner", "bookingTenant", "passengerTenant"])(
+    "rejects an unrelated %s before the clearance read",
+    async mismatch => {
+      if (mismatch === "owner") boundary.ownerId = 202;
+      if (mismatch === "bookingTenant") boundary.bookingTenantId = 2;
+      if (mismatch === "passengerTenant") boundary.passengerTenantId = 2;
+      await expect(call()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(boundary.journey).not.toHaveBeenCalled();
+    }
+  );
+  it("requires authentication before the journey read", async () => {
+    await expect(call(context(null))).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(boundary.journey).not.toHaveBeenCalled();
   });
 });

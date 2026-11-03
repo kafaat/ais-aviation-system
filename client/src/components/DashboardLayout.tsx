@@ -386,9 +386,20 @@ function DashboardLayoutContent({
           },
         ]
       : [];
+  const dcsItems =
+    user && ["admin", "super_admin", "airline_admin", "ops"].includes(user.role)
+      ? [
+          {
+            icon: UserCheck,
+            labelKey: "Departure desk / مكتب المغادرة",
+            path: "/airline/dcs",
+            adminOnly: false,
+          },
+        ]
+      : [];
   const allMenuItems = isAdmin
-    ? [...menuItems, ...adminMenuItems]
-    : [...menuItems, ...airlineItems];
+    ? [...menuItems, ...adminMenuItems, ...dcsItems]
+    : [...menuItems, ...airlineItems, ...dcsItems];
 
   const activeMenuItem = allMenuItems.find(item => item.path === location);
 

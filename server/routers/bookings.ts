@@ -392,8 +392,13 @@ export const bookingsRouter = router({
         });
       const database = db.getDb();
       if (!database) throw new Error("Database unavailable");
-      const { bookingSegments, flights, seatInventory, passengers } =
-        await import("../../drizzle/schema");
+      const {
+        bookingSegments,
+        flights,
+        seatInventory,
+        passengers,
+        dcsFlightOperations,
+      } = await import("../../drizzle/schema");
       const { eq, inArray, asc } = await import("drizzle-orm");
       const segments = await database
         .select()
@@ -410,6 +415,10 @@ export const bookingsRouter = router({
         .select()
         .from(flights)
         .where(inArray(flights.id, ids));
+      const gates = await database
+        .select()
+        .from(dcsFlightOperations)
+        .where(inArray(dcsFlightOperations.flightId, ids));
       const ps = await database
         .select()
         .from(passengers)
@@ -429,8 +438,18 @@ export const bookingsRouter = router({
             departureTime: f.departureTime,
             status: f.status,
             open:
+              gates.find(g => g.flightId === f.id)?.checkInState !== "closed" &&
               booking.status === "confirmed" &&
               booking.paymentStatus === "paid" &&
+              (segments.length
+                ? Boolean(
+                    segments.find(
+                      l =>
+                        l.flightId === f.id &&
+                        ["confirmed", "pending"].includes(l.status)
+                    )?.seatsReserved
+                  )
+                : booking.seatsReserved) &&
               ["scheduled", "delayed"].includes(f.status) &&
               remaining > 3600000 &&
               remaining <= 48 * 3600000,

@@ -11,6 +11,7 @@ import { SeatMap } from "@/components/SeatMap";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { BaggageEntitlement } from "@/components/BaggageEntitlement";
+import { PassengerTravelDocuments } from "@/components/PassengerTravelDocuments";
 
 function BoardingPass({
   bookingId,
@@ -246,6 +247,16 @@ export default function CheckIn() {
                   </p>
                 ))}
               </div>
+              {passengers.data && (
+                <PassengerTravelDocuments
+                  key={`${booking.data.id}:${leg.flightId}`}
+                  bookingId={booking.data.id}
+                  flightId={leg.flightId}
+                  passengers={passengers.data.filter(passenger =>
+                    leg.passengers.some(row => row.passengerId === passenger.id)
+                  )}
+                />
+              )}
               {leg.passengers.some(p => !p.checkedIn) && (
                 <section className="space-y-4 print:hidden">
                   {leg.open ? (

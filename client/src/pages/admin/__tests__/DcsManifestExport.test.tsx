@@ -66,6 +66,7 @@ it("exports the selected manifest with UTC times, escaped names and only allowli
       expectedBags: 1,
       loadedBags: 0,
       unexpectedBags: 1,
+      unresolvedRegistrations: ["0000000002"],
       missingEntry: ["0000000001"],
       missingLoading: [],
       duplicates: [],
@@ -86,6 +87,10 @@ it("exports the selected manifest with UTC times, escaped names and only allowli
   );
   expect(refetch).toHaveBeenCalledOnce();
   expect(screen.getByText("0000000001")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "dcs.manifest.unresolvedRegistrations"
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("0000000002");
   expect(screen.getByText(passenger.name)).toBeInTheDocument();
   expect(screen.getByText(passenger.seat)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", exportButton));
@@ -99,4 +104,5 @@ it("exports the selected manifest with UTC times, escaped names and only allowli
   fireEvent.change(flightId, { target: { value: "43" } });
   expect(screen.queryByRole("button", exportButton)).not.toBeInTheDocument();
   expect(screen.queryByText("0000000001")).not.toBeInTheDocument();
+  expect(screen.queryByText("0000000002")).not.toBeInTheDocument();
 });

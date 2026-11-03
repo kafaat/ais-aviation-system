@@ -2189,6 +2189,7 @@
       "missingEntry": "Missing acceptance or transfer",
       "missingLoading": "Missing loading",
       "duplicateScans": "Duplicate scans",
+      "unresolvedRegistrations": "Received bags require operational reconciliation; the booking, passenger or sector is no longer eligible:",
       "flightId": "Flight ID",
       "enterFlightId": "Enter flight ID",
       "generate": "Generate Manifest",
@@ -3719,7 +3720,7 @@
   },
   "apis": {
     "title": "Advance Passenger Information System",
-    "subtitle": "Manage passenger travel document submissions and border authority compliance",
+    "subtitle": "Collect travel documents, review local APIS drafts and inspect verified submission records",
     "submissions": "Submissions",
     "validation": "Validation",
     "routeRequirements": "Route Requirements",
@@ -3776,8 +3777,8 @@
     "generateSuccess": "{{format}} local draft. Validated travel records: {{validated}} of {{total}} passengers. No transmission.",
     "enterFlightIdPrompt": "Enter a Flight ID above to view APIS submissions and passenger status.",
     "flightStatus": "Flight {{number}} - APIS Status",
-    "generatePAXLST": "Generate PAXLST",
-    "generatePNRGOV": "Preview PNR data (text)",
+    "generatePAXLST": "Generate PAXLST draft",
+    "generatePNRGOV": "Generate PNR/GOV draft",
     "submitToAuthorities": "Submit to Authorities",
     "notReadyWarning": "All passengers must have validated APIS data before submission.",
     "passengerStatuses": "Passenger APIS Status",
@@ -3877,6 +3878,45 @@
       "acknowledged": "Acknowledged",
       "rejected": "Rejected",
       "error": "Error"
+    },
+    "authorityUnavailable": "Authority transmission is unavailable",
+    "authorityUnavailableDetail": "Authority transmission is unavailable. No verified transport and acknowledgment adapter is configured. You can generate and review a local draft.",
+    "authorityAvailable": "Authority connection is available.",
+    "capabilityReadError": "Authority connection readiness could not be verified. Submission remains disabled.",
+    "capabilityLoading": "Checking authority connection readiness...",
+    "dataReadinessOnly": "Validated passenger data does not establish an authority connection or acceptance.",
+    "submissionResult": "Authority submission for {{flight}}: {{status}}",
+    "flightStatusError": "Flight APIS status could not be verified.",
+    "draft": {
+      "title": "Generated local draft",
+      "notTransmitted": "Not transmitted. This draft has no authority acknowledgment.",
+      "counts": "Passengers: {{total}} · Validated: {{validated}} · Missing: {{missing}}",
+      "content": "Generated APIS draft content",
+      "download": "Download exact draft"
+    },
+    "journey": {
+      "title": "Travel documents for this flight",
+      "savedStatus": "Saved document status",
+      "clearance": "Current journey clearance",
+      "documentStatus": {
+        "incomplete": "No complete document record",
+        "complete": "Saved — awaiting format validation",
+        "validated": "Document format validated",
+        "submitted": "Submission recorded — not proof of admission",
+        "rejected": "Document record rejected"
+      },
+      "clearanceStatus": {
+        "not_required": "Operator clearance is not required for this domestic journey",
+        "cleared": "Current operator clearance verified",
+        "not_cleared": "Current operator clearance has not been verified"
+      },
+      "separateClearance": "Saving or validating document fields does not grant travel clearance or transmit them to a border authority.",
+      "operatorReview": "Current operator clearance is required before international check-in. Contact the airline after saving your documents.",
+      "readError": "Travel document or clearance status could not be verified.",
+      "unknownRoute": "Country-specific requirements are unavailable for this route. You can save document details; the airline must review the route requirements.",
+      "editDocuments": "Review or edit travel documents",
+      "addDocuments": "Add travel documents",
+      "requirementsError": "Route requirements could not be verified. Retry before saving."
     }
   },
   "biometric": {

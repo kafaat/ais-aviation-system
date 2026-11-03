@@ -1,5 +1,6 @@
 import { passengerRightsSource } from "../shared/passenger-policy";
 import { registerProviderCheckoutTests } from "./fixtures/provider-checkout";
+import { registerDcsCounterTests } from "./fixtures/dcs-counter";
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
 import type { Page } from "@playwright/test";
@@ -16,6 +17,7 @@ import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 
 registerProviderCheckoutTests();
+registerDcsCounterTests();
 
 async function loginAsAdmin(page: Page) {
   await useBrowserSession(page, "admin");

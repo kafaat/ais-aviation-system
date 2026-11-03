@@ -44,10 +44,10 @@ import { cn } from "@/lib/utils";
 // Types
 // ============================================================================
 
-type DocumentType = "passport" | "national_id";
+type DocumentType = "passport" | "national_id" | "visa";
 type Gender = "M" | "F" | "U";
 
-interface APISFormData {
+export interface APISFormData {
   documentType: DocumentType;
   documentNumber: string;
   issuingCountry: string;
@@ -70,6 +70,7 @@ interface APISFormProps {
   originCountry?: string;
   destinationCountry?: string;
   onSuccess?: () => void;
+  onSaveStateChange?: (saving: boolean) => void | Promise<void>;
   onCancel?: () => void;
   className?: string;
   initialData?: Partial<APISFormData>;
@@ -90,7 +91,7 @@ const INITIAL_FORM_DATA: APISFormData = {
   issuingCountry: "",
   nationality: "",
   dateOfBirth: "",
-  gender: "M",
+  gender: "U",
   expiryDate: "",
   givenNames: "",
   surname: "",
@@ -106,6 +107,7 @@ const INITIAL_FORM_DATA: APISFormData = {
  * ISO 3166-1 alpha-2 codes used in aviation.
  */
 const COMMON_COUNTRIES = [
+  { code: "YE", label: "Yemen" },
   { code: "SA", label: "Saudi Arabia" },
   { code: "AE", label: "United Arab Emirates" },
   { code: "EG", label: "Egypt" },
@@ -156,6 +158,7 @@ export function APISForm({
   originCountry,
   destinationCountry,
   onSuccess,
+  onSaveStateChange,
   onCancel,
   className,
   initialData,
@@ -169,6 +172,28 @@ export function APISForm({
   });
   const [fieldErrors, setFieldErrors] = useState<FieldError[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const countries = useMemo(() => {
+    const knownCodes = new Set(COMMON_COUNTRIES.map(country => country.code));
+    return [
+      ...COMMON_COUNTRIES,
+      ...[
+        formData.issuingCountry,
+        formData.nationality,
+        formData.residenceCountry,
+      ]
+        .filter(
+          (code, index, values) =>
+            Boolean(code) &&
+            !knownCodes.has(code) &&
+            values.indexOf(code) === index
+        )
+        .map(code => ({ code, label: code })),
+    ];
+  }, [
+    formData.issuingCountry,
+    formData.nationality,
+    formData.residenceCountry,
+  ]);
 
   // Fetch route requirements if countries are provided
   const requirementsQuery = trpc.apis.getRequirements.useQuery(
@@ -198,8 +223,12 @@ export function APISForm({
           t("apis.submitError", "Failed to save travel document information")
       );
     },
-    onSettled: () => {
-      setIsSubmitting(false);
+    onSettled: async () => {
+      try {
+        await onSaveStateChange?.(false);
+      } finally {
+        setIsSubmitting(false);
+      }
     },
   });
 
@@ -376,6 +405,8 @@ export function APISForm({
     (e: React.FormEvent) => {
       e.preventDefault();
 
+      if (requirementsQuery.isFetching || requirementsQuery.isError) return;
+
       if (!validateForm()) {
         toast.error(
           t("apis.validationErrors", "Please fix the errors before submitting")
@@ -384,6 +415,7 @@ export function APISForm({
       }
 
       setIsSubmitting(true);
+      void onSaveStateChange?.(true);
       submitMutation.mutate({
         passengerId,
         documentType: formData.documentType,
@@ -404,7 +436,16 @@ export function APISForm({
         knownTravelerNumber: formData.knownTravelerNumber || undefined,
       });
     },
-    [validateForm, submitMutation, passengerId, formData, t]
+    [
+      validateForm,
+      submitMutation,
+      passengerId,
+      formData,
+      t,
+      requirementsQuery.isFetching,
+      requirementsQuery.isError,
+      onSaveStateChange,
+    ]
   );
 
   // Helper to check if a field has an error
@@ -526,6 +567,15 @@ export function APISForm({
                   {t("apis.nationalId", "National ID")}
                 </Label>
               </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="visa" id="doc-visa" />
+                <Label
+                  htmlFor="doc-visa"
+                  className="font-normal cursor-pointer"
+                >
+                  {t("apis.visa", "Visa")}
+                </Label>
+              </div>
             </RadioGroup>
           </div>
 
@@ -585,6 +635,7 @@ export function APISForm({
                 }
               >
                 <SelectTrigger
+                  id="apis-issuing-country"
                   className={cn(
                     "w-full",
                     getFieldError("issuingCountry") && "border-destructive"
@@ -595,7 +646,7 @@ export function APISForm({
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMON_COUNTRIES.map(country => (
+                  {countries.map(country => (
                     <SelectItem key={country.code} value={country.code}>
                       {country.code} - {country.label}
                     </SelectItem>
@@ -792,6 +843,7 @@ export function APISForm({
               onValueChange={value => handleFieldChange("nationality", value)}
             >
               <SelectTrigger
+                id="apis-nationality"
                 className={cn(
                   "w-full",
                   getFieldError("nationality") && "border-destructive"
@@ -805,7 +857,7 @@ export function APISForm({
                 />
               </SelectTrigger>
               <SelectContent>
-                {COMMON_COUNTRIES.map(country => (
+                {countries.map(country => (
                   <SelectItem key={country.code} value={country.code}>
                     {country.code} - {country.label}
                   </SelectItem>
@@ -872,7 +924,7 @@ export function APISForm({
                 />
               </SelectTrigger>
               <SelectContent>
-                {COMMON_COUNTRIES.map(country => (
+                {countries.map(country => (
                   <SelectItem key={country.code} value={country.code}>
                     {country.code} - {country.label}
                   </SelectItem>
@@ -1025,6 +1077,23 @@ export function APISForm({
       )}
 
       {/* Route Requirements Info */}
+      {requirementsQuery.isError && (
+        <div role="alert" className="space-y-2 rounded border p-3">
+          <p>
+            {t(
+              "apis.journey.requirementsError",
+              "Route requirements could not be verified. Retry before saving."
+            )}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => requirementsQuery.refetch()}
+          >
+            {t("common.retry", "Retry")}
+          </Button>
+        </div>
+      )}
       {requirementsQuery.data && (
         <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
           <CardContent className="pt-6">
@@ -1060,11 +1129,24 @@ export function APISForm({
       {/* Actions */}
       <div className="flex items-center justify-end gap-3">
         {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            disabled={isSubmitting}
+          >
             {t("common.cancel", "Cancel")}
           </Button>
         )}
-        <Button type="submit" disabled={isSubmitting} className="min-w-[140px]">
+        <Button
+          type="submit"
+          disabled={
+            isSubmitting ||
+            requirementsQuery.isFetching ||
+            requirementsQuery.isError
+          }
+          className="min-w-[140px]"
+        >
           {isSubmitting ? (
             <>
               <Loader2 className="me-2 h-4 w-4 animate-spin" />

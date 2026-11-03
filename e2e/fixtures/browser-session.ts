@@ -13,10 +13,10 @@ import { prepareAnonymousConsent } from "./consent";
 import { login } from "./test-helpers";
 import { testUsers } from "./test-data";
 
-type Account = "regular" | "admin";
+type Account = "regular" | "admin" | "ops";
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
-/** Two real UI logins, then isolated contexts reuse their authenticated cookies.
+/** Real UI logins, then isolated contexts reuse their authenticated cookies.
  * This keeps retries within the real IP login quota without disabling it. */
 export async function prepareBrowserSessions(config: FullConfig) {
   disposableDatabaseUrl();
@@ -27,7 +27,7 @@ export async function prepareBrowserSessions(config: FullConfig) {
       config.projects.find(project => project.name === "chromium")?.use
         .launchOptions
     );
-    for (const account of ["regular", "admin"] as const) {
+    for (const account of ["regular", "admin", "ops"] as const) {
       const context = await browser.newContext({
         baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
       });

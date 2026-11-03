@@ -15,10 +15,14 @@ try {
     .select({ id: users.id })
     .from(users)
     .where(
-      inArray(users.email, ["test.user@example.com", "admin@ais-aviation.com"])
+      inArray(users.email, [
+        "test.user@example.com",
+        "admin@ais-aviation.com",
+        "test.ops@example.com",
+      ])
     );
-  if (accounts.length !== 2)
-    throw new Error("Both registered E2E accounts are required");
+  if (accounts.length !== 3)
+    throw new Error("All three registered E2E accounts are required");
   for (const account of accounts) {
     const current = await getMyConsent(account.id);
     if (!current.needsReconsent) continue;

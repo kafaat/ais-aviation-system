@@ -17,6 +17,7 @@ import {
   getClearanceContext,
   ingestTravelClearance,
   assertTravelClearance,
+  getPassengerJourneyStatus,
 } from "../services/travel-clearance.service";
 import { calculateRequestHash } from "../services/idempotency-v2.service";
 import type { EvidenceEnvelope } from "../services/aviation-evidence.service";
@@ -44,6 +45,7 @@ beforeEach(() => {
     flights: [
       {
         id: 11,
+        flightNumber: "AIS11",
         airlineId: 1,
         tenantId: 3,
         originId: 1,
@@ -209,6 +211,82 @@ describe("sourced carbon and documents", () => {
     await expect(assertTravelClearance(fixture.db, 7, 8)).rejects.toThrow(
       "Itinerary has no active segments"
     );
+  });
+  it("shows current journey clearance without exposing provider or document evidence", async () => {
+    expect(await getPassengerJourneyStatus(7, 8, 11, 3)).toMatchObject({
+      bookingId: 7,
+      passengerId: 8,
+      flightId: 11,
+      flightNumber: "AIS11",
+      originAirport: "AAA",
+      destinationAirport: "BBB",
+      originCountry: "SA",
+      destinationCountry: "AE",
+      clearanceRequired: true,
+      clearanceStatus: "not_cleared",
+    });
+    const context = await getClearanceContext(7, 8, 3);
+    const e = event("travel_clearance", {
+      bookingId: 7,
+      passengerId: 8,
+      documentDigest: context.documentDigest,
+      itineraryDigest: context.itineraryDigest,
+      verdict: "cleared",
+      validUntil: carbon.validUntil,
+      providerTransactionId: "current-clearance",
+      reference: "operator-review",
+    });
+    await ingestTravelClearance(e.envelope, e.signature);
+    const cleared = await getPassengerJourneyStatus(7, 8, 11, 3);
+    expect(cleared.clearanceStatus).toBe("cleared");
+    expect(Object.keys(cleared).sort()).toEqual([
+      "bookingId",
+      "checkedAt",
+      "clearanceRequired",
+      "clearanceStatus",
+      "destinationAirport",
+      "destinationCountry",
+      "flightId",
+      "flightNumber",
+      "originAirport",
+      "originCountry",
+      "passengerId",
+    ]);
+    fixture.rows("passengers")[0].passportNumber = "CORRECTED123";
+    expect((await getPassengerJourneyStatus(7, 8, 11, 3)).clearanceStatus).toBe(
+      "not_cleared"
+    );
+  });
+  it("rejects a flight or tenant outside the passenger journey", async () => {
+    await expect(getPassengerJourneyStatus(7, 8, 99, 3)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(getPassengerJourneyStatus(7, 8, 11, 4)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+  it("does not guess country codes or turn unavailable route evidence into clearance", async () => {
+    fixture.rows("airports")[0].country = "Saudi Arabia";
+    expect(await getPassengerJourneyStatus(7, 8, 11, 3)).toMatchObject({
+      originCountry: null,
+      clearanceRequired: true,
+      clearanceStatus: "not_cleared",
+    });
+    fixture.rows("airports")[0].country = "";
+    await expect(getPassengerJourneyStatus(7, 8, 11, 3)).rejects.toThrow(
+      "Airport country evidence unavailable"
+    );
+    boundary.db = null;
+    await expect(getPassengerJourneyStatus(7, 8, 11, 3)).rejects.toThrow(
+      "Document storage unavailable"
+    );
+  });
+  it("reports that clearance is not required for a wholly domestic journey", async () => {
+    fixture.rows("airports")[1].country = "SA";
+    expect(await getPassengerJourneyStatus(7, 8, 11, 3)).toMatchObject({
+      clearanceRequired: false,
+      clearanceStatus: "not_required",
+    });
   });
   it("rolls evidence back when the durable event cannot be written", async () => {
     fixture.failInsert("outbox");

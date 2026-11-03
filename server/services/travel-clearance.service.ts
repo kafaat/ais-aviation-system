@@ -18,6 +18,16 @@ import {
   type EvidenceEnvelope,
 } from "./aviation-evidence.service";
 import type { SettlementTx } from "./booking-settlement.service";
+import { TRPCError } from "@trpc/server";
+
+export class TravelClearanceRequiredError extends Error {
+  constructor() {
+    super(
+      "International check-in requires current operator document clearance for this passenger and itinerary"
+    );
+    this.name = "TravelClearanceRequiredError";
+  }
+}
 export const clearanceSchema = z
   .object({
     bookingId: z.number().int().positive(),
@@ -217,9 +227,7 @@ export async function assertTravelClearance(
     Date.parse(e.p.validUntil) <
       Math.max(Date.now(), ...c.legs.map(f => f.departureTime.getTime()))
   )
-    throw new Error(
-      "International check-in requires current operator document clearance for this passenger and itinerary"
-    );
+    throw new TravelClearanceRequiredError();
   return { required: true, evidenceId: e.id };
 }
 export async function getClearanceContext(
@@ -245,6 +253,72 @@ export async function getClearanceContext(
       documentDigest: c.documentDigest,
       itineraryDigest: c.itineraryDigest,
       international: c.international,
+    };
+  });
+}
+
+/** Owner authorization is checked by the router. This projection reuses the
+ * check-in authority and never exposes document hashes or provider references.
+ * An unavailable data source must fail the read, not become a clearance verdict.
+ */
+export async function getPassengerJourneyStatus(
+  bookingId: number,
+  passengerId: number,
+  flightId: number,
+  tenantId: number | null
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Document storage unavailable");
+  return db.transaction(async tx => {
+    await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .for("update");
+    const context = await documentContext(tx, bookingId, passengerId);
+    const flight = context.legs.find(leg => leg.id === flightId);
+    if (!flight || (tenantId !== null && context.booking.tenantId !== tenantId))
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Passenger flight unavailable",
+      });
+    const route = await tx
+      .select()
+      .from(airports)
+      .where(inArray(airports.id, [flight.originId, flight.destinationId]));
+    const origin = route.find(airport => airport.id === flight.originId);
+    const destination = route.find(
+      airport => airport.id === flight.destinationId
+    );
+    if (!origin || !destination)
+      throw new Error("Airport route evidence unavailable");
+    let clearanceStatus: "not_required" | "cleared" | "not_cleared" =
+      "not_required";
+    if (context.international) {
+      try {
+        await assertTravelClearance(tx, bookingId, passengerId);
+        clearanceStatus = "cleared";
+      } catch (error) {
+        if (!(error instanceof TravelClearanceRequiredError)) throw error;
+        clearanceStatus = "not_cleared";
+      }
+    }
+    const countryCode = (country: string) => {
+      const code = country.trim().toUpperCase();
+      return /^[A-Z]{2,3}$/.test(code) ? code : null;
+    };
+    return {
+      bookingId,
+      passengerId,
+      flightId,
+      flightNumber: flight.flightNumber,
+      originAirport: origin.code,
+      destinationAirport: destination.code,
+      originCountry: countryCode(origin.country),
+      destinationCountry: countryCode(destination.country),
+      clearanceRequired: context.international,
+      clearanceStatus,
+      checkedAt: new Date().toISOString(),
     };
   });
 }
