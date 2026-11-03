@@ -651,6 +651,23 @@ export async function verifyDcsCounterLifecycle(
         before.passengers.list.map(p => p.id),
         [baglessSector.passengerId]
       );
+      const validSeat = await storedSeat(baglessSector);
+      await db
+        .update(s.seatInventory)
+        .set({ checkInNonce: null })
+        .where(eq(s.seatInventory.id, validSeat.id));
+      for (const read of [
+        () => generateFlightManifest(baglessSector.flightId),
+        () => getDcsDesk(baglessSector.flightId, actor),
+      ])
+        await assert.rejects(read(), {
+          code: "PRECONDITION_FAILED",
+          message: /reconciliation.*boarded passenger/i,
+        });
+      await db
+        .update(s.seatInventory)
+        .set({ checkInNonce: validSeat.checkInNonce })
+        .where(eq(s.seatInventory.id, validSeat.id));
       const [funded] = await db
         .select()
         .from(s.bookings)
@@ -695,7 +712,7 @@ export async function verifyDcsCounterLifecycle(
       });
       await assert.rejects(generateFlightManifest(baglessSector.flightId), {
         code: "PRECONDITION_FAILED",
-        message: /boarded passenger.*reconciliation/i,
+        message: /reconciliation.*boarded passenger/i,
       });
       const closeout = await getFlightBaggageCloseout(
         j.key().flightId,

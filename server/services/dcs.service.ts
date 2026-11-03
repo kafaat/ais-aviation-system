@@ -2,6 +2,7 @@ import { manifestBaggageFlightCondition } from "./baggage-sector-scope";
 import { assertFlightBaggageReconciled } from "./baggage-reconciliation.service";
 import type { SettlementTx } from "./booking-settlement.service";
 import { lockSimulatedLoadPlanFlight } from "./load-sheet-lifecycle.service";
+import { readReconciledBoardings } from "./dcs-state.service";
 import { manifestBookingCondition } from "./flight-state.service";
 import { assignCrewWithRules } from "./crew-rule.service";
 /**
@@ -27,9 +28,8 @@ import {
   crewAssignments,
   loadPlans,
   baggageItems,
-  dcsPassengerStates,
 } from "../../drizzle/schema";
-import { eq, and, notExists, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -279,6 +279,7 @@ async function readFlightManifest(db: SettlementTx, flightId: number) {
   const [flight] = await db
     .select({
       id: flights.id,
+      tenantId: flights.tenantId,
       flightNumber: flights.flightNumber,
       aircraftType: flights.aircraftType,
       departureTime: flights.departureTime,
@@ -319,37 +320,11 @@ async function readFlightManifest(db: SettlementTx, flightId: number) {
     .limit(1);
 
   const membership = manifestBookingCondition(flightId);
-  // A financial reversal can remove someone from the reservation list while
-  // their physical boarding is still recorded, even when they have no bags.
-  const [unlistedBoarding] = await db
-    .select({ passengerId: dcsPassengerStates.passengerId })
-    .from(dcsPassengerStates)
-    .where(
-      and(
-        eq(dcsPassengerStates.flightId, flightId),
-        eq(dcsPassengerStates.state, "boarded"),
-        notExists(
-          db
-            .select({ id: passengers.id })
-            .from(bookings)
-            .innerJoin(passengers, eq(passengers.bookingId, bookings.id))
-            .where(
-              and(
-                membership,
-                eq(bookings.id, dcsPassengerStates.bookingId),
-                eq(passengers.id, dcsPassengerStates.passengerId)
-              )
-            )
-        )
-      )
-    )
-    .limit(1);
-  if (unlistedBoarding)
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message:
-        "A boarded passenger is missing from the flight manifest; departure reconciliation is required",
-    });
+  const boarded = await readReconciledBoardings(
+    db,
+    flight,
+    flight.status === "completed"
+  );
   // Only unsegmented legacy bookings can use a booking-wide seat. Multiple
   // competing active assignments cannot establish a reliable seat number.
   const confirmedBookings = await db
@@ -377,6 +352,16 @@ async function readFlightManifest(db: SettlementTx, flightId: number) {
     .from(bookings)
     .innerJoin(passengers, eq(bookings.id, passengers.bookingId))
     .where(membership);
+
+  const listedBookings = new Map(
+    confirmedBookings.map(p => [p.passengerId, p.bookingId])
+  );
+  if (boarded.some(p => listedBookings.get(p.passengerId) !== p.bookingId))
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Departure reconciliation is required: a boarded passenger is missing from the flight manifest",
+    });
 
   // Get crew assignments
   const crew = await readFlightCrew(db, flightId);
