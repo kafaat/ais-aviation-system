@@ -21,6 +21,7 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createSecurityHeaders } from "./middleware/security-headers";
+import { TRPC_BATCH_LIMIT } from "../../shared/const";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import swaggerUi from "swagger-ui-express";
 import { registerOAuthRoutes } from "./oauth";
@@ -249,7 +250,7 @@ async function startServer() {
       createContext,
       // The per-user limiter counts one HTTP request; without a cap a single
       // batched request carried hundreds of procedure calls for one unit.
-      maxBatchSize: 10,
+      maxBatchSize: TRPC_BATCH_LIMIT,
     })
   );
   // development mode uses Vite, production mode uses static files

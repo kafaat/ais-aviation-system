@@ -259,6 +259,11 @@ test.describe("Funded journeys and truthful operational reads", () => {
         }),
       ])
     );
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: "My bookings", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/my-bookings(?:\?|$)/);
     const card = page.locator('[data-slot="card"]').filter({
       hasText: booking.bookingReference,
     });
@@ -695,10 +700,10 @@ test.describe("Funded journeys and truthful operational reads", () => {
     await page.goto(
       `/search?origin=${flight.origin.id}&destination=${flight.destination.id}&date=${flight.departureTime.toISOString().slice(0, 10)}`
     );
-    const familyLink = page.locator(
-      `a[href="/booking/${flightId}?class=economy&fareClassCode=Q"]`
-    );
-    await expect(familyLink).toHaveAccessibleName(/Evidence Flex/);
+    const familyLink = page
+      .getByRole("link", { name: /Evidence Flex/ })
+      .and(page.locator(`a[href^="/booking/${flightId}?"]`));
+    await expect(familyLink).toBeVisible();
     await familyLink.click();
     await expect(page).toHaveURL(
       new RegExp(`/booking/${flightId}.*fareClassCode=Q`)

@@ -13,7 +13,7 @@ initWebVitals({
 import { trpc } from "@/lib/trpc";
 import { redirectToLoginIfUnauthorized } from "@/lib/auth-navigation";
 import "./i18n/config";
-import { UNAUTHED_ERR_MSG } from "@shared/const";
+import { TRPC_BATCH_LIMIT, UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -59,6 +59,7 @@ const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
+      maxItems: TRPC_BATCH_LIMIT,
       transformer: superjson,
       fetch(input, init) {
         return globalThis.fetch(input, {
