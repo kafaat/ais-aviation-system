@@ -60,6 +60,9 @@ export interface RefundInput {
   transactionId: string;
   amount: number; // in SAR cents
   reason?: string;
+  /** Stable identity of the refund operation (e.g. `order-refund:<itemId>`).
+   * Constant across retries; never a timestamp, trace id or attempt counter. */
+  idempotencyKey?: string;
 }
 
 export interface RefundResult {

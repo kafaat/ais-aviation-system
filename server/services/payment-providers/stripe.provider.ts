@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
 import { createStripeClient } from "../stripe/client-factory";
+import { providerRequestOptions } from "../../_core/idempotency";
 import type {
   PaymentProvider,
   PaymentProviderInfo,
@@ -56,39 +57,48 @@ export class StripeProvider implements PaymentProvider {
   ): Promise<CheckoutSessionResult> {
     const stripe = this.getClient();
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: input.currency.toLowerCase(),
-            product_data: {
-              name: input.description,
-              description: `PNR: ${input.pnr} - Ref: ${input.bookingReference}`,
-              metadata: {
-                bookingReference: input.bookingReference,
-                pnr: input.pnr,
+    // The caller's operation key, when it has one, is the provider
+    // idempotency key. Nothing per-attempt (trace id, timestamp) may enter
+    // the keyed body: Stripe refuses a replay whose parameters changed.
+    const options = input.idempotencyKey
+      ? providerRequestOptions(input.idempotencyKey)
+      : undefined;
+    const session = await stripe.checkout.sessions.create(
+      {
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: input.currency.toLowerCase(),
+              product_data: {
+                name: input.description,
+                description: `PNR: ${input.pnr} - Ref: ${input.bookingReference}`,
+                metadata: {
+                  bookingReference: input.bookingReference,
+                  pnr: input.pnr,
+                },
               },
+              unit_amount: input.amount,
             },
-            unit_amount: input.amount,
+            quantity: 1,
           },
-          quantity: 1,
+        ],
+        mode: "payment",
+        success_url: input.successUrl,
+        cancel_url: input.cancelUrl,
+        customer_email: input.customerEmail || undefined,
+        client_reference_id: input.userId.toString(),
+        metadata: {
+          bookingId: input.bookingId.toString(),
+          userId: input.userId.toString(),
+          bookingReference: input.bookingReference,
+          provider: "stripe",
+          ...(input.metadata || {}),
         },
-      ],
-      mode: "payment",
-      success_url: input.successUrl,
-      cancel_url: input.cancelUrl,
-      customer_email: input.customerEmail || undefined,
-      client_reference_id: input.userId.toString(),
-      metadata: {
-        bookingId: input.bookingId.toString(),
-        userId: input.userId.toString(),
-        bookingReference: input.bookingReference,
-        provider: "stripe",
-        ...(input.metadata || {}),
+        allow_promotion_codes: true,
       },
-      allow_promotion_codes: true,
-    });
+      options
+    );
 
     return {
       provider: "stripe",
@@ -119,11 +129,19 @@ export class StripeProvider implements PaymentProvider {
 
   async refund(input: RefundInput): Promise<RefundResult> {
     const stripe = this.getClient();
-    const refund = await stripe.refunds.create({
-      payment_intent: input.transactionId,
-      amount: input.amount,
-      reason: "requested_by_customer",
-    });
+    // A refund without a stable key is re-issued on every retry. The key is
+    // the refund operation's identity supplied by the caller, never minted
+    // here per attempt.
+    const refund = await stripe.refunds.create(
+      {
+        payment_intent: input.transactionId,
+        amount: input.amount,
+        reason: "requested_by_customer",
+      },
+      input.idempotencyKey
+        ? providerRequestOptions(input.idempotencyKey)
+        : undefined
+    );
 
     return {
       refundId: refund.id,

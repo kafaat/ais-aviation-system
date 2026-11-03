@@ -2173,6 +2173,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/_core/idempotency.ts",
         "server/services/aircraft-rotation.service.ts",
         "server/services/ancillary-services.service.ts",
         "server/services/aviation-evidence.service.ts",
@@ -3762,7 +3763,10 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/services/payment-providers/index.ts"],
-      "dependencies": ["server/services/stripe/client-factory.ts"],
+      "dependencies": [
+        "server/_core/idempotency.ts",
+        "server/services/stripe/client-factory.ts"
+      ],
       "tableExpressions": {
         "reads": [],
         "writes": []
