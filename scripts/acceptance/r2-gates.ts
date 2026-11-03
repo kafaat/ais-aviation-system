@@ -226,6 +226,11 @@ export async function verifyR2Gates(
           )
         );
       assert(changed);
+      // The allocation is the authority even when the event's display label is stale.
+      await db
+        .update(airportGates)
+        .set({ gateNumber: "R2-LIVE" })
+        .where(eq(airportGates.id, id + 2));
       await consumeLocalEvent(changed);
       await consumeLocalEvent(changed);
       const messages = await db
@@ -238,6 +243,51 @@ export async function verifyR2Gates(
         ).length,
         1
       );
+      assert.equal(
+        JSON.parse(
+          messages.find(
+            n => n.data && JSON.parse(n.data).eventId === changed.eventId
+          )!.data!
+        ).newGate,
+        "R2-LIVE"
+      );
+
+      // Deliver the later change first. The consumer must suppress a distinct
+      // stale event, even if that event was never acknowledged before.
+      await db.transaction(tx =>
+        allocateGate(tx, { flightId: id + 3, gateId: id, actor, replace: true })
+      );
+      await db.transaction(tx =>
+        allocateGate(tx, {
+          flightId: id + 3,
+          gateId: id + 2,
+          actor,
+          replace: true,
+        })
+      );
+      const changes = await db
+        .select()
+        .from(outbox)
+        .where(
+          and(
+            eq(outbox.aggregateId, String(id + 3)),
+            eq(outbox.eventType, "gate.changed")
+          )
+        );
+      const latest = changes
+        .filter(c => c.eventId !== changed.eventId)
+        .sort((a, b) => a.id - b.id);
+      assert.equal(latest.length, 2);
+      await consumeLocalEvent(latest[1]);
+      await consumeLocalEvent(latest[0]);
+      const events = (
+        await db
+          .select()
+          .from(notifications)
+          .where(eq(notifications.userId, seed))
+      ).map(n => n.data && JSON.parse(n.data).eventId);
+      assert.equal(events.filter(e => e === latest[1].eventId).length, 1);
+      assert(!events.includes(latest[0].eventId));
     }
   );
 }

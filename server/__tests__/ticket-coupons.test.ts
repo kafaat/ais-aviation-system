@@ -10,6 +10,7 @@ import { checkInPassengers } from "../services/departure-control.service";
 import { undoCheckIn } from "../services/seat-map.service";
 import {
   closeLocalCoupons,
+  exchangeLocalCoupons,
   setCouponCheckIn,
 } from "../services/ticket-coupons.service";
 
@@ -135,4 +136,71 @@ it("updates the issued coupon through passenger check-in and the seat-map undo c
   expect(fixture.rows("ticket_coupons")[0].status).toBe("C");
   await undoCheckIn(4, 2, 5);
   expect(fixture.rows("ticket_coupons")[0].status).toBe("O");
+});
+
+it("retains the untouched coupon and allocates a new identity even when exchanging back to a prior flight", async () => {
+  fixture.rows("seat_inventory")[1].status = "occupied";
+  fixture.rows("flights").push({ ...fixture.rows("flights")[1], id: 9 });
+  const before = await readTicketDocument(2, 5, 3);
+  const number = before.data.ticketNumber;
+  for (const [oldId, newId, expectedNumber] of [
+    [8, 9, 3],
+    [9, 8, 4],
+  ]) {
+    await fixture.db.transaction(async (tx: any) => {
+      expect(await exchangeLocalCoupons(tx, 2, [4, oldId], [4, newId])).toBe(
+        true
+      );
+    });
+    fixture.rows("booking_segments")[1].flightId = newId;
+    const after = await readTicketDocument(2, 5, 3);
+    expect(after.data.ticketNumber).toBe(number);
+    expect(after.legs.map(l => l.localCoupon)).toEqual([
+      { number: 1, status: "O" },
+      { number: expectedNumber, status: "O" },
+    ]);
+    expect(
+      fixture
+        .rows("ticket_coupons")
+        .find(c => c.couponNumber === expectedNumber - 1)?.status
+    ).toBe("E");
+  }
+  await closeLocalCoupons(fixture.db, 2, "R");
+  expect(fixture.rows("ticket_coupons").map(c => c.status)).toEqual([
+    "R",
+    "E",
+    "E",
+    "R",
+  ]);
+});
+
+it("cannot replace a checked-in sector and rolls back legacy coupon creation", async () => {
+  fixture.rows("passengers")[0].ticketNumber = "0010000000007";
+  await expect(
+    fixture.db.transaction((tx: any) =>
+      exchangeLocalCoupons(tx, 2, [4, 8], [4, 9])
+    )
+  ).rejects.toThrow("Only open");
+  expect(fixture.rows("ticket_coupons")).toHaveLength(0);
+});
+
+it("preserves a checked-in legacy coupon on an untouched sector and rolls back failed replacement issuance", async () => {
+  fixture.rows("passengers")[0].ticketNumber = "0010000000007";
+  await readTicketDocument(2, 5, 3);
+  fixture.failInsert("ticket_coupons");
+  await expect(
+    fixture.db.transaction((tx: any) =>
+      exchangeLocalCoupons(tx, 2, [4, 8], [9, 8])
+    )
+  ).rejects.toThrow();
+  expect(fixture.rows("ticket_coupons").map(c => c.status)).toEqual(["O", "C"]);
+  fixture.failInsert("");
+  await fixture.db.transaction((tx: any) =>
+    exchangeLocalCoupons(tx, 2, [4, 8], [9, 8])
+  );
+  expect(fixture.rows("ticket_coupons").map(c => c.status)).toEqual([
+    "E",
+    "C",
+    "O",
+  ]);
 });

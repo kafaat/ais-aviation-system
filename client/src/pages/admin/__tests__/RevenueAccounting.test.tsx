@@ -45,9 +45,9 @@ beforeEach(() => {
   state.data = {
     getDashboard: responseContracts.getDashboard.parse({
       totalRevenue: 12345,
-      deferredRevenue: 0,
-      recognizedRevenue: 0,
-      ancillaryRevenue: 0,
+      deferredRevenue: null,
+      recognizedRevenue: null,
+      ancillaryRevenue: null,
       refundTotal: 0,
       netRevenue: 12345,
       revenueGrowthPercent: 0,
@@ -55,7 +55,8 @@ beforeEach(() => {
       totalBookings: 1,
     }),
     getDeferredRevenue: responseContracts.getDeferredRevenue.parse({
-      total: 0,
+      total: null,
+      upcomingBookingGross: 0,
       items: [],
     }),
     getRevenueByRoute: [],
@@ -98,6 +99,8 @@ describe("Revenue consumer failures", () => {
   it("valid zero data is distinguishable from source failure", () => {
     render(<RevenueAccounting />);
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getAllByText("Not verified")).toHaveLength(3);
+    expect(screen.getByText("Upcoming paid bookings")).toBeVisible();
     expect(screen.getAllByText("123.45 SAR").length).toBeGreaterThan(0);
   });
   it("missing yield evidence renders null amounts without a synthetic distance", () => {

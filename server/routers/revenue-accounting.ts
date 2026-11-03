@@ -110,7 +110,7 @@ export const revenueAccountingRouter = router({
     }),
 
   /**
-   * Get deferred revenue (tickets sold, flights not yet flown)
+   * Compatibility route: upcoming booking gross with unverified deferred total.
    */
   getDeferredRevenue: adminProcedure
     .output(responseContracts["getDeferredRevenue"])

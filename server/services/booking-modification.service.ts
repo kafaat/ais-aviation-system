@@ -1,3 +1,4 @@
+import { withInventoryTransaction } from "./inventory-capacity.service";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -16,78 +17,96 @@ import {
 export interface ChangeFlightDateInput {
   bookingId: number;
   userId: number;
+  tenantId?: number | null;
   newFlightId: number;
+  replaceFlightId?: number;
   reason?: string;
   idempotencyKey?: string;
 }
 export interface UpgradeCabinInput {
   bookingId: number;
   userId: number;
+  tenantId?: number | null;
   newCabinClass: "business";
   reason?: string;
   idempotencyKey?: string;
 }
-function requestService(input: ChangeFlightDateInput | UpgradeCabinInput) {
+async function requestService(
+  input: ChangeFlightDateInput | UpgradeCabinInput
+) {
   const key = input.idempotencyKey ?? randomUUID();
-  return withTransactionalIdempotency({
-    scope: "booking.modification.quote",
-    key,
-    userId: input.userId,
-    request: input,
-    run: async tx => {
-      const [booking] = await tx
-        .select()
-        .from(bookings)
-        .where(
-          and(
-            eq(bookings.id, input.bookingId),
-            eq(bookings.userId, input.userId)
-          )
-        )
-        .for("update");
-      if (!booking)
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      if ("newCabinClass" in input && booking.cabinClass === "business")
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Already in business class",
-        });
-      const pax = await tx
-        .select()
-        .from(passengers)
-        .where(eq(passengers.bookingId, booking.id));
-      const offer = await createRetailOffer(
-        {
-          flightId:
-            "newFlightId" in input ? input.newFlightId : booking.flightId,
-          cabinClass:
-            "newCabinClass" in input ? input.newCabinClass : booking.cabinClass,
-          passengerTypes: pax.map(p => p.type),
-          userId: input.userId,
-          channel: "direct",
+  const db = await getDb();
+  if (!db) throw new Error("Servicing storage unavailable");
+  return withInventoryTransaction(db, async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(
+        and(eq(bookings.id, input.bookingId), eq(bookings.userId, input.userId))
+      )
+      .for("update");
+    if (
+      !booking ||
+      (input.tenantId != null && input.tenantId !== booking.tenantId)
+    )
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Booking not found",
+      });
+    // Preserve the original digest for existing direct-client retries.
+    const { tenantId: _tenantId, ...request } = input;
+    return withTransactionalIdempotency(
+      {
+        scope: "booking.modification.quote",
+        key,
+        userId: input.userId,
+        request,
+        run: async tx => {
+          if ("newCabinClass" in input && booking.cabinClass === "business")
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Already in business class",
+            });
+          const pax = await tx
+            .select()
+            .from(passengers)
+            .where(eq(passengers.bookingId, booking.id));
+          const offer = await createRetailOffer(
+            {
+              flightId:
+                "newFlightId" in input ? input.newFlightId : booking.flightId,
+              cabinClass:
+                "newCabinClass" in input
+                  ? input.newCabinClass
+                  : booking.cabinClass,
+              passengerTypes: pax.map(p => p.type),
+              userId: input.userId,
+              channel: "direct",
+            },
+            tx
+          );
+          const quote = await quotePaidOrderService(
+            {
+              bookingId: booking.id,
+              offerIds: [offer.id],
+              replaceFlightId:
+                "replaceFlightId" in input ? input.replaceFlightId : undefined,
+              idempotencyKey: calculateRequestHash({ key }),
+            },
+            input.userId,
+            booking.tenantId,
+            tx
+          );
+          if (input.reason)
+            await tx
+              .update(bookingModifications)
+              .set({ reason: input.reason })
+              .where(eq(bookingModifications.id, quote.modificationId));
+          return quote;
         },
-        tx
-      );
-      const quote = await quotePaidOrderService(
-        {
-          bookingId: booking.id,
-          offerIds: [offer.id],
-          idempotencyKey: calculateRequestHash({ key }),
-        },
-        input.userId,
-        booking.tenantId,
-        tx
-      );
-      if (input.reason)
-        await tx
-          .update(bookingModifications)
-          .set({ reason: input.reason })
-          .where(eq(bookingModifications.id, quote.modificationId));
-      return quote;
-    },
+      },
+      tx
+    );
   });
 }
 export const requestChangeFlightDate = (input: ChangeFlightDateInput) =>

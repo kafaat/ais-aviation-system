@@ -1,6 +1,7 @@
 import { getRefundExportRows } from "./refunds-stats.service";
 import {
   aggregateFinancialMonths,
+  financialInteger,
   getFinancialDays,
   getFinancialSummary,
   type FinancialMonth,
@@ -40,7 +41,7 @@ export interface RevenueEntry {
   amount: number; // SAR cents
   currency: string;
   recognitionDate: Date | null;
-  status: "deferred" | "recognized" | "voided";
+  status: "deferred" | "recognized" | "voided" | "unverified";
   channel: "direct" | "agent" | "corporate";
   classOfService: "economy" | "business";
   routeId: string; // "originId-destinationId"
@@ -65,10 +66,11 @@ export interface RevenueReport {
 // ============ Response Interfaces ============
 
 export interface RevenueOverview {
+  /** Compatibility alias for booking-bound cash collected. */
   totalRevenue: number;
-  deferredRevenue: number;
-  recognizedRevenue: number;
-  ancillaryRevenue: number;
+  deferredRevenue: number | null;
+  recognizedRevenue: number | null;
+  ancillaryRevenue: number | null;
   refundTotal: number;
   netRevenue: number;
   revenueGrowthPercent: number;
@@ -233,6 +235,7 @@ export async function recordRevenueEntry(
     .from(flights)
     .where(eq(flights.id, booking.flightId));
 
+  // Classification only; this virtual row is not an accounting posting.
   // Determine channel
   const { corporateBookings } = await import("../../drizzle/schema");
   const { agentBookings } = await import("../../drizzle/schema");
@@ -255,11 +258,6 @@ export async function recordRevenueEntry(
       ? "agent"
       : "direct";
 
-  // Determine status: if flight is completed, revenue is recognized
-  const isCompleted = flight?.status === "completed";
-  const status: RevenueEntry["status"] =
-    type === "refund" ? "voided" : isCompleted ? "recognized" : "deferred";
-
   return {
     id: bookingId, // Virtual ID
     bookingId,
@@ -267,8 +265,8 @@ export async function recordRevenueEntry(
     type,
     amount,
     currency: "SAR",
-    recognitionDate: isCompleted ? flight.departureTime : null,
-    status,
+    recognitionDate: null,
+    status: "unverified",
     channel,
     classOfService: booking.cabinClass as "economy" | "business",
     routeId: flight ? `${flight.originId}-${flight.destinationId}` : "unknown",
@@ -277,10 +275,12 @@ export async function recordRevenueEntry(
 }
 
 /**
- * Calculate deferred revenue: revenue for tickets sold but flights not yet flown.
+ * List paid bookings whose primary flight is upcoming. Their gross booking value
+ * is operational only; no accounting deferral has been recorded.
  */
 export async function calculateDeferredRevenue(): Promise<{
-  total: number;
+  total: null;
+  upcomingBookingGross: number;
   items: DeferredRevenueItem[];
 }> {
   const db = await getDb();
@@ -326,62 +326,7 @@ export async function calculateDeferredRevenue(): Promise<{
 
   const total = items.reduce((sum, item) => sum + item.amount, 0);
 
-  return { total, items };
-}
-
-/**
- * Calculate recognized revenue for completed flights within a date range.
- */
-export async function calculateRecognizedRevenue(
-  startDate?: Date,
-  endDate?: Date
-): Promise<{ total: number; byDay: Array<{ date: string; amount: number }> }> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const conditions = [
-    eq(bookings.status, "confirmed"),
-    eq(bookings.paymentStatus, "paid"),
-    eq(flights.status, "completed"),
-  ];
-
-  if (startDate && endDate) {
-    conditions.push(
-      gte(flights.departureTime, startDate),
-      lte(flights.departureTime, endDate)
-    );
-  }
-
-  const [totals] = await db
-    .select({
-      total: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-    })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(and(...conditions));
-
-  const byDay = await db
-    .select({
-      date: sql<string>`DATE(${flights.departureTime})`,
-      amount: sql<number>`SUM(${bookings.totalAmount})`,
-    })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(and(...conditions))
-    .groupBy(sql`DATE(${flights.departureTime})`)
-    .orderBy(sql`DATE(${flights.departureTime})`);
-
-  return {
-    total: totals.total || 0,
-    byDay: byDay.map(row => ({
-      date: row.date,
-      amount: row.amount || 0,
-    })),
-  };
+  return { total: null, upcomingBookingGross: total, items };
 }
 
 /**
@@ -417,7 +362,9 @@ export async function getRevenueByRoute(
     .select({
       originId: flights.originId,
       destinationId: flights.destinationId,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
+      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`.mapWith(
+        financialInteger
+      ),
       bookingCount: sql<number>`COUNT(${bookings.id})`,
       passengerCount: sql<number>`SUM(${bookings.numberOfPassengers})`,
     })
@@ -514,7 +461,9 @@ export async function getRevenueByClass(
   const classData = await db
     .select({
       cabinClass: bookings.cabinClass,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
+      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`.mapWith(
+        financialInteger
+      ),
       bookingCount: sql<number>`COUNT(${bookings.id})`,
       passengerCount: sql<number>`SUM(${bookings.numberOfPassengers})`,
     })
@@ -572,10 +521,13 @@ export async function getRevenueByChannel(
     );
   }
 
-  // Total revenue for all paid bookings
+  // Gross value for all paid bookings.
   const [totalStats] = await db
     .select({
-      totalRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
+      totalRevenue:
+        sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`.mapWith(
+          financialInteger
+        ),
       totalBookings: sql<number>`COUNT(*)`,
     })
     .from(bookings)
@@ -584,7 +536,10 @@ export async function getRevenueByChannel(
   // Corporate channel revenue
   const [corporateStats] = await db
     .select({
-      totalRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
+      totalRevenue:
+        sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`.mapWith(
+          financialInteger
+        ),
       bookingCount: sql<number>`COUNT(${bookings.id})`,
     })
     .from(bookings)
@@ -594,7 +549,10 @@ export async function getRevenueByChannel(
   // Agent channel revenue
   const [agentStats] = await db
     .select({
-      totalRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
+      totalRevenue:
+        sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`.mapWith(
+          financialInteger
+        ),
       bookingCount: sql<number>`COUNT(${bookings.id})`,
     })
     .from(bookings)
@@ -696,19 +654,23 @@ export async function getAncillaryRevenue(
     .groupBy(ancillaryServices.category)
     .orderBy(desc(sql`SUM(${bookingAncillaries.totalPrice})`));
 
-  const total = categoryData.reduce(
-    (sum, row) => sum + (row.totalRevenue || 0),
-    0
-  );
-
-  const breakdown: AncillaryRevenueBreakdown[] = categoryData.map(row => ({
+  // MySQL SUM(INT) is a DECIMAL and may arrive from mysql2 as text.
+  const categories = categoryData.map(row => ({
     category: row.category,
-    totalRevenue: row.totalRevenue || 0,
-    quantity: row.quantity || 0,
-    averagePrice:
-      row.quantity > 0 ? Math.round((row.totalRevenue || 0) / row.quantity) : 0,
-    percentageOfTotal:
-      total > 0 ? Math.round(((row.totalRevenue || 0) / total) * 1000) / 10 : 0,
+    totalRevenue: financialInteger(row.totalRevenue),
+    quantity: financialInteger(row.quantity),
+  }));
+  const total = financialInteger(
+    categories.reduce((sum, row) => sum + row.totalRevenue, 0)
+  );
+  const breakdown = categories.map(row => ({
+    ...row,
+    averagePrice: row.quantity
+      ? Math.round(row.totalRevenue / row.quantity)
+      : 0,
+    percentageOfTotal: total
+      ? Math.round((row.totalRevenue / total) * 1000) / 10
+      : 0,
   }));
 
   return { total, breakdown };
@@ -987,70 +949,10 @@ export async function getRevenueDashboard(
   // Total revenue
   const [totalStats] = await db
     .select({
-      totalRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
       totalBookings: sql<number>`COUNT(*)`,
     })
     .from(bookings)
     .where(and(...conditions));
-
-  // Deferred (future flights)
-  const now = new Date();
-  const deferredConditions = [
-    eq(bookings.status, "confirmed"),
-    eq(bookings.paymentStatus, "paid"),
-    gte(flights.departureTime, now),
-  ];
-  if (startDate && endDate) {
-    deferredConditions.push(
-      gte(bookings.createdAt, startDate),
-      lte(bookings.createdAt, endDate)
-    );
-  }
-
-  const [deferredStats] = await db
-    .select({
-      deferredRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-    })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(and(...deferredConditions));
-
-  // Recognized (completed flights)
-  const recognizedConditions = [
-    eq(bookings.status, "confirmed"),
-    eq(bookings.paymentStatus, "paid"),
-    eq(flights.status, "completed"),
-  ];
-  if (startDate && endDate) {
-    recognizedConditions.push(
-      gte(bookings.createdAt, startDate),
-      lte(bookings.createdAt, endDate)
-    );
-  }
-
-  const [recognizedStats] = await db
-    .select({
-      recognizedRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-    })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(and(...recognizedConditions));
-
-  // Ancillary revenue
-  const ancillaryConditions = [eq(bookingAncillaries.status, "active")];
-  if (startDate && endDate) {
-    ancillaryConditions.push(
-      gte(bookingAncillaries.createdAt, startDate),
-      lte(bookingAncillaries.createdAt, endDate)
-    );
-  }
-
-  const [ancillaryStats] = await db
-    .select({
-      ancillaryRevenue: sql<number>`COALESCE(SUM(${bookingAncillaries.totalPrice}), 0)`,
-    })
-    .from(bookingAncillaries)
-    .where(and(...ancillaryConditions));
 
   // Cash is read from the shared settlement ledger on its posting date.
   const cash = await getFinancialSummary({ startDate, endDate });
@@ -1076,9 +978,11 @@ export async function getRevenueDashboard(
 
   return {
     totalRevenue,
-    deferredRevenue: deferredStats.deferredRevenue || 0,
-    recognizedRevenue: recognizedStats.recognizedRevenue || 0,
-    ancillaryRevenue: ancillaryStats.ancillaryRevenue || 0,
+    // Operational flight state, future tickets and active ancillaries do not
+    // establish an earned amount or the remaining transport liability.
+    deferredRevenue: null,
+    recognizedRevenue: cash.earnedRevenue,
+    ancillaryRevenue: null,
     refundTotal,
     netRevenue: totalRevenue - refundTotal,
     revenueGrowthPercent,

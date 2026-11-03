@@ -1,3 +1,4 @@
+import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { assertTenantOperational } from "./tenant.service";
 import { allocateProportional } from "./seat-economics.service";
 import { createInventoryLock } from "./inventory-lock.service";
@@ -354,6 +355,7 @@ export async function createMultiCityBooking(
         message: "Passengers and distinct flight segments are required",
       });
     const result = await withTransactionalIdempotency({
+      transactionConfig: inventoryTransactionConfig,
       scope: "booking.multi-city.atomic",
       key: input.idempotencyKey ?? input.sessionId,
       userId: input.userId,

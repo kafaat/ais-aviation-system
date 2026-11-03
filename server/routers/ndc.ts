@@ -1,3 +1,4 @@
+import { seatExchangeSchema } from "../services/seat-exchange.service";
 import { cancelOrderServiceQuote } from "../services/order-service-checkout.service";
 import {
   paidServiceInput,
@@ -99,7 +100,7 @@ export const ndcRouter = router({
     .input(z.object({ modificationId: z.number().int().positive() }))
     .output(z.object({ cancelled: z.boolean() }))
     .mutation(({ input, ctx }) =>
-      cancelOrderServiceQuote(input.modificationId, ctx.user.id)
+      cancelOrderServiceQuote(input.modificationId, ctx.user.id, ctx.tenantId)
     ),
   quotePaidService: protectedProcedure
     .input(paidServiceInput)
@@ -115,6 +116,8 @@ export const ndcRouter = router({
         expiresAt: z.date(),
         requiresPayment: z.boolean(),
         refundDue: z.number().int(),
+        currency: z.literal("SAR").optional(),
+        seatExchange: seatExchangeSchema.optional(),
       })
     )
     .mutation(({ input, ctx }) =>
@@ -126,7 +129,7 @@ export const ndcRouter = router({
       z.object({ receiptId: z.string().uuid(), refundDue: z.number().int() })
     )
     .mutation(({ input, ctx }) =>
-      confirmNoChargeService(input.modificationId, ctx.user.id)
+      confirmNoChargeService(input.modificationId, ctx.user.id, ctx.tenantId)
     ),
   // ==========================================================================
   // Shopping & Offers

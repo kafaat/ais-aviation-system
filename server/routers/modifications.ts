@@ -1,3 +1,7 @@
+import {
+  exchangeContextOutput,
+  getExchangeContext,
+} from "../services/order-exchange-context.service";
 import { responseContracts } from "../contracts/modifications";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -9,6 +13,12 @@ import { assertModificationOwnership } from "../services/access-control.service"
  * Handles booking modification requests
  */
 export const modificationsRouter = router({
+  exchangeContext: protectedProcedure
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(exchangeContextOutput)
+    .query(({ ctx, input }) =>
+      getExchangeContext(input.bookingId, ctx.user.id, ctx.tenantId)
+    ),
   /**
    * Request to change flight date
    */
@@ -17,6 +27,7 @@ export const modificationsRouter = router({
       z.object({
         bookingId: z.number(),
         newFlightId: z.number(),
+        replaceFlightId: z.number().int().positive().optional(),
         reason: z.string().max(1000).optional(),
         idempotencyKey: z.string().min(8).max(100).optional(),
       })
@@ -26,7 +37,9 @@ export const modificationsRouter = router({
       return await modificationService.requestChangeFlightDate({
         bookingId: input.bookingId,
         userId: ctx.user.id,
+        tenantId: ctx.tenantId,
         newFlightId: input.newFlightId,
+        replaceFlightId: input.replaceFlightId,
         reason: input.reason,
         idempotencyKey: input.idempotencyKey,
       });
@@ -48,6 +61,7 @@ export const modificationsRouter = router({
       return await modificationService.requestUpgradeCabin({
         bookingId: input.bookingId,
         userId: ctx.user.id,
+        tenantId: ctx.tenantId,
         newCabinClass: "business",
         reason: input.reason,
         idempotencyKey: input.idempotencyKey,

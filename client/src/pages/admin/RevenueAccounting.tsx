@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import type { inferRouterOutputs } from "@trpc/server";
@@ -91,14 +91,18 @@ export function RevenueAccounting() {
     new Date().getFullYear()
   );
 
-  // Compute date filters
-  const dateFilter =
-    dateRange === "all"
-      ? undefined
-      : {
-          startDate: daysAgo(parseInt(dateRange)),
-          endDate: new Date(),
-        };
+  // All queries for this selection share a fixed reporting instant. A new
+  // Date on each render would issue a new query before its result can render.
+  const dateFilter = useMemo(
+    () =>
+      dateRange === "all"
+        ? undefined
+        : {
+            startDate: daysAgo(Number(dateRange)),
+            endDate: new Date(),
+          },
+    [dateRange]
+  );
 
   // ============ Queries ============
 
@@ -220,7 +224,7 @@ export function RevenueAccounting() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              {t("revenueAccounting.totalRevenue", "Total Revenue")}
+              {t("revenueAccounting.cashCollected", "Cash collected")}
             </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -274,12 +278,14 @@ export function RevenueAccounting() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {formatSAR(dashboard?.deferredRevenue ?? 0)} SAR
+                  {dashboard?.deferredRevenue == null
+                    ? t("revenueAccounting.notVerified", "Not verified")
+                    : `${formatSAR(dashboard.deferredRevenue)} SAR`}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {t(
-                    "revenueAccounting.ticketsSoldPending",
-                    "Tickets sold, flights pending"
+                    "revenueAccounting.deferralEvidence",
+                    "Requires a verified transport liability allocation"
                   )}
                 </p>
               </>
@@ -300,10 +306,15 @@ export function RevenueAccounting() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {formatSAR(dashboard?.recognizedRevenue ?? 0)} SAR
+                  {dashboard?.recognizedRevenue == null
+                    ? t("revenueAccounting.notVerified", "Not verified")
+                    : `${formatSAR(dashboard.recognizedRevenue)} SAR`}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t("revenueAccounting.completedFlights", "Completed flights")}
+                  {t(
+                    "revenueAccounting.recognitionEvidence",
+                    "Requires evidence of delivered service and its value"
+                  )}
                 </p>
               </>
             )}
@@ -323,10 +334,15 @@ export function RevenueAccounting() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {formatSAR(dashboard?.ancillaryRevenue ?? 0)} SAR
+                  {dashboard?.ancillaryRevenue == null
+                    ? t("revenueAccounting.notVerified", "Not verified")
+                    : `${formatSAR(dashboard.ancillaryRevenue)} SAR`}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t("revenueAccounting.addOnServices", "Add-on services")}
+                  {t(
+                    "revenueAccounting.recognitionEvidence",
+                    "Requires evidence of delivered service and its value"
+                  )}
                 </p>
               </>
             )}
@@ -340,10 +356,10 @@ export function RevenueAccounting() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
-                {t("revenueAccounting.netRevenue", "Net Revenue")}
+                {t("revenueAccounting.netCash", "Net cash collected")}
               </span>
               <span className="text-lg font-semibold">
-                {formatSAR(dashboard?.netRevenue ?? 0)} SAR
+                {dashboard ? `${formatSAR(dashboard.netRevenue)} SAR` : "—"}
               </span>
             </div>
           </CardContent>
@@ -353,12 +369,14 @@ export function RevenueAccounting() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
                 {t(
-                  "revenueAccounting.avgRevenuePerBooking",
-                  "Avg Revenue / Booking"
+                  "revenueAccounting.cashPerBooking",
+                  "Average cash collected per paid booking"
                 )}
               </span>
               <span className="text-lg font-semibold">
-                {formatSAR(dashboard?.averageRevenuePerBooking ?? 0)} SAR
+                {dashboard
+                  ? `${formatSAR(dashboard.averageRevenuePerBooking)} SAR`
+                  : "—"}
               </span>
             </div>
           </CardContent>
@@ -370,7 +388,7 @@ export function RevenueAccounting() {
                 {t("revenueAccounting.refunds", "Refunds")}
               </span>
               <span className="text-lg font-semibold text-red-600">
-                -{formatSAR(dashboard?.refundTotal ?? 0)} SAR
+                {dashboard ? `-${formatSAR(dashboard.refundTotal)} SAR` : "—"}
               </span>
             </div>
           </CardContent>
@@ -398,12 +416,15 @@ export function RevenueAccounting() {
           <Card>
             <CardHeader>
               <CardTitle>
-                {t("revenueAccounting.revenueByRoute", "Revenue by Route")}
+                {t(
+                  "revenueAccounting.revenueByRoute",
+                  "Paid booking value by primary route"
+                )}
               </CardTitle>
               <CardDescription>
                 {t(
                   "revenueAccounting.topRoutesDesc",
-                  "Top routes ranked by total revenue"
+                  "Primary routes ranked by gross paid booking value"
                 )}
               </CardDescription>
             </CardHeader>
@@ -419,7 +440,10 @@ export function RevenueAccounting() {
                           {t("revenueAccounting.route", "Route")}
                         </th>
                         <th className="text-right p-3 font-medium">
-                          {t("revenueAccounting.revenueSAR", "Revenue (SAR)")}
+                          {t(
+                            "revenueAccounting.revenueSAR",
+                            "Booking value (SAR)"
+                          )}
                         </th>
                         <th className="text-right p-3 font-medium">
                           {t("revenueAccounting.bookings", "Bookings")}
@@ -434,7 +458,10 @@ export function RevenueAccounting() {
                           )}
                         </th>
                         <th className="p-3 font-medium">
-                          {t("revenueAccounting.revenueShare", "Revenue Share")}
+                          {t(
+                            "revenueAccounting.revenueShare",
+                            "Booking value share"
+                          )}
                         </th>
                       </tr>
                     </thead>
@@ -496,13 +523,13 @@ export function RevenueAccounting() {
               <CardTitle>
                 {t(
                   "revenueAccounting.revenueByClass",
-                  "Revenue by Cabin Class"
+                  "Paid booking value by cabin class"
                 )}
               </CardTitle>
               <CardDescription>
                 {t(
                   "revenueAccounting.classComparisonDesc",
-                  "Economy vs Business class revenue comparison"
+                  "Gross paid booking value for economy and business"
                 )}
               </CardDescription>
             </CardHeader>
@@ -523,7 +550,11 @@ export function RevenueAccounting() {
                               {formatSAR(cls.totalRevenue)} SAR
                             </p>
                             <p className="text-sm text-muted-foreground">
-                              {cls.percentageOfTotal}% of total revenue
+                              {cls.percentageOfTotal}%{" "}
+                              {t(
+                                "revenueAccounting.ofBookingGross",
+                                "of gross booking value"
+                              )}
                             </p>
                           </div>
                           <div className="space-y-2 text-sm">
@@ -584,7 +615,10 @@ export function RevenueAccounting() {
           <Card>
             <CardHeader>
               <CardTitle>
-                {t("revenueAccounting.revenueByChannel", "Revenue by Channel")}
+                {t(
+                  "revenueAccounting.revenueByChannel",
+                  "Paid booking value by channel"
+                )}
               </CardTitle>
               <CardDescription>
                 {t(
@@ -603,7 +637,10 @@ export function RevenueAccounting() {
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium">Channel</th>
                         <th className="text-right p-3 font-medium">
-                          Revenue (SAR)
+                          {t(
+                            "revenueAccounting.bookedAmountSar",
+                            "Booked amount (SAR)"
+                          )}
                         </th>
                         <th className="text-right p-3 font-medium">Bookings</th>
                         <th className="text-right p-3 font-medium">
@@ -669,12 +706,15 @@ export function RevenueAccounting() {
           <Card>
             <CardHeader>
               <CardTitle>
-                {t("revenueAccounting.ancillaryRevenue", "Ancillary Revenue")}
+                {t(
+                  "revenueAccounting.activeAddOns",
+                  "Active add-on booking value"
+                )}
               </CardTitle>
               <CardDescription>
                 {t(
-                  "revenueAccounting.ancillaryDesc",
-                  "Revenue from add-on services: baggage, meals, seats, etc."
+                  "revenueAccounting.activeAddOnBasis",
+                  "Booked prices for active add-ons by category."
                 )}
               </CardDescription>
             </CardHeader>
@@ -686,8 +726,8 @@ export function RevenueAccounting() {
                   <div className="text-center p-4 bg-muted/50 rounded-lg">
                     <p className="text-sm text-muted-foreground">
                       {t(
-                        "revenueAccounting.totalAncillaryRevenue",
-                        "Total Ancillary Revenue"
+                        "revenueAccounting.activeAddOns",
+                        "Active add-on booking value"
                       )}
                     </p>
                     <p className="text-3xl font-bold">
@@ -704,7 +744,10 @@ export function RevenueAccounting() {
                               Category
                             </th>
                             <th className="text-right p-3 font-medium">
-                              Revenue (SAR)
+                              {t(
+                                "revenueAccounting.bookedAmountSar",
+                                "Booked amount (SAR)"
+                              )}
                             </th>
                             <th className="text-right p-3 font-medium">
                               Qty Sold
@@ -795,7 +838,10 @@ export function RevenueAccounting() {
                         <th className="text-left p-3 font-medium">Flight</th>
                         <th className="text-left p-3 font-medium">Route</th>
                         <th className="text-right p-3 font-medium">
-                          Revenue (SAR)
+                          {t(
+                            "revenueAccounting.bookedAmountSar",
+                            "Booked amount (SAR)"
+                          )}
                         </th>
                         <th className="text-right p-3 font-medium">Pax</th>
                         <th className="text-right p-3 font-medium">
@@ -1123,10 +1169,17 @@ export function RevenueAccounting() {
         {activeTab === "route" && (
           <Card>
             <CardHeader>
-              <CardTitle>Deferred Revenue Details</CardTitle>
+              <CardTitle>
+                {t(
+                  "revenueAccounting.upcomingBookings",
+                  "Upcoming paid bookings"
+                )}
+              </CardTitle>
               <CardDescription>
-                Confirmed bookings for upcoming flights (revenue not yet
-                recognized)
+                {t(
+                  "revenueAccounting.upcomingGrossBasis",
+                  "Gross value of confirmed, paid bookings by primary flight departure."
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1136,14 +1189,17 @@ export function RevenueAccounting() {
                 <div className="space-y-4">
                   <div className="text-center p-3 bg-muted/50 rounded-lg">
                     <p className="text-sm text-muted-foreground">
-                      Total Deferred Revenue
+                      {t(
+                        "revenueAccounting.upcomingGross",
+                        "Upcoming booking gross value"
+                      )}
                     </p>
                     <p className="text-2xl font-bold">
-                      {formatSAR(deferredData.total)} SAR
+                      {formatSAR(deferredData.upcomingBookingGross)} SAR
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {deferredData.items.length} bookings pending flight
-                      completion
+                      {deferredData.items.length}{" "}
+                      {t("revenueAccounting.bookings", "Bookings")}
                     </p>
                   </div>
                   <div className="overflow-auto max-h-[300px]">
@@ -1190,7 +1246,10 @@ export function RevenueAccounting() {
                 </div>
               ) : (
                 <p className="text-center text-muted-foreground py-4">
-                  No deferred revenue items found.
+                  {t(
+                    "revenueAccounting.noUpcoming",
+                    "No upcoming paid bookings."
+                  )}
                 </p>
               )}
             </CardContent>

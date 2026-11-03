@@ -5,10 +5,12 @@
  * Supports natural language flight search, recommendations, and booking
  */
 
-import { eq, and, desc, lt, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, lt, sql } from "drizzle-orm";
 import {
   passengerPolicyGuidance,
-  passengerPolicyLanguage,
+  chatReferral,
+  exchangeGuidance,
+  referralLabels,
 } from "./chat-passenger-policy";
 import { passengerRightsSource } from "@shared/passenger-policy";
 import { AI_LIMITS } from "./ai-guardrails.service";
@@ -18,6 +20,7 @@ const CHAT_HISTORY_WINDOW = 20;
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
+  bookings,
   chatConversations,
   chatMessages,
   bookingSuggestions,
@@ -44,6 +47,7 @@ export interface ChatContext {
 }
 
 export interface ChatResponse {
+  exchangeBookings?: { id: number; bookingReference: string }[];
   policySourceLanguage?: keyof typeof passengerRightsSource;
   message: string;
   suggestions?: Array<{
@@ -235,36 +239,57 @@ export async function sendMessage(
       .orderBy(desc(chatMessages.id))
       .limit(CHAT_HISTORY_WINDOW - 1)
   ).reverse();
-  // A referral captures exactly one follow-up (which often carries the
-  // identifiers the first message did), then ordinary chat resumes. Keeping
-  // every later message local hijacked conversations after one mention of
-  // a refund.
   const lastReply = history.at(-1);
-  const continuing =
-    lastReply?.role === "assistant" &&
-    lastReply.metadata?.intent === "passenger_rights_review" &&
-    lastReply.metadata?.trigger === "keyword";
-  const keyed = passengerPolicyLanguage(input.message, false);
-  const policyLanguage =
-    keyed ??
-    (continuing ? passengerPolicyLanguage(input.message, true) : undefined);
-  if (policyLanguage) {
-    const message = passengerPolicyGuidance[policyLanguage];
-    const metadata = {
-      intent: "passenger_rights_review",
-      trigger: (keyed ? "keyword" : "follow_up") as "keyword" | "follow_up",
-      entities: { source: passengerRightsSource[policyLanguage], article: 5 },
-    };
+  const referral = chatReferral(
+    input.message,
+    lastReply?.role === "assistant" && lastReply.metadata?.trigger === "keyword"
+      ? lastReply.metadata.intent
+      : undefined
+  );
+  if (referral) {
+    const { intent, language, trigger } = referral;
+    const isExchange = intent === "exchange_review";
+    const message = (isExchange ? exchangeGuidance : passengerPolicyGuidance)[
+      language
+    ];
+    const metadata = isExchange
+      ? { intent, trigger }
+      : {
+          intent,
+          trigger,
+          entities: { source: passengerRightsSource[language], article: 5 },
+        };
+
+    // This projection stays in the authenticated response. Neither the
+    // passenger references nor the selection enter the model or transcript.
+    const exchangeBookings = isExchange
+      ? await db
+          .select({
+            id: bookings.id,
+            bookingReference: bookings.bookingReference,
+          })
+          .from(bookings)
+          .where(
+            and(
+              eq(bookings.userId, input.userId),
+              input.tenantId == null
+                ? isNull(bookings.tenantId)
+                : eq(bookings.tenantId, input.tenantId),
+              eq(bookings.status, "confirmed"),
+              eq(bookings.paymentStatus, "paid"),
+              isNull(bookings.deletedAt)
+            )
+          )
+          .orderBy(desc(bookings.id))
+          .limit(10)
+      : undefined;
     // Record the referral without retaining passenger-supplied claims or identifiers.
     await db.transaction(async tx => {
       await tx.insert(chatMessages).values([
         {
           conversationId: input.conversationId,
           role: "user",
-          content:
-            policyLanguage === "ar"
-              ? "طلب مراجعة حقوق المسافر"
-              : "Passenger rights review requested",
+          content: referralLabels[intent][language],
           metadata,
         },
         {
@@ -282,7 +307,9 @@ export async function sendMessage(
         })
         .where(eq(chatConversations.id, input.conversationId));
     });
-    return { message, policySourceLanguage: policyLanguage };
+    return isExchange
+      ? { message, exchangeBookings }
+      : { message, policySourceLanguage: language };
   }
 
   await db.insert(chatMessages).values({

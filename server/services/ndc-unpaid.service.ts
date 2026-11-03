@@ -1,3 +1,4 @@
+import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { lockRetailOffer, consumeRetailOffer } from "./retail-offer.service";
 import { z } from "zod";
 import { and, asc, eq } from "drizzle-orm";
@@ -419,6 +420,7 @@ export async function changeUnpaidOrder(
       message: "No changes requested",
     });
   return await withTransactionalIdempotency({
+    transactionConfig: inventoryTransactionConfig,
     scope: "ndc.order.change",
     key: input.idempotencyKey,
     userId: input.userId,

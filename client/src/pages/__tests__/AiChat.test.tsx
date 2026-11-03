@@ -12,6 +12,7 @@ const current = vi.hoisted(() => ({
   pending: null as Promise<{
     message: string;
     policySourceLanguage?: "ar" | "en";
+    exchangeBookings?: { id: number; bookingReference: string }[];
   }> | null,
 }));
 vi.mock("react-i18next", () => ({
@@ -179,6 +180,37 @@ it.each([
       });
       expect(source).toHaveAttribute("href", passengerRightsSource[language]);
       expect(screen.queryByRole("link", { name: /unknown/ })).toBeNull();
+    } finally {
+      current.pending = null;
+    }
+  }
+);
+
+it.each([
+  ["ar", ar.aiChat],
+  ["en", en.aiChat],
+] as const)(
+  "opens the owned booking review from an assistant exchange referral in %s",
+  async (language, labels) => {
+    current.language = language;
+    current.pending = Promise.resolve({
+      message: "Review only",
+      exchangeBookings: [{ id: 17, bookingReference: "MYBOOK" }],
+    });
+    try {
+      render(<AiChat />);
+      fireEvent.click(
+        screen.getByRole("button", { name: labels.startConversation })
+      );
+      fireEvent.click(
+        await screen.findByRole("button", { name: labels.exchangeHelp })
+      );
+      expect(
+        await screen.findByRole("link", { name: new RegExp("MYBOOK") })
+      ).toHaveAttribute("href", "/my-bookings?exchange=17");
+      expect(
+        screen.getByRole("link", { name: "myBookings.title" })
+      ).toHaveAttribute("href", "/my-bookings");
     } finally {
       current.pending = null;
     }

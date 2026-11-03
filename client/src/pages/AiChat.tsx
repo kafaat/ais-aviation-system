@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 interface ChatMessageDisplay {
+  exchangeBookings?: { id: number; bookingReference: string }[];
   policySourceLanguage?: keyof typeof passengerRightsSource;
   id: number;
   role: "user" | "assistant" | "system";
@@ -156,6 +157,7 @@ export default function AiChat() {
         role: "assistant",
         content: result.message,
         policySourceLanguage: result.policySourceLanguage,
+        exchangeBookings: result.exchangeBookings,
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, aiMsg]);
@@ -392,6 +394,26 @@ export default function AiChat() {
                 <p className="text-sm whitespace-pre-wrap" dir="auto">
                   {msg.content}
                 </p>
+                {msg.exchangeBookings && (
+                  <nav
+                    aria-label={t("aiChat.exchangeHelp")}
+                    className="grid gap-2"
+                  >
+                    {msg.exchangeBookings.map(booking => (
+                      <Link
+                        key={booking.id}
+                        className="underline"
+                        href={`/my-bookings?exchange=${booking.id}`}
+                      >
+                        {t("aiChat.reviewExchange")}{" "}
+                        <bdi>{booking.bookingReference}</bdi>
+                      </Link>
+                    ))}
+                    <Link href="/my-bookings" className="underline">
+                      {t("myBookings.title")}
+                    </Link>
+                  </nav>
+                )}
                 {msg.policySourceLanguage && (
                   <a
                     href={passengerRightsSource[msg.policySourceLanguage]}
@@ -496,6 +518,16 @@ export default function AiChat() {
       {/* Input Area */}
       <div className="border-t bg-background/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          {!messages.some(message => message.exchangeBookings) && (
+            <button
+              type="button"
+              disabled={isGenerating}
+              className="mb-2 me-3 text-sm underline"
+              onClick={() => handleSendMessage(t("aiChat.exchangeHelp"))}
+            >
+              {t("aiChat.exchangeHelp")}
+            </button>
+          )}
           {!messages.some(message => message.policySourceLanguage) && (
             <button
               type="button"
