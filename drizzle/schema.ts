@@ -3868,6 +3868,10 @@ export const crewMembers = mysqlTable(
       .default("active")
       .notNull(),
 
+    /** Home base airport; its time zone is the initial acclimatisation
+     * reference for the crew legality engine. */
+    homeBaseAirportId: int("homeBaseAirportId"),
+
     phone: varchar("phone", { length: 20 }),
     email: varchar("email", { length: 320 }),
 
@@ -3905,6 +3909,10 @@ export const crewAssignments = mysqlTable(
     dutyStartTime: timestamp("dutyStartTime"),
     dutyEndTime: timestamp("dutyEndTime"),
     ruleEvidenceId: int("ruleEvidenceId"),
+    /** Trip definition this roster line belongs to (pairing vs rostering). */
+    pairingId: int("pairingId"),
+    /** Legality verdict recorded by the FTL engine for this assignment. */
+    legalityVerdictId: int("legalityVerdictId"),
     notes: text("notes"),
     assignedBy: int("assignedBy"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -3922,6 +3930,277 @@ export const crewAssignments = mysqlTable(
 
 export type CrewAssignment = typeof crewAssignments.$inferSelect;
 export type InsertCrewAssignment = typeof crewAssignments.$inferInsert;
+
+/**
+ * Crew flight and duty time limitation (FTL) rule sets.
+ * Rule values are data (crew_ftl_fdp_limits, crew_ftl_limits), never code.
+ * A rule set only gates assignments once it is operator-confirmed and active.
+ */
+export const crewFtlRuleSets = mysqlTable(
+  "crew_ftl_rule_sets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    tenantId: int("tenantId"),
+    code: varchar("code", { length: 40 }).notNull(), // EASA-ORO-FTL, GACAR-117
+    version: varchar("version", { length: 50 }).notNull(),
+    name: varchar("name", { length: 200 }).notNull(),
+    jurisdiction: varchar("jurisdiction", { length: 10 }).notNull(),
+    effectiveFrom: datetime("effectiveFrom").notNull(),
+    effectiveTo: datetime("effectiveTo"),
+    sourceUrl: varchar("sourceUrl", { length: 500 }).notNull(),
+    sourceNotes: text("sourceNotes"),
+    valuesStatus: mysqlEnum("valuesStatus", [
+      "documented",
+      "transcribed_unverified",
+      "pending_official_text",
+    ]).notNull(),
+    approvalStatus: mysqlEnum("approvalStatus", [
+      "draft",
+      "operator_confirmed",
+      "retired",
+    ])
+      .default("draft")
+      .notNull(),
+    operatorConfirmed: boolean("operatorConfirmed").default(false).notNull(),
+    confirmedBy: int("confirmedBy"),
+    confirmedAt: timestamp("confirmedAt"),
+    confirmationNote: varchar("confirmationNote", { length: 500 }),
+    active: boolean("active").default(false).notNull(),
+    activatedBy: int("activatedBy"),
+    activatedAt: timestamp("activatedAt"),
+    allowsOverride: boolean("allowsOverride").default(false).notNull(),
+    importedBy: int("importedBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    identityIdx: uniqueIndex("crew_ftl_rule_set_identity_idx").on(
+      table.airlineId,
+      table.code,
+      table.version
+    ),
+    activeIdx: index("crew_ftl_rule_set_active_idx").on(
+      table.airlineId,
+      table.active
+    ),
+  })
+);
+
+export type CrewFtlRuleSet = typeof crewFtlRuleSets.$inferSelect;
+export type InsertCrewFtlRuleSet = typeof crewFtlRuleSets.$inferInsert;
+
+/**
+ * Maximum daily FDP by report-time band (minutes after local midnight,
+ * end exclusive, wrapping past midnight when end <= start) and sector count.
+ */
+export const crewFtlFdpLimits = mysqlTable(
+  "crew_ftl_fdp_limits",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ruleSetId: int("ruleSetId").notNull(),
+    tableKind: mysqlEnum("tableKind", [
+      "acclimatised",
+      "unknown_acclimatisation",
+      "unknown_acclimatisation_frm",
+      "augmented_crew",
+    ]).notNull(),
+    bandStartMinute: int("bandStartMinute").notNull(),
+    bandEndMinute: int("bandEndMinute").notNull(),
+    sectorsFrom: int("sectorsFrom").notNull(),
+    sectorsTo: int("sectorsTo").notNull(),
+    qualifier: varchar("qualifier", { length: 40 }),
+    maxFdpMinutes: int("maxFdpMinutes"),
+    sourceStatus: mysqlEnum("sourceStatus", [
+      "documented",
+      "transcribed_unverified",
+      "pending_official_text",
+    ]).notNull(),
+  },
+  table => ({
+    ruleSetIdx: index("crew_ftl_fdp_rule_set_idx").on(
+      table.ruleSetId,
+      table.tableKind
+    ),
+  })
+);
+
+export type CrewFtlFdpLimit = typeof crewFtlFdpLimits.$inferSelect;
+
+/**
+ * Scalar FTL limits: extensions, minimum rest, cumulative duty/flight hours,
+ * consecutive duty days, roster publication, standby, split/augmented crew.
+ */
+export const crewFtlLimits = mysqlTable(
+  "crew_ftl_limits",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ruleSetId: int("ruleSetId").notNull(),
+    limitKey: varchar("limitKey", { length: 64 }).notNull(),
+    qualifier: varchar("qualifier", { length: 40 }),
+    value: int("value"),
+    unit: mysqlEnum("unit", ["minutes", "count", "days", "percent"]).notNull(),
+    reference: varchar("reference", { length: 120 }).notNull(),
+    sourceStatus: mysqlEnum("sourceStatus", [
+      "documented",
+      "transcribed_unverified",
+      "pending_official_text",
+    ]).notNull(),
+  },
+  table => ({
+    ruleSetIdx: index("crew_ftl_limit_rule_set_idx").on(
+      table.ruleSetId,
+      table.limitKey
+    ),
+  })
+);
+
+export type CrewFtlLimit = typeof crewFtlLimits.$inferSelect;
+
+/**
+ * Documented operational overrides: the only way an illegal verdict may be
+ * assigned, and only when the active rule set allows overrides.
+ */
+export const crewLegalityOverrides = mysqlTable(
+  "crew_legality_overrides",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    tenantId: int("tenantId"),
+    crewMemberId: int("crewMemberId").notNull(),
+    flightId: int("flightId").notNull(),
+    ruleCodes: json("ruleCodes").$type<string[]>().notNull(),
+    reason: text("reason").notNull(),
+    approvedBy: int("approvedBy").notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    status: mysqlEnum("status", ["active", "consumed", "revoked"])
+      .default("active")
+      .notNull(),
+    consumedByAssignmentId: int("consumedByAssignmentId"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    targetIdx: index("crew_legality_override_target_idx").on(
+      table.crewMemberId,
+      table.flightId,
+      table.status
+    ),
+  })
+);
+
+export type CrewLegalityOverride = typeof crewLegalityOverrides.$inferSelect;
+
+/** Audit log: every legality verdict on every assignment path. */
+export const crewLegalityVerdicts = mysqlTable(
+  "crew_legality_verdicts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ruleSetId: int("ruleSetId"),
+    airlineId: int("airlineId").notNull(),
+    tenantId: int("tenantId"),
+    crewMemberId: int("crewMemberId").notNull(),
+    flightId: int("flightId"),
+    pairingId: int("pairingId"),
+    standbyId: int("standbyId"),
+    path: mysqlEnum("path", [
+      "manual",
+      "bulk_roster",
+      "recovery_swap",
+      "standby_activation",
+      "preview",
+    ]).notNull(),
+    verdict: mysqlEnum("verdict", [
+      "legal",
+      "legal_with_extension",
+      "illegal",
+    ]).notNull(),
+    /** true when the assignment was blocked by this verdict. */
+    blocked: boolean("blocked").notNull(),
+    overrideId: int("overrideId"),
+    checks: json("checks").$type<Record<string, unknown>[]>().notNull(),
+    fatigue: json("fatigue").$type<Record<string, unknown>>().notNull(),
+    summary: json("summary").$type<Record<string, unknown>>().notNull(),
+    actorId: int("actorId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    crewIdx: index("crew_legality_verdict_crew_idx").on(
+      table.crewMemberId,
+      table.createdAt
+    ),
+    flightIdx: index("crew_legality_verdict_flight_idx").on(table.flightId),
+  })
+);
+
+export type CrewLegalityVerdict = typeof crewLegalityVerdicts.$inferSelect;
+
+/** Pairings (trip definitions) are separate from rostering individuals. */
+export const crewPairings = mysqlTable(
+  "crew_pairings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    tenantId: int("tenantId"),
+    code: varchar("code", { length: 40 }).notNull(),
+    homeBaseAirportId: int("homeBaseAirportId"),
+    startsAt: timestamp("startsAt").notNull(),
+    endsAt: timestamp("endsAt").notNull(),
+    legs: json("legs").$type<Array<{ flightId: number }>>().notNull(),
+    status: mysqlEnum("status", ["draft", "published"])
+      .default("draft")
+      .notNull(),
+    publishedAt: timestamp("publishedAt"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    codeIdx: uniqueIndex("crew_pairing_code_idx").on(
+      table.airlineId,
+      table.code
+    ),
+  })
+);
+
+export type CrewPairing = typeof crewPairings.$inferSelect;
+
+/** Standby duties; activation is an assignment path gated by the engine. */
+export const crewStandbyDuties = mysqlTable(
+  "crew_standby_duties",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    tenantId: int("tenantId"),
+    crewMemberId: int("crewMemberId").notNull(),
+    kind: mysqlEnum("kind", ["airport", "home"]).notNull(),
+    startsAt: timestamp("startsAt").notNull(),
+    endsAt: timestamp("endsAt").notNull(),
+    locationAirportId: int("locationAirportId"),
+    status: mysqlEnum("status", [
+      "planned",
+      "activated",
+      "released",
+      "cancelled",
+    ])
+      .default("planned")
+      .notNull(),
+    activatedAssignmentId: int("activatedAssignmentId"),
+    activatedAt: timestamp("activatedAt"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    crewIdx: index("crew_standby_crew_idx").on(
+      table.crewMemberId,
+      table.startsAt
+    ),
+  })
+);
+
+export type CrewStandbyDuty = typeof crewStandbyDuties.$inferSelect;
 
 /**
  * Load plans for flights

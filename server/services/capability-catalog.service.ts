@@ -49,6 +49,15 @@ export const capabilityCatalog = [
     requirement: "Verified departure-control provider and dispatch acceptance",
   },
   {
+    id: "crewLegality",
+    implementation: "implemented",
+    owner: "crew-legality-engine and crew-legality.service",
+    consumer:
+      "crew.assignToFlight, crew.assignRoster, crew.activateStandby and recovery feasibility",
+    requirement:
+      "Operator-confirmed active FTL rule set per airline (EASA ORO.FTL seed carries research-documented values plus transcribed values that must be verified against the primary text; GACAR Part 117 Tables A/B/C and FRMS values must be loaded from the official text). Illegal verdicts block every assignment path unless a documented override is recorded and allowed. Fatigue indicator is advisory, not a certified FRMS.",
+  },
+  {
     id: "gdsSynchronization",
     implementation: "demo",
     owner: "gds.service",

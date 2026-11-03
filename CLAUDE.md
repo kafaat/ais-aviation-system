@@ -569,6 +569,7 @@ Deployment receipts are tracked separately in [provider acceptance](docs/operati
 | ndcExternalFulfillment | blocked | Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts |
 | kioskHardware | blocked | Authenticated device heartbeat and physical printer/scanner acceptance; digital documents are separate |
 | dcsDispatch | demo | Verified departure-control provider and dispatch acceptance |
+| crewLegality | implemented | Operator-confirmed active FTL rule set per airline (EASA ORO.FTL seed carries research-documented values plus transcribed values that must be verified against the primary text; GACAR Part 117 Tables A/B/C and FRMS values must be loaded from the official text). Illegal verdicts block every assignment path unless a documented override is recorded and allowed. Fatigue indicator is advisory, not a certified FRMS. |
 | gdsSynchronization | demo | Contracted GDS connection and round-trip order synchronization |
 | biometricIdentity | demo | Approved biometric processor, measured verification and privacy controls |
 | multiRegionFailover | demo | Infrastructure adapter, replication evidence and controlled failover drill |

@@ -1294,6 +1294,27 @@ try {
           ],
         });
         await ingestCrewRules(policy.envelope, policy.signature, id, id);
+        // Crew assignment and recovery swaps pass the FTL legality gate,
+        // which requires an operator-confirmed active rule set.
+        const legality =
+          await import("../../server/services/crew-legality.service");
+        const ruleSet = await legality.importRuleSet({
+          airlineId: id,
+          tenantId: id,
+          actorId: id,
+          template: "EASA-ORO-FTL",
+        });
+        await legality.confirmRuleSet({
+          ruleSetId: ruleSet.id,
+          actorId: id,
+          tenantId: id,
+          note: "Synthetic acceptance fixture; values not operator-verified",
+        });
+        await legality.activateRuleSet({
+          ruleSetId: ruleSet.id,
+          actorId: id,
+          tenantId: id,
+        });
         await assert.rejects(
           proposeRecovery(input, id),
           /Missing required captain/
