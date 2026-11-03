@@ -74,7 +74,7 @@ spec:
                   number: 80
 
 ---
-# Exact public search location: preserve application CSP/XFO without the main
+# Exact public search and isolated brand documents: preserve application CSP/XFO without the main
 # ingress's DENY override. All account/payment locations retain that override.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -113,10 +113,38 @@ spec:
                 name: ais-api
                 port:
                   number: 80
+          - path: /videcom/brand/header
+            pathType: Exact
+            backend:
+              service:
+                name: ais-api
+                port:
+                  number: 80
+          - path: /videcom/brand/footer
+            pathType: Exact
+            backend:
+              service:
+                name: ais-api
+                port:
+                  number: 80
     - host: www.ais-aviation.example.com
       http:
         paths:
           - path: /embed/search
+            pathType: Exact
+            backend:
+              service:
+                name: ais-api
+                port:
+                  number: 80
+          - path: /videcom/brand/header
+            pathType: Exact
+            backend:
+              service:
+                name: ais-api
+                port:
+                  number: 80
+          - path: /videcom/brand/footer
             pathType: Exact
             backend:
               service:
