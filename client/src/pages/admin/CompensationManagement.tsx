@@ -234,6 +234,11 @@ function ClaimsQueue() {
   const [distanceReference, setDistanceReference] = useState("");
   const [distanceKm, setDistanceKm] = useState("");
   const [denialReason, setDenialReason] = useState("");
+  const [useGaca, setUseGaca] = useState(false);
+  const [scheduledArrival, setScheduledArrival] = useState("");
+  const [actualArrival, setActualArrival] = useState("");
+  const [arrivalSource, setArrivalSource] = useState("");
+  const [sarPerSdr, setSarPerSdr] = useState("");
 
   const {
     data: claimsData,
@@ -248,6 +253,26 @@ function ClaimsQueue() {
     page,
     limit: 15,
   });
+
+  const selectedClaim = claimsData?.claims.find(
+    claim => claim.id === selectedClaimId
+  );
+  const allowsGaca =
+    decision === "approved" &&
+    selectedClaim?.regulationType === "local" &&
+    selectedClaim.claimType === "delay";
+  const gacaMode = allowsGaca && useGaca;
+  // datetime-local values are read as UTC, which is what the label asks for.
+  const utcIso = (value: string) =>
+    value && Number.isFinite(Date.parse(`${value}:00Z`))
+      ? new Date(`${value}:00Z`).toISOString()
+      : "";
+  const validArrivals =
+    !!utcIso(scheduledArrival) &&
+    !!utcIso(actualArrival) &&
+    Date.parse(utcIso(actualArrival)) > Date.parse(utcIso(scheduledArrival));
+  const validFx =
+    /^\d{1,5}(\.\d{1,6})?$/.test(sarPerSdr) && Number(sarPerSdr) > 0;
 
   const processClaimMutation = trpc.compensation.processClaim.useMutation({
     onSuccess: () => {
@@ -265,6 +290,11 @@ function ClaimsQueue() {
 
   const resetProcessForm = () => {
     setSelectedClaimId(null);
+    setUseGaca(false);
+    setScheduledArrival("");
+    setActualArrival("");
+    setArrivalSource("");
+    setSarPerSdr("");
     setPolicyReference("");
     setFxReference("");
     setDistanceReference("");
@@ -281,12 +311,22 @@ function ClaimsQueue() {
       claimId: selectedClaimId,
       decision,
       approvedAmount:
-        decision !== "denied" && approvedAmount
+        decision !== "denied" && !gacaMode && approvedAmount
           ? Math.round(parseFloat(approvedAmount) * 100)
           : undefined,
       denialReason: decision === "denied" ? denialReason : undefined,
+      gacaArrivalEvidence: gacaMode
+        ? {
+            scopeAndExceptionReview: policyReference,
+            arrivalReference: arrivalSource,
+            scheduledArrivalUtc: utcIso(scheduledArrival),
+            actualArrivalUtc: utcIso(actualArrival),
+            fxReference,
+            sarPerXdrMillionths: Math.round(Number(sarPerSdr) * 1_000_000),
+          }
+        : undefined,
       evidence:
-        decision === "denied"
+        decision === "denied" || gacaMode
           ? undefined
           : {
               policyReference,
@@ -298,6 +338,7 @@ function ClaimsQueue() {
   };
 
   const openProcessDialog = (claimId: number) => {
+    resetProcessForm();
     setSelectedClaimId(claimId);
     setProcessDialogOpen(true);
   };
@@ -564,7 +605,81 @@ function ClaimsQueue() {
               </Select>
             </div>
 
-            {decision !== "denied" && (
+            {allowsGaca && (
+              <label className="block">
+                <input
+                  type="checkbox"
+                  checked={useGaca}
+                  onChange={e => setUseGaca(e.target.checked)}
+                />{" "}
+                GACA article 10(6) arrival delay / تأخير الوصول وفق المادة
+                العاشرة
+              </label>
+            )}
+            {gacaMode && (
+              <div className="space-y-2">
+                {[
+                  {
+                    label:
+                      "Scope and exceptions review / مرجع مراجعة الانطباق والاستثناءات",
+                    value: policyReference,
+                    set: setPolicyReference,
+                  },
+                  {
+                    label: "Arrival evidence reference / مرجع إثبات الوصول",
+                    value: arrivalSource,
+                    set: setArrivalSource,
+                  },
+                  {
+                    label:
+                      "Booked arrival (UTC) / الوصول المحجوز بالتوقيت العالمي",
+                    value: scheduledArrival,
+                    set: setScheduledArrival,
+                    type: "datetime-local",
+                  },
+                  {
+                    label:
+                      "Actual arrival (UTC) / الوصول الفعلي بالتوقيت العالمي",
+                    value: actualArrival,
+                    set: setActualArrival,
+                    type: "datetime-local",
+                  },
+                  {
+                    label:
+                      "Dated exchange-rate reference / مرجع سعر الصرف وتاريخه",
+                    value: fxReference,
+                    set: setFxReference,
+                  },
+                  {
+                    label: "SAR per SDR / ريال لكل وحدة حقوق سحب خاصة",
+                    value: sarPerSdr,
+                    set: setSarPerSdr,
+                    type: "number",
+                    hint: "5.123456",
+                  },
+                ].map(field => (
+                  <label className="block" key={field.label}>
+                    {field.label}
+                    <Input
+                      type={field.type ?? "text"}
+                      step={field.type === "number" ? "0.000001" : undefined}
+                      min={field.type === "number" ? "0" : undefined}
+                      dir={field.type ? "ltr" : undefined}
+                      value={field.value}
+                      placeholder={field.hint}
+                      onChange={e => field.set(e.target.value)}
+                    />
+                  </label>
+                ))}
+                {scheduledArrival && actualArrival && !validArrivals && (
+                  <p className="text-sm text-red-600">
+                    Actual arrival must be a valid time after the booked arrival
+                    / يجب أن يكون الوصول الفعلي وقتاً صحيحاً بعد الوصول المحجوز
+                  </p>
+                )}
+              </div>
+            )}
+            {decision !== "denied" && !gacaMode && (
               <div className="space-y-2">
                 <Label htmlFor="approved-amount">
                   {t(
@@ -584,7 +699,7 @@ function ClaimsQueue() {
               </div>
             )}
 
-            {decision !== "denied" && (
+            {decision !== "denied" && !gacaMode && (
               <div className="space-y-2">
                 {[
                   {
@@ -656,7 +771,14 @@ function ClaimsQueue() {
               disabled={
                 processClaimMutation.isPending ||
                 (decision === "denied" && !denialReason.trim()) ||
+                (gacaMode &&
+                  (!validFx ||
+                    !validArrivals ||
+                    !arrivalSource.trim() ||
+                    !policyReference.trim() ||
+                    !fxReference.trim())) ||
                 (decision !== "denied" &&
+                  !gacaMode &&
                   (!approvedAmount ||
                     !policyReference ||
                     !fxReference ||

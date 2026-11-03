@@ -30,9 +30,9 @@ const monthlyReportContract = z.object({
 export const responseContracts = {
   getDashboard: z.object({
     totalRevenue: outputNumber,
-    deferredRevenue: outputNumber,
-    recognizedRevenue: outputNumber,
-    ancillaryRevenue: outputNumber,
+    deferredRevenue: outputNumber.nullable(),
+    recognizedRevenue: outputNumber.nullable(),
+    ancillaryRevenue: outputNumber.nullable(),
     refundTotal: outputNumber,
     netRevenue: outputNumber,
     revenueGrowthPercent: outputNumber,
@@ -83,7 +83,8 @@ export const responseContracts = {
     ),
   }),
   getDeferredRevenue: z.object({
-    total: outputNumber,
+    total: outputNumber.nullable(),
+    upcomingBookingGross: outputNumber,
     items: z.array(
       z.object({
         bookingId: outputNumber,

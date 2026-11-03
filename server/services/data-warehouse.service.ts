@@ -1,4 +1,5 @@
 import { getFinancialDays } from "./financial-reporting.service";
+import { escapeCSV } from "../../shared/csv";
 import { emitLineageEvent, exportRunId } from "./lineage.service";
 import {
   EXPORT_INPUT_TABLES,
@@ -1275,16 +1276,6 @@ function formatJSONLines<T>(
       return JSON.stringify(obj);
     })
     .join("\n");
-}
-
-/**
- * Escape CSV field value.
- */
-function escapeCSV(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
 }
 
 /**

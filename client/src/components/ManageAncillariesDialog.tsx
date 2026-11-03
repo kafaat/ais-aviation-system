@@ -1,3 +1,4 @@
+import { matchesPaidSeatProduct } from "@shared/paid-seat";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -30,6 +31,7 @@ interface ManageAncillariesDialogProps {
   bookingId: number;
   cabinClass: "economy" | "business";
   numberOfPassengers: number;
+  editable: boolean;
 }
 
 const categoryIcons: Record<string, LucideIcon> = {
@@ -50,11 +52,126 @@ const categoryNameKeys: Record<string, string> = {
   priority_boarding: "ancillary.categories.priority_boarding",
 };
 
+type NamedSeat = { passengerId: number; flightId: number; seatNumber: string };
+function SeatPurchaseControls({
+  bookingId,
+  cabinClass,
+  service,
+  disabled,
+  onAdd,
+}: {
+  bookingId: number;
+  cabinClass: "economy" | "business";
+  service: { code: string; price: number };
+  disabled: boolean;
+  onAdd: (selection: NamedSeat) => void;
+}) {
+  const { t } = useTranslation();
+  const [flightId, setFlightId] = useState(0);
+  const [passengerId, setPassengerId] = useState(0);
+  const [number, setNumber] = useState("");
+  const legs = trpc.bookings.getDepartureState.useQuery({ bookingId });
+  const pax = trpc.bookings.getPassengers.useQuery({ bookingId });
+  const map = trpc.seatMap.getFlightSeatMap.useQuery(
+    { flightId },
+    { enabled: flightId > 0 }
+  );
+  const sector = legs.data?.find(leg => leg.flightId === flightId);
+  const unseated = sector?.passengers.filter(p => !p.seatNumber);
+  const options =
+    map.data?.cabins
+      .filter(c => c.cabinClass === cabinClass)
+      .flatMap(c => c.rows.flatMap(r => r.seats))
+      .filter(
+        seat =>
+          seat.status === "available" &&
+          !seat.isAssigned &&
+          seat.seatPrice === service.price &&
+          matchesPaidSeatProduct(service.code, seat)
+      ) ?? [];
+  const valid =
+    unseated?.some(p => p.passengerId === passengerId) &&
+    options.some(s => s.seatNumber === number);
+  const selectClass = "border rounded px-2 py-1 text-sm";
+  return (
+    <div className="grid gap-2">
+      <label>
+        {t("manageAncillaries.sector")}{" "}
+        <select
+          className={selectClass}
+          value={flightId}
+          onChange={e => {
+            setFlightId(Number(e.target.value));
+            setPassengerId(0);
+            setNumber("");
+          }}
+        >
+          <option value={0}>{t("manageAncillaries.choose")}</option>
+          {legs.data?.map((leg, i) => (
+            <option key={leg.flightId} value={leg.flightId}>
+              {i + 1} · {leg.flightNumber}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {t("manageAncillaries.passenger")}{" "}
+        <select
+          className={selectClass}
+          disabled={!sector}
+          value={passengerId}
+          onChange={e => setPassengerId(Number(e.target.value))}
+        >
+          <option value={0}>{t("manageAncillaries.choose")}</option>
+          {pax.data
+            ?.filter(p => unseated?.some(s => s.passengerId === p.id))
+            .map(p => (
+              <option key={p.id} value={p.id}>
+                {p.firstName} {p.lastName}
+              </option>
+            ))}
+        </select>
+      </label>
+      <label>
+        {t("manageAncillaries.seat")}{" "}
+        <select
+          className={selectClass}
+          disabled={!options.length}
+          value={number}
+          onChange={e => setNumber(e.target.value)}
+        >
+          <option value="">{t("manageAncillaries.choose")}</option>
+          {options.map(s => (
+            <option key={s.id} value={s.seatNumber}>
+              {s.seatNumber}
+            </option>
+          ))}
+        </select>
+      </label>
+      {legs.isError || pax.isError || map.isError ? (
+        <p role="alert">{t("manageAncillaries.seatError")}</p>
+      ) : (
+        sector &&
+        !map.isLoading &&
+        !options.length && <p role="status">{t("manageAncillaries.noSeats")}</p>
+      )}
+      <Button
+        size="sm"
+        disabled={disabled || !valid}
+        onClick={() => onAdd({ flightId, passengerId, seatNumber: number })}
+      >
+        {t("common.add")}
+      </Button>
+    </div>
+  );
+}
+
 export function ManageAncillariesDialog({
   open,
   onOpenChange,
   bookingId,
-  cabinClass: _cabinClass,
+  cabinClass,
+  editable,
   numberOfPassengers,
 }: ManageAncillariesDialogProps) {
   const { t } = useTranslation();
@@ -74,6 +191,8 @@ export function ManageAncillariesDialog({
 
   const addAncillary = trpc.ancillary.addToBooking.useMutation({
     onSuccess: () => {
+      utils.bookings.getDepartureState.invalidate({ bookingId });
+      utils.seatMap.getFlightSeatMap.invalidate();
       utils.ancillary.getBookingAncillaries.invalidate({ bookingId });
       utils.bookings.myBookings.invalidate();
       toast.success(t("manageAncillaries.addSuccess"));
@@ -85,6 +204,8 @@ export function ManageAncillariesDialog({
 
   const removeAncillary = trpc.ancillary.removeFromBooking.useMutation({
     onSuccess: () => {
+      utils.bookings.getDepartureState.invalidate({ bookingId });
+      utils.seatMap.getFlightSeatMap.invalidate();
       utils.ancillary.getBookingAncillaries.invalidate({ bookingId });
       utils.bookings.myBookings.invalidate();
       toast.success(t("manageAncillaries.removeSuccess"));
@@ -95,19 +216,26 @@ export function ManageAncillariesDialog({
   });
 
   const pendingCommands = useRef(new Map<string, string>());
-  const handleAddService = async (serviceId: number, _price: number) => {
-    const quantity = selectedServices[serviceId] || 1;
-    const signature = JSON.stringify([bookingId, serviceId, quantity]);
+  const handleAddService = (serviceId: number, seat?: NamedSeat) => {
+    const quantity = seat ? 1 : selectedServices[serviceId] || 1;
+    const signature = JSON.stringify([bookingId, serviceId, quantity, seat]);
     const key = pendingCommands.current.get(signature) ?? crypto.randomUUID();
     pendingCommands.current.set(signature, key);
-    await addAncillary.mutateAsync({
-      idempotencyKey: key,
-      bookingId,
-      ancillaryServiceId: serviceId,
-      quantity,
-    });
-    pendingCommands.current.delete(signature);
-    setSelectedServices(prev => ({ ...prev, [serviceId]: 0 }));
+    addAncillary.mutate(
+      {
+        idempotencyKey: key,
+        bookingId,
+        ancillaryServiceId: serviceId,
+        quantity,
+        ...seat,
+      },
+      {
+        onSuccess: () => {
+          pendingCommands.current.delete(signature);
+          setSelectedServices(prev => ({ ...prev, [serviceId]: 0 }));
+        },
+      }
+    );
   };
 
   const handleRemoveAncillary = async (ancillaryId: number) => {
@@ -188,7 +316,7 @@ export function ManageAncillariesDialog({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleRemoveAncillary(ancillary.id)}
-                        disabled={removeAncillary.isPending}
+                        disabled={!editable || removeAncillary.isPending}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -204,7 +332,9 @@ export function ManageAncillariesDialog({
           )}
 
           {/* Available Services */}
-          {loadingAvailable ? (
+          {!editable ? (
+            <p>{t("manageAncillaries.settled")}</p>
+          ) : loadingAvailable ? (
             <Skeleton className="h-64 w-full" />
           ) : (
             <div>
@@ -242,47 +372,57 @@ export function ManageAncillariesDialog({
                                     {t("common.sar")}
                                   </p>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <div className="flex items-center gap-1 border rounded-lg">
+                                {category === "seat" ? (
+                                  <SeatPurchaseControls
+                                    key={bookingId}
+                                    bookingId={bookingId}
+                                    cabinClass={cabinClass}
+                                    service={service}
+                                    disabled={addAncillary.isPending}
+                                    onAdd={seat =>
+                                      handleAddService(service.id, seat)
+                                    }
+                                  />
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1 border rounded-lg">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                          decrementQuantity(service.id)
+                                        }
+                                        disabled={!selectedServices[service.id]}
+                                      >
+                                        <Minus className="h-3 w-3" />
+                                      </Button>
+                                      <span className="px-3 text-sm font-medium">
+                                        {selectedServices[service.id] || 0}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                          incrementQuantity(service.id)
+                                        }
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                      </Button>
+                                    </div>
                                     <Button
-                                      variant="ghost"
                                       size="sm"
                                       onClick={() =>
-                                        decrementQuantity(service.id)
+                                        handleAddService(service.id)
                                       }
-                                      disabled={!selectedServices[service.id]}
-                                    >
-                                      <Minus className="h-3 w-3" />
-                                    </Button>
-                                    <span className="px-3 text-sm font-medium">
-                                      {selectedServices[service.id] || 0}
-                                    </span>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        incrementQuantity(service.id)
+                                      disabled={
+                                        !selectedServices[service.id] ||
+                                        addAncillary.isPending
                                       }
                                     >
-                                      <Plus className="h-3 w-3" />
+                                      {t("common.add")}
                                     </Button>
                                   </div>
-                                  <Button
-                                    size="sm"
-                                    onClick={() =>
-                                      handleAddService(
-                                        service.id,
-                                        service.price
-                                      )
-                                    }
-                                    disabled={
-                                      !selectedServices[service.id] ||
-                                      addAncillary.isPending
-                                    }
-                                  >
-                                    {t("common.add")}
-                                  </Button>
-                                </div>
+                                )}
                               </div>
                             ))}
                           </div>

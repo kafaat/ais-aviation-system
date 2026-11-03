@@ -29,7 +29,7 @@ const JOB_CONFIG = {
  * Execute the reconciliation job.
  *
  * @param options.limit - Maximum records to process
- * @param options.dryRun - If true, only log what would be done (not implemented yet)
+ * @param options.dryRun - If true, inspect provider state and report proposed changes without database writes
  */
 export async function reconciliationJob(options?: {
   limit?: number;
@@ -43,7 +43,10 @@ export async function reconciliationJob(options?: {
   const startTime = Date.now();
 
   try {
-    const result = await runStripeReconciliation({ limit });
+    const result = await runStripeReconciliation({
+      limit,
+      dryRun: options?.dryRun ?? false,
+    });
 
     const duration = Date.now() - startTime;
 

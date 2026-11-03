@@ -14,6 +14,12 @@ backup_job = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backup_job)
 
 
+restore_spec = importlib.util.spec_from_file_location(
+    "restore_smoke", Path(__file__).with_name("backup-restore-smoke.py"))
+restore_smoke = importlib.util.module_from_spec(restore_spec)
+restore_spec.loader.exec_module(restore_smoke)
+
+
 class BackupJobTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -44,6 +50,22 @@ class BackupJobTest(unittest.TestCase):
         checksum = (self.output / "db-backup-123-1.sql.sha256").read_text()
         self.assertEqual(checksum, hashlib.sha256(dump.read_bytes()).hexdigest() + "  db-backup-123-1.sql\n")
         self.assertEqual(len(list(self.output.iterdir())), 2)
+
+    def test_restore_rejects_a_valid_manifest_for_a_different_sql_file(self):
+        self.assertEqual(self.execute().returncode, 0)
+        name = "db-backup-swapped"
+        original = self.output / "db-backup-123-1.sql.sha256"
+        (self.output / f"{name}.sql.sha256").write_bytes(original.read_bytes())
+        (self.output / f"{name}.sql").write_text("unverified SQL")
+        mysql = self.root / "mysql"
+        mysql.write_text("#!/bin/sh\ntouch \"$AIS_RESTORE_DIR/mysql-called\"\n")
+        mysql.chmod(0o700)
+        result = subprocess.run(["sh", "-ec", restore_smoke.RESTORE_COMMAND, "restore", name],
+                                env=dict(self.env, AIS_RESTORE_DIR=str(self.output)),
+                                capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"checksum", result.stderr)
+        self.assertFalse((self.output / "mysql-called").exists())
 
     def test_failed_dump_cannot_publish_partial_output(self):
         self.client.write_text("#!/bin/sh\nprintf 'partial SQL'\nexit 2\n")

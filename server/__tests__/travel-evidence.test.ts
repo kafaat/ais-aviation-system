@@ -177,6 +177,18 @@ describe("sourced carbon and documents", () => {
     });
     await ingestTravelClearance(e.envelope, e.signature);
     expect((await assertTravelClearance(fixture.db, 7, 8)).required).toBe(true);
+    // A corrected jurisdiction or a carrier change invalidates an earlier
+    // authorization even when the flight, stations and schedule retain IDs.
+    fixture.rows("airports")[1].country = "OM";
+    await expect(assertTravelClearance(fixture.db, 7, 8)).rejects.toThrow(
+      "requires current"
+    );
+    fixture.rows("airports")[1].country = "AE";
+    fixture.rows("flights")[0].airlineId = 2;
+    await expect(assertTravelClearance(fixture.db, 7, 8)).rejects.toThrow(
+      "requires current"
+    );
+    fixture.rows("flights")[0].airlineId = 1;
     const revoked = event("travel_clearance", {
       ...e.envelope.payload,
       verdict: "denied",
@@ -185,6 +197,17 @@ describe("sourced carbon and documents", () => {
     await ingestTravelClearance(revoked.envelope, revoked.signature);
     await expect(assertTravelClearance(fixture.db, 7, 8)).rejects.toThrow(
       "requires current"
+    );
+  });
+  it("refuses a booking with no active legs instead of treating it as domestic", async () => {
+    fixture = transactionMemory({
+      bookings: [{ id: 7, flightId: 11 }],
+      booking_segments: [
+        { bookingId: 7, flightId: 11, status: "cancelled", segmentOrder: 1 },
+      ],
+    });
+    await expect(assertTravelClearance(fixture.db, 7, 8)).rejects.toThrow(
+      "Itinerary has no active segments"
     );
   });
   it("rolls evidence back when the durable event cannot be written", async () => {

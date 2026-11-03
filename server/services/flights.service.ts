@@ -240,6 +240,15 @@ export async function calculateFlightPrice(
   userId?: number,
   sessionId?: string
 ) {
+  if (
+    !Number.isSafeInteger(passengerCount) ||
+    passengerCount < 1 ||
+    (passengers && passengers.length !== passengerCount)
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid passenger count",
+    });
   const basePrice =
     cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
 
@@ -254,17 +263,37 @@ export async function calculateFlightPrice(
     });
 
     // Apply passenger type discounts (child 75%, infant 10%)
-    const perPassengerPrice = pricingResult.breakdown.total;
+    // The engine returns an all-adult party total, tax per seat and fees per party.
+    const perPassengerPrice = pricingResult.breakdown.total / passengerCount;
+    const unitFee = pricingResult.breakdown.fees / passengerCount;
+    const unitFare =
+      perPassengerPrice - unitFee - pricingResult.breakdown.taxes;
     const typeBreakdown = calculatePassengerTypePrice(
       perPassengerPrice,
       passengers
     );
+    const fareLines = passengers?.map(({ type }, i) => {
+      const factor = PASSENGER_TYPE_MULTIPLIERS[type];
+      const baseFare = Math.round(unitFare * factor);
+      // Round cumulative subtotals so each line conserves the quoted minor units.
+      const fareWithTax = Math.round(
+        (unitFare + pricingResult.breakdown.taxes) * factor
+      );
+      return {
+        type,
+        baseFare,
+        tax: fareWithTax - baseFare,
+        bookingFee: typeBreakdown.breakdown[i].price - fareWithTax,
+        total: typeBreakdown.breakdown[i].price,
+      };
+    });
     const totalPrice = passengers
       ? typeBreakdown.total
       : perPassengerPrice * passengerCount;
 
     return {
       price: totalPrice,
+      fareLines,
       pricing: {
         basePrice: pricingResult.basePrice,
         finalPrice: totalPrice,

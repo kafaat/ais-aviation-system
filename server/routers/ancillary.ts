@@ -87,7 +87,12 @@ export const ancillaryRouter = router({
     .input(
       z.object({
         bookingId: z.number(),
-        passengerId: z.number().optional(),
+        passengerId: z.number().int().positive().optional(),
+        flightId: z.number().int().positive().optional(),
+        seatNumber: z
+          .string()
+          .regex(/^[0-9]{1,3}[A-Z]{1,2}$/)
+          .optional(),
         ancillaryServiceId: z.number(),
         quantity: z.number().int().min(1).max(10).optional(),
         idempotencyKey: z.string().min(1).max(255),
@@ -109,12 +114,15 @@ export const ancillaryRouter = router({
         });
 
       const [booking] = await db
-        .select({ userId: bookings.userId })
+        .select({ userId: bookings.userId, tenantId: bookings.tenantId })
         .from(bookings)
         .where(eq(bookings.id, input.bookingId))
         .limit(1);
 
-      if (!booking) {
+      if (
+        !booking ||
+        (ctx.tenantId != null && booking.tenantId !== ctx.tenantId)
+      ) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",
@@ -131,6 +139,7 @@ export const ancillaryRouter = router({
       return await ancillaryService.addAncillaryToBooking(input, {
         userId: ctx.user.id,
         admin: ctx.user.role === "admin",
+        tenantId: ctx.tenantId,
       });
     }),
 
@@ -149,12 +158,15 @@ export const ancillaryRouter = router({
         });
 
       const [booking] = await db
-        .select({ userId: bookings.userId })
+        .select({ userId: bookings.userId, tenantId: bookings.tenantId })
         .from(bookings)
         .where(eq(bookings.id, input.bookingId))
         .limit(1);
 
-      if (!booking) {
+      if (
+        !booking ||
+        (ctx.tenantId != null && booking.tenantId !== ctx.tenantId)
+      ) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",
@@ -199,13 +211,14 @@ export const ancillaryRouter = router({
       }
 
       const [booking] = await db
-        .select({ userId: bookings.userId })
+        .select({ userId: bookings.userId, tenantId: bookings.tenantId })
         .from(bookings)
         .where(eq(bookings.id, ancillary.bookingId))
         .limit(1);
 
       if (
         !booking ||
+        (ctx.tenantId != null && booking.tenantId !== ctx.tenantId) ||
         (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
       ) {
         throw new TRPCError({
@@ -216,7 +229,11 @@ export const ancillaryRouter = router({
 
       return await ancillaryService.removeAncillaryFromBooking(
         input.ancillaryId,
-        { userId: ctx.user.id, admin: ctx.user.role === "admin" }
+        {
+          userId: ctx.user.id,
+          admin: ctx.user.role === "admin",
+          tenantId: ctx.tenantId,
+        }
       );
     }),
 
@@ -235,12 +252,15 @@ export const ancillaryRouter = router({
         });
 
       const [booking] = await db
-        .select({ userId: bookings.userId })
+        .select({ userId: bookings.userId, tenantId: bookings.tenantId })
         .from(bookings)
         .where(eq(bookings.id, input.bookingId))
         .limit(1);
 
-      if (!booking) {
+      if (
+        !booking ||
+        (ctx.tenantId != null && booking.tenantId !== ctx.tenantId)
+      ) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",

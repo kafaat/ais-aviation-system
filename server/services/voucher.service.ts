@@ -698,6 +698,12 @@ export async function useCredit(
         code: "NOT_FOUND",
         message: "Owned booking not found",
       });
+    // Account then lots: disjoint bookings cannot spend the same balance.
+    await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for("update");
     const previous = await tx
       .select()
       .from(creditUsage)
@@ -740,12 +746,6 @@ export async function useCredit(
         message:
           "Credits currently settle the full invoice; partial tenders are unavailable",
       });
-    // Account then lots: disjoint bookings cannot spend the same balance.
-    await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.id, userId))
-      .for("update");
     const now = new Date();
     const credits = await tx
       .select()

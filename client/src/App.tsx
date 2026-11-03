@@ -35,6 +35,9 @@ const LiveFlightTracking = lazy(() => import("./pages/LiveFlightTracking"));
 const RebookPage = lazy(() => import("./pages/RebookPage"));
 const PaymentHistory = lazy(() => import("./pages/PaymentHistory"));
 const AiChat = lazy(() => import("./pages/AiChat"));
+const AccessibilityStatement = lazy(
+  () => import("./pages/AccessibilityStatement")
+);
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 
 // Admin pages
@@ -333,6 +336,7 @@ function Router() {
           </Route>
 
           {/* Legal pages (public - linked from the cookie banner and footer) */}
+          <Route path="/accessibility" component={AccessibilityStatement} />
           <Route path="/privacy-policy">
             <Suspense fallback={<PageLoadingFallback variant="default" />}>
               <PrivacyPolicy />

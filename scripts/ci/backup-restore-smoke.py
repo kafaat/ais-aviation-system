@@ -16,6 +16,16 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 
+RESTORE_COMMAND = '''
+cd "${AIS_RESTORE_DIR:-/backup}"
+manifest=$(cat "$1.sql.sha256")
+actual=$(sha256sum "$1.sql")
+test "$manifest" = "$actual" || { echo 'Restore checksum mismatch' >&2; exit 1; }
+count=$(mysql -uroot -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$MYSQL_DATABASE'")
+test "$count" = 0 || { echo 'Restore target is not empty' >&2; exit 1; }
+mysql -uroot "$MYSQL_DATABASE" < "$1.sql"
+'''
+
 
 def run(args, *, env=None, data=None, check=True, timeout=120):
     result = subprocess.run(args, input=data, stdout=subprocess.PIPE,
@@ -109,13 +119,7 @@ def main():
     def restore(name):
         # A failed checksum must be rejected before any database writes. The mount
         # is read-only and this server has no network or production credentials.
-        return execute(target, ["sh", "-ec", '''
-cd /backup
-sha256sum -c "$1.sql.sha256" >/dev/null
-count=$(mysql -uroot -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$MYSQL_DATABASE'")
-test "$count" = 0 || { echo 'Restore target is not empty' >&2; exit 1; }
-mysql -uroot "$MYSQL_DATABASE" < "$1.sql"
-''', "restore", name], check=False)
+        return execute(target, ["sh", "-ec", RESTORE_COMMAND, "restore", name], check=False)
 
     started = time.monotonic()
     try:
@@ -165,6 +169,15 @@ mysql -uroot "$MYSQL_DATABASE" < "$1.sql"
         require(sql(target, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()") == "0",
                 "Checksum rejection changed the target database")
         check("corrupt backup is rejected before writing any target tables")
+        swapped_name = backup_name + "-swapped"
+        volume_command(f"cd /backup; printf 'unverified' > {swapped_name}.sql; "
+                       f"cp {backup_name}.sql.sha256 {swapped_name}.sql.sha256")
+        swapped = restore(swapped_name)
+        require(swapped.returncode != 0 and b"checksum" in swapped.stderr.lower(),
+                "Manifest from another backup was accepted")
+        require(sql(target, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()") == "0",
+                "Mismatched manifest changed the target database")
+        check("restore binds the checksum to the selected SQL file")
         restored = restore(backup_name)
         require(restored.returncode == 0, restored.stderr.decode(errors="replace"))
         after = snapshot(target)

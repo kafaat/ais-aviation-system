@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
 import {
   assertPassengerInKioskCapability,
@@ -33,7 +34,13 @@ describe("self-service capability boundary", () => {
 
   it("cannot replay a capability into a different self-service scope", () => {
     const token = issueSelfServiceCapability(
-      { kind: "bag-drop-admission", bookingId: 42, passengerId: 10 },
+      {
+        kind: "bag-drop-admission",
+        bookingId: 42,
+        passengerId: 10,
+        flightId: 8,
+        passDigest: "a".repeat(64),
+      },
       { secret }
     );
     expect(() =>
@@ -43,7 +50,13 @@ describe("self-service capability boundary", () => {
 
   it("rejects tampering", () => {
     const token = issueSelfServiceCapability(
-      { kind: "bag-drop-admission", bookingId: 42, passengerId: 10 },
+      {
+        kind: "bag-drop-admission",
+        bookingId: 42,
+        passengerId: 10,
+        flightId: 8,
+        passDigest: "a".repeat(64),
+      },
       { secret }
     );
     const tampered = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`;
@@ -52,9 +65,31 @@ describe("self-service capability boundary", () => {
     ).toThrow(TRPCError);
   });
 
+  it("requires a new scan for pre-binding admission tokens", () => {
+    const legacy = jwt.sign(
+      { kind: "bag-drop-admission", bookingId: 42, passengerId: 10 },
+      secret,
+      {
+        algorithm: "HS256",
+        issuer: "ais-self-service",
+        audience: "ais-bag-drop-admission",
+        expiresIn: 60,
+      }
+    );
+    expect(() =>
+      verifySelfServiceCapability(legacy, "bag-drop-admission", { secret })
+    ).toThrow(TRPCError);
+  });
+
   it("rejects expired capabilities", () => {
     const token = issueSelfServiceCapability(
-      { kind: "bag-drop-admission", bookingId: 42, passengerId: 10 },
+      {
+        kind: "bag-drop-admission",
+        bookingId: 42,
+        passengerId: 10,
+        flightId: 8,
+        passDigest: "a".repeat(64),
+      },
       { secret, expiresInSeconds: -1 }
     );
     expect(() =>

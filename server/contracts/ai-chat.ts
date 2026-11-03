@@ -34,6 +34,10 @@ export const responseContracts = {
     greeting: z.string(),
   }),
   sendMessage: z.object({
+    exchangeBookings: z
+      .array(z.object({ id: outputNumber, bookingReference: z.string() }))
+      .optional(),
+    policySourceLanguage: z.enum(["ar", "en"]).optional(),
     message: z.string(),
     suggestions: z
       .union([

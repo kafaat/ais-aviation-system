@@ -36,6 +36,9 @@ let fixture: ReturnType<typeof transactionMemory>;
 const at = (h: number) => new Date(Date.now() + (240 + h) * 3600000);
 beforeEach(() => {
   fixture = transactionMemory({
+    seat_inventory: [],
+    agent_bookings: [],
+    corporate_bookings: [],
     tenants: [{ id: 3, status: "active" }],
     bookings: [
       {
@@ -347,6 +350,8 @@ describe("paid order servicing", () => {
     expect(fixture.rows("financial_ledger")).toHaveLength(0);
   });
   it("exchanges all legs only after verified payment and replays once", async () => {
+    // Existing paid local document predates durable coupons.
+    fixture.rows("passengers")[0].ticketNumber = "0010000000011";
     const offers = await Promise.all([offer(12), offer(13)]);
     const input = {
       bookingId: 7,
@@ -380,6 +385,14 @@ describe("paid order servicing", () => {
     );
     expect(fixture.rows("flights").map(f => f.economyAvailable)).toEqual([
       6, 4, 4,
+    ]);
+    expect(fixture.rows("ticket_coupons")).toMatchObject([
+      {
+        ticketNumber: "0010000000011",
+        couponNumber: 1,
+        flightId: 11,
+        status: "E",
+      },
     ]);
     expect(fixture.rows("bookings")[0].totalAmount).toBe(13000);
     expect(fixture.rows("ndc_orders")[0].totalAmount).toBe(13000);
@@ -452,5 +465,271 @@ describe("paid order servicing", () => {
       fixture.rows("inventory_locks").every(l => l.status === "released")
     ).toBe(true);
     expect(fixture.rows("bookings")[0].flightId).toBe(11);
+  });
+  it("holds the fare, document, seat and segment identity of the unchanged sector", async () => {
+    const [booking] = fixture.rows("bookings");
+    booking.flightId = 12;
+    booking.inventoryLockId = 91;
+    const [first] = fixture.rows("booking_segments");
+    first.flightId = 12;
+    first.segmentAmount = 4400;
+    first.updatedAt = new Date("2020-01-01T00:00:00Z");
+    fixture.rows("booking_segments").push({
+      ...first,
+      id: 22,
+      segmentOrder: 2,
+      flightId: 13,
+      segmentAmount: 5600,
+    });
+    const replacement = {
+      ...fixture.rows("flights")[2],
+      id: 14,
+      flightNumber: "AI14",
+      economyPrice: 5600,
+    };
+    fixture.rows("flights").push(replacement);
+    fixture.rows("passengers")[0].ticketNumber = "0010000000001";
+    fixture.rows("passengers")[0].seatNumber = "12A";
+    fixture.rows("seat_inventory").push({
+      id: 51,
+      flightId: 12,
+      bookingId: 7,
+      passengerId: 1,
+      status: "occupied",
+      seatNumber: "12A",
+      seatPrice: 0,
+    });
+    const input = {
+      bookingId: 7,
+      userId: 1,
+      tenantId: 3,
+      replaceFlightId: 13,
+      newFlightId: 14,
+      idempotencyKey: "replace-return-1",
+    };
+    const quote = await requestChangeFlightDate(input);
+    expect(quote).toMatchObject({
+      newAmount: 10000,
+      priceDifference: 0,
+      currency: "SAR",
+      requiresPayment: false,
+    });
+    expect(fixture.rows("booking_modifications")[0]).toMatchObject({
+      originalFlightId: 13,
+      newFlightId: 14,
+    });
+    await expect(
+      requestChangeFlightDate({ ...input, tenantId: 4 })
+    ).rejects.toThrow("Booking not found");
+    await expect(
+      confirmNoChargeService(quote.modificationId, 1, 4)
+    ).rejects.toThrow();
+    const receipt = await confirmNoChargeService(quote.modificationId, 1, 3);
+    expect(await confirmNoChargeService(quote.modificationId, 1, 3)).toEqual(
+      receipt
+    );
+    expect(fixture.rows("booking_segments")).toMatchObject([
+      { id: 21, flightId: 12, segmentAmount: 4400 },
+      { id: 22, flightId: 14, segmentAmount: 5600 },
+    ]);
+    expect(fixture.rows("bookings")[0].inventoryLockId).toBe(91);
+    expect(fixture.rows("booking_segments")[0].updatedAt).toEqual(
+      new Date("2020-01-01T00:00:00Z")
+    );
+    expect(fixture.rows("seat_inventory")[0]).toMatchObject({
+      flightId: 12,
+      passengerId: 1,
+      status: "occupied",
+    });
+    expect(fixture.rows("passengers")[0]).toMatchObject({
+      ticketNumber: "0010000000001",
+      seatNumber: "12A",
+    });
+    expect(
+      fixture.rows("ticket_coupons").map(c => [c.flightId, c.status])
+    ).toEqual(
+      expect.arrayContaining([
+        [12, "O"],
+        [13, "E"],
+        [14, "O"],
+      ])
+    );
+  });
+
+  it.each([
+    "changed invoice",
+    "cancelled flight",
+    "changed destination",
+    "changed source schedule",
+    "changed passengers",
+    "changed quote terms",
+    "expired quote",
+    "selling channel changed",
+  ])("refuses checkout before a provider call for %s", async defect => {
+    const input = {
+      bookingId: 7,
+      offerIds: [(await offer(12)).id, (await offer(13)).id],
+      idempotencyKey: "stale-before-payment",
+    };
+    const q = await quotePaidOrderService(input, 1, 3);
+    const change = fixture.rows("booking_modifications")[0];
+    if (defect === "changed invoice") fixture.rows("bookings")[0].totalAmount++;
+    if (defect === "changed source schedule")
+      fixture.rows("flights")[0].departureTime = at(8);
+    if (defect === "changed passengers")
+      fixture.rows("passengers")[0].type = "infant";
+    if (defect === "cancelled flight")
+      fixture.rows("flights")[2].status = "cancelled";
+    if (defect === "changed destination")
+      fixture.rows("flights")[2].destinationId = 456;
+    if (defect === "changed quote terms") {
+      change.totalCost++;
+      change.newAmount++;
+    }
+    if (defect === "expired quote")
+      change.servicingPayload.expiresAt = new Date(0).toISOString();
+    if (defect === "selling channel changed")
+      fixture.rows("ndc_orders")[0].channel = "travel_agent";
+    await expect(
+      createOrderServiceCheckout(q.modificationId, 1, "https://ais.example", 3)
+    ).rejects.toThrow();
+    expect(boundary.checkout).not.toHaveBeenCalled();
+    expect(change.checkoutRequestId).toBeFalsy();
+  });
+
+  it("reuses a single saved provider operation after the checkout response is lost", async () => {
+    const input = {
+      bookingId: 7,
+      offerIds: [(await offer(12)).id, (await offer(13)).id],
+      idempotencyKey: "lost-response",
+    };
+    const q = await quotePaidOrderService(input, 1, 3);
+    boundary.checkout.mockRejectedValueOnce(new Error("response lost"));
+    await expect(
+      createOrderServiceCheckout(q.modificationId, 1, "https://ais.example", 3)
+    ).rejects.toThrow("response lost");
+    await expect(
+      createOrderServiceCheckout(q.modificationId, 1, "https://ais.example", 4)
+    ).rejects.toThrow();
+    await createOrderServiceCheckout(
+      q.modificationId,
+      1,
+      "https://ais.example",
+      3
+    );
+    expect(boundary.checkout.mock.calls).toHaveLength(2);
+    expect(boundary.checkout.mock.calls[0]).toEqual(
+      boundary.checkout.mock.calls[1]
+    );
+    expect(fixture.rows("booking_modifications")).toHaveLength(1);
+  });
+  it.each(["agent_bookings", "corporate_bookings"])(
+    "blocks direct exchange for independently linked %s without an NDC order",
+    async channel => {
+      fixture.rows("ndc_orders").splice(0);
+      const a = await offer(12),
+        b = await offer(13);
+      fixture.rows(channel).push({ id: 51, bookingId: 7 });
+      const input = {
+        bookingId: 7,
+        offerIds: [a.id, b.id],
+        idempotencyKey: "partner-issued",
+      };
+      await expect(quotePaidOrderService(input, 1, 3)).rejects.toThrow(
+        "Issuing channel"
+      );
+      expect(fixture.rows("booking_modifications")).toHaveLength(0);
+      fixture.rows(channel).splice(0);
+      const q = await quotePaidOrderService(input, 1, 3);
+      fixture.rows(channel).push({ id: 51, bookingId: 7 });
+      await expect(
+        createOrderServiceCheckout(
+          q.modificationId,
+          1,
+          "https://ais.example",
+          3
+        )
+      ).rejects.toThrow("Issuing channel");
+      expect(boundary.checkout).not.toHaveBeenCalled();
+    }
+  );
+  it("releases an unknown checkout only on a matching verified unpaid expiry", async () => {
+    const { processStripeEvent } = await import("../webhooks/stripe");
+    const q = await quotePaidOrderService(
+      {
+        bookingId: 7,
+        offerIds: [(await offer(12)).id, (await offer(13)).id],
+        idempotencyKey: "expiry-no-ack",
+      },
+      1,
+      3
+    );
+    boundary.checkout.mockRejectedValueOnce(new Error("lost acknowledgement"));
+    await expect(
+      createOrderServiceCheckout(q.modificationId, 1, "https://ais.example", 3)
+    ).rejects.toThrow("lost acknowledgement");
+    const request = boundary.checkout.mock.calls[0][0];
+    const session = {
+      id: "cs_unknown",
+      metadata: request.metadata,
+      currency: "sar",
+      amount_total: q.totalCost,
+      mode: "payment",
+      status: "expired",
+      payment_status: "unpaid",
+    };
+    const deliver = async (override: Record<string, unknown> = {}) =>
+      fixture.db.transaction((tx: any) =>
+        processStripeEvent(tx, {
+          id: "evt_verified_expiry",
+          type: "checkout.session.expired",
+          data: { object: { ...session, ...override } },
+        } as Parameters<typeof processStripeEvent>[1])
+      );
+    const state = () => fixture.rows("booking_modifications")[0];
+    for (const override of [
+      { amount_total: 1 },
+      { currency: "usd" },
+      { payment_status: "paid" },
+      { status: "open" },
+      { metadata: { ...request.metadata, checkoutRequestId: "another" } },
+      { metadata: { ...request.metadata, userId: "999" } },
+      { metadata: { ...request.metadata, bookingId: "999" } },
+    ])
+      await deliver(override);
+    expect(state().status).toBe("pending");
+    expect(state().checkoutSessionId).toBeFalsy();
+    const review = {
+      paymentIntentId: "pi_review",
+      bookingId: 7,
+      kind: "modification",
+      targetId: q.modificationId,
+      settlementStatus: "review_required",
+    };
+    fixture.rows("payment_receipts").push(review);
+    await deliver();
+    expect(state().status).toBe("pending");
+    fixture.rows("payment_receipts").pop();
+    await deliver();
+    await deliver();
+    expect(state()).toMatchObject({
+      status: "rejected",
+      checkoutSessionId: "cs_unknown",
+      checkoutUrl: null,
+    });
+    expect(
+      fixture.rows("inventory_locks").every(l => l.status === "released")
+    ).toBe(true);
+    expect(
+      fixture
+        .rows("outbox")
+        .filter(e => e.eventType === "order.servicing_cancelled")
+    ).toHaveLength(1);
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      flightId: 11,
+      totalAmount: 10000,
+      status: "confirmed",
+    });
+    expect(boundary.checkout).toHaveBeenCalledTimes(1);
   });
 });

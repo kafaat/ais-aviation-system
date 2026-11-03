@@ -1,3 +1,7 @@
+import {
+  gacaArrivalAward,
+  GACA_PASSENGER_RIGHTS,
+} from "../../shared/gaca-arrival-delay";
 import { resolveClaimFlight } from "./booking-flight-membership.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -455,6 +459,14 @@ export async function processClaim(input: {
     distanceReference: string;
     distanceKm: number;
   };
+  gacaArrivalEvidence?: {
+    scopeAndExceptionReview: string;
+    arrivalReference: string;
+    scheduledArrivalUtc: string;
+    actualArrivalUtc: string;
+    fxReference: string;
+    sarPerXdrMillionths: number;
+  };
   actorId: number;
 }): Promise<CompensationClaim> {
   const db = await getDb();
@@ -472,8 +484,69 @@ export async function processClaim(input: {
         message: "Claim already resolved",
       });
     const approval = input.decision !== "denied";
+    const gaca = input.gacaArrivalEvidence;
+    let award;
+    if (gaca) {
+      if (
+        claim.regulationType !== "local" ||
+        claim.claimType !== "delay" ||
+        claim.currency !== "SAR" ||
+        input.decision !== "approved" ||
+        input.evidence ||
+        input.approvedAmount !== undefined
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Select a single basis for a full local delay award",
+        });
+      }
+      if (new Date(gaca.actualArrivalUtc).getTime() > Date.now()) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Actual arrival cannot be in the future",
+        });
+      }
+      // The reviewer types the booked arrival; the claim already names the
+      // flight. An award that contradicts the system's own schedule is not
+      // auditable, so the typed value must match the flight record.
+      const [flight] = await tx
+        .select({ arrivalTime: flights.arrivalTime })
+        .from(flights)
+        .where(eq(flights.id, claim.flightId))
+        .limit(1);
+      if (
+        flight &&
+        Math.abs(
+          Date.parse(gaca.scheduledArrivalUtc) - flight.arrivalTime.getTime()
+        ) > 60_000
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Booked arrival does not match the flight record (${flight.arrivalTime.toISOString()})`,
+        });
+      }
+      try {
+        award = gacaArrivalAward(
+          gaca.scheduledArrivalUtc,
+          gaca.actualArrivalUtc,
+          gaca.sarPerXdrMillionths
+        );
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid arrival or conversion evidence",
+        });
+      }
+      if (!award.halalas) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "No positive article 10(6) delay award",
+        });
+      }
+    }
     if (
       approval &&
+      !award &&
       (!input.evidence ||
         !Number.isSafeInteger(input.approvedAmount) ||
         (input.approvedAmount ?? 0) <= 0)
@@ -506,11 +579,24 @@ export async function processClaim(input: {
       .update(compensationClaims)
       .set({
         status: approval ? "approved" : "denied",
-        approvedAmount: approval ? input.approvedAmount : null,
+        approvedAmount: approval
+          ? (award?.halalas ?? input.approvedAmount)
+          : null,
+        ...(award && {
+          calculatedAmount: award.halalas,
+          delayMinutes: Math.floor(award.minutes),
+        }),
         denialReason: approval ? null : input.denialReason,
         flightDistance: input.evidence?.distanceKm ?? claim.flightDistance,
         reviewEvidence: {
           ...input.evidence,
+          ...(gaca &&
+            award && {
+              article: "GACA 10(6)",
+              source: GACA_PASSENGER_RIGHTS,
+              ...gaca,
+              tariffXdr: award.sdr,
+            }),
           actorId: input.actorId,
           reviewedAt: new Date().toISOString(),
         },

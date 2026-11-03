@@ -3,7 +3,10 @@ import { z } from "zod";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as bagDropService from "../services/bag-drop.service";
 import { TRPCError } from "@trpc/server";
-import { verifyBoardingPass } from "../services/boarding-pass.service";
+import {
+  boardingPassDigest,
+  verifyActiveBoardingPass,
+} from "../services/boarding-pass.service";
 import {
   issueSelfServiceCapability,
   verifySelfServiceCapability,
@@ -39,16 +42,21 @@ export const bagDropRouter = router({
   scanPass: publicProcedure
     .input(z.object({ boardingPassToken: z.string().min(32).max(8192) }))
     .output(responseContracts["scanPass"])
-    .mutation(({ input }) => {
-      const verified = verifyBoardingPass(input.boardingPassToken);
+    .mutation(async ({ input }) => {
+      const verified = await verifyActiveBoardingPass(input.boardingPassToken);
       if (!verified.valid) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: verified.reason });
       }
-      const capabilityToken = issueSelfServiceCapability({
-        kind: "bag-drop-admission",
-        bookingId: verified.data.bookingId,
-        passengerId: verified.data.passengerId,
-      });
+      const capabilityToken = issueSelfServiceCapability(
+        {
+          kind: "bag-drop-admission",
+          flightId: verified.data.flightId,
+          passDigest: boardingPassDigest(verified.data),
+          bookingId: verified.data.bookingId,
+          passengerId: verified.data.passengerId,
+        },
+        { expiresInSeconds: verified.expiresAt - Math.floor(Date.now() / 1000) }
+      );
       return {
         success: true,
         bookingId: verified.data.bookingId,
@@ -70,7 +78,8 @@ export const bagDropRouter = router({
       );
       const session = await bagDropService.initiateBagDrop(
         admission.bookingId,
-        admission.passengerId
+        admission.passengerId,
+        admission
       );
       const sessionToken = issueSelfServiceCapability({
         kind: "bag-drop-session",

@@ -1,3 +1,4 @@
+import { holdInvoiceSeat, seatFeesBySegment } from "./seat-exchange.service";
 import { TRPCError } from "@trpc/server";
 import { and, eq, asc } from "drizzle-orm";
 import {
@@ -15,7 +16,11 @@ import { assertInvoiceEditable } from "./booking-checkout.service";
 import { assertTenantOperational } from "./tenant.service";
 import { allocateProportional } from "./seat-economics.service";
 import { recordEvent } from "./outbox.service";
-export type InvoiceActor = { userId: number; admin?: boolean };
+export type InvoiceActor = {
+  userId: number;
+  admin?: boolean;
+  tenantId?: number | null;
+};
 export const invoiceBlocked = (message: string) =>
   new TRPCError({ code: "PRECONDITION_FAILED", message });
 
@@ -42,6 +47,7 @@ export async function lockEditableInvoice(
     !Number.isSafeInteger(actor.userId) ||
     actor.userId <= 0 ||
     !booking ||
+    (actor.tenantId != null && booking.tenantId !== actor.tenantId) ||
     (!actor.admin && booking.userId !== actor.userId)
   )
     throw new TRPCError({
@@ -76,7 +82,8 @@ export async function setInvoiceTotal(
   tx: SettlementTx,
   booking: Booking,
   totalAmount: number,
-  mode: "editable_invoice" | "completed_servicing" = "editable_invoice"
+  mode: "editable_invoice" | "completed_servicing" = "editable_invoice",
+  allocatedSegmentId?: number
 ) {
   if (
     !Number.isSafeInteger(totalAmount) ||
@@ -109,7 +116,33 @@ export async function setInvoiceTotal(
       segmentAmounts.reduce((sum, a) => sum + a, 0) !== booking.totalAmount)
   )
     throw invoiceBlocked("Segment invoice allocation requires reconciliation");
-  const allocation = allocateProportional(totalAmount, segmentAmounts);
+  if (
+    allocatedSegmentId !== undefined &&
+    !legs.some(l => l.id === allocatedSegmentId)
+  )
+    throw invoiceBlocked("Seat segment is no longer on the invoice");
+  let allocation: number[];
+  if (allocatedSegmentId === undefined && legs.length) {
+    const fees = await seatFeesBySegment(tx, booking.id);
+    const fareWeights = legs.map(
+      (leg, i) => segmentAmounts[i] - (fees.get(leg.id) ?? 0)
+    );
+    const fareTotal =
+      totalAmount - [...fees.values()].reduce((sum, n) => sum + n, 0);
+    if (fareTotal < 0 || fareWeights.some(n => n < 0))
+      throw invoiceBlocked("Seat fee exceeds invoice allocation");
+    allocation = allocateProportional(fareTotal, fareWeights).map(
+      (n, i) => n + (fees.get(legs[i].id) ?? 0)
+    );
+  } else {
+    allocation = legs.map(
+      (l, index) =>
+        segmentAmounts[index] +
+        (l.id === allocatedSegmentId ? totalAmount - booking.totalAmount : 0)
+    );
+  }
+  if (allocation.some(n => n < 0))
+    throw invoiceBlocked("Invalid seat segment allocation");
   for (const [i, leg] of legs.entries())
     await tx
       .update(bookingSegments)
@@ -162,6 +195,7 @@ export async function quoteInvoiceAncillary(
     quantity?: number;
     flightId?: number;
     metadata?: unknown;
+    seatNumber?: string;
   }
 ) {
   const quantity = data.quantity ?? 1;
@@ -184,7 +218,18 @@ export async function quoteInvoiceAncillary(
     throw invoiceBlocked(
       "Ancillary catalog price or availability is unsupported"
     );
-  if (!["baggage", "meal", "priority_boarding"].includes(service.category))
+  if (data.seatNumber !== undefined && service.category !== "seat")
+    throw invoiceBlocked("Seat selection requires a seat catalog item");
+  if (
+    service.category === "seat" &&
+    (!data.seatNumber || !data.passengerId || !data.flightId || quantity !== 1)
+  )
+    throw invoiceBlocked(
+      "Seat selection requires one named passenger, flight and seat"
+    );
+  if (
+    !["baggage", "meal", "priority_boarding", "seat"].includes(service.category)
+  )
     throw invoiceBlocked(
       "This ancillary requires a verified seat or external fulfillment workflow"
     );
@@ -258,8 +303,10 @@ export async function insertInvoiceAncillary(
     booking,
     data
   );
-  const [scopedSegment] =
-    service.category === "baggage" && data.passengerId && data.flightId
+  const matchingSegments =
+    ["baggage", "seat"].includes(service.category) &&
+    data.passengerId &&
+    data.flightId
       ? await tx
           .select({ id: bookingSegments.id })
           .from(bookingSegments)
@@ -269,14 +316,41 @@ export async function insertInvoiceAncillary(
               eq(bookingSegments.flightId, data.flightId)
             )
           )
-          .limit(1)
+          .limit(2)
       : [];
+  if (service.category === "seat" && matchingSegments.length !== 1)
+    throw invoiceBlocked(
+      "Seat assignment requires a unique booked flight segment"
+    );
+  const scopedSegment = matchingSegments[0];
   const weightSnapshotGrams =
     service.category === "baggage" &&
     service.weightGrams != null &&
     service.weightGrams > 0
       ? service.weightGrams * quantity
       : null;
+  let paidSeat;
+  if (service.category === "seat") {
+    if (
+      mode !== "editable_invoice" ||
+      !scopedSegment ||
+      !data.passengerId ||
+      !data.flightId ||
+      !data.seatNumber
+    )
+      throw invoiceBlocked(
+        "Paid seats require an editable, sector-scoped invoice"
+      );
+    paidSeat = await holdInvoiceSeat(
+      tx,
+      booking,
+      data.passengerId,
+      data.flightId,
+      data.seatNumber,
+      service.code,
+      service.price
+    );
+  }
   const [result] = await tx.insert(bookingAncillaries).values({
     bookingId: booking.id,
     passengerId: data.passengerId,
@@ -289,6 +363,7 @@ export async function insertInvoiceAncillary(
     scopeState: scopedSegment ? "specific_segment" : "unresolved",
     status: "active",
     metadata: JSON.stringify({
+      ...(paidSeat && { paidSeat }),
       preferences: data.metadata ?? null,
       flightId: data.flightId ?? null,
       fulfillment:
@@ -297,6 +372,12 @@ export async function insertInvoiceAncillary(
           : "pending_payment",
     }),
   });
-  await setInvoiceTotal(tx, booking, booking.totalAmount + totalPrice, mode);
+  await setInvoiceTotal(
+    tx,
+    booking,
+    booking.totalAmount + totalPrice,
+    mode,
+    paidSeat ? scopedSegment?.id : undefined
+  );
   return { id: Number(result.insertId), totalPrice, service };
 }

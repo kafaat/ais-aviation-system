@@ -932,6 +932,10 @@ jobs:
           AIS_KUBECONFIG_BASE64: ${{ secrets.PRODUCTION_KUBECONFIG }}
         run: python3 scripts/deploy/kubernetes_secrets.py configure
 
+      - name: Require accepted service ownership
+        if: steps.kube-config.outputs.configured == 'true'
+        run: python3 scripts/deploy/verify_service_ownership.py
+
       - name: Verify cluster connectivity
         if: steps.kube-config.outputs.configured == 'true'
         run: |

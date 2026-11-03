@@ -299,8 +299,12 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
       toast.success(
         t(
           "apis.generateSuccess",
-          "{{format}} message generated for {{count}} passengers",
-          { format: data.format.toUpperCase(), count: data.passengerCount }
+          "{{format}} local draft. Validated travel records: {{validated}} of {{total}} passengers. No transmission.",
+          {
+            format: data.format.toUpperCase(),
+            validated: data.validatedCount,
+            total: data.passengerCount,
+          }
         )
       );
     },
@@ -427,7 +431,7 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
                 ) : (
                   <FileCheck className="me-2 h-4 w-4" />
                 )}
-                {t("apis.generatePNRGOV", "Generate PNR/GOV")}
+                {t("apis.generatePNRGOV", "Preview PNR data (text)")}
               </Button>
               <Button
                 size="sm"

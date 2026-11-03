@@ -1,3 +1,4 @@
+import { verifyInventoryHoldConcurrency } from "./acceptance/inventory-hold-concurrency";
 import { verifyAuditGapClosure } from "./acceptance/audit-gap-closure";
 import { verifyProjectHardening } from "./acceptance/project-hardening";
 /** Destructive fixtures ONLY in an empty, disposable *_test database.
@@ -73,7 +74,16 @@ const payment = (
 });
 try {
   await check("live services and empty database", async () => {
-    await db.execute(sql`SELECT 1`);
+    const [sessionRows] = await db.execute(
+      sql`SELECT @@session.time_zone AS sessionZone`
+    );
+    assert(Array.isArray(sessionRows) && sessionRows.length === 1);
+    assert.equal(
+      sessionRows[0].sessionZone,
+      "+00:00",
+      "Each application SQL session must interpret UTC timestamp parameters independently of the server default"
+    );
+
     for (const table of [
       schema.users,
       schema.airlines,
@@ -156,6 +166,10 @@ try {
       economyAvailable: offset ? 1 : 10,
       businessAvailable: 5,
     }))
+  );
+  await check(
+    "independent flight holds avoid gap deadlocks and the last seat cannot be held twice",
+    () => verifyInventoryHoldConcurrency(id, id + 1, id)
   );
   await db.insert(schema.bookings).values(
     [0, 1, 2, 3, 4].map(offset => ({
@@ -455,6 +469,12 @@ try {
   await verifyR2Trace(db, id, check);
   await verifyR2Lineage(db, id, check);
   await verifyR2Reaccommodation(db, id, check);
+  const { verifySupplierFinance } =
+    await import("./acceptance/supplier-finance");
+  await check(
+    "supplier bank versions, independent approvals and immutable evidence",
+    () => verifySupplierFinance(db)
+  );
   completed = true;
 } finally {
   const report = {

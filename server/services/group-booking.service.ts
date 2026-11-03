@@ -1,3 +1,4 @@
+import { withInventoryTransaction } from "./inventory-capacity.service";
 import {
   createInventoryLock,
   releaseInventoryLock,
@@ -245,7 +246,7 @@ export async function approveGroupBooking(
     discountPercent > 100
   )
     throw new Error("Invalid group discount");
-  return await db.transaction(async tx => {
+  return await withInventoryTransaction(db, async tx => {
     const [group] = await tx
       .select()
       .from(groupBookings)

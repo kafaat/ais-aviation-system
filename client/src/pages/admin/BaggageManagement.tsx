@@ -132,7 +132,7 @@ export default function BaggageManagement() {
 
   // Fetch tracking history
   const { data: trackingData, isLoading: trackingLoading } =
-    trpc.baggage.track.useQuery(
+    trpc.baggage.adminTrack.useQuery(
       { tagNumber: selectedBaggage?.tagNumber || "" },
       { enabled: trackDialogOpen && !!selectedBaggage?.tagNumber }
     );

@@ -1,7 +1,9 @@
+import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import {
   createRetailOffer,
   lockRetailOffer,
   consumeRetailOffer,
+  DEFAULT_TAX_RATE,
 } from "./retail-offer.service";
 import {
   cancelBookingResources,
@@ -38,7 +40,6 @@ import crypto from "crypto";
 const OFFER_EXPIRY_MINUTES = 30;
 
 /** Tax rate applied to base fares (15% VAT for Saudi Arabia) */
-const TAX_RATE = 0.15;
 
 /** NDC message version */
 const NDC_VERSION = "21.3";
@@ -938,6 +939,7 @@ export async function createOrder(
     });
   const userId = params.userId;
   return withTransactionalIdempotency({
+    transactionConfig: inventoryTransactionConfig,
     scope: "ndc.order.create",
     key: params.offerId,
     userId,
@@ -1911,7 +1913,7 @@ export async function generateOfferFromFlight(params: {
     expiresAt,
     ndcPolicy: {
       fareMultiplier: fareClass ? Number(fareClass.basePriceMultiplier) : 1,
-      taxRate: TAX_RATE,
+      taxRate: DEFAULT_TAX_RATE,
       fareClassId: fareClass?.id,
     },
   });

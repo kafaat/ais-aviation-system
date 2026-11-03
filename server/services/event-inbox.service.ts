@@ -12,6 +12,7 @@ import {
   groupBookings,
   flights,
   gateAssignments,
+  airportGates,
   type OutboxEvent,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -270,11 +271,13 @@ async function notificationEffect(tx: SettlementTx, event: InboxEvent) {
     const [flight] = await tx
       .select()
       .from(flights)
-      .where(eq(flights.id, details.flightId));
+      .where(eq(flights.id, details.flightId))
+      .for("share");
     const [assignment] = await tx
       .select()
       .from(gateAssignments)
-      .where(eq(gateAssignments.id, details.assignmentId));
+      .where(eq(gateAssignments.id, details.assignmentId))
+      .for("share");
     if (
       !flight ||
       flight.tenantId !== event.tenantId ||
@@ -284,6 +287,18 @@ async function notificationEffect(tx: SettlementTx, event: InboxEvent) {
     )
       throw new Error("Gate event ownership mismatch");
     if (!["assigned", "boarding"].includes(assignment.status)) return;
+    const [gate] = await tx
+      .select({ number: airportGates.gateNumber })
+      .from(airportGates)
+      .where(
+        and(
+          eq(airportGates.id, assignment.gateId),
+          eq(airportGates.airportId, flight.originId)
+        )
+      )
+      .for("share");
+    if (!gate)
+      throw new Error("Gate assignment no longer belongs to departure airport");
     const rows = await tx
       .select()
       .from(bookings)
@@ -297,12 +312,12 @@ async function notificationEffect(tx: SettlementTx, event: InboxEvent) {
         userId: booking.userId,
         type: "flight",
         title: "Gate Change Alert",
-        message: `Flight ${flight.flightNumber}: proceed to gate ${details.gateNumber}.`,
+        message: `Flight ${flight.flightNumber}: proceed to gate ${gate.number}.`,
         data: JSON.stringify({
           flightId: flight.id,
           bookingId: booking.id,
           eventId: event.eventId,
-          newGate: details.gateNumber,
+          newGate: gate.number,
           link: "/my-bookings",
         }),
       });

@@ -1,3 +1,4 @@
+import { manifestBookingCondition } from "./flight-state.service";
 import { assignCrewWithRules } from "./crew-rule.service";
 /**
  * Departure Control System (DCS) Service
@@ -6,7 +7,10 @@ import { assignCrewWithRules } from "./crew-rule.service";
  * load planning, and crew management.
  */
 
-import { requireDemoCapability } from "./demo-capability";
+import {
+  demoCapabilitiesEnabled,
+  requireDemoCapability,
+} from "./demo-capability";
 import { getDb } from "../db";
 import {
   flights,
@@ -296,7 +300,9 @@ export async function generateFlightManifest(flightId: number) {
     .where(eq(airports.id, destFlight.destinationId))
     .limit(1);
 
-  // Get confirmed bookings with passengers
+  const membership = manifestBookingCondition(flightId);
+  // Only unsegmented legacy bookings can use a booking-wide seat. Multiple
+  // competing active assignments cannot establish a reliable seat number.
   const confirmedBookings = await db
     .select({
       bookingId: bookings.id,
@@ -308,16 +314,20 @@ export async function generateFlightManifest(flightId: number) {
       title: passengers.title,
       firstName: passengers.firstName,
       lastName: passengers.lastName,
-      seatNumber: passengers.seatNumber,
+      seatNumber: sql<string | null>`(
+        SELECT CASE COUNT(*)
+          WHEN 0 THEN CASE WHEN NOT EXISTS (SELECT 1 FROM booking_segments bs
+            WHERE bs.bookingId = ${bookings.id}) THEN ${passengers.seatNumber} END
+          WHEN 1 THEN MAX(si.seatNumber)
+        END FROM seat_inventory si
+        WHERE si.flightId = ${flightId} AND si.bookingId = ${bookings.id}
+          AND si.passengerId = ${passengers.id}
+          AND si.status IN ('occupied', 'checked_in')
+      )`,
     })
     .from(bookings)
     .innerJoin(passengers, eq(bookings.id, passengers.bookingId))
-    .where(
-      and(
-        eq(bookings.flightId, flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
+    .where(membership);
 
   // Get crew assignments
   const crew = await getFlightCrew(flightId);
@@ -332,8 +342,16 @@ export async function generateFlightManifest(flightId: number) {
     .innerJoin(bookings, eq(baggageItems.bookingId, bookings.id))
     .where(
       and(
-        eq(bookings.flightId, flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
+        membership,
+        // A legacy booking-level bag can be attributed to its sole flight.
+        // On multi-flight bookings require custody evidence for this sector.
+        sql`(EXISTS (SELECT 1 FROM baggage_custody_events bc
+        WHERE bc.baggageId = ${baggageItems.id} AND bc.flightId = ${flightId})
+        OR (${bookings.flightId} = ${flightId}
+          AND NOT EXISTS (SELECT 1 FROM booking_segments bs
+            WHERE bs.bookingId = ${bookings.id} AND bs.flightId <> ${flightId})
+          AND NOT EXISTS (SELECT 1 FROM baggage_custody_events bc
+            WHERE bc.baggageId = ${baggageItems.id})))`
       )
     );
 
@@ -818,14 +836,16 @@ export async function getDcsStats() {
     })
     .from(crewMembers);
 
-  const [loadPlanStats] = await db
-    .select({
-      totalPlans: sql<number>`COUNT(*)`,
-      draftPlans: sql<number>`SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END)`,
-      approvedPlans: sql<number>`SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END)`,
-      finalizedPlans: sql<number>`SUM(CASE WHEN status = 'finalized' THEN 1 ELSE 0 END)`,
-    })
-    .from(loadPlans);
+  const [loadPlanStats] = demoCapabilitiesEnabled()
+    ? await db
+        .select({
+          totalPlans: sql<number>`COUNT(*)`,
+          draftPlans: sql<number>`SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END)`,
+          approvedPlans: sql<number>`SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END)`,
+          finalizedPlans: sql<number>`SUM(CASE WHEN status = 'finalized' THEN 1 ELSE 0 END)`,
+        })
+        .from(loadPlans)
+    : [];
 
   const [aircraftStats] = await db
     .select({
@@ -845,12 +865,14 @@ export async function getDcsStats() {
       total: Number(crewStats?.totalCrew ?? 0),
       active: Number(crewStats?.activeCrew ?? 0),
     },
-    loadPlans: {
-      total: Number(loadPlanStats?.totalPlans ?? 0),
-      draft: Number(loadPlanStats?.draftPlans ?? 0),
-      approved: Number(loadPlanStats?.approvedPlans ?? 0),
-      finalized: Number(loadPlanStats?.finalizedPlans ?? 0),
-    },
+    loadPlans: loadPlanStats
+      ? {
+          total: Number(loadPlanStats.totalPlans ?? 0),
+          draft: Number(loadPlanStats.draftPlans ?? 0),
+          approved: Number(loadPlanStats.approvedPlans ?? 0),
+          finalized: Number(loadPlanStats.finalizedPlans ?? 0),
+        }
+      : null,
     aircraftTypes: Number(aircraftStats?.totalTypes ?? 0),
   };
 }

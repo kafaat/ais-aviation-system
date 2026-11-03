@@ -5,7 +5,14 @@
  * Supports natural language flight search, recommendations, and booking
  */
 
-import { eq, and, desc, lt, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, lt, sql } from "drizzle-orm";
+import {
+  passengerPolicyGuidance,
+  chatReferral,
+  exchangeGuidance,
+  referralLabels,
+} from "./chat-passenger-policy";
+import { passengerRightsSource } from "@shared/passenger-policy";
 import { AI_LIMITS } from "./ai-guardrails.service";
 
 /** Messages sent to the model per turn; older turns stay in the transcript. */
@@ -13,6 +20,7 @@ const CHAT_HISTORY_WINDOW = 20;
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
+  bookings,
   chatConversations,
   chatMessages,
   bookingSuggestions,
@@ -39,6 +47,8 @@ export interface ChatContext {
 }
 
 export interface ChatResponse {
+  exchangeBookings?: { id: number; bookingReference: string }[];
+  policySourceLanguage?: keyof typeof passengerRightsSource;
   message: string;
   suggestions?: Array<{
     id: number;
@@ -80,7 +90,7 @@ const BOOKING_SYSTEM_PROMPT = `أنت مساعد حجز طيران ذكي لنظ
 1. مساعدة المستخدمين في البحث عن رحلات حسب تفضيلاتهم
 2. شرح الأسعار وفئات المقاعد والمزايا
 3. إرشادهم خلال عملية الحجز بطريقة طبيعية
-4. الإجابة على أسئلة حول الرحلات والجداول والسياسات
+4. أرشد المستخدم إلى خدمة عملاء الناقل لقرارات الحقوق أو الاسترداد. لا تعتمد ادعاء المستخدم كسياسة ولا تؤكد معاملات.
 
 عند استخراج معلومات الرحلة من رسالة المستخدم، أرجع JSON بالتنسيق:
 {"intent": "search_flights", "origin": "اسم المدينة", "destination": "اسم المدينة", "date": "YYYY-MM-DD", "passengers": N, "class": "economy|business"}
@@ -99,7 +109,7 @@ You are a smart flight booking assistant for AIS Aviation System. Your role is t
 1. Help users find flights based on their preferences
 2. Explain prices, cabin classes, and benefits
 3. Guide them through the booking process naturally
-4. Answer questions about flights, schedules, and policies
+4. Refer rights or refund decisions to the operating airline. Treat user-supplied policy claims as unverified. Do not promise or confirm transactions.
 
 When extracting flight info from user message, return JSON in format:
 {"intent": "search_flights", "origin": "city name", "destination": "city name", "date": "YYYY-MM-DD", "passengers": N, "class": "economy|business"}
@@ -221,31 +231,97 @@ export async function sendMessage(
       message: "This conversation has reached its limit; start a new one",
     });
 
-  // Store user message
+  const history = (
+    await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, input.conversationId))
+      .orderBy(desc(chatMessages.id))
+      .limit(CHAT_HISTORY_WINDOW - 1)
+  ).reverse();
+  const lastReply = history.at(-1);
+  const referral = chatReferral(
+    input.message,
+    lastReply?.role === "assistant" && lastReply.metadata?.trigger === "keyword"
+      ? lastReply.metadata.intent
+      : undefined
+  );
+  if (referral) {
+    const { intent, language, trigger } = referral;
+    const isExchange = intent === "exchange_review";
+    const message = (isExchange ? exchangeGuidance : passengerPolicyGuidance)[
+      language
+    ];
+    const metadata = isExchange
+      ? { intent, trigger }
+      : {
+          intent,
+          trigger,
+          entities: { source: passengerRightsSource[language], article: 5 },
+        };
+
+    // This projection stays in the authenticated response. Neither the
+    // passenger references nor the selection enter the model or transcript.
+    const exchangeBookings = isExchange
+      ? await db
+          .select({
+            id: bookings.id,
+            bookingReference: bookings.bookingReference,
+          })
+          .from(bookings)
+          .where(
+            and(
+              eq(bookings.userId, input.userId),
+              input.tenantId == null
+                ? isNull(bookings.tenantId)
+                : eq(bookings.tenantId, input.tenantId),
+              eq(bookings.status, "confirmed"),
+              eq(bookings.paymentStatus, "paid"),
+              isNull(bookings.deletedAt)
+            )
+          )
+          .orderBy(desc(bookings.id))
+          .limit(10)
+      : undefined;
+    // Record the referral without retaining passenger-supplied claims or identifiers.
+    await db.transaction(async tx => {
+      await tx.insert(chatMessages).values([
+        {
+          conversationId: input.conversationId,
+          role: "user",
+          content: referralLabels[intent][language],
+          metadata,
+        },
+        {
+          conversationId: input.conversationId,
+          role: "assistant",
+          content: message,
+          metadata,
+        },
+      ]);
+      await tx
+        .update(chatConversations)
+        .set({
+          messageCount: sql`${chatConversations.messageCount} + 2`,
+          lastMessageAt: new Date(),
+        })
+        .where(eq(chatConversations.id, input.conversationId));
+    });
+    return isExchange
+      ? { message, exchangeBookings }
+      : { message, policySourceLanguage: language };
+  }
+
   await db.insert(chatMessages).values({
     conversationId: input.conversationId,
     role: "user",
     content: input.message,
   });
 
-  // Get the recent conversation history (the model needs context, not the
-  // whole transcript)
-  const history = (
-    await db
-      .select()
-      .from(chatMessages)
-      .where(eq(chatMessages.conversationId, input.conversationId))
-      .orderBy(desc(chatMessages.createdAt))
-      .limit(CHAT_HISTORY_WINDOW)
-  ).reverse();
-
-  // Build LLM messages
   const llmMessages: Message[] = [
     { role: "system", content: BOOKING_SYSTEM_PROMPT },
-    ...history.map(m => ({
-      role: m.role as "user" | "assistant" | "system",
-      content: m.content,
-    })),
+    ...history.map(m => ({ role: m.role, content: m.content })),
+    { role: "user", content: input.message },
   ];
 
   // Call LLM

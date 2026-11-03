@@ -1,0 +1,21 @@
+{
+  "result": "PASS",
+  "scope": "independent disposable local MySQL instances, synthetic fixture; target environment RPO/RTO not exercised",
+  "mysqlVersion": "8.0.46",
+  "migrations": 58,
+  "restoredTables": 158,
+  "snapshotSha256": "cf3e6ba7df169d6ad1b2da5a4e88ba3a6c0455b703cb8978fc64b6d89632eec5",
+  "restoredSha256": "cf3e6ba7df169d6ad1b2da5a4e88ba3a6c0455b703cb8978fc64b6d89632eec5",
+  "restoreSeconds": 3.647,
+  "checks": [
+    "generated backup",
+    "swapped manifest refused before database writes",
+    "entire canonical logical snapshot matched",
+    "routine executed",
+    "Arabic fixture preserved",
+    "nonempty target refused without mutation"
+  ],
+  "testedGitTree": "9f9a7f346f44b3950b5332e2cf438b76829446e4",
+  "restoredTablesNote": "Includes the Drizzle migration history table.",
+  "restoreSecondsNote": "Local SQL import only; excludes detection and service recovery."
+}

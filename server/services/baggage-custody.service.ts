@@ -30,6 +30,16 @@ const scanSchema = z
 type Scan = z.infer<typeof scanSchema>;
 export class BaggageCustodyConflict extends Error {}
 type Custody = typeof baggageCustodyEvents.$inferSelect;
+
+function custodyFlightIds(
+  legs: Array<{ flightId: number; status: string }>,
+  legacyFlightId: number
+) {
+  return legs.length
+    ? legs.filter(leg => leg.status !== "cancelled").map(leg => leg.flightId)
+    : [legacyFlightId];
+}
+
 export function validateCustodyTransition(
   input: Scan,
   flight: { id: number; originId: number; destinationId: number },
@@ -143,9 +153,7 @@ export async function ingestBaggageCustody(
       .from(bookingSegments)
       .where(eq(bookingSegments.bookingId, booking.id))
       .orderBy(asc(bookingSegments.segmentOrder));
-    const ordered = legs.length
-      ? legs.map(l => l.flightId)
-      : [booking.flightId];
+    const ordered = custodyFlightIds(legs, booking.flightId);
     const [flight] = await tx
       .select()
       .from(flights)
@@ -233,7 +241,7 @@ export async function getBaggageCustody(
     .from(bookingSegments)
     .where(eq(bookingSegments.bookingId, booking.id))
     .orderBy(asc(bookingSegments.segmentOrder));
-  const ordered = legs.length ? legs.map(l => l.flightId) : [booking.flightId];
+  const ordered = custodyFlightIds(legs, booking.flightId);
   const events = await db
     .select()
     .from(baggageCustodyEvents)
@@ -255,7 +263,7 @@ export async function getBaggageCustody(
   );
   return {
     tagNumber,
-    complete: required.every(p => p.observed),
+    complete: required.length > 0 && required.every(p => p.observed),
     verifiedPoints: required.filter(p => p.observed).length,
     requiredPoints: required.length,
     required,

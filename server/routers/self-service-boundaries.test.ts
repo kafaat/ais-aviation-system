@@ -15,7 +15,7 @@ describe("self-service router authority boundaries", () => {
   });
 
   it("requires signed boarding-pass admission for bag drop", () => {
-    expect(bagDrop).toContain("verifyBoardingPass");
+    expect(bagDrop).toContain("await verifyActiveBoardingPass");
     expect(bagDrop).toContain('"bag-drop-admission"');
     expect(bagDrop).toContain('"bag-drop-session"');
     expect(bagDrop).not.toMatch(/bookingId:\s*z\.number/);

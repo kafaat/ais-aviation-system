@@ -11,10 +11,10 @@
 
 - **البحث عن الرحلات**: بحث متقدم عن الرحلات حسب الوجهة والتاريخ والدرجة
 - **الحجز السهل**: نظام حجز بسيط وسريع مع دعم عدة ركاب
-- **الدفع الآمن**: معالجة الدفع عبر Stripe مع دعم الدفع المقسم
+- **الدفع الآمن**: تكامل Stripe والدفع المقسم مختبران محلياً. راجع دليل قبول المزوّد E01
 - **إدارة الحجوزات**: عرض وإلغاء وتعديل جميع حجوزاتك
 - **تسجيل الوصول**: تسجيل وصول إلكتروني مع اختيار المقاعد
-- **التذاكر الإلكترونية**: تحميل تذاكر وبطاقات الصعود بصيغة PDF
+- **التذاكر الإلكترونية**: تحميل مستندات PDF بمرجع تذكرة محلي
 - **برنامج الولاء**: كسب واستبدال الأميال مع مستويات (برونز، فضي، ذهبي، بلاتيني)
 - **قائمة الانتظار**: الانضمام لقائمة الانتظار للرحلات الممتلئة
 - **تنبيهات الأسعار**: إشعارات عند انخفاض أسعار الرحلات
@@ -34,24 +34,54 @@
 - **إدارة القسائم**: إنشاء وإدارة قسائم الخصم والأرصدة
 - **الحسابات المؤسسية**: إدارة حسابات الشركات ووكلاء السفر
 - **إدارة الأمتعة**: تتبع وإدارة أمتعة الركاب
-- **إدارة الاضطرابات**: معالجة اضطرابات الرحلات وإعادة الحجز التلقائي
-- **مركز IROPS**: إدارة العمليات غير النظامية والتنسيق في الوقت الفعلي
-- **الوزن والتوازن**: حسابات وزن وتوازن الطائرة
-- **تخطيط الحمولة**: تخطيط حمولة البضائع والركاب
-- **إدارة الطاقم**: جدولة وتعيين طاقم الطائرة
-- **APIS**: نظام معلومات الركاب المسبقة للامتثال الحدودي
-- **الصعود البيومتري**: نظام الصعود بالتعرف على الوجه
-- **أكشاك الخدمة الذاتية**: تسجيل الوصول عبر الأكشاك
-- **إسقاط الأمتعة الآلي**: نظام إسقاط الأمتعة الذاتي
-- **المحاسبة المالية**: التعرف على الإيرادات والتقارير المالية
-- **تقارير BSP**: تسوية وتقارير IATA BSP
-- **تعويضات EU261/DOT**: إدارة التعويضات التنظيمية
+- **إدارة الاضطرابات**: معالجة اضطرابات الرحلات واقتراح خيارات لإعادة الحجز
+- **مركز IROPS**: اقتراح خطط استعادة ومراجعتها
+- **الوزن والتوازن**: محاكاة تدريبية لحساب الوزن والتوازن
+- **تخطيط الحمولة**: محاكاة تدريبية لتخطيط الحمولة
+- **إدارة الطاقم**: تسجيل تعيينات الطاقم؛ اعتماد قواعد الأهلية معلّق
+- **APIS**: توليد بيانات الركاب محلياً؛ قبول الإرسال إلى السلطة معلّق
+- **الصعود البيومتري**: محاكاة التحقق من الوجه
+- **أكشاك الخدمة الذاتية**: تدفق تسجيل وصول تجريبي؛ قبول أجهزة المحطة معلّق
+- **إسقاط الأمتعة الآلي**: محاكاة لأجهزة إسقاط الأمتعة
+- **المحاسبة المالية**: تقارير التحصيل النقدي من الدفتر
+- **تقارير BSP**: نموذج تقارير HOT؛ التسوية الخارجية معلّقة
+- **تعويضات EU261/DOT**: قواعد أولية لـ EU261 وDOT؛ قواعد GACA معلّقة
 - **الفنادق الطارئة**: إدارة إقامة فنادق IROPS
 - **أولوية الركاب**: تسجيل الأولوية وترتيب إعادة الحجز
 - **مراقبة SLA**: تتبع اتفاقيات مستوى الخدمة
 - **مستودع البيانات/BI**: الذكاء التجاري والتحليلات
 - **المصادقة الثنائية MFA**: المصادقة متعددة العوامل TOTP
-- **التعافي من الكوارث**: استمرارية الأعمال وتخطيط DR
+- **التعافي من الكوارث**: محاكاة للتعافي واختبار استعادة في CI
+
+## حالة التنفيذ ودليل القبول
+
+يعرض الجدول حالة الكود وشروط القبول. توثّق نتائج الاختبار الخارجي في [سجل قبول المزوّدين](docs/operations/provider-acceptance.md).
+
+<!-- capability-catalog:start -->
+<!-- prettier-ignore -->
+| Capability | Implementation | Acceptance requirement |
+| --- | --- | --- |
+| hotelFulfillment | implemented | Default disabled; Hotelbeds single adult/room, net SAR, explicit quote and hotel mapping approval; sandbox confirmation is not a real stay. Live credentials, certification, local fees/transport and property acceptance remain operator responsibilities. |
+| ndcUnpaidServicing | implemented | Unpaid pending invoice, no active checkout, same airline/tenant SAR economy or business offer, canonical passengers; no EMD or external fulfillment certification |
+| ndcPaidServicing | implemented | Local paid SAR itinerary exchange and catalog entitlements before check-in; same tenant/airline and cabin across up to six segments, no unresolved ancillary fulfillment. Original Stripe payer refund receipts required for a lower fare. |
+| ndcExternalFulfillment | blocked | Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts |
+| kioskHardware | blocked | Authenticated device heartbeat and physical printer/scanner acceptance; digital documents are separate |
+| dcsDispatch | demo | Verified departure-control provider and dispatch acceptance |
+| gdsSynchronization | demo | Contracted GDS connection and round-trip order synchronization |
+| biometricIdentity | demo | Approved biometric processor, measured verification and privacy controls |
+| multiRegionFailover | demo | Infrastructure adapter, replication evidence and controlled failover drill |
+| apisSubmission | blocked | Authority transport, credentials, acknowledgement and rejection fixtures |
+| alternatePayments | blocked | Invoice/session binding, amount/currency verification, settlement and refund acceptance for each provider |
+| bagDropHardware | demo | Certified scale, printer, conveyor and device heartbeat adapter |
+| weightBalance | demo | Approved aircraft data, calculation validation and operational sign-off |
+| loadPlanning | demo | Aircraft configuration, measured cargo and approved dispatch workflow |
+| disasterRecovery | demo | Infrastructure adapter and observed restore/failover exercise |
+| warehouseExports | implemented | Migration applied; shared database and authorized export owner |
+| eventInbox | implemented | Migration applied; local transaction or authenticated receiver acknowledgement |
+| scheduledTasks | implemented | Shared database lease and observed lastSuccessAt |
+| slaObservations | implemented | Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA |
+
+<!-- capability-catalog:end -->
 
 ## 🛠️ التقنيات المستخدمة
 

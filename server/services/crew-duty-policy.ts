@@ -67,6 +67,18 @@ export function validateDuty(proposed: Duty, other: Duty[], rule: CrewRule) {
       violations: ["Missing or inconsistent duty records"],
       totalDutyMinutes: null,
     };
+  if (
+    proposed.start.getTime() >
+      proposed.departure.getTime() - rule.reportBeforeMinutes * 60000 ||
+    proposed.end.getTime() <
+      proposed.arrival.getTime() + rule.releaseAfterMinutes * 60000
+  )
+    violations.push("Duty bounds omit required reporting or release time");
+  if (
+    proposed.start.getTime() < Date.parse(rule.effectiveFrom) ||
+    proposed.end.getTime() > Date.parse(rule.effectiveTo)
+  )
+    violations.push("Operator profile does not cover the complete duty");
   const grouped = new Map<string, Duty[]>();
   for (const d of [...other, proposed]) {
     const key = `${d.start.toISOString()}:${d.end.toISOString()}`;

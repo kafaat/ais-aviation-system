@@ -47,6 +47,14 @@ export function SiteFooter() {
                   {t("footer.privacy")}
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/accessibility"
+                  className="hover:text-white transition-colors"
+                >
+                  {t("accessibility.statement.title")}
+                </Link>
+              </li>
             </ul>
           </div>
 

@@ -45,6 +45,7 @@ beforeEach(() => {
     )
   );
   fixture = transactionMemory({
+    booking_modifications: [],
     bookings: [
       {
         id: 7,
@@ -168,5 +169,62 @@ describe("signed tRPC compatibility webhook", () => {
     });
     expect(fixture.rows("stripe_events")[0].processed).toBe(false);
     expect(fixture.rows("stripe_events")[0].retryCount).toBe(1);
+  });
+  it("recovers a lost checkout acknowledgement from one signed unpaid expiry", async () => {
+    const requestedAt = new Date();
+    fixture.rows("booking_modifications").push({
+      id: 42,
+      bookingId: 7,
+      userId: 9,
+      status: "pending",
+      paymentStatus: "pending",
+      totalCost: 300,
+      checkoutSessionId: null,
+      checkoutRequestId: "request-original",
+      checkoutData: {
+        requestedAt: requestedAt.toISOString(),
+        baseUrl: "https://ais.example",
+        bookingId: 7,
+        userId: 9,
+        amount: 300,
+        expiresAt: Math.floor(requestedAt.getTime() / 1000) + 1800,
+      },
+      servicingPayload: {
+        version: 1,
+        fingerprint: "frozen",
+        expiresAt: requestedAt.toISOString(),
+        segments: [],
+        ancillaries: [],
+      },
+    });
+    const payload = signed({
+      id: "evt_expired_modification",
+      object: "event",
+      type: "checkout.session.expired",
+      data: {
+        object: {
+          id: "cs_recovered",
+          mode: "payment",
+          status: "expired",
+          payment_status: "unpaid",
+          currency: "sar",
+          amount_total: 300,
+          metadata: {
+            bookingId: "7",
+            modificationId: "42",
+            userId: "9",
+            type: "modification",
+            checkoutRequestId: "request-original",
+          },
+        },
+      },
+    });
+    expect(await caller().stripe(payload)).toMatchObject({ duplicate: false });
+    expect(await caller().stripe(payload)).toMatchObject({ duplicate: true });
+    expect(fixture.rows("booking_modifications")[0]).toMatchObject({
+      status: "rejected",
+      checkoutSessionId: "cs_recovered",
+    });
+    expect(fixture.rows("financial_ledger")).toHaveLength(0);
   });
 });

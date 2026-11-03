@@ -73,3 +73,29 @@ it("retains ordinary DCS aircraft reads in production", async () => {
   await expect(dcs.getAircraftTypes()).resolves.toEqual([]);
   expect(boundary.getDb).toHaveBeenCalledOnce();
 });
+
+it.each(["production", "development"])(
+  "limits DCS load-plan statistics to opted-in training (%s)",
+  async environment => {
+    vi.stubEnv("NODE_ENV", environment);
+    vi.stubEnv("AIS_ENABLE_DEMOS", "true");
+    const from = vi.fn(() =>
+      Object.assign([{ totalPlans: 4, approvedPlans: 3, finalizedPlans: 1 }], {
+        where: () => Promise.resolve([]),
+      })
+    );
+    boundary.getDb.mockResolvedValue({ select: () => ({ from }) });
+    const stats = await dcs.getDcsStats();
+    if (environment === "production") {
+      expect(stats.loadPlans).toBeNull();
+      expect(from).toHaveBeenCalledTimes(3);
+    } else {
+      expect(stats.loadPlans).toMatchObject({
+        total: 4,
+        approved: 3,
+        finalized: 1,
+      });
+      expect(from).toHaveBeenCalledTimes(4);
+    }
+  }
+);

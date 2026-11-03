@@ -288,12 +288,14 @@ export const responseContracts = {
       completed: outputNumber,
     }),
     crew: z.object({ total: outputNumber, active: outputNumber }),
-    loadPlans: z.object({
-      total: outputNumber,
-      draft: outputNumber,
-      approved: outputNumber,
-      finalized: outputNumber,
-    }),
+    loadPlans: z
+      .object({
+        total: outputNumber,
+        draft: outputNumber,
+        approved: outputNumber,
+        finalized: outputNumber,
+      })
+      .nullable(),
     aircraftTypes: outputNumber,
   }),
 };

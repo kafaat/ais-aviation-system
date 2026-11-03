@@ -1,3 +1,4 @@
+import { removeInvoiceSeat } from "./seat-exchange.service";
 import {
   lockEditableInvoice,
   insertInvoiceAncillary,
@@ -131,6 +132,8 @@ export async function addAncillaryToBooking(
     ancillaryServiceId: number;
     quantity?: number;
     metadata?: unknown;
+    flightId?: number;
+    seatNumber?: string;
     idempotencyKey: string;
   },
   actor: InvoiceActor
@@ -237,6 +240,7 @@ export async function removeAncillaryFromBooking(
       ancillary.totalPrice < 0
     )
       throw invoiceBlocked("Ancillary charge requires reconciliation");
+    const seatSegmentId = await removeInvoiceSeat(tx, ancillary);
     await tx
       .update(bookingAncillaries)
       .set({ status: "cancelled", updatedAt: new Date() })
@@ -244,7 +248,9 @@ export async function removeAncillaryFromBooking(
     await setInvoiceTotal(
       tx,
       booking,
-      booking.totalAmount - ancillary.totalPrice
+      booking.totalAmount - ancillary.totalPrice,
+      "editable_invoice",
+      seatSegmentId
     );
     return true;
   });

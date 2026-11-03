@@ -1,3 +1,5 @@
+import { fundInvoiceSeats } from "./seat-exchange.service";
+import { closeLocalCoupons } from "./ticket-coupons.service";
 import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 import { countActiveHolds } from "./inventory-capacity.service";
 import { and, eq, asc, inArray, sql, isNotNull, isNull } from "drizzle-orm";
@@ -213,13 +215,20 @@ async function applyFundedBooking(
     transitionReason: "Verified funds settled with inventory",
     changedBy: null,
   });
-  await recordEvent(tx, {
+  const confirmationEventId = await recordEvent(tx, {
     aggregateType: "booking",
     aggregateId: booking.id,
     tenantId: booking.tenantId,
     eventType: "booking.confirmed",
     payload: { bookingId: booking.id },
   });
+  try {
+    await fundInvoiceSeats(tx, booking.id, confirmationEventId);
+  } catch (cause) {
+    if (cause instanceof TRPCError && cause.code === "PRECONDITION_FAILED")
+      throw new InventoryUnavailableError(cause.message);
+    throw cause;
+  }
 }
 
 export async function reserveSeats(
@@ -271,6 +280,13 @@ export async function releaseBookingSeats(
     .where(eq(bookingSegments.bookingId, booking.id))
     .orderBy(asc(bookingSegments.flightId))
     .for("update");
+  await closeLocalCoupons(
+    tx,
+    booking.id,
+    terminalState === "refunded" || booking.paymentStatus === "refunded"
+      ? "R"
+      : "V"
+  );
   const reserved = segments.filter(s => s.seatsReserved);
   // Pre-upgrade bookings only reserved their primary flight. Never invent
   // restoration of seats that those historical segments did not reserve.

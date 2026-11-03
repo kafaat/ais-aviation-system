@@ -24,6 +24,7 @@ const WORKER_CONFIG = {
 
 interface ReconciliationJobData {
   limit?: number;
+  dryRun?: boolean;
   triggeredBy?: string;
 }
 
@@ -45,14 +46,18 @@ export const reconciliationWorker = redisConnection
       async (job: Job<ReconciliationJobData>) => {
         console.info(`[ReconciliationWorker] Processing job ${job.id}...`);
 
-        const { limit = 200, triggeredBy = "scheduler" } = job.data;
+        const {
+          limit = 200,
+          dryRun = false,
+          triggeredBy = "scheduler",
+        } = job.data;
 
         try {
           // Update progress
           await job.updateProgress(10);
 
           // Run reconciliation
-          const result = await reconciliationJob({ limit });
+          const result = await reconciliationJob({ limit, dryRun });
 
           // Update progress
           await job.updateProgress(100);
@@ -127,10 +132,9 @@ export async function closeReconciliationWorker(): Promise<void> {
 /**
  * Manually trigger a reconciliation job
  */
-export async function triggerReconciliation(options?: {
-  limit?: number;
-  triggeredBy?: string;
-}): Promise<string> {
+export async function triggerReconciliation(
+  options?: ReconciliationJobData
+): Promise<string> {
   const { reconciliationQueue } = await import("../queues");
 
   if (!reconciliationQueue) {
@@ -141,6 +145,7 @@ export async function triggerReconciliation(options?: {
     "manual-reconciliation",
     {
       limit: options?.limit ?? 200,
+      dryRun: options?.dryRun ?? false,
       triggeredBy: options?.triggeredBy ?? "manual",
     },
     {

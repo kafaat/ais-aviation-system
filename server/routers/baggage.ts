@@ -85,12 +85,8 @@ export const baggageRouter = router({
     .output(responseContracts["track"])
     .query(async ({ input }) => {
       try {
-        const result = await baggageService.trackBaggage(input.tagNumber);
-        // Public tracker: the lost report carries the owner's contact details.
-        return {
-          ...result,
-          baggage: { ...result.baggage, lostDescription: null },
-        };
+        // The public response contract projects only the tracking timeline.
+        return await baggageService.trackBaggage(input.tagNumber);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to track baggage";
@@ -119,8 +115,7 @@ export const baggageRouter = router({
           message: "Baggage not found",
         });
       }
-      // Public lookup: the lost report carries the owner's contact details.
-      return { ...baggage, lostDescription: null };
+      return baggage;
     }),
 
   /**
@@ -296,6 +291,11 @@ export const baggageRouter = router({
     }),
 
   // =================== Admin Endpoints ===================
+
+  adminTrack: adminProcedure
+    .input(z.object({ tagNumber: z.string().min(1).max(20) }))
+    .output(responseContracts["adminTrack"])
+    .query(({ input }) => baggageService.trackBaggage(input.tagNumber)),
 
   /**
    * Admin: Update baggage status

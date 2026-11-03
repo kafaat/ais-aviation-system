@@ -11,6 +11,11 @@ vi.mock("../db", () => ({ getDb: () => databaseState.db }));
 import { getFinancialDays } from "../services/financial-reporting.service";
 import {
   generateRevenueReport,
+  calculateDeferredRevenue,
+  getRevenueDashboard,
+  getAncillaryRevenue,
+  getRevenueByChannel,
+  getRevenueByClass,
   getReports,
 } from "../services/revenue-accounting.service";
 
@@ -48,7 +53,7 @@ nativeDescribe(
       });
       await connection.query("SET SESSION time_zone = '+00:00'");
       await connection.query(
-        "CREATE TABLE bookings (id INT PRIMARY KEY, tenantId INT, createdAt TIMESTAMP NOT NULL, totalAmount INT NOT NULL, paymentStatus VARCHAR(20) NOT NULL)"
+        "CREATE TABLE bookings (id INT PRIMARY KEY, tenantId INT, flightId INT NOT NULL DEFAULT 1, status VARCHAR(20) NOT NULL DEFAULT 'confirmed', bookingReference VARCHAR(6) NOT NULL DEFAULT 'TEST', cabinClass VARCHAR(20) NOT NULL DEFAULT 'economy', numberOfPassengers INT NOT NULL DEFAULT 1, createdAt TIMESTAMP NOT NULL, totalAmount INT NOT NULL, paymentStatus VARCHAR(20) NOT NULL)"
       );
       await connection.query(
         "CREATE TABLE financial_ledger (id INT AUTO_INCREMENT PRIMARY KEY, bookingId INT, type VARCHAR(30) NOT NULL, amount DECIMAL(10,2) NOT NULL, currency VARCHAR(3) NOT NULL, metadata TEXT, transactionDate TIMESTAMP NOT NULL)"
@@ -82,6 +87,35 @@ nativeDescribe(
           row
         );
       }
+      await connection.query(
+        "CREATE TABLE flights (id INT PRIMARY KEY, flightNumber VARCHAR(10), departureTime TIMESTAMP, status VARCHAR(20))"
+      );
+      await connection.query(
+        "INSERT INTO flights VALUES (1,'NO-SHOW','2026-09-30 23:59:59','scheduled'),(2,'EXCHANGED',DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 YEAR),'scheduled')"
+      );
+      await connection.query(
+        "UPDATE bookings SET flightId=2, cabinClass='business' WHERE id=2"
+      );
+      await connection.query(
+        "CREATE TABLE ticket_coupons (ticketNumber VARCHAR(13), bookingId INT, flightId INT, status CHAR(1))"
+      );
+      await connection.query(
+        "INSERT INTO ticket_coupons VALUES ('1111111111111',1,1,'O'),('2222222222222',2,1,'E'),('3333333333333',2,2,'O')"
+      );
+      await connection.query(
+        "CREATE TABLE ancillary_services (id INT PRIMARY KEY, category VARCHAR(20))"
+      );
+      await connection.query(
+        "CREATE TABLE booking_ancillaries (ancillaryServiceId INT, totalPrice INT, quantity INT, status VARCHAR(20))"
+      );
+      await connection.query(
+        "INSERT INTO ancillary_services VALUES (1,'seat'),(2,'meal')"
+      );
+      await connection.query(
+        "INSERT INTO booking_ancillaries VALUES (1,1200,1,'active'),(2,350,2,'active'),(2,450,1,'refunded')"
+      );
+      await connection.query("CREATE TABLE corporate_bookings (bookingId INT)");
+      await connection.query("CREATE TABLE agent_bookings (bookingId INT)");
       databaseState.db = drizzle(connection, { schema, mode: "default" });
     }, 30000);
 
@@ -95,6 +129,46 @@ nativeDescribe(
           await admin.end();
         }
       }
+    });
+
+    it("does not recognize no-shows or exchanged coupons when the recorded flight completes twice", async () => {
+      const from = new Date("2026-10-01T00:00:00Z");
+      const until = new Date("2026-10-31T23:59:59Z");
+      const expected = {
+        totalRevenue: 20000,
+        refundTotal: 4000,
+        netRevenue: 16000,
+        recognizedRevenue: null,
+        deferredRevenue: null,
+        ancillaryRevenue: null,
+      };
+      await expect(getRevenueDashboard(from, until)).resolves.toMatchObject(
+        expected
+      );
+      for (let n = 0; n < 2; n++) {
+        await connection!.query(
+          "UPDATE flights SET status='completed' WHERE id=1"
+        );
+        await expect(getRevenueDashboard(from, until)).resolves.toMatchObject(
+          expected
+        );
+      }
+      const deferred = await calculateDeferredRevenue();
+      const cabins = await getRevenueByClass();
+      expect(cabins.map(row => row.percentageOfTotal)).toEqual([50, 50]);
+      const channels = await getRevenueByChannel();
+      expect(channels.find(row => row.channel === "direct")).toMatchObject({
+        totalRevenue: 20000,
+        percentageOfTotal: 100,
+      });
+      const addOns = await getAncillaryRevenue();
+      expect(addOns.total).toBe(1550);
+      expect(addOns.breakdown.map(row => row.totalRevenue)).toEqual([
+        1200, 350,
+      ]);
+      expect(deferred.total).toBeNull();
+      expect(deferred.upcomingBookingGross).toBe(10000);
+      expect(deferred.items.map(row => row.bookingId)).toEqual([2]);
     });
 
     it("derives generated and listed cash totals from the same ledger and includes refund-only months", async () => {

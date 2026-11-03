@@ -141,6 +141,16 @@ export const compensationRouter = router({
             distanceKm: z.number().int().positive(),
           })
           .optional(),
+        gacaArrivalEvidence: z
+          .object({
+            scopeAndExceptionReview: z.string().trim().min(5).max(500),
+            arrivalReference: z.string().trim().min(5).max(500),
+            scheduledArrivalUtc: z.string().datetime(),
+            actualArrivalUtc: z.string().datetime(),
+            fxReference: z.string().trim().min(5).max(500),
+            sarPerXdrMillionths: z.number().int().positive().safe(),
+          })
+          .optional(),
         decision: z.enum(["approved", "denied", "partial"]),
         approvedAmount: z.number().min(0).optional(),
         denialReason: z.string().max(1000).optional(),
@@ -153,6 +163,7 @@ export const compensationRouter = router({
           claimId: input.claimId,
           actorId: ctx.user.id,
           evidence: input.evidence,
+          gacaArrivalEvidence: input.gacaArrivalEvidence,
           decision: input.decision,
           approvedAmount: input.approvedAmount,
           denialReason: input.denialReason,

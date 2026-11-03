@@ -1,8 +1,41 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const publicBag = z.object({
+  tagNumber: z.string(),
+  status: z.enum([
+    "checked_in",
+    "security_screening",
+    "loading",
+    "in_transit",
+    "arrived",
+    "customs",
+    "ready_for_pickup",
+    "claimed",
+    "lost",
+    "found",
+    "damaged",
+  ]),
+  weight: z.string(),
+  lastLocation: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
 export const responseContracts = {
   track: z.object({
+    baggage: publicBag,
+    tracking: z.array(
+      z.object({
+        id: outputNumber,
+        status: publicBag.shape.status,
+        location: z.string(),
+        scannedAt: z.date(),
+      })
+    ),
+  }),
+  getByTag: publicBag,
+  adminTrack: z.object({
     baggage: z.object({
       id: outputNumber,
       status: z.enum([
@@ -54,33 +87,6 @@ export const responseContracts = {
         scannedBy: z.union([z.null(), outputNumber]),
       })
     ),
-  }),
-  getByTag: z.object({
-    id: outputNumber,
-    status: z.enum([
-      "checked_in",
-      "security_screening",
-      "loading",
-      "in_transit",
-      "arrived",
-      "customs",
-      "ready_for_pickup",
-      "claimed",
-      "lost",
-      "found",
-      "damaged",
-    ]),
-    createdAt: z.date(),
-    updatedAt: z.date(),
-    description: z.union([z.null(), z.string()]),
-    bookingId: outputNumber,
-    passengerId: outputNumber,
-    tagNumber: z.string(),
-    weight: z.string(),
-    lastLocation: z.union([z.null(), z.string()]),
-    specialHandling: z.union([z.null(), z.string()]),
-    lostReportedAt: z.union([z.null(), z.date()]),
-    lostDescription: z.union([z.null(), z.string()]),
   }),
   register: z.object({
     success: z.boolean(),

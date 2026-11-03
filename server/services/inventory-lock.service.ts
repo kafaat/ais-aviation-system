@@ -1,4 +1,7 @@
-import { countActiveHolds } from "./inventory-capacity.service";
+import {
+  countActiveHolds,
+  withInventoryTransaction,
+} from "./inventory-capacity.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -9,7 +12,7 @@ import {
   passengers,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
-import { eq, and, lt, gt, sql } from "drizzle-orm";
+import { eq, and, lt, gt, sql, inArray } from "drizzle-orm";
 
 /**
  * Inventory Lock Service
@@ -105,7 +108,7 @@ export async function createInventoryLock(
     };
     const result = transaction
       ? await create(transaction)
-      : await database.transaction(create);
+      : await withInventoryTransaction(database, create);
 
     return {
       lockId: result.lockId,
@@ -240,7 +243,7 @@ export async function releaseExpiredLocks(): Promise<number> {
             and(
               eq(seatInventory.bookingId, booking.id),
               eq(seatInventory.flightId, hold.flightId),
-              eq(seatInventory.status, "occupied")
+              inArray(seatInventory.status, ["held", "occupied"])
             )
           );
         if (booking.flightId === hold.flightId)

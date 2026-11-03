@@ -1,4 +1,5 @@
 import superjson from "superjson";
+import type { MySqlTransactionConfig } from "drizzle-orm/mysql-core";
 import { TRPCError } from "@trpc/server";
 /**
  * Idempotency V2 Service - Production-Grade
@@ -126,6 +127,7 @@ export async function findCompletedCommand<T>(
 /** The command and its durable response commit together. No external I/O in run. */
 export async function withTransactionalIdempotency<T>(
   opts: {
+    transactionConfig?: MySqlTransactionConfig;
     scope: string;
     key: string;
     userId: number;
@@ -200,7 +202,9 @@ export async function withTransactionalIdempotency<T>(
       .where(eq(idempotencyRequests.id, entry.id));
     return response;
   };
-  return transaction ? execute(transaction) : database.transaction(execute);
+  return transaction
+    ? execute(transaction)
+    : database.transaction(execute, opts.transactionConfig);
 }
 
 /**

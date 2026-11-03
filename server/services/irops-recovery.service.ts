@@ -1,3 +1,4 @@
+import { exchangeLocalCoupons } from "./ticket-coupons.service";
 import { readRecoveryFeasibility } from "./recovery-feasibility.service";
 import { requireValue } from "./required-value";
 import { randomUUID } from "node:crypto";
@@ -376,6 +377,14 @@ export async function executeRecovery(
         r.booking.cabinClass,
         r.booking.numberOfPassengers
       );
+      const retainedDocument = await exchangeLocalCoupons(
+        tx,
+        r.booking.id,
+        r.legs,
+        r.legs.map(flightId =>
+          flightId === state.event.flightId ? newId : flightId
+        )
+      );
       if (r.segments.length)
         await tx
           .update(bookingSegments)
@@ -411,10 +420,16 @@ export async function executeRecovery(
             eq(seatInventory.flightId, state.event.flightId)
           )
         );
-      await tx
-        .update(passengers)
-        .set({ seatNumber: null, ticketNumber: null })
-        .where(eq(passengers.bookingId, r.booking.id));
+      if (!retainedDocument || r.booking.flightId === state.event.flightId) {
+        await tx
+          .update(passengers)
+          .set(
+            retainedDocument
+              ? { seatNumber: null }
+              : { seatNumber: null, ticketNumber: null }
+          )
+          .where(eq(passengers.bookingId, r.booking.id));
+      }
       const orders = await tx
         .select()
         .from(ndcOrders)

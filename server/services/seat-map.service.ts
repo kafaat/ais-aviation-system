@@ -1,3 +1,4 @@
+import { setCouponCheckIn } from "./ticket-coupons.service";
 import type { SettlementTx } from "./booking-settlement.service";
 import { randomUUID } from "node:crypto";
 import {
@@ -835,6 +836,11 @@ export async function selectSeat(
         )
       )
       .for("update");
+    if (previous.some(s => s.seatPrice > 0))
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Use paid seat servicing before releasing this seat",
+      });
     if (previous.some(s => s.status === "checked_in"))
       throw new TRPCError({
         code: "CONFLICT",
@@ -929,6 +935,12 @@ export async function releaseSeat(
         message: `Seat ${seatNumber} is already available`,
       });
     }
+
+    if (seat.seatPrice > 0 && seat.bookingId != null)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Use paid seat servicing before releasing this seat",
+      });
 
     if (seat.status === "checked_in") {
       throw new TRPCError({
@@ -1029,6 +1041,12 @@ export async function changeSeat(
         message: `Seat ${oldSeatNumber} is not assigned to passenger ${passengerId} in booking ${bookingId}`,
       });
     }
+
+    if (oldSeat.seatPrice > 0)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Use paid seat servicing before changing this seat",
+      });
 
     // Verify new seat is available
     const [newSeat] = await db
@@ -1173,7 +1191,11 @@ export async function blockSeat(
     });
   }
 
-  if (seat.status === "occupied" || seat.status === "checked_in") {
+  if (
+    seat.bookingId != null ||
+    seat.status === "occupied" ||
+    seat.status === "checked_in"
+  ) {
     throw new TRPCError({
       code: "CONFLICT",
       message: `Cannot block seat ${seatNumber}: it is currently ${seat.status}. Release or undo check-in first.`,
@@ -1187,10 +1209,21 @@ export async function blockSeat(
     });
   }
 
-  await db
+  const [blocked] = await db
     .update(seatInventory)
     .set({ status: "blocked" })
-    .where(eq(seatInventory.id, seat.id));
+    .where(
+      and(
+        eq(seatInventory.id, seat.id),
+        eq(seatInventory.status, seat.status),
+        isNull(seatInventory.bookingId)
+      )
+    );
+  if (blocked.affectedRows !== 1)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Seat assignment changed",
+    });
 
   return { success: true, seatNumber };
 }
@@ -1304,6 +1337,7 @@ export async function undoCheckIn(
         boardingPassIssued: false,
       })
       .where(eq(seatInventory.id, seat.id));
+    await setCouponCheckIn(db, bookingId, passengerId, flightId, false);
     await refreshBookingCheckIn(db, bookingId);
     return { success: true as const, seatNumber: seat.seatNumber };
   });

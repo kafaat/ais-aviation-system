@@ -6310,3 +6310,88 @@ export const compensationRules = mysqlTable("compensation_rules", {
   isActive: boolean("isActive").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+/** Local document coupons. External carrier issuance and uplift require separate evidence. */
+export const ticketCoupons = mysqlTable(
+  "ticket_coupons",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    passengerId: int("passengerId").notNull(),
+    flightId: int("flightId").notNull(),
+    ticketNumber: varchar("ticketNumber", { length: 13 }).notNull(),
+    couponNumber: int("couponNumber").notNull(),
+    status: mysqlEnum("status", [
+      "O",
+      "C",
+      "F",
+      "R",
+      "E",
+      "V",
+      "unverified",
+    ]).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    documentIndex: uniqueIndex("ticket_coupon_document_idx").on(
+      table.ticketNumber,
+      table.couponNumber
+    ),
+    bookingIndex: index("ticket_coupon_booking_idx").on(
+      table.bookingId,
+      table.passengerId,
+      table.flightId
+    ),
+  })
+);
+
+// The profile row serializes changes for one external supplier within one airline.
+export const supplierBankProfiles = mysqlTable(
+  "supplier_bank_profiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull(),
+    supplierRef: varchar("supplierRef", { length: 36 }).notNull(),
+    bankVersion: int("bankVersion").notNull().default(0),
+  },
+  t => ({
+    scope: uniqueIndex("supplier_bank_scope").on(t.tenantId, t.supplierRef),
+  })
+);
+
+// Append-only local approvals. No bank account number or payment execution is retained.
+export const supplierFinanceEvents = mysqlTable(
+  "supplier_finance_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    profileId: int("profileId").notNull(),
+    bankVersion: int("bankVersion").notNull(),
+    action: mysqlEnum("action", [
+      "bank_change",
+      "bank_approved",
+      "payout_request",
+      "payout_approved",
+    ]).notNull(),
+    invoiceRef: varchar("invoiceRef", { length: 36 }).notNull().default(""),
+    supersedesBankVersion: int("supersedesBankVersion"),
+    vaultRef: varchar("vaultRef", { length: 36 }),
+    lastFour: varchar("lastFour", { length: 4 }),
+    amountMinor: int("amountMinor"),
+    actorId: int("actorId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    once: uniqueIndex("supplier_finance_once").on(
+      t.profileId,
+      t.bankVersion,
+      t.action,
+      t.invoiceRef
+    ),
+    invoice: index("supplier_finance_invoice").on(
+      t.profileId,
+      t.invoiceRef,
+      t.id
+    ),
+  })
+);

@@ -51,6 +51,7 @@ export async function documentContext(
         .filter(l => l.status === "confirmed" || l.status === "pending")
         .map(l => l.flightId)
     : [b.flightId];
+  if (!ids.length) throw new Error("Itinerary has no active segments");
   const fs = await tx
     .select()
     .from(flights)
@@ -82,8 +83,10 @@ export async function documentContext(
     airportRows.some(a => !a.country.trim())
   )
     throw new Error("Airport country evidence unavailable");
-  const international =
-    new Set(airportRows.map(a => a.country.trim().toUpperCase())).size > 1;
+  const countries = new Map(
+    airportRows.map(a => [a.id, a.country.trim().toUpperCase()])
+  );
+  const international = new Set(countries.values()).size > 1;
   const [apis] = await tx
     .select()
     .from(apisData)
@@ -120,8 +123,11 @@ export async function documentContext(
   const itineraryDigest = calculateRequestHash(
     ordered.map(f => ({
       id: f.id,
+      airlineId: f.airlineId,
       originId: f.originId,
+      originCountry: countries.get(f.originId),
       destinationId: f.destinationId,
+      destinationCountry: countries.get(f.destinationId),
       departureTime: f.departureTime,
       arrivalTime: f.arrivalTime,
     }))

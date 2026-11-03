@@ -1,5 +1,6 @@
 /** Signed AIS passes. Signature checks alone are NOT boarding authorization. */
 import jwt from "jsonwebtoken";
+import { calculateRequestHash } from "./idempotency-v2.service";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
@@ -38,7 +39,7 @@ export const boardingPassPayloadSchema = z.object({
 });
 export type BoardingPassPayload = z.infer<typeof boardingPassPayloadSchema>;
 export type VerifyResult =
-  | { valid: true; data: BoardingPassPayload }
+  | { valid: true; data: BoardingPassPayload; expiresAt: number }
   | { valid: false; reason: string };
 function getSecret(override?: string): string {
   const secret =
@@ -78,7 +79,13 @@ export function verifyBoardingPass(
       issuer: BOARDING_PASS_ISSUER,
       audience: BOARDING_PASS_AUDIENCE,
     });
-    return { valid: true, data: boardingPassPayloadSchema.parse(decoded) };
+    if (typeof decoded === "string" || !Number.isSafeInteger(decoded.exp))
+      return { valid: false, reason: "Boarding pass expiry is required" };
+    return {
+      valid: true,
+      data: boardingPassPayloadSchema.parse(decoded),
+      expiresAt: Number(decoded.exp),
+    };
   } catch (error) {
     return {
       valid: false,
@@ -176,6 +183,30 @@ export async function issueBoardingPass(
     return { token, payload };
   });
 }
+/** Bind a short-lived admission to the current pass without copying the bearer token. */
+export function boardingPassDigest(payload: BoardingPassPayload): string {
+  return calculateRequestHash(boardingPassPayloadSchema.parse(payload));
+}
+export async function assertCurrentPassDigest(
+  tx: SettlementTx,
+  scope: {
+    bookingId: number;
+    passengerId: number;
+    flightId: number;
+    passDigest: string;
+  }
+) {
+  const { payload, seat } = await activePayload(tx, scope);
+  if (
+    !seat.boardingPassIssued ||
+    boardingPassDigest(payload) !== scope.passDigest
+  )
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Boarding pass revoked or itinerary changed",
+    });
+  return payload;
+}
 /** Current eligibility, revocation, documents and itinerary are checked online. */
 export async function verifyActiveBoardingPass(
   token: string
@@ -186,21 +217,23 @@ export async function verifyActiveBoardingPass(
   if (!db) return { valid: false, reason: "Boarding verification unavailable" };
   try {
     return await db.transaction(async tx => {
-      const { payload, seat } = await activePayload(tx, signed.data);
-      if (
-        !seat.boardingPassIssued ||
-        JSON.stringify(payload) !== JSON.stringify(signed.data)
-      )
-        return {
-          valid: false as const,
-          reason: "Boarding pass revoked or itinerary changed",
-        };
-      return { valid: true as const, data: payload };
+      const payload = await assertCurrentPassDigest(tx, {
+        ...signed.data,
+        passDigest: boardingPassDigest(signed.data),
+      });
+      return {
+        valid: true as const,
+        data: payload,
+        expiresAt: signed.expiresAt,
+      };
     });
-  } catch {
+  } catch (error) {
     return {
       valid: false,
-      reason: "Current passenger or flight eligibility could not be confirmed",
+      reason:
+        error instanceof TRPCError && error.code === "UNAUTHORIZED"
+          ? error.message
+          : "Current passenger or flight eligibility could not be confirmed",
     };
   }
 }

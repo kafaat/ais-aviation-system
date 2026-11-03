@@ -1,11 +1,21 @@
+import { withInventoryTransaction } from "./inventory-capacity.service";
+import {
+  quoteSeatExchange,
+  transferExchangeSeats,
+  seatExchangeSchema,
+} from "./seat-exchange.service";
+import { exchangeLocalCoupons } from "./ticket-coupons.service";
 import { assertBaggageNotInCustody } from "./baggage-custody.service";
 import { calculateModificationFee } from "./modification-fee";
 import { allocateProportional } from "./seat-economics.service";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { getDb, getFlightById } from "../db";
 import {
   bookings,
+  agentBookings,
+  corporateBookings,
   bookingSegments,
   bookingModifications,
   bookingAncillaries,
@@ -48,12 +58,17 @@ export const paidServiceInput = z
   .object({
     bookingId: z.number().int().positive(),
     idempotencyKey: z.string().min(8).max(128),
+    replaceFlightId: z.number().int().positive().optional(),
     offerIds: z.array(z.string().uuid()).min(1).max(6).optional(),
     ancillaries: z.array(ancillaryInput).min(1).max(20).optional(),
   })
   .refine(
     i => Boolean(i.offerIds) !== Boolean(i.ancillaries),
     "Choose an itinerary exchange or additional services"
+  )
+  .refine(
+    i => i.replaceFlightId === undefined || i.offerIds?.length === 1,
+    "A sector exchange requires exactly one replacement offer"
   );
 const segment = z.object({
   flightId: z.number().int().positive(),
@@ -62,12 +77,20 @@ const segment = z.object({
   holdId: z.number().int().positive().nullable(),
   departureTime: z.iso.datetime(),
   arrivalTime: z.iso.datetime(),
-  offerId: z.string().uuid(),
+  offerId: z.string().uuid().nullable(),
+  airlineId: z.number().int().optional(),
+  originId: z.number().int().optional(),
+  destinationId: z.number().int().optional(),
   ndc: z.record(z.string(), z.unknown()),
 });
 export const planSchema = z.object({
   version: z.literal(1),
   fingerprint: z.string(),
+  seatExchange: seatExchangeSchema.optional(),
+  termsHash: z.string().optional(),
+  partyHash: z.string().optional(),
+  scheduleHash: z.string().optional(),
+  replaceFlightId: z.number().int().positive().optional(),
   expiresAt: z.iso.datetime(),
   segments: z.array(segment),
   ancillaries: z.array(
@@ -85,6 +108,7 @@ async function itinerary(tx: SettlementTx, booking: Booking) {
     .for("update");
   return legs.length
     ? legs.map(l => ({
+        id: l.id,
         flightId: l.flightId,
         amount: l.segmentAmount,
         reserved: l.seatsReserved,
@@ -92,6 +116,7 @@ async function itinerary(tx: SettlementTx, booking: Booking) {
       }))
     : [
         {
+          id: null,
           flightId: booking.flightId,
           amount: booking.totalAmount,
           reserved: booking.seatsReserved,
@@ -109,9 +134,84 @@ function fingerprint(
     totalAmount: booking.totalAmount,
     checkedIn: booking.checkedIn,
     status: booking.status,
-    legs,
+    legs: legs.map(l => ({
+      flightId: l.flightId,
+      amount: l.amount,
+      reserved: l.reserved,
+      status: l.status,
+    })),
   });
 }
+async function assertDirectExchange(tx: SettlementTx, bookingId: number) {
+  // Agency sales and corporate approval records exist independently of NDC orders.
+  const [agency] = await tx
+    .select({ id: agentBookings.id })
+    .from(agentBookings)
+    .where(eq(agentBookings.bookingId, bookingId))
+    .limit(1)
+    .for("update");
+  const [corporate] = await tx
+    .select({ id: corporateBookings.id })
+    .from(corporateBookings)
+    .where(eq(corporateBookings.bookingId, bookingId))
+    .limit(1)
+    .for("update");
+  if (agency || corporate)
+    throw unavailable("Issuing channel must service this booking");
+  const orders = await tx
+    .select()
+    .from(ndcOrders)
+    .where(eq(ndcOrders.bookingId, bookingId))
+    .for("update");
+  if (
+    orders.some(
+      o =>
+        (o.channel && o.channel !== "direct") ||
+        o.distributorId ||
+        (o.currency && o.currency !== "SAR") ||
+        storedJson<unknown[]>(o.emdNumbers, []).length ||
+        storedJson<unknown[]>(o.ticketNumbers, []).length
+    )
+  )
+    throw unavailable("Issuing channel must service this booking");
+}
+
+function partyHash(booking: Booking, party: { id: number; type: string }[]) {
+  return calculateRequestHash({
+    count: booking.numberOfPassengers,
+    tenantId: booking.tenantId,
+    passengers: party.map(({ id, type }) => ({ id, type })),
+  });
+}
+
+function scheduleHash(instances: (typeof flights.$inferSelect)[]) {
+  return calculateRequestHash(
+    instances.map(f => ({
+      id: f.id,
+      airlineId: f.airlineId,
+      originId: f.originId,
+      destinationId: f.destinationId,
+      departure: f.departureTime,
+      arrival: f.arrivalTime,
+    }))
+  );
+}
+
+function quoteTermsHash(
+  originalAmount: number,
+  newAmount: number,
+  modificationFee: number,
+  priceDifference: number
+) {
+  return calculateRequestHash({
+    originalAmount,
+    newAmount,
+    modificationFee,
+    priceDifference,
+    currency: "SAR",
+  });
+}
+
 export async function quotePaidOrderService(
   raw: z.infer<typeof paidServiceInput>,
   userId: number,
@@ -121,293 +221,382 @@ export async function quotePaidOrderService(
   const input = paidServiceInput.parse(raw);
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
-  return withTransactionalIdempotency(
-    {
-      scope: "order.paid.service",
-      key: input.idempotencyKey,
-      userId,
-      request: input,
-      run: async tx => {
-        const [booking] = await tx
-          .select()
-          .from(bookings)
-          .where(eq(bookings.id, input.bookingId))
-          .for("update");
-        if (
-          !booking ||
-          booking.userId !== userId ||
-          (tenantId !== null && booking.tenantId !== tenantId)
-        )
-          throw unavailable("Owned booking not found");
-        await assertTenantOperational(tx, booking.tenantId);
-        await assertNoCollectionReview(tx, booking.id);
-        if (
-          booking.status !== "confirmed" ||
-          booking.paymentStatus !== "paid" ||
-          !booking.seatsReserved ||
-          booking.checkedIn
-        )
-          throw unavailable(
-            "A paid, confirmed booking before check-in is required"
-          );
-        const [pending] = await tx
-          .select()
-          .from(bookingModifications)
-          .where(
-            and(
-              eq(bookingModifications.bookingId, booking.id),
-              eq(bookingModifications.status, "pending")
-            )
+  const quoteInTransaction = async (tx: SettlementTx) => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, input.bookingId))
+      .for("update");
+    if (
+      !booking ||
+      booking.userId !== userId ||
+      (tenantId !== null && booking.tenantId !== tenantId)
+    )
+      throw unavailable("Owned booking not found");
+    await assertTenantOperational(tx, booking.tenantId);
+    return withTransactionalIdempotency(
+      {
+        scope: "order.paid.service",
+        key: input.idempotencyKey,
+        userId,
+        request: input,
+        run: async tx => {
+          await assertNoCollectionReview(tx, booking.id);
+          if (
+            booking.status !== "confirmed" ||
+            booking.paymentStatus !== "paid" ||
+            !booking.seatsReserved ||
+            booking.checkedIn
           )
-          .limit(1);
-        if (pending)
-          throw unavailable("Resolve the existing servicing request first");
-        const old = await itinerary(tx, booking);
-        if (old.some(l => !l.reserved || l.status !== "confirmed"))
-          throw unavailable(
-            "Existing itinerary reservation needs reconciliation"
-          );
-        const pax = await tx
-          .select()
-          .from(passengers)
-          .where(eq(passengers.bookingId, booking.id))
-          .orderBy(asc(passengers.id));
-        if (pax.length !== booking.numberOfPassengers)
-          throw unavailable("Passenger mapping needs reconciliation");
-        const segments: z.infer<typeof segment>[] = [];
-        const additions: z.infer<typeof planSchema>["ancillaries"] = [];
-        let newAmount = booking.totalAmount;
-        let modificationFee = 0;
-        let fareDifference = 0;
-        const expiry = new Date(Date.now() + 10 * 60000);
-        if (input.offerIds) {
-          await assertBaggageNotInCustody(tx, booking.id);
-          const [active] = await tx
+            throw unavailable(
+              "A paid, confirmed booking before check-in is required"
+            );
+          const [pending] = await tx
             .select()
-            .from(bookingAncillaries)
+            .from(bookingModifications)
             .where(
               and(
-                eq(bookingAncillaries.bookingId, booking.id),
-                eq(bookingAncillaries.status, "active")
+                eq(bookingModifications.bookingId, booking.id),
+                eq(bookingModifications.status, "pending")
               )
             )
             .limit(1);
-          if (active)
+          if (pending)
+            throw unavailable("Resolve the existing servicing request first");
+          const old = await itinerary(tx, booking);
+          if (old.some(l => !l.reserved || l.status !== "confirmed"))
             throw unavailable(
-              "Existing ancillary fulfillment must be reconciled before itinerary exchange"
+              "Existing itinerary reservation needs reconciliation"
             );
-          const offers = await tx
+          const pax = await tx
             .select()
-            .from(retailOffers)
-            .where(inArray(retailOffers.id, input.offerIds));
-          if (
-            offers.length !== input.offerIds.length ||
-            new Set(offers.map(o => o.flightId)).size !== offers.length ||
-            new Set(offers.map(o => o.cabinClass)).size !== 1
-          )
-            throw unavailable(
-              "Distinct flight offers in one cabin are required"
-            );
-          const heldFlights = new Map<number, typeof flights.$inferSelect>();
-          for (const id of [
-            ...new Set([
-              ...old.map(l => l.flightId),
-              ...offers.map(o => o.flightId),
-            ]),
-          ].sort((a, b) => a - b)) {
-            const [flight] = await tx
+            .from(passengers)
+            .where(eq(passengers.bookingId, booking.id))
+            .orderBy(asc(passengers.id));
+          if (pax.length !== booking.numberOfPassengers)
+            throw unavailable("Passenger mapping needs reconciliation");
+          const segments: z.infer<typeof segment>[] = [];
+          const additions: z.infer<typeof planSchema>["ancillaries"] = [];
+          let acceptedScheduleHash: string | undefined;
+          let seatExchange: z.infer<typeof seatExchangeSchema> | undefined;
+          let newAmount = booking.totalAmount;
+          let modificationFee = 0;
+          let fareDifference = 0;
+          const expiry = new Date(Date.now() + 10 * 60000);
+          if (input.offerIds) {
+            await assertDirectExchange(tx, booking.id);
+            await assertBaggageNotInCustody(tx, booking.id);
+            const offers = await tx
               .select()
-              .from(flights)
-              .where(eq(flights.id, id))
-              .for("update");
+              .from(retailOffers)
+              .where(inArray(retailOffers.id, input.offerIds));
             if (
-              !flight ||
-              flight.tenantId !== booking.tenantId ||
-              flight.departureTime <= new Date()
+              offers.length !== input.offerIds.length ||
+              new Set(offers.map(o => o.flightId)).size !== offers.length ||
+              new Set(offers.map(o => o.cabinClass)).size !== 1
             )
-              throw unavailable("Flight instance is unavailable");
-            heldFlights.set(id, flight);
-          }
-          const original = heldFlights.get(booking.flightId);
-          if (!original) throw unavailable("Original flight missing");
-          for (const id of input.offerIds) {
-            const hint = offers.find(o => o.id === id);
-            if (!hint) throw unavailable("Offer missing");
-            const offer = await lockRetailOffer(tx, id, {
-              flightId: hint.flightId,
-              cabinClass: hint.cabinClass,
-              tenantId: booking.tenantId,
-              userId,
-              channel: "direct",
-              passengerTypes: pax.map(p => p.type),
-            });
-            const flight = heldFlights.get(offer.flightId);
-            if (!flight || flight.airlineId !== original.airlineId)
               throw unavailable(
-                "Cross-airline settlement requires a contracted partner"
+                "Distinct flight offers in one cabin are required"
               );
-            const full = await getFlightById(flight.id);
+            const cabin = offers[0].cabinClass;
+            const replacedIndex = old.findIndex(
+              l => l.flightId === input.replaceFlightId
+            );
             if (
-              !full ||
-              full.departureTime.getTime() !== flight.departureTime.getTime()
+              input.replaceFlightId !== undefined &&
+              (replacedIndex < 0 ||
+                cabin !== booking.cabinClass ||
+                old.some(
+                  l => l.flightId === offers[0].flightId || l.amount == null
+                ) ||
+                old.reduce((sum, l) => sum + (l.amount ?? 0), 0) !==
+                  booking.totalAmount)
             )
-              throw unavailable("Schedule changed");
-            const unchanged =
-              old.some(l => l.flightId === flight.id) &&
-              booking.cabinClass === offer.cabinClass;
-            const hold = unchanged
-              ? null
-              : await createInventoryLock(
-                  flight.id,
-                  booking.numberOfPassengers,
-                  offer.cabinClass,
-                  `service:${booking.id}:${input.idempotencyKey}`,
-                  userId,
-                  tx
+              throw unavailable(
+                "Sector exchange requires a distinct replacement and verified segment amounts in the same cabin"
+              );
+            const targets =
+              input.replaceFlightId === undefined
+                ? input.offerIds.map(id => {
+                    const offer = offers.find(o => o.id === id);
+                    if (!offer) throw unavailable("Replacement offer missing");
+                    return {
+                      flightId: offer.flightId,
+                      offerId: id,
+                      retainedAmount: null,
+                    };
+                  })
+                : old.map((l, index) =>
+                    index === replacedIndex
+                      ? {
+                          flightId: offers[0].flightId,
+                          offerId: offers[0].id,
+                          retainedAmount: null,
+                        }
+                      : {
+                          flightId: l.flightId,
+                          offerId: null,
+                          retainedAmount: l.amount,
+                        }
+                  );
+            const heldFlights = new Map<number, typeof flights.$inferSelect>();
+            for (const id of [
+              ...new Set([
+                ...old.map(l => l.flightId),
+                ...offers.map(o => o.flightId),
+              ]),
+            ].sort((a, b) => a - b)) {
+              const [flight] = await tx
+                .select()
+                .from(flights)
+                .where(eq(flights.id, id))
+                .for("update");
+              if (
+                !flight ||
+                flight.tenantId !== booking.tenantId ||
+                !["scheduled", "delayed"].includes(flight.status) ||
+                flight.departureTime <= new Date()
+              )
+                throw unavailable("Flight instance is unavailable");
+              heldFlights.set(id, flight);
+            }
+            acceptedScheduleHash = scheduleHash([...heldFlights.values()]);
+            const original = heldFlights.get(booking.flightId);
+            if (!original) throw unavailable("Original flight missing");
+            seatExchange = await quoteSeatExchange(
+              tx,
+              booking,
+              old.map(l => l.flightId),
+              targets.map(t => t.flightId),
+              cabin
+            );
+            for (const target of targets) {
+              const offer = target.offerId
+                ? await lockRetailOffer(tx, target.offerId, {
+                    flightId: target.flightId,
+                    cabinClass: cabin,
+                    tenantId: booking.tenantId,
+                    userId,
+                    channel: "direct",
+                    passengerTypes: pax.map(p => p.type),
+                  })
+                : null;
+              const flight = heldFlights.get(target.flightId);
+              if (!flight || flight.airlineId !== original.airlineId)
+                throw unavailable(
+                  "Cross-airline settlement requires a contracted partner"
                 );
-            segments.push({
-              flightId: flight.id,
-              cabinClass: offer.cabinClass,
-              amount: offer.totalAmount,
-              holdId: hold?.lockId ?? null,
-              offerId: offer.id,
-              departureTime: flight.departureTime.toISOString(),
-              arrivalTime: flight.arrivalTime.toISOString(),
-              ndc: {
-                segmentKey: `SEG${segments.length + 1}`,
+              const full = await getFlightById(flight.id);
+              if (
+                !full ||
+                full.departureTime.getTime() !== flight.departureTime.getTime()
+              )
+                throw unavailable("Schedule changed");
+              const unchanged =
+                old.some(l => l.flightId === flight.id) &&
+                booking.cabinClass === cabin;
+              const hold = unchanged
+                ? null
+                : await createInventoryLock(
+                    flight.id,
+                    booking.numberOfPassengers,
+                    cabin,
+                    calculateRequestHash({
+                      scope: "order.service.hold",
+                      bookingId: booking.id,
+                      key: input.idempotencyKey,
+                    }),
+                    userId,
+                    tx
+                  );
+              const amount = offer?.totalAmount ?? target.retainedAmount;
+              if (amount == null) throw unavailable("Unverified sector amount");
+              segments.push({
                 flightId: flight.id,
-                flightNumber: flight.flightNumber,
-                airlineCode: full.airline.code,
-                airlineName: full.airline.name,
-                origin: full.origin,
-                destination: full.destination,
+                cabinClass: cabin,
+                amount,
+                holdId: hold?.lockId ?? null,
+                offerId: target.offerId,
+                originId: flight.originId,
+                destinationId: flight.destinationId,
+                airlineId: flight.airlineId,
                 departureTime: flight.departureTime.toISOString(),
                 arrivalTime: flight.arrivalTime.toISOString(),
-                aircraftType: flight.aircraftType,
-                cabinClass: offer.cabinClass,
-              },
-            });
-            await consumeRetailOffer(tx, offer, booking.id);
-          }
-          for (let i = 1; i < segments.length; i++) {
-            const a = heldFlights.get(segments[i - 1].flightId);
-            const b = heldFlights.get(segments[i].flightId);
+                ndc: {
+                  segmentKey: `SEG${segments.length + 1}`,
+                  flightId: flight.id,
+                  flightNumber: flight.flightNumber,
+                  airlineCode: full.airline.code,
+                  airlineName: full.airline.name,
+                  origin: full.origin,
+                  destination: full.destination,
+                  departureTime: flight.departureTime.toISOString(),
+                  arrivalTime: flight.arrivalTime.toISOString(),
+                  aircraftType: flight.aircraftType,
+                  cabinClass: cabin,
+                },
+              });
+              if (offer) await consumeRetailOffer(tx, offer, booking.id);
+            }
+            for (let i = 1; i < segments.length; i++) {
+              const a = heldFlights.get(segments[i - 1].flightId);
+              const b = heldFlights.get(segments[i].flightId);
+              if (
+                !a ||
+                !b ||
+                a.destinationId !== b.originId ||
+                b.departureTime.getTime() - a.arrivalTime.getTime() < 45 * 60000
+              )
+                throw unavailable(
+                  "Replacement itinerary needs a valid connection of at least 45 minutes"
+                );
+            }
+            const first = heldFlights.get(segments[0].flightId);
+            const last = heldFlights.get(
+              segments[segments.length - 1].flightId
+            );
+            const oldLast = heldFlights.get(old[old.length - 1].flightId);
             if (
-              !a ||
-              !b ||
-              a.destinationId !== b.originId ||
-              b.departureTime.getTime() - a.arrivalTime.getTime() < 45 * 60000
+              !first ||
+              !last ||
+              !oldLast ||
+              first.originId !== original.originId ||
+              last.destinationId !== oldLast.destinationId
             )
-              throw unavailable(
-                "Replacement itinerary needs a valid connection of at least 45 minutes"
+              throw unavailable("Replacement must preserve journey endpoints");
+            // Retained sector amounts already contain their original seat charges.
+            // For exchanged sectors, the retail offer is fare-only.
+            for (const leg of segments) {
+              if (leg.offerId)
+                leg.amount += seatExchange.seats
+                  .filter(seat => seat.toFlightId === leg.flightId)
+                  .reduce((sum, seat) => sum + seat.amount, 0);
+            }
+            const fareAmount = segments.reduce(
+              (sum, leg) => sum + leg.amount,
+              0
+            );
+            fareDifference = fareAmount - booking.totalAmount;
+            const originalChanged =
+              input.replaceFlightId === undefined
+                ? original
+                : heldFlights.get(input.replaceFlightId);
+            if (!originalChanged)
+              throw unavailable("Original sector not found");
+            modificationFee = calculateModificationFee(
+              booking.totalAmount,
+              originalChanged.departureTime
+            );
+            newAmount = fareAmount + modificationFee;
+            if (replacedIndex >= 0)
+              segments[replacedIndex].amount += modificationFee;
+            else {
+              const fees = allocateProportional(
+                modificationFee,
+                segments.map(s => s.amount)
               );
-          }
-          const first = heldFlights.get(segments[0].flightId);
-          const last = heldFlights.get(segments[segments.length - 1].flightId);
-          const oldLast = heldFlights.get(old[old.length - 1].flightId);
+              for (const [i, leg] of segments.entries()) leg.amount += fees[i];
+            }
+          } else
+            for (const item of input.ancillaries ?? []) {
+              const quote = await quoteInvoiceAncillary(tx, booking, item);
+              additions.push({ ...item, unitTotal: quote.totalPrice });
+              newAmount += quote.totalPrice;
+            }
           if (
-            !first ||
-            !last ||
-            !oldLast ||
-            first.originId !== original.originId ||
-            last.destinationId !== oldLast.destinationId
+            !Number.isSafeInteger(newAmount) ||
+            newAmount <= 0 ||
+            newAmount > 2147483647
           )
-            throw unavailable("Replacement must preserve journey endpoints");
-          const fareAmount = segments.reduce((n, s) => n + s.amount, 0);
-          fareDifference = fareAmount - booking.totalAmount;
-          modificationFee = calculateModificationFee(
-            booking.totalAmount,
-            original.departureTime
-          );
-          newAmount = fareAmount + modificationFee;
-          const allocations = allocateProportional(
+            throw unavailable("Invalid replacement total");
+          const plan: z.infer<typeof planSchema> = {
+            version: 1,
+            partyHash: partyHash(booking, pax),
+            scheduleHash: acceptedScheduleHash,
+            termsHash: quoteTermsHash(
+              booking.totalAmount,
+              newAmount,
+              modificationFee,
+              input.offerIds ? fareDifference : newAmount - booking.totalAmount
+            ),
+            fingerprint: fingerprint(booking, old),
+            seatExchange,
+            replaceFlightId: input.replaceFlightId,
+            expiresAt: expiry.toISOString(),
+            segments,
+            ancillaries: additions,
+          };
+          const [insert] = await tx.insert(bookingModifications).values({
+            bookingId: booking.id,
+            userId,
+            modificationType: segments.length
+              ? "change_flight"
+              : "add_services",
+            originalFlightId: input.replaceFlightId ?? booking.flightId,
+            originalCabinClass: booking.cabinClass,
+            originalAmount: booking.totalAmount,
+            newFlightId:
+              (input.replaceFlightId
+                ? segments.find(s => s.offerId)
+                : segments[0]
+              )?.flightId ?? booking.flightId,
+            newCabinClass: segments[0]?.cabinClass ?? booking.cabinClass,
             newAmount,
-            segments.map(s => s.amount)
-          );
-          for (const [i, leg] of segments.entries())
-            leg.amount = allocations[i];
-        } else
-          for (const item of input.ancillaries ?? []) {
-            const quote = await quoteInvoiceAncillary(tx, booking, item);
-            additions.push({ ...item, unitTotal: quote.totalPrice });
-            newAmount += quote.totalPrice;
-          }
-        if (
-          !Number.isSafeInteger(newAmount) ||
-          newAmount <= 0 ||
-          newAmount > 2147483647
-        )
-          throw unavailable("Invalid replacement total");
-        const plan: z.infer<typeof planSchema> = {
-          version: 1,
-          fingerprint: fingerprint(booking, old),
-          expiresAt: expiry.toISOString(),
-          segments,
-          ancillaries: additions,
-        };
-        const [insert] = await tx.insert(bookingModifications).values({
-          bookingId: booking.id,
-          userId,
-          modificationType: segments.length ? "change_flight" : "add_services",
-          originalFlightId: booking.flightId,
-          originalCabinClass: booking.cabinClass,
-          originalAmount: booking.totalAmount,
-          newFlightId: segments[0]?.flightId ?? booking.flightId,
-          newCabinClass: segments[0]?.cabinClass ?? booking.cabinClass,
-          newAmount,
-          priceDifference: input.offerIds
-            ? fareDifference
-            : newAmount - booking.totalAmount,
-          modificationFee,
-          totalCost: newAmount - booking.totalAmount,
-          status: "pending",
-          paymentStatus: "pending",
-          servicingPayload: plan,
-        });
-        const modificationId = Number(insert.insertId);
-        if (!modificationId)
-          throw new Error("Modification identity unavailable");
-        await recordEvent(tx, {
-          aggregateType: "booking",
-          aggregateId: booking.id,
-          tenantId: booking.tenantId,
-          eventType: "order.servicing_quoted",
-          payload: {
+            priceDifference: input.offerIds
+              ? fareDifference
+              : newAmount - booking.totalAmount,
+            modificationFee,
+            totalCost: newAmount - booking.totalAmount,
+            status: "pending",
+            paymentStatus: "pending",
+            servicingPayload: plan,
+          });
+          const modificationId = Number(insert.insertId);
+          if (!modificationId)
+            throw new Error("Modification identity unavailable");
+          await recordEvent(tx, {
+            aggregateType: "booking",
+            aggregateId: booking.id,
+            tenantId: booking.tenantId,
+            eventType: "order.servicing_quoted",
+            payload: {
+              modificationId,
+              totalCost: newAmount - booking.totalAmount,
+              expiresAt: expiry.toISOString(),
+            },
+          });
+          return {
+            bookingId: booking.id,
             modificationId,
             totalCost: newAmount - booking.totalAmount,
-            expiresAt: expiry.toISOString(),
-          },
-        });
-        return {
-          bookingId: booking.id,
-          modificationId,
-          totalCost: newAmount - booking.totalAmount,
-          newAmount,
-          modificationFee,
-          priceDifference: input.offerIds
-            ? fareDifference
-            : newAmount - booking.totalAmount,
-          originalAmount: booking.totalAmount,
-          expiresAt: expiry,
-          requiresPayment: newAmount > booking.totalAmount,
-          refundDue: Math.max(0, booking.totalAmount - newAmount),
-        };
+            newAmount,
+            modificationFee,
+            priceDifference: input.offerIds
+              ? fareDifference
+              : newAmount - booking.totalAmount,
+            originalAmount: booking.totalAmount,
+            expiresAt: expiry,
+            currency: "SAR" as const,
+            seatExchange,
+            requiresPayment: newAmount > booking.totalAmount,
+            refundDue: Math.max(0, booking.totalAmount - newAmount),
+          };
+        },
       },
-    },
-    transaction
-  );
+      tx
+    );
+  };
+  return transaction
+    ? quoteInTransaction(transaction)
+    : withInventoryTransaction(db, quoteInTransaction);
 }
-/** Only settlement or the authenticated no-charge confirmation calls this inside a booking transaction. */
-export async function applyPaidOrderModification(
+/** Lock and validate the same version before creating checkout and again after verified collection. */
+export async function validatePaidServiceQuote(
   tx: SettlementTx,
   booking: Booking,
-  change: typeof bookingModifications.$inferSelect,
-  funding:
-    | { kind: "collected_modification"; paymentIntentId: string }
-    | { kind: "authorized_no_charge" }
+  change: typeof bookingModifications.$inferSelect
 ) {
   const plan = planSchema.parse(change.servicingPayload);
-  const createdAncillaryIds: number[] = [];
   if (
     booking.paymentStatus !== "paid" ||
     !booking.seatsReserved ||
@@ -417,15 +606,38 @@ export async function applyPaidOrderModification(
   const old = await itinerary(tx, booking);
   if (
     change.status !== "pending" ||
+    change.bookingId !== booking.id ||
+    change.originalAmount !== booking.totalAmount ||
+    change.totalCost !== change.newAmount - change.originalAmount ||
+    (plan.termsHash &&
+      plan.termsHash !==
+        quoteTermsHash(
+          change.originalAmount,
+          change.newAmount,
+          change.modificationFee,
+          change.priceDifference
+        )) ||
     change.userId !== booking.userId ||
     fingerprint(booking, old) !== plan.fingerprint ||
     Date.parse(plan.expiresAt) <= Date.now()
   )
     throw unavailable("Servicing quote expired or booking changed");
+  if (plan.partyHash) {
+    const party = await tx
+      .select({ id: passengers.id, type: passengers.type })
+      .from(passengers)
+      .where(eq(passengers.bookingId, booking.id))
+      .orderBy(asc(passengers.id))
+      .for("update");
+    if (partyHash(booking, party) !== plan.partyHash)
+      throw unavailable("Passenger composition changed after quote");
+  }
   await assertTenantOperational(tx, booking.tenantId);
   if (plan.segments.length) {
+    await assertDirectExchange(tx, booking.id);
     await assertBaggageNotInCustody(tx, booking.id);
     const cabin = plan.segments[0].cabinClass;
+    const instances: (typeof flights.$inferSelect)[] = [];
     for (const id of [
       ...new Set([
         ...old.map(l => l.flightId),
@@ -441,13 +653,58 @@ export async function applyPaidOrderModification(
       if (
         !flight ||
         flight.tenantId !== booking.tenantId ||
+        !["scheduled", "delayed"].includes(flight.status) ||
         flight.departureTime <= new Date() ||
         (target &&
-          (flight.departureTime.toISOString() !== target.departureTime ||
+          ((target.airlineId !== undefined &&
+            target.airlineId !== flight.airlineId) ||
+            (target.originId !== undefined &&
+              target.originId !== flight.originId) ||
+            (target.destinationId !== undefined &&
+              target.destinationId !== flight.destinationId) ||
+            flight.departureTime.toISOString() !== target.departureTime ||
             flight.arrivalTime.toISOString() !== target.arrivalTime))
       )
         throw unavailable("Itinerary schedule changed");
+      instances.push(flight);
     }
+    if (plan.scheduleHash && scheduleHash(instances) !== plan.scheduleHash)
+      throw unavailable("Itinerary schedule changed");
+    const current = await quoteSeatExchange(
+      tx,
+      booking,
+      old.map(l => l.flightId),
+      plan.segments.map(s => s.flightId),
+      cabin
+    ).catch(error => {
+      if (error instanceof TRPCError && error.code === "PRECONDITION_FAILED")
+        throw unavailable(error.message);
+      throw error;
+    });
+    if (
+      calculateRequestHash(current) !==
+      calculateRequestHash(
+        plan.seatExchange ?? { seats: [], retainedAmount: 0 }
+      )
+    ) {
+      throw unavailable("Paid seat disposition changed after quote");
+    }
+  }
+  return { plan, old };
+}
+/** Only settlement or the authenticated no-charge confirmation calls this inside a booking transaction. */
+export async function applyPaidOrderModification(
+  tx: SettlementTx,
+  booking: Booking,
+  change: typeof bookingModifications.$inferSelect,
+  funding:
+    | { kind: "collected_modification"; paymentIntentId: string }
+    | { kind: "authorized_no_charge" }
+) {
+  const { plan, old } = await validatePaidServiceQuote(tx, booking, change);
+  const createdAncillaryIds: number[] = [];
+  if (plan.segments.length) {
+    const cabin = plan.segments[0].cabinClass;
     for (const leg of plan.segments) {
       if (
         old.some(l => l.flightId === leg.flightId) &&
@@ -494,47 +751,113 @@ export async function applyPaidOrderModification(
           booking.cabinClass,
           booking.numberOfPassengers
         );
-    await tx
-      .delete(bookingSegments)
-      .where(eq(bookingSegments.bookingId, booking.id));
-    await tx.insert(bookingSegments).values(
-      plan.segments.map((s, i) => ({
+    const retainedDocuments = await exchangeLocalCoupons(
+      tx,
+      booking.id,
+      old.map(l => l.flightId),
+      plan.segments.map(l => l.flightId),
+      booking.cabinClass === cabin
+    );
+    if (plan.seatExchange)
+      await transferExchangeSeats(tx, booking, plan.seatExchange).catch(
+        error => {
+          if (
+            error instanceof TRPCError &&
+            error.code === "PRECONDITION_FAILED"
+          )
+            throw unavailable(error.message);
+          throw error;
+        }
+      );
+    // A sector change must retain segment IDs used by ancillary entitlements.
+    // For a full re-route, preserve a row for each unchanged flight where possible.
+    const retainedIds = new Set<number>();
+    for (const [index, leg] of plan.segments.entries()) {
+      const previous =
+        plan.replaceFlightId !== undefined || plan.seatExchange?.seats.length
+          ? old[index]
+          : old.find(l => l.flightId === leg.flightId);
+      const record = {
         bookingId: booking.id,
-        segmentOrder: i + 1,
-        flightId: s.flightId,
-        inventoryLockId: s.holdId,
-        segmentAmount: s.amount,
-        departureDate: new Date(s.departureTime),
+        segmentOrder: index + 1,
+        flightId: leg.flightId,
+        segmentAmount: leg.amount,
+        departureDate: new Date(leg.departureTime),
         seatsReserved: true,
         status: "confirmed" as const,
-      }))
-    );
-    await tx
-      .update(seatInventory)
-      .set({
-        bookingId: null,
-        passengerId: null,
-        status: "available",
-        assignedAt: null,
-        checkedInAt: null,
-        boardingPassIssued: false,
-      })
-      .where(
-        and(
-          eq(seatInventory.bookingId, booking.id),
-          inArray(seatInventory.status, ["held", "occupied"])
+      };
+      if (previous?.id != null) {
+        retainedIds.add(previous.id);
+        if (
+          plan.replaceFlightId !== undefined &&
+          previous.flightId === leg.flightId
         )
-      );
-    await tx
-      .update(passengers)
-      .set({ seatNumber: null, ticketNumber: null })
-      .where(eq(passengers.bookingId, booking.id));
+          continue;
+        await tx
+          .update(bookingSegments)
+          .set({
+            ...record,
+            ...(previous.flightId !== leg.flightId ||
+            booking.cabinClass !== cabin
+              ? { inventoryLockId: leg.holdId }
+              : {}),
+          })
+          .where(eq(bookingSegments.id, previous.id));
+      } else {
+        await tx
+          .insert(bookingSegments)
+          .values({ ...record, inventoryLockId: leg.holdId });
+      }
+    }
+    const removedIds = old.flatMap(l =>
+      l.id !== null && !retainedIds.has(l.id) ? [l.id] : []
+    );
+    if (removedIds.length)
+      await tx
+        .delete(bookingSegments)
+        .where(inArray(bookingSegments.id, removedIds));
+    const removedFlights = old
+      .filter(
+        l =>
+          booking.cabinClass !== cabin ||
+          !plan.segments.some(s => s.flightId === l.flightId)
+      )
+      .map(l => l.flightId);
+    if (removedFlights.length)
+      await tx
+        .update(seatInventory)
+        .set({
+          bookingId: null,
+          passengerId: null,
+          status: "available",
+          assignedAt: null,
+          checkedInAt: null,
+          boardingPassIssued: false,
+        })
+        .where(
+          and(
+            eq(seatInventory.bookingId, booking.id),
+            inArray(seatInventory.flightId, removedFlights),
+            inArray(seatInventory.status, ["held", "occupied"])
+          )
+        );
+    const anchorChanged =
+      booking.flightId !== plan.segments[0].flightId ||
+      booking.cabinClass !== cabin;
+    if (anchorChanged || !retainedDocuments)
+      await tx
+        .update(passengers)
+        .set({
+          ...(anchorChanged ? { seatNumber: null } : {}),
+          ...(!retainedDocuments ? { ticketNumber: null } : {}),
+        })
+        .where(eq(passengers.bookingId, booking.id));
     await tx
       .update(bookings)
       .set({
         flightId: plan.segments[0].flightId,
         cabinClass: cabin,
-        inventoryLockId: null,
+        inventoryLockId: anchorChanged ? null : booking.inventoryLockId,
         totalAmount: change.newAmount,
         updatedAt: new Date(),
       })
@@ -604,6 +927,8 @@ export async function applyPaidOrderModification(
     eventType: "order.servicing_applied",
     payload: {
       modificationId: change.id,
+      currency: "SAR",
+      quoteTermsHash: plan.termsHash,
       previousTotal: booking.totalAmount,
       totalAmount: change.newAmount,
       refundDue: Math.max(0, -change.totalCost),
@@ -652,7 +977,8 @@ export async function applyPaidOrderModification(
 }
 export async function confirmNoChargeService(
   modificationId: number,
-  userId: number
+  userId: number,
+  tenantId: number | null = null
 ) {
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
@@ -674,13 +1000,22 @@ export async function confirmNoChargeService(
       .from(bookingModifications)
       .where(eq(bookingModifications.id, modificationId))
       .for("update");
-    if (!booking || !change || change.userId !== userId || change.totalCost > 0)
+    if (
+      !booking ||
+      booking.userId !== userId ||
+      (tenantId !== null && booking.tenantId !== tenantId) ||
+      !change ||
+      change.bookingId !== booking.id ||
+      change.userId !== userId ||
+      change.totalCost > 0
+    )
       throw unavailable("Verified payment is required");
     if (change.status === "completed" && change.executionEventId)
       return {
         receiptId: change.executionEventId,
         refundDue: Math.max(0, -change.totalCost),
       };
+    await assertNoCollectionReview(tx, booking.id);
     return applyPaidOrderModification(tx, booking, change, {
       kind: "authorized_no_charge",
     });

@@ -1,3 +1,4 @@
+import { setCouponCheckIn } from "./ticket-coupons.service";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -231,6 +232,15 @@ export async function checkInPassengersTx(
       });
       continue;
     }
+    if (
+      previous.some(
+        s => s.seatPrice > 0 && a.seatNumber && s.seatNumber !== a.seatNumber
+      )
+    )
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Use paid seat servicing before changing this seat",
+      });
     const requested =
       a.seatNumber ??
       previous.find(
@@ -310,6 +320,13 @@ export async function checkInPassengersTx(
       .update(seatInventory)
       .set(changed)
       .where(eq(seatInventory.id, seat.id));
+    await setCouponCheckIn(
+      tx,
+      input.bookingId,
+      a.passengerId,
+      c.flight.id,
+      true
+    );
     if (c.booking.flightId === c.flight.id)
       await tx
         .update(passengers)

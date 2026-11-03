@@ -118,6 +118,7 @@ describe("Loyalty Service", () => {
     amount: number
   ) {
     const fixture = transactionMemory({
+      mfa_settings: [],
       loyalty_accounts: [{ ...account, creditLotsInitializedAt: new Date() }],
       loyalty_credit_lots:
         account.currentMilesBalance > 0
@@ -313,6 +314,60 @@ describe("Loyalty Service", () => {
     expect(fixture.rows("user_credits")[0].expiresAt.getTime()).toBeGreaterThan(
       Date.now() + 360 * 86400000
     );
+  });
+
+  it("consumes a fresh enrolled factor atomically with the miles debit", async () => {
+    const { redeemMiles } = await import("./loyalty.service");
+    const { encryptSecret } = await import("./mfa.service");
+    const fixture = funded(
+      { ...baseBronzeAccount, currentMilesBalance: 500 },
+      testBookingId,
+      1000
+    );
+    // RFC 6238 SHA-1 vector at 59 seconds, truncated to the configured six digits.
+    const clock = vi.spyOn(Date, "now").mockReturnValue(59_000);
+    fixture.rows("mfa_settings").push({
+      userId: testUserId,
+      isEnabled: true,
+      lastUsedStep: null,
+      secret: encryptSecret("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"),
+    });
+    try {
+      await expect(redeemMiles(testUserId, 100)).rejects.toThrow(
+        "authenticator code"
+      );
+      await expect(
+        redeemMiles(testUserId, 100, undefined, "000000")
+      ).rejects.toThrow("authenticator code");
+      await expect(
+        redeemMiles(testUserId, 501, undefined, "287082")
+      ).rejects.toThrow("Insufficient miles");
+      expect(fixture.rows("mfa_settings")[0].lastUsedStep).toBeNull();
+      await expect(
+        redeemMiles(testUserId, 100, undefined, "287082")
+      ).resolves.toMatchObject({ newBalance: 400 });
+      await expect(
+        redeemMiles(testUserId, 100, undefined, "287082")
+      ).rejects.toThrow("authenticator code");
+      expect(fixture.rows("user_credits")).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("rejects a foreign booking before recording credit or a miles debit", async () => {
+    const { redeemMiles } = await import("./loyalty.service");
+    const fixture = funded(
+      { ...baseBronzeAccount, currentMilesBalance: 500 },
+      testBookingId,
+      1000
+    );
+    fixture.rows("bookings")[0].userId++;
+    await expect(redeemMiles(testUserId, 100, testBookingId)).rejects.toThrow(
+      "Booking not found"
+    );
+    expect(fixture.rows("user_credits")).toHaveLength(0);
+    expect(fixture.rows("loyalty_accounts")[0].currentMilesBalance).toBe(500);
   });
 
   it("should throw error when redeeming more miles than available", async () => {

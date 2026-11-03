@@ -1,3 +1,4 @@
+import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { recordEvent } from "./outbox.service";
 import { assertTenantOperational, isTenantActive } from "./tenant.service";
 import { createBooking } from "./bookings.service";
@@ -463,6 +464,7 @@ export async function createAgentBooking(
       message: "An idempotency key or unique external reference is required",
     });
   return withTransactionalIdempotency({
+    transactionConfig: inventoryTransactionConfig,
     scope: `agent.booking.${agentId}`,
     key,
     userId: owner.id,

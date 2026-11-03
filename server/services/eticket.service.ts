@@ -12,12 +12,13 @@ import { randomInt } from "node:crypto";
 export interface TicketData {
   flightId?: number;
   additionalLegs?: TicketData[];
+  localCoupon?: { number: number; status: string };
   // Passenger info
   passengerName: string;
   passengerType: "adult" | "child" | "infant";
 
   // Booking info
-  ticketNumber: string; // 13-digit IATA standard
+  ticketNumber: string; // 13-digit local document reference
   bookingReference: string;
   pnr: string;
 
@@ -209,11 +210,16 @@ export async function generateETicketPDF(
         .text(`Baggage: ${ticketData.baggageAllowance}`, 60)
         .moveDown(1.5);
 
+      if (ticketData.localCoupon)
+        doc.text(
+          `AIS local coupon ${ticketData.localCoupon.number}: ${ticketData.localCoupon.status}`,
+          60
+        );
       // Payment info
       doc
         .fontSize(10)
         .text(
-          `Total Amount: ${(ticketData.totalAmount / 100).toFixed(2)} ${ticketData.currency}`,
+          `Booking Total: ${(ticketData.totalAmount / 100).toFixed(2)} ${ticketData.currency}`,
           60
         )
         .text(
@@ -250,6 +256,12 @@ export async function generateETicketPDF(
           .fillColor("#1e40af")
           .fontSize(20)
           .text("ITINERARY CONTINUED", 50, 50);
+        if (leg.localCoupon)
+          doc
+            .fontSize(12)
+            .text(
+              `AIS local coupon ${leg.localCoupon.number}: ${leg.localCoupon.status}`
+            );
         doc
           .moveDown()
           .fillColor("#000")

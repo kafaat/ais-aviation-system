@@ -126,7 +126,7 @@ export async function createRefund(
       });
     }
 
-    if (booking.paymentStatus !== "paid") {
+    if (!["paid", "refunded"].includes(booking.paymentStatus)) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Cannot refund unpaid booking",
@@ -168,19 +168,6 @@ export async function createRefund(
 
     const refundAmount = input.amount ?? feeCalculation.refundAmount;
 
-    if (
-      !Number.isSafeInteger(booking.totalAmount) ||
-      !Number.isSafeInteger(refundAmount) ||
-      refundAmount <= 0 ||
-      refundAmount > booking.totalAmount
-    ) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          "Refund amount must be positive integer cents within the booking total",
-      });
-    }
-
     await assertNoOrderRefundPending(database, booking.id);
     // A refund is applied against the receipt that recorded the collection.
     // Legacy paid rows without one used to get the provider refund and then
@@ -204,19 +191,64 @@ export async function createRefund(
     const remainingRefundableAmount =
       booking.totalAmount - alreadyRefundedAmount;
 
-    // Same booking + same amount maps to one provider operation. Check this before
-    // the remaining-balance guard so a provider-success/local-failure retry can
-    // reconcile state without trying to issue money again.
-    const refundOperationId = `booking-${input.bookingId}-refund-${refundAmount}`;
-    const existingOperationRefund = existingRefunds.find(
-      refund => refund.metadata?.refundOperationId === refundOperationId
+    // A customer cancels a given collection once. Keying that operation by its
+    // recalculated fee would issue another refund after a cancellation tier changes.
+    const legacyRefundId = `booking-${input.bookingId}-refund-${refundAmount}`;
+    const cancellationId = `booking-${input.bookingId}-cancel-${booking.stripePaymentIntentId}`;
+    const refundOperationId =
+      input.amount === undefined ? cancellationId : legacyRefundId;
+    const priorCancellation = existingRefunds.find(
+      refund =>
+        refund.metadata?.bookingId === String(input.bookingId) &&
+        refund.metadata.refundOperationId === cancellationId &&
+        (input.amount === undefined || input.amount === refund.amount)
     );
+    const existingOperationRefund =
+      priorCancellation ??
+      existingRefunds.find(
+        refund =>
+          refund.metadata?.bookingId === String(input.bookingId) &&
+          refund.metadata.refundOperationId === legacyRefundId &&
+          refund.amount === refundAmount
+      );
 
     let refund: Stripe.Refund;
     if (existingOperationRefund) {
       refund = existingOperationRefund;
     } else {
-      if (remainingRefundableAmount <= 0) {
+      // Old releases used the amount alone for both policy cancellations and
+      // manual overrides. A different historic amount has no proof of intent.
+      if (
+        input.amount === undefined &&
+        existingRefunds.some(
+          refund =>
+            refund.metadata?.refundOperationId ===
+            `booking-${input.bookingId}-refund-${refund.amount}`
+        )
+      ) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "An earlier refund must be reconciled before this cancellation",
+        });
+      }
+      if (
+        !Number.isSafeInteger(booking.totalAmount) ||
+        !Number.isSafeInteger(refundAmount) ||
+        refundAmount <= 0 ||
+        refundAmount > booking.totalAmount
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Refund amount must be positive integer cents within the booking total",
+        });
+      }
+
+      if (
+        booking.paymentStatus === "refunded" ||
+        remainingRefundableAmount <= 0
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Booking payment has already been fully refunded",

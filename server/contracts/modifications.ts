@@ -1,3 +1,4 @@
+import { seatExchangeSchema } from "../services/seat-exchange.service";
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
@@ -10,6 +11,9 @@ export const responseContracts = {
     modificationFee: outputNumber,
     totalCost: outputNumber,
     requiresPayment: z.boolean(),
+    expiresAt: z.date().optional(),
+    currency: z.literal("SAR").optional(),
+    seatExchange: seatExchangeSchema.optional(),
   }),
   requestUpgrade: z.object({
     modificationId: outputNumber,
@@ -19,6 +23,9 @@ export const responseContracts = {
     modificationFee: outputNumber,
     totalCost: outputNumber,
     requiresPayment: z.boolean(),
+    expiresAt: z.date().optional(),
+    currency: z.literal("SAR").optional(),
+    seatExchange: seatExchangeSchema.optional(),
   }),
   getDetails: z.object({
     id: outputNumber,

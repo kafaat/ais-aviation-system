@@ -121,6 +121,22 @@ describe("baggage handover evidence", () => {
     });
     expect(fixture.rows("baggage_tracking")).toHaveLength(6);
   });
+  it("routes around cancelled legs and never reports an empty itinerary complete", async () => {
+    const actor = { id: 1, role: "user", tenantId: 3 };
+    const [firstLeg] = fixture.rows("booking_segments");
+    firstLeg.status = "cancelled";
+    expect(await getBaggageCustody("AIS-BAG", actor)).toMatchObject({
+      complete: false,
+      requiredPoints: 3,
+    });
+    await expect(scan("acceptance", 11, 1, null)).rejects.toThrow("not routed");
+    await scan("acceptance", 12, 2, null);
+    fixture.rows("booking_segments")[1].status = "cancelled";
+    expect(await getBaggageCustody("AIS-BAG", actor)).toMatchObject({
+      complete: false,
+      requiredPoints: 0,
+    });
+  });
   it("rejects a missing predecessor and an unrelated journey flight", async () => {
     await expect(scan("loading", 11, 1, null)).rejects.toThrow(/Initial/);
     expect(() =>

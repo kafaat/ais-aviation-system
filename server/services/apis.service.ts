@@ -1,4 +1,6 @@
-import { flightBookingCondition } from "./flight-state.service";
+import { generatePAXLST } from "./apis-paxlst";
+import { isValidTimeZone } from "./civil-day";
+import { manifestBookingCondition } from "./flight-state.service";
 /**
  * Advance Passenger Information System (APIS) Service
  *
@@ -15,7 +17,7 @@ import {
   airports,
   airlines,
 } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -584,12 +586,7 @@ export async function getFlightAPISStatus(flightId: number) {
     })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        flightBookingCondition(flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
+    .where(manifestBookingCondition(flightId));
 
   if (flightPassengers.length === 0) {
     return {
@@ -827,12 +824,7 @@ export async function flagIncompletePassengers(flightId: number) {
     })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        flightBookingCondition(flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
+    .where(manifestBookingCondition(flightId));
 
   if (flightPassengers.length === 0) {
     return {
@@ -935,13 +927,21 @@ export async function generateAPISMessage(
     .limit(1);
 
   const [origin] = await db
-    .select({ code: airports.code, country: airports.country })
+    .select({
+      code: airports.code,
+      country: airports.country,
+      timezone: airports.timezone,
+    })
     .from(airports)
     .where(eq(airports.id, flightRoute.originId))
     .limit(1);
 
   const [destination] = await db
-    .select({ code: airports.code, country: airports.country })
+    .select({
+      code: airports.code,
+      country: airports.country,
+      timezone: airports.timezone,
+    })
     .from(airports)
     .where(eq(airports.id, flightRoute.destinationId))
     .limit(1);
@@ -962,12 +962,7 @@ export async function generateAPISMessage(
     })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        flightBookingCondition(flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
+    .where(manifestBookingCondition(flightId));
 
   const passengerIds = passengerData.map(p => p.passengerId);
 
@@ -999,11 +994,32 @@ export async function generateAPISMessage(
   let messageContent: string;
 
   if (format === "paxlst") {
+    if (
+      !origin ||
+      !destination ||
+      !airline ||
+      !isValidTimeZone(origin.timezone) ||
+      !isValidTimeZone(destination.timezone)
+    ) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "PAXLST requires carrier and route airports with valid time zones.",
+      });
+    }
     messageContent = generatePAXLST({
       flight,
-      origin: origin ?? { code: "???", country: "??" },
-      destination: destination ?? { code: "???", country: "??" },
-      airline: airline ?? { code: "??", name: "Unknown" },
+      origin: {
+        code: origin.code,
+        country: origin.country,
+        timezone: origin.timezone,
+      },
+      destination: {
+        code: destination.code,
+        country: destination.country,
+        timezone: destination.timezone,
+      },
+      airline,
       passengers: passengerData,
       apisMap,
     });
@@ -1028,137 +1044,6 @@ export async function generateAPISMessage(
     missingCount: passengerData.length - apisResults.length,
     generatedAt: new Date().toISOString(),
   };
-}
-
-// ============================================================================
-// PAXLST Message Builder (UN/EDIFACT format)
-// ============================================================================
-
-function generatePAXLST(data: {
-  flight: {
-    id: number;
-    flightNumber: string;
-    departureTime: Date;
-    arrivalTime: Date;
-  };
-  origin: { code: string; country: string };
-  destination: { code: string; country: string };
-  airline: { code: string; name: string };
-  passengers: Array<{
-    passengerId: number;
-    firstName: string;
-    lastName: string;
-    bookingReference: string;
-  }>;
-  apisMap: Map<number, Record<string, unknown>>;
-}): string {
-  const { flight, origin, destination, airline, passengers, apisMap } = data;
-
-  const now = new Date();
-  const dateStr = formatEdifactDate(now);
-  const timeStr = formatEdifactTime(now);
-  const depDate = formatEdifactDate(flight.departureTime);
-  const depTime = formatEdifactTime(flight.departureTime);
-
-  const lines: string[] = [];
-
-  // UNB - Interchange Header
-  lines.push(
-    `UNB+UNOA:4+${airline.code}+${destination.country}GOVT+${dateStr}:${timeStr}+${flight.id}++APIS'`
-  );
-
-  // UNH - Message Header
-  lines.push(`UNH+1+PAXLST:D:05B:UN:IATA+${flight.id}+01:F'`);
-
-  // BGM - Beginning of Message
-  lines.push(`BGM+745'`);
-
-  // NAD - Name and Address (carrier)
-  lines.push(`NAD+MS+++${airline.name}'`);
-
-  // TDT - Transport Information
-  lines.push(`TDT+20+${flight.flightNumber}+++${airline.code}'`);
-
-  // LOC - Origin
-  lines.push(`LOC+125+${origin.code}'`);
-
-  // DTM - Departure time
-  lines.push(`DTM+189:${depDate}${depTime}:201'`);
-
-  // LOC - Destination
-  lines.push(`LOC+87+${destination.code}'`);
-
-  // Passenger segments
-  let segCount = 0;
-  for (const pax of passengers) {
-    const apis = apisMap.get(pax.passengerId);
-    if (!apis) continue;
-
-    segCount++;
-
-    const surname = ((apis["surname"] as string) ?? pax.lastName).toUpperCase();
-    const givenNames = (
-      (apis["given_names"] as string) ?? pax.firstName
-    ).toUpperCase();
-    const dob = apis["date_of_birth"]
-      ? formatEdifactDate(new Date(apis["date_of_birth"] as string))
-      : "";
-    const gender = (apis["gender"] as string) ?? "U";
-    const nationality = (apis["nationality"] as string) ?? "";
-    const docNumber = (apis["document_number"] as string) ?? "";
-    const issuingCountry = (apis["issuing_country"] as string) ?? "";
-    const expiryDate = apis["expiry_date"]
-      ? formatEdifactDate(new Date(apis["expiry_date"] as string))
-      : "";
-    const docType = apis["document_type"] === "passport" ? "P" : "I";
-
-    // NAD - Passenger Name
-    lines.push(`NAD+FL+++${surname}:${givenNames}'`);
-
-    // ATT - Gender
-    const genderCode = gender === "M" ? "1" : gender === "F" ? "2" : "0";
-    lines.push(`ATT+2++${genderCode}'`);
-
-    // DTM - Date of Birth
-    if (dob) {
-      lines.push(`DTM+329:${dob}:102'`);
-    }
-
-    // LOC - Residence country
-    const resCountry = apis["residence_country"] as string | null;
-    if (resCountry) {
-      lines.push(`LOC+174+${resCountry}'`);
-    }
-
-    // NAT - Nationality
-    if (nationality) {
-      lines.push(`NAT+2+${nationality}'`);
-    }
-
-    // DOC - Travel Document
-    lines.push(`DOC+${docType}+${docNumber}'`);
-
-    // DTM - Document Expiry
-    if (expiryDate) {
-      lines.push(`DTM+36:${expiryDate}:102'`);
-    }
-
-    // LOC - Document Issuing Country
-    if (issuingCountry) {
-      lines.push(`LOC+91+${issuingCountry}'`);
-    }
-  }
-
-  // CNT - Passenger Count
-  lines.push(`CNT+42:${segCount}'`);
-
-  // UNT - Message Trailer
-  lines.push(`UNT+${lines.length}+1'`);
-
-  // UNZ - Interchange Trailer
-  lines.push(`UNZ+1+${flight.id}'`);
-
-  return lines.join("\n");
 }
 
 // ============================================================================
@@ -1243,23 +1128,6 @@ function generatePNRGOV(data: {
   lines.push(`APIS RECORDS: ${apisMap.size}/${passengers.length}`);
 
   return lines.join("\n");
-}
-
-// ============================================================================
-// EDIFACT Date/Time Helpers
-// ============================================================================
-
-function formatEdifactDate(date: Date): string {
-  const y = date.getFullYear().toString();
-  const m = (date.getMonth() + 1).toString().padStart(2, "0");
-  const d = date.getDate().toString().padStart(2, "0");
-  return `${y}${m}${d}`;
-}
-
-function formatEdifactTime(date: Date): string {
-  const h = date.getHours().toString().padStart(2, "0");
-  const min = date.getMinutes().toString().padStart(2, "0");
-  return `${h}${min}`;
 }
 
 // ============================================================================

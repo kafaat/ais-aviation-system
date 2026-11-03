@@ -13,7 +13,19 @@ vi.mock("../db", () => ({
   }),
 }));
 vi.mock("../services/flights.service", () => ({
-  calculateFlightPrice: async () => ({ price: 17500 }),
+  calculateFlightPrice: async () => ({
+    price: 17500,
+    fareLines: [
+      {
+        type: "adult",
+        baseFare: 8000,
+        tax: 1200,
+        bookingFee: 800,
+        total: 10000,
+      },
+      { type: "child", baseFare: 6000, tax: 900, bookingFee: 600, total: 7500 },
+    ],
+  }),
 }));
 import {
   createRetailOffer,
@@ -39,6 +51,11 @@ describe("retail offer authority", () => {
   it("preserves the quoted fare and consumes it with the durable receipt", async () => {
     const offer = await createRetailOffer(input);
     expect(offer.totalAmount).toBe(17500);
+    expect(offer.payload).toMatchObject({
+      baseAmount: 14000,
+      taxesAndFees: 3500,
+    });
+    expect(validateRetailOffer(offer, input).fareLines).toHaveLength(2);
     await fixture.db.transaction(async (tx: any) => {
       const held = await lockRetailOffer(tx, offer.id, input);
       await consumeRetailOffer(tx, held, 7);
@@ -70,6 +87,21 @@ describe("retail offer authority", () => {
       )
     ).rejects.toThrow();
     expect(fixture.rows("retail_offers")[0].consumedBookingId).toBeNull();
+  });
+  it("applies NDC policy to the fare without taxing the existing gross quote", async () => {
+    const offer = await createRetailOffer({
+      ...input,
+      channel: "ndc",
+      ndcPolicy: { fareMultiplier: 1.2, taxRate: 0.15 },
+    });
+    expect(offer.payload).toMatchObject({
+      baseAmount: 16800,
+      taxesAndFees: 3920,
+      totalAmount: 20720,
+    });
+    expect(
+      validateRetailOffer(offer, { ...input, channel: "ndc" }).fareLines
+    ).toHaveLength(2);
   });
   it("makes channel taxes explicit and rejects unsafe amounts", () => {
     expect(

@@ -260,10 +260,10 @@ describe("refund amount validation", () => {
         reason: "requested_by_customer",
         metadata: {
           bookingId: "10",
-          refundOperationId: "booking-10-refund-8000",
+          refundOperationId: "booking-10-cancel-pi_test",
         },
       },
-      { idempotencyKey: "booking-10-refund-8000" }
+      { idempotencyKey: "booking-10-cancel-pi_test" }
     );
   });
 
@@ -306,6 +306,79 @@ describe("refund amount validation", () => {
     expect(result.amount).toBe(8000);
     expect(result.cumulativeRefundedAmount).toBe(10000);
     expect(result.remainingRefundableAmount).toBe(0);
+  });
+
+  it("reconciles a provider-success/local-timeout cancellation across midnight and a real fee-tier boundary", async () => {
+    const { calculateCancellationFee } = await vi.importActual<
+      typeof import("./cancellation-fees.service")
+    >("./cancellation-fees.service");
+    mocks.calculateFee.mockImplementation(calculateCancellationFee);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const flight = { departureTime: new Date("2030-01-02T21:00:00Z") };
+    try {
+      vi.setSystemTime(new Date("2030-01-01T20:59:59Z"));
+      mocks.limit.mockReset();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        mocks.limit
+          .mockResolvedValueOnce([booking])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([flight])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ paymentIntentId: "pi_test" }]);
+      }
+      mocks.limit.mockResolvedValueOnce([booking]).mockResolvedValue([]);
+      mocks.refund.mockImplementationOnce(async params => {
+        mocks.refundsState.push(
+          refundRecord("re_first", params.amount, params.metadata)
+        );
+        throw new Error("Simulated lost provider response");
+      });
+      await expect(createRefund(input, owner)).rejects.toMatchObject({
+        code: "INTERNAL_SERVER_ERROR",
+      });
+      vi.setSystemTime(new Date("2030-01-01T21:00:01Z"));
+      expect(
+        calculateCancellationFee(10000, flight.departureTime).refundAmount
+      ).toBe(2500);
+      const retry = await createRefund(input, owner);
+      expect(retry).toMatchObject({ refundId: "re_first", amount: 5000 });
+      expect(mocks.refund).toHaveBeenCalledTimes(1);
+      expect(mocks.settle).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it.each([2500, 0])(
+    "recovers the original cancellation when the current policy refund falls to %s",
+    async currentAmount => {
+      mocks.refundsState.push(
+        refundRecord("re_before_cutoff", 5000, {
+          bookingId: "10",
+          refundOperationId: "booking-10-cancel-pi_test",
+        })
+      );
+      mocks.calculateFee.mockReturnValue({ refundAmount: currentAmount });
+      const result = await createRefund(input, owner);
+      expect(result).toMatchObject({
+        refundId: "re_before_cutoff",
+        amount: 5000,
+      });
+      expect(mocks.refund).not.toHaveBeenCalled();
+    }
+  );
+
+  it("refuses to create a second refund after an ambiguous legacy amount crosses a policy threshold", async () => {
+    mocks.refundsState.push(
+      refundRecord("re_legacy", 5000, {
+        bookingId: "10",
+        refundOperationId: "booking-10-refund-5000",
+      })
+    );
+    mocks.calculateFee.mockReturnValue({ refundAmount: 2500 });
+    await expect(createRefund(input, owner)).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    expectNoFinancialWrites();
   });
 
   it("recovers the same provider operation without issuing money twice", async () => {

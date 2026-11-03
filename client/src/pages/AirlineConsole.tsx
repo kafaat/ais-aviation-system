@@ -8,6 +8,7 @@ import {
   useOperationalLabels,
 } from "@/components/OperationalReadState";
 import { SettlementLedgerDraft } from "@/components/SettlementLedgerDraft";
+import { SupplierFinanceControl } from "@/components/SupplierFinanceControl";
 import { InternalFundingRefund } from "@/components/InternalFundingRefund";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ export default function AirlineConsole() {
           <>
             <SettlementLedgerDraft />
             <InternalFundingRefund />
+            <SupplierFinanceControl />
           </>
         )}
       </main>

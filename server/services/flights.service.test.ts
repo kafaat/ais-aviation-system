@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as flightsService from "./flights.service";
 import * as db from "../db";
+import { DynamicPricingService } from "./pricing/dynamic-pricing.service";
 
 // Mock the db module
 vi.mock("../db");
@@ -134,6 +135,71 @@ describe("Flights Service", () => {
   });
 
   describe("calculateFlightPrice", () => {
+    it("charges the engine's party total once and preserves passenger components", async () => {
+      const engine = vi.spyOn(DynamicPricingService, "calculateDynamicPrice");
+      const breakdown = {
+        basePrice: 10000,
+        demandMultiplier: 1,
+        timeMultiplier: 1,
+        occupancyMultiplier: 1,
+        seasonalMultiplier: 1,
+        aiMultiplier: 1,
+        promoDiscount: 0,
+        taxes: 1500,
+        fees: 15000,
+        total: 49500,
+      };
+      try {
+        engine.mockResolvedValue({
+          basePrice: 10000,
+          finalPrice: 49500,
+          currency: "SAR",
+          breakdown,
+          validUntil: new Date(),
+          priceId: "test",
+        });
+        const flight = { id: 1, economyPrice: 10000, businessPrice: 20000 };
+        const adultParty = await flightsService.calculateFlightPrice(
+          flight,
+          "economy",
+          3
+        );
+        expect(adultParty.price).toBe(49500);
+        const family = await flightsService.calculateFlightPrice(
+          flight,
+          "economy",
+          3,
+          [{ type: "adult" }, { type: "child" }, { type: "infant" }]
+        );
+        expect(family.price).toBe(30525);
+        expect(family.fareLines).toEqual([
+          {
+            type: "adult",
+            baseFare: 10000,
+            tax: 1500,
+            bookingFee: 5000,
+            total: 16500,
+          },
+          {
+            type: "child",
+            baseFare: 7500,
+            tax: 1125,
+            bookingFee: 3750,
+            total: 12375,
+          },
+          {
+            type: "infant",
+            baseFare: 1000,
+            tax: 150,
+            bookingFee: 500,
+            total: 1650,
+          },
+        ]);
+      } finally {
+        engine.mockRestore();
+      }
+    });
+
     it("should calculate correct price for economy with dynamic pricing", async () => {
       const mockFlight = {
         id: 1,

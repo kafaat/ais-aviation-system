@@ -505,18 +505,18 @@ trpc.priceCalendar.getCalendar.useQuery({
 
 ### Other Phase 2 Features
 
-| Feature          | Route                | Description                              |
-| ---------------- | -------------------- | ---------------------------------------- |
-| Waitlist         | `/waitlist`          | Join waitlist for full flights           |
-| Corporate        | `/corporate`         | Business travel management               |
-| Travel Agent     | `/agent`             | Agent booking portal                     |
-| Group Bookings   | `/group-booking`     | Request group discounts                  |
-| Price Alerts     | `/price-alerts`      | Get notified on price drops              |
-| DCS              | `/admin/dcs`         | Departure control system                 |
-| Disruptions      | -                    | Automated flight disruption handling     |
-| Rebooking        | `/rebook/:bookingId` | Flight rebooking from previous booking   |
-| Travel Scenarios | -                    | Carbon offset and travel document checks |
-| AI Chat          | `/ai-chat`           | AI-powered booking assistant             |
+| Feature          | Route                | Description                               |
+| ---------------- | -------------------- | ----------------------------------------- |
+| Waitlist         | `/waitlist`          | Join waitlist for full flights            |
+| Corporate        | `/corporate`         | Business travel management                |
+| Travel Agent     | `/agent`             | Agent booking portal                      |
+| Group Bookings   | `/group-booking`     | Request group discounts                   |
+| Price Alerts     | `/price-alerts`      | Get notified on price drops               |
+| DCS              | `/admin/dcs`         | Departure control system                  |
+| Disruptions      | -                    | Automated flight disruption handling      |
+| Rebooking        | `/rebook/:bookingId` | Flight rebooking from previous booking    |
+| Travel Scenarios | -                    | Carbon evidence and passport expiry check |
+| AI Chat          | `/ai-chat`           | AI-powered booking assistant              |
 
 ## Phase 3 Features
 
@@ -530,30 +530,60 @@ trpc.priceCalendar.getCalendar.useQuery({
 
 ## Phase 4 Features (Competitive Gap Closure)
 
-| Feature              | Route                       | Description                          |
-| -------------------- | --------------------------- | ------------------------------------ |
-| IROPS Command Center | `/admin/irops`              | Irregular operations management      |
-| Weight & Balance     | `/admin/weight-balance`     | Aircraft weight and balance          |
-| Load Planning        | `/admin/load-planning`      | Cargo and passenger load planning    |
-| Crew Assignment      | `/admin/crew-assignment`    | Crew scheduling and assignment       |
-| APIS                 | -                           | Advance passenger information system |
-| Biometric Boarding   | -                           | Facial recognition boarding          |
-| Self-Service Kiosk   | -                           | Airport kiosk check-in               |
-| Automated Bag Drop   | -                           | Self-service baggage drop            |
-| Revenue Accounting   | `/admin/revenue-accounting` | Revenue recognition and reporting    |
-| BSP Reporting        | `/admin/bsp-reporting`      | IATA BSP settlement and reporting    |
-| EU261 Compensation   | `/admin/compensation`       | Regulatory compensation management   |
-| Emergency Hotel      | -                           | IROPS hotel accommodation            |
-| Passenger Priority   | -                           | Priority scoring for rebooking       |
-| SLA Monitoring       | `/admin/sla`                | Service level agreement tracking     |
-| Data Warehouse/BI    | `/admin/data-warehouse`     | Business intelligence analytics      |
-| MFA/TOTP             | -                           | Multi-factor authentication          |
-| Dark Mode            | -                           | Theme toggle (dark/light)            |
-| PWA                  | -                           | Progressive web app support          |
-| Accessibility        | -                           | WCAG compliance tools                |
-| Cookie Consent       | -                           | GDPR/CCPA consent management         |
-| Multi-Region         | -                           | Multi-region deployment config       |
-| Disaster Recovery    | `/admin/disaster-recovery`  | Business continuity planning         |
+| Feature              | Route                       | Description                                              |
+| -------------------- | --------------------------- | -------------------------------------------------------- |
+| IROPS Command Center | `/admin/irops`              | Advisory recovery plans                                  |
+| Weight & Balance     | `/admin/weight-balance`     | Training simulation                                      |
+| Load Planning        | `/admin/load-planning`      | Training simulation                                      |
+| Crew Assignment      | `/admin/crew-assignment`    | Assignment records; operator legality acceptance pending |
+| APIS                 | -                           | Local message generation; authority submission blocked   |
+| Biometric Boarding   | -                           | Biometric simulation                                     |
+| Self-Service Kiosk   | -                           | Kiosk flow; device acceptance pending                    |
+| Automated Bag Drop   | -                           | Bag-drop device simulation                               |
+| Revenue Accounting   | `/admin/revenue-accounting` | Monthly cash ledger reports                              |
+| BSP Reporting        | `/admin/bsp-reporting`      | HOT prototype; settlement blocked                        |
+| EU261 Compensation   | `/admin/compensation`       | Preliminary EU261/DOT rules                              |
+| Emergency Hotel      | -                           | IROPS hotel accommodation                                |
+| Passenger Priority   | -                           | Priority scoring for rebooking                           |
+| SLA Monitoring       | `/admin/sla`                | Service level agreement tracking                         |
+| Data Warehouse/BI    | `/admin/data-warehouse`     | Business intelligence analytics                          |
+| MFA/TOTP             | -                           | Multi-factor authentication                              |
+| Dark Mode            | -                           | Theme toggle (dark/light)                                |
+| PWA                  | -                           | Progressive web app support                              |
+| Accessibility        | -                           | Live announcements; conformance audit pending            |
+| Cookie Consent       | -                           | GDPR/CCPA consent management                             |
+| Multi-Region         | -                           | Failover simulation                                      |
+| Disaster Recovery    | `/admin/disaster-recovery`  | DR simulation; target restore acceptance pending         |
+
+### Implementation and acceptance requirements
+
+Deployment receipts are tracked separately in [provider acceptance](docs/operations/provider-acceptance.md).
+
+<!-- capability-catalog:start -->
+<!-- prettier-ignore -->
+| Capability | Implementation | Acceptance requirement |
+| --- | --- | --- |
+| hotelFulfillment | implemented | Default disabled; Hotelbeds single adult/room, net SAR, explicit quote and hotel mapping approval; sandbox confirmation is not a real stay. Live credentials, certification, local fees/transport and property acceptance remain operator responsibilities. |
+| ndcUnpaidServicing | implemented | Unpaid pending invoice, no active checkout, same airline/tenant SAR economy or business offer, canonical passengers; no EMD or external fulfillment certification |
+| ndcPaidServicing | implemented | Local paid SAR itinerary exchange and catalog entitlements before check-in; same tenant/airline and cabin across up to six segments, no unresolved ancillary fulfillment. Original Stripe payer refund receipts required for a lower fare. |
+| ndcExternalFulfillment | blocked | Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts |
+| kioskHardware | blocked | Authenticated device heartbeat and physical printer/scanner acceptance; digital documents are separate |
+| dcsDispatch | demo | Verified departure-control provider and dispatch acceptance |
+| gdsSynchronization | demo | Contracted GDS connection and round-trip order synchronization |
+| biometricIdentity | demo | Approved biometric processor, measured verification and privacy controls |
+| multiRegionFailover | demo | Infrastructure adapter, replication evidence and controlled failover drill |
+| apisSubmission | blocked | Authority transport, credentials, acknowledgement and rejection fixtures |
+| alternatePayments | blocked | Invoice/session binding, amount/currency verification, settlement and refund acceptance for each provider |
+| bagDropHardware | demo | Certified scale, printer, conveyor and device heartbeat adapter |
+| weightBalance | demo | Approved aircraft data, calculation validation and operational sign-off |
+| loadPlanning | demo | Aircraft configuration, measured cargo and approved dispatch workflow |
+| disasterRecovery | demo | Infrastructure adapter and observed restore/failover exercise |
+| warehouseExports | implemented | Migration applied; shared database and authorized export owner |
+| eventInbox | implemented | Migration applied; local transaction or authenticated receiver acknowledgement |
+| scheduledTasks | implemented | Shared database lease and observed lastSuccessAt |
+| slaObservations | implemented | Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA |
+
+<!-- capability-catalog:end -->
 
 ## Auth Service (Microservice)
 

@@ -280,6 +280,22 @@ export async function verifyProjectHardening(
             assert.equal(reads, 2);
             assert.equal(batch.length, 20);
             assert.equal(batch.filter(c => c.compliant).length, 17);
+            const missingAircraft = await evaluateCrewCandidates(
+              db,
+              candidates,
+              {
+                ...proposed,
+                flightId: id,
+                aircraftType: null,
+              }
+            );
+            assert(
+              missingAircraft.every(
+                check =>
+                  !check.compliant &&
+                  check.violations.includes("Aircraft qualification is missing")
+              )
+            );
             assert.deepEqual(
               batch.find(c => c.crewMemberId === id)?.conflicts,
               ["HDCONFLICT"]
@@ -309,6 +325,69 @@ export async function verifyProjectHardening(
         if (savedKey === undefined) delete process.env.HARDENING_EVIDENCE_KEY;
         else process.env.HARDENING_EVIDENCE_KEY = savedKey;
       }
+    }
+  );
+  await check(
+    "Disjoint bookings can fund and refund the same customer's credit concurrently",
+    async () => {
+      const owner = id + 170;
+      await db
+        .insert(s.users)
+        .values({ id: owner, openId: `credit-lock-${owner}` });
+      const [lot] = await db
+        .insert(s.userCredits)
+        .values({ userId: owner, amount: 120000, source: "promo" });
+      const requests: Array<() => Promise<unknown>> = [];
+      for (let i = 0; i < 12; i++) {
+        const bookingId = id + 180 + i;
+        await db.insert(s.flights).values({
+          ...template,
+          id: bookingId,
+          flightNumber: `CRED${i}`,
+          status: "scheduled",
+          departureTime: new Date("2035-01-01T10:00:00Z"),
+          arrivalTime: new Date("2035-01-01T12:00:00Z"),
+          economyAvailable: 10,
+        });
+        await db.insert(s.bookings).values({
+          id: bookingId,
+          userId: owner,
+          flightId: bookingId,
+          bookingReference: `CRED${String(i).padStart(2, "0")}`,
+          pnr: `CRED${String(i).padStart(2, "0")}`,
+          totalAmount: 10000,
+          cabinClass: "economy",
+          numberOfPassengers: 1,
+        });
+        if (i % 2) {
+          await useCredit(owner, 10000, bookingId);
+          requests.push(() =>
+            refundInternalFunding(
+              {
+                bookingId,
+                amount: 100,
+                requestId: randomUUID(),
+                approvalReference: "synthetic-concurrent-approval",
+                reason: "Synthetic partial refund",
+                cancelItinerary: false,
+              },
+              id + 1
+            )
+          );
+        } else requests.push(() => useCredit(owner, 10000, bookingId));
+      }
+      await Promise.all(requests.map(run => run()));
+      const [remaining] = await db
+        .select()
+        .from(s.userCredits)
+        .where(eq(s.userCredits.id, lot.insertId));
+      assert.equal(remaining.usedAmount, 119400);
+      const entries = await db
+        .select({ type: s.financialLedger.type })
+        .from(s.financialLedger)
+        .where(eq(s.financialLedger.userId, owner));
+      assert.equal(entries.filter(e => e.type === "charge").length, 12);
+      assert.equal(entries.filter(e => e.type === "partial_refund").length, 6);
     }
   );
   await check(

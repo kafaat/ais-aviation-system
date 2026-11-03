@@ -13,6 +13,13 @@ import { calculateFlightPrice } from "./flights.service";
 import { recordEvent } from "./outbox.service";
 import type { SettlementTx } from "./booking-settlement.service";
 const passengerType = z.enum(["adult", "child", "infant"]);
+export const offerFareLineSchema = z.object({
+  type: passengerType,
+  baseFare: z.number().int().nonnegative(),
+  tax: z.number().int().nonnegative(),
+  bookingFee: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
 const payloadSchema = z.object({
   experiment: z
     .object({
@@ -26,6 +33,7 @@ const payloadSchema = z.object({
   currency: z.literal("SAR"),
   amountUnit: z.literal("minor"),
   scope: z.literal("airfare"),
+  fareLines: z.array(offerFareLineSchema).min(1).max(100).optional(),
   passengerTypes: z.array(passengerType).min(1).max(100),
   policy: z.object({
     name: z.string(),
@@ -44,6 +52,10 @@ export function offerDigest(payload: Record<string, unknown>) {
     .digest("hex");
 }
 /** Channel differences are explicit policies over the same dynamic fare authority. */
+/** Statutory VAT applied by the NDC channel when a fare class declares no
+ * rate of its own. Shared with the NDC service so both channels agree. */
+export const DEFAULT_TAX_RATE = 0.15;
+
 export function composeOfferPolicy(
   baseAmount: number,
   policy: OfferPayload["policy"]
@@ -113,9 +125,36 @@ export async function createRetailOffer(
       ? {
           name: `ndc:${input.ndcPolicy?.fareClassId ?? "default"}:v1`,
           fareMultiplier: input.ndcPolicy?.fareMultiplier ?? 1,
-          taxRate: input.ndcPolicy?.taxRate ?? 0,
+          taxRate: input.ndcPolicy?.taxRate ?? DEFAULT_TAX_RATE,
         }
       : { name: "direct:v1", fareMultiplier: 1, taxRate: 0 };
+  const fareLines = price.fareLines?.map(line => {
+    if (input.channel === "direct") return line;
+    // Apply the channel's price and tax policy to the fare before tax.
+    const adjusted = composeOfferPolicy(line.baseFare, policy);
+    return {
+      ...line,
+      baseFare: adjusted.baseAmount,
+      tax: adjusted.taxesAndFees,
+      total: adjusted.totalAmount + line.bookingFee,
+    };
+  });
+  const amounts = fareLines
+    ? {
+        fareLines,
+        baseAmount: fareLines.reduce((sum, line) => sum + line.baseFare, 0),
+        taxesAndFees: fareLines.reduce(
+          (sum, line) => sum + line.tax + line.bookingFee,
+          0
+        ),
+        totalAmount: fareLines.reduce((sum, line) => sum + line.total, 0),
+      }
+    : composeOfferPolicy(price.price, policy);
+  if (
+    !Number.isSafeInteger(amounts.totalAmount) ||
+    amounts.totalAmount > 2147483647
+  )
+    throw new Error("Offer exceeds monetary storage range");
   const payload: OfferPayload = {
     version: 1,
     currency: "SAR",
@@ -123,7 +162,7 @@ export async function createRetailOffer(
     scope: "airfare",
     passengerTypes: types,
     policy,
-    ...composeOfferPolicy(price.price, policy),
+    ...amounts,
   };
   const now = new Date();
   const expiresAt = new Date(
@@ -167,6 +206,7 @@ export async function createRetailOffer(
       if (adjustment) {
         offer.payload = {
           ...payload,
+          fareLines: undefined,
           experiment: adjustment.experiment,
           policy: {
             ...policy,
@@ -218,7 +258,19 @@ export function validateRetailOffer(
       code: "NOT_FOUND",
       message: "Offer does not belong to this booking",
     });
+  const lines = payload.fareLines;
   if (
+    (lines &&
+      (lines.length !== payload.passengerTypes.length ||
+        lines.some(
+          (line, i) =>
+            line.type !== payload.passengerTypes[i] ||
+            line.baseFare + line.tax + line.bookingFee !== line.total
+        ) ||
+        lines.reduce((sum, line) => sum + line.baseFare, 0) !==
+          payload.baseAmount ||
+        lines.reduce((sum, line) => sum + line.total, 0) !==
+          payload.totalAmount)) ||
     offer.consumedBookingId !== null ||
     offer.expiresAt <= now ||
     offer.digest !== offerDigest(offer.payload) ||

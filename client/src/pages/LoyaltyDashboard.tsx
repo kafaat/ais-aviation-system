@@ -274,6 +274,9 @@ export default function LoyaltyDashboard() {
   const { user, loading: authLoading } = useAuth();
   const [milesToRedeem, setMilesToRedeem] = useState("");
 
+  const [mfaToken, setMfaToken] = useState("");
+  const mfa = trpc.mfa.getStatus.useQuery(undefined, { enabled: !!user });
+
   const dateLocale = i18n.language === "ar" ? ar : enUS;
 
   const { data: account, isLoading: accountLoading } =
@@ -290,6 +293,7 @@ export default function LoyaltyDashboard() {
         })
       );
       setMilesToRedeem("");
+      setMfaToken("");
     },
     onError: error => {
       toast.error(error.message);
@@ -421,7 +425,10 @@ export default function LoyaltyDashboard() {
       toast.error(t("loyalty.insufficientMiles"));
       return;
     }
-    redeemMiles.mutate({ milesToRedeem: miles });
+    redeemMiles.mutate({
+      milesToRedeem: miles,
+      mfaToken: mfaToken || undefined,
+    });
   };
 
   return (
@@ -912,9 +919,38 @@ export default function LoyaltyDashboard() {
                       </motion.div>
                     )}
                   </div>
+                  {mfa.isError && (
+                    <Button variant="outline" onClick={() => mfa.refetch()}>
+                      {t("common.retry")}
+                    </Button>
+                  )}
+                  {mfa.data?.enabled && (
+                    <div className="space-y-2">
+                      <Label htmlFor="redemption-code">
+                        {t("loyalty.authenticatorCode")}
+                      </Label>
+                      <Input
+                        id="redemption-code"
+                        type="text"
+                        dir="ltr"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={mfaToken}
+                        onChange={event =>
+                          setMfaToken(event.target.value.replace(/[^0-9]/g, ""))
+                        }
+                      />
+                    </div>
+                  )}
                   <Button
                     onClick={handleRedeem}
-                    disabled={!milesToRedeem || redeemMiles.isPending}
+                    disabled={
+                      !milesToRedeem ||
+                      mfa.isLoading ||
+                      (mfa.data?.enabled && mfaToken.length !== 6) ||
+                      redeemMiles.isPending
+                    }
                     className="w-full bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90"
                   >
                     {redeemMiles.isPending ? (

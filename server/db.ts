@@ -103,7 +103,19 @@ export function getPool(): mysql.Pool | null {
       });
 
       // Monitor pool events
-      _pool.on("connection", () => {
+      _pool.pool.on("connection", connection => {
+        // mysql2's timezone option encodes Dates in UTC. TIMESTAMP conversion
+        // also depends on the server session. Queue this before the pool hands
+        // the connection to its first caller.
+        connection.query("SET SESSION time_zone = '+00:00'", error => {
+          if (error) {
+            log.error(
+              { event: "pool_session_timezone_failed", error },
+              "UTC session initialization failed"
+            );
+            connection.destroy();
+          }
+        });
         log.debug(
           { event: "pool_connection_created" },
           "New pool connection created"

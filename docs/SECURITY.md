@@ -701,6 +701,8 @@ The system integrates Sentry for real-time error tracking on both client and ser
 
 ## Compliance
 
+For Saudi personal data incidents use the [controller notification and evidence procedure](operations/saudi-privacy-incident.md).
+
 ### GDPR (General Data Protection Regulation)
 
 **User Rights:**

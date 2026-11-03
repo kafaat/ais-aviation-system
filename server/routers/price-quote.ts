@@ -1,4 +1,7 @@
-import { createRetailOffer } from "../services/retail-offer.service";
+import {
+  createRetailOffer,
+  offerFareLineSchema,
+} from "../services/retail-offer.service";
 import { responseContracts } from "../contracts/price-quote";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
@@ -30,6 +33,7 @@ export const priceQuoteRouter = router({
         currency: z.literal("SAR"),
         expiresAt: z.date(),
         scope: z.literal("airfare"),
+        fareLines: z.array(offerFareLineSchema).nullable(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -44,6 +48,9 @@ export const priceQuoteRouter = router({
         currency: "SAR" as const,
         expiresAt: offer.expiresAt,
         scope: "airfare" as const,
+        fareLines: offer.payload.fareLines
+          ? z.array(offerFareLineSchema).parse(offer.payload.fareLines)
+          : null,
       };
     }),
   get: publicProcedure

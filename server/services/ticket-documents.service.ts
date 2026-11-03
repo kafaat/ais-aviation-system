@@ -1,3 +1,4 @@
+import { localDocumentCoupons } from "./ticket-coupons.service";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
@@ -85,6 +86,7 @@ export async function readTicketDocument(
         },
       });
     }
+    const couponLegs = [];
     const legs: TicketData[] = [];
     for (const id of ids) {
       const f = locked.find(f => f.id === id);
@@ -113,6 +115,14 @@ export async function readTicketDocument(
             eq(seatInventory.passengerId, passengerId)
           )
         );
+      couponLegs.push({
+        flightId: id,
+        checkedIn: seat?.status === "checked_in",
+        canOpen:
+          booking.status === "confirmed" &&
+          f.departureTime > new Date() &&
+          ["scheduled", "delayed"].includes(f.status),
+      });
       legs.push({
         flightId: id,
         passengerName: `${passenger.firstName} ${passenger.lastName}`,
@@ -136,6 +146,19 @@ export async function readTicketDocument(
         currency: "SAR",
         issueDate: new Date(),
       });
+    }
+    const coupons = await localDocumentCoupons(
+      tx,
+      bookingId,
+      passengerId,
+      ticketNumber,
+      couponLegs
+    );
+    for (const [i, coupon] of coupons.entries()) {
+      legs[i].localCoupon = {
+        number: coupon.couponNumber,
+        status: coupon.status,
+      };
     }
     const first = legs[0];
     if (!first) throw new Error("Empty ticket itinerary");
