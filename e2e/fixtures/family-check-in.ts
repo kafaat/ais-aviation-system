@@ -65,9 +65,7 @@ export function registerFamilyCheckInTests() {
 
     await useBrowserSession(page, "regular");
     await page.goto("/check-in");
-    await page
-      .getByLabel("Booking Reference (PNR)")
-      .fill(booking.pnr);
+    await page.getByLabel("Passenger Name Record (PNR)").fill(booking.pnr);
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(
       page.getByText("Nora Family · Boarding denied", { exact: true })
@@ -87,6 +85,19 @@ export function registerFamilyCheckInTests() {
     await expect(
       pass.getByRole("button", { name: "Print Boarding Pass" })
     ).toBeVisible();
+    // A partial check-in still offers a route from the owner's booking card.
+    await page.goto("/my-bookings");
+    const bookingCard = page
+      .locator('[data-slot="card"]')
+      .filter({ hasText: booking.bookingReference });
+    await bookingCard
+      .getByRole("link", { name: "Manage check-in", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/check-in$/);
+    await expect(page.getByLabel("Passenger Name Record (PNR)")).toHaveValue(
+      booking.pnr
+    );
+    await expect(pass.getByText("Sami Family", { exact: true })).toBeVisible();
     const seats = await sqlRows<RowDataPacket>(
       "SELECT passengerId, status FROM seat_inventory WHERE flightId=? AND bookingId=?",
       [flightId, bookingId]

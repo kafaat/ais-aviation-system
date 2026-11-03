@@ -212,7 +212,7 @@ function passengerReplies() {
 
 it("reaches the saved APIS form from real check-in passengers and refreshes clearance after saving", async () => {
   const calls = visit(<CheckIn />, passengerReplies());
-  fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+  fireEvent.change(screen.getByLabelText("Passenger Name Record (PNR)"), {
     target: { value: "ABC123" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Search" }));
@@ -297,7 +297,7 @@ it("shows a failed document read instead of opening an empty editor over saved d
     throw new Error("offline");
   };
   visit(<CheckIn />, replies);
-  fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+  fireEvent.change(screen.getByLabelText("Passenger Name Record (PNR)"), {
     target: { value: "ABC123" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Search" }));
@@ -339,7 +339,7 @@ it("rechecks an uncertain save and hides old clearance until the saved document 
     throw new Error("The server committed but the response was lost");
   };
   const calls = visit(<CheckIn />, replies);
-  fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+  fireEvent.change(screen.getByLabelText("Passenger Name Record (PNR)"), {
     target: { value: "ABC123" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Search" }));
@@ -449,7 +449,7 @@ it.each(["boarding_denied", "boarded", "checked_in"])(
     replies["seatMap.getBoardingPass"] = ({ passengerId, flightId }) =>
       boardingPassFixture(passengerId, flightId);
     const calls = visit(<CheckIn />, replies);
-    fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+    fireEvent.change(screen.getByLabelText("Passenger Name Record (PNR)"), {
       target: { value: "ABC123" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
@@ -525,7 +525,7 @@ it("does not display a cached printable pass when its verification is paused off
     </>,
     replies
   );
-  fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+  fireEvent.change(screen.getByLabelText("Passenger Name Record (PNR)"), {
     target: { value: "ABC123" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Search" }));
@@ -601,7 +601,7 @@ it.each(["acknowledged", "lost response"])(
       </>,
       replies
     );
-    fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+    fireEvent.change(screen.getByLabelText("Passenger Name Record (PNR)"), {
       target: { value: "ABC123" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
