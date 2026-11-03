@@ -3,11 +3,20 @@ import { disposableDatabaseUrl } from "../disposable-database";
 import { test, expect } from "./base-test";
 import { fixtureFlight, rpc } from "./hardening";
 
+const bookingOrigin = "https://booking-fixture.invalid";
+
 export function registerMobileIbeTests() {
   test.describe("Mobile airline website entry", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
-    test.beforeEach(async ({ page }) => {
-      await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
+    test.beforeEach(async ({ page, baseURL }) => {
+      if (!baseURL) throw new Error("Missing booking origin");
+      await page.addInitScript(
+        origins => {
+          if (origins.includes(window.origin))
+            localStorage.setItem("i18nextLng", "en");
+        },
+        [new URL(baseURL).origin, bookingOrigin]
+      );
     });
 
     test("passengers and agents can reach their own entry from the mobile header", async ({
@@ -45,7 +54,6 @@ export function registerMobileIbeTests() {
       });
       if (!flight || !baseURL)
         throw new Error("Missing flight fixture or booking origin");
-      const bookingOrigin = "https://booking-fixture.invalid";
       const embed = new URL("/embed/search", bookingOrigin);
       const allowed = "https://airline-fixture.invalid/corporate";
       const unlisted = "https://unlisted-fixture.invalid/corporate";
@@ -76,7 +84,12 @@ export function registerMobileIbeTests() {
           })
         );
       }
-      await page.goto(unlisted);
+      await Promise.all([
+        page.waitForEvent("console", {
+          predicate: message => /frame-ancestors/i.test(message.text()),
+        }),
+        page.goto(unlisted),
+      ]);
       expect(
         embedPolicy
           ?.split(";")

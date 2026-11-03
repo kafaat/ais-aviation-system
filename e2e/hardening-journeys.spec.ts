@@ -1069,11 +1069,106 @@ test.describe("Funded journeys and truthful operational reads", () => {
       0
     );
 
-    await promisify(execFile)(
-      process.execPath,
-      ["--import", "tsx", "scripts/e2e/process-privacy.ts"],
-      { timeout: 30000 }
-    );
+    try {
+      await promisify(execFile)(
+        process.execPath,
+        ["--import", "tsx", "scripts/e2e/process-privacy.ts"],
+        { timeout: 30000 }
+      );
+    } catch (error) {
+      const failure: Record<string, unknown> =
+        typeof error === "object" && error !== null
+          ? (error as Record<string, unknown>)
+          : {};
+      const prefix = "[ais-privacy-worker]";
+      const phases = new Set([
+        "processPrivacyRequests:start",
+        "processPrivacyRequests:return",
+        "closePool:start",
+        "closePool:return",
+      ]);
+      const resourceTypes = new Set([
+        "PipeWrap",
+        "TTYWrap",
+        "TCPServerWrap",
+        "TCPSocketWrap",
+        "TCPConnectWrap",
+        "Timeout",
+        "Immediate",
+        "MessagePort",
+        "FSReqCallback",
+        "FSReqPromise",
+        "FileHandle",
+        "FileHandleCloseReq",
+        "CloseReq",
+        "ProcessWrap",
+        "SignalWrap",
+        "WriteWrap",
+        "ShutdownWrap",
+      ]);
+      // Rebuild reserved fields only; never surface arbitrary child logs.
+      const diagnostics =
+        typeof failure.stderr === "string"
+          ? failure.stderr.split(/\r?\n/).flatMap(line => {
+              if (!line.startsWith(prefix)) return [];
+              try {
+                const value: unknown = JSON.parse(line.slice(prefix.length));
+                if (typeof value !== "object" || value === null) return [];
+                const phase = value as Record<string, unknown>;
+                if (
+                  typeof phase.phase !== "string" ||
+                  !phases.has(phase.phase) ||
+                  typeof phase.elapsedMs !== "number" ||
+                  !Number.isSafeInteger(phase.elapsedMs) ||
+                  phase.elapsedMs < 0
+                )
+                  return [];
+                return [
+                  {
+                    phase: phase.phase,
+                    elapsedMs: phase.elapsedMs,
+                    ...(phase.phase === "closePool:return" &&
+                      Array.isArray(phase.resourceTypes) && {
+                        resourceTypes: [
+                          ...new Set(
+                            phase.resourceTypes
+                              .slice(0, 32)
+                              .map(type =>
+                                typeof type === "string" &&
+                                resourceTypes.has(type)
+                                  ? type
+                                  : "Other"
+                              )
+                          ),
+                        ].sort(),
+                      }),
+                  },
+                ];
+              } catch {
+                return [];
+              }
+            })
+          : [];
+      throw new Error(
+        "Privacy worker failed: " +
+          JSON.stringify({
+            code:
+              (typeof failure.code === "number" &&
+                Number.isSafeInteger(failure.code)) ||
+              (typeof failure.code === "string" &&
+                /^E[A-Z0-9_]{1,63}$/.test(failure.code))
+                ? failure.code
+                : null,
+            killed: typeof failure.killed === "boolean" ? failure.killed : null,
+            signal:
+              typeof failure.signal === "string" &&
+              /^SIG[A-Z0-9]{1,16}$/.test(failure.signal)
+                ? failure.signal
+                : null,
+            diagnostics: diagnostics.slice(-8),
+          })
+      );
+    }
     await page.getByRole("button", { name: "Refresh exports" }).click();
     const row = page.getByRole("listitem").filter({
       hasText: new RegExp("#" + requestId + " · JSON · .*completed", "i"),
