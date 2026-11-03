@@ -449,6 +449,8 @@
     "addToCalendar": "Add to Calendar",
     "inventoryUnavailable": "Seat inventory is unavailable. Contact the airline or try again later.",
     "passUnavailable": "A valid boarding pass could not be loaded.",
+    "bcbpBarcode": "IATA boarding pass barcode (BCBP, PDF417) for airport readers",
+    "signedQr": "Signed AIS QR for online verification",
     "onlineVerification": "This signed AIS pass requires online verification of current eligibility.",
     "windowClosed": "Check-in requires a paid active reservation and is open from 48 hours until 1 hour before departure."
   },

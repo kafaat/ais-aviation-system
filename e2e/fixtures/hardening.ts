@@ -49,16 +49,25 @@ export async function sqlRows<T extends RowDataPacket>(
 export async function fixtureFlight() {
   const db = await mysql.createConnection(disposableDatabaseUrl());
   try {
+    await db.beginTransaction();
     const [flight] = await db.execute<ResultSetHeader>(
       // Departs at 12:00 UTC two days out: the same civil day in UTC and in
       // every airport zone between UTC-11 and UTC+11, so a search for the UTC
       // date finds it whatever zone the seeded origin airport carries and
       // whatever hour the suite runs (it failed between 21:00 and 24:00 UTC,
       // when the Riyadh day had already turned).
-      "INSERT INTO flights (flightNumber, airlineId, originId, destinationId, departureTime, arrivalTime, aircraftType, economySeats, businessSeats, economyPrice, businessPrice, economyAvailable, businessAvailable) SELECT ?, airlineId, originId, destinationId, TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '12:00:00'), TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '14:00:00'), 'B737', 10, 2, 10000, 20000, 10, 2 FROM flights ORDER BY id LIMIT 1",
-      ["H" + randomUUID().replaceAll("-", "").slice(0, 8)]
+      "INSERT INTO flights (flightNumber, airlineId, originId, destinationId, departureTime, arrivalTime, aircraftType, economySeats, businessSeats, economyPrice, businessPrice, economyAvailable, businessAvailable) SELECT flightNumber, airlineId, originId, destinationId, TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '12:00:00'), TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '14:00:00'), 'B737', 10, 2, 10000, 20000, 10, 2 FROM flights ORDER BY id LIMIT 1"
     );
     if (!flight.affectedRows) throw new Error("Seed flight missing");
+    // The disposable seed uses small auto-increment IDs. Keep each fixture
+    // identifiable in search while issuing an encodable carrier/flight number.
+    if (flight.insertId > 9999)
+      throw new Error("E2E flight number range exhausted");
+    await db.execute(
+      "UPDATE flights f JOIN airlines a ON a.id = f.airlineId SET f.flightNumber = CONCAT(a.code, LPAD(f.id, 4, '0'), 'T') WHERE f.id = ?",
+      [flight.insertId]
+    );
+    await db.commit();
     // Search results for this route and day may already be cached by another
     // test in the run (the same route and 12:00 UTC day are shared by every
     // fixture flight). A cached result does not learn about new flights until

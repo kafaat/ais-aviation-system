@@ -1,5 +1,6 @@
 /** Correct-behaviour regression gates against an EMPTY disposable MySQL database.
  * Provider HTTP is stubbed; no claim of external aviation/provider acceptance. */
+import { fixtureSurname } from "./fixture-passenger";
 import assert from "node:assert/strict";
 import { randomUUID, createHmac } from "node:crypto";
 import type Stripe from "stripe";
@@ -78,7 +79,7 @@ async function booking(
       tenantId: id,
       bookingId: id + offset,
       firstName: "Synthetic",
-      lastName: `Traveler${offset}-${i}`,
+      lastName: fixtureSurname(offset, i),
       nationality: "SA",
       passportNumber: `AU${offset}P${i}`,
       passportExpiry: hour(24 * 365),
@@ -112,9 +113,30 @@ try {
     .insert(s.airlines)
     .values({ id, code: "ZY", name: "Synthetic audit" });
   await db.insert(s.airports).values([
-    { id, code: "ZZA", name: "A", city: "A", country: "SA" },
-    { id: id + 1, code: "ZZB", name: "B", city: "B", country: "SA" },
-    { id: id + 2, code: "ZZC", name: "C", city: "C", country: "AE" },
+    {
+      id,
+      code: "ZZA",
+      name: "A",
+      city: "A",
+      country: "SA",
+      timezone: "Asia/Riyadh",
+    },
+    {
+      id: id + 1,
+      code: "ZZB",
+      name: "B",
+      city: "B",
+      country: "SA",
+      timezone: "Asia/Riyadh",
+    },
+    {
+      id: id + 2,
+      code: "ZZC",
+      name: "C",
+      city: "C",
+      country: "AE",
+      timezone: "Asia/Dubai",
+    },
   ]);
   await db.insert(s.flights).values(
     Array.from({ length: 18 }, (_, i) => ({
@@ -627,7 +649,7 @@ try {
         passengers: Array.from({ length: 10 }, (_, n) => ({
           type: "adult" as const,
           firstName: "Group",
-          lastName: `Traveler${n}`,
+          lastName: fixtureSurname(11, n),
         })),
       });
       assert.equal(result.totalAmount, group.totalPrice);

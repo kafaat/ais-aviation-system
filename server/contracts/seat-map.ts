@@ -483,6 +483,7 @@ export const responseContracts = {
     gate: z.union([z.null(), z.string()]),
     boardingTime: z.union([z.null(), z.date()]),
     barcodeData: z.string(),
+    bcbp: z.string(),
     issuedAt: z.date(),
   }),
   getCheckInStatus: z.object({

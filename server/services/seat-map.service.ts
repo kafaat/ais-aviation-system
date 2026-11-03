@@ -188,7 +188,10 @@ export interface BoardingPassData {
   };
   gate: string | null;
   boardingTime: Date | null;
+  /** Signed AIS token for the QR layer. */
   barcodeData: string;
+  /** IATA Resolution 792 BCBP M1 string for the PDF417 layer. */
+  bcbp: string;
   issuedAt: Date;
 }
 
@@ -1466,7 +1469,11 @@ export async function generateBoardingPass(
     // Gate tables may not exist; boarding pass still valid without gate info
   }
 
-  const { token: barcodeData, payload } = await issueBoardingPass(
+  const {
+    token: barcodeData,
+    payload,
+    bcbp,
+  } = await issueBoardingPass(
     { bookingId: booking.id, passengerId, flightId },
     { userId: booking.userId }
   );
@@ -1512,6 +1519,7 @@ export async function generateBoardingPass(
     gate: gateNumber,
     boardingTime,
     barcodeData,
+    bcbp,
     issuedAt: new Date(),
   };
 }

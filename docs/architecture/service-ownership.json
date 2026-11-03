@@ -13,7 +13,7 @@
     },
     {
       "id": "departure",
-      "match": "departure|boarding|seat-map|ticket|baggage|bag-drop|travel-clearance|kiosk|dcs",
+      "match": "departure|boarding|bcbp|seat-map|ticket|baggage|bag-drop|travel-clearance|kiosk|dcs",
       "accountableOwner": null,
       "onCall": null,
       "acceptanceEvidence": null
