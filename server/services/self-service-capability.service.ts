@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
 
@@ -23,13 +24,64 @@ export type SelfServiceCapability =
       bookingId: number;
       passengerId: number;
       sessionId: number;
+    }
+  | {
+      /**
+       * Authority for an assistant-surfaced alternative to be executed.
+       * Fetching alternatives is read-only and needs no capability; executing
+       * one needs this token, bound to the user who saw the offer, the exact
+       * amount they were shown and the offer version it was priced at. A
+       * repriced or re-ranked offer yields a new version and the old token
+       * no longer authorises anything.
+       */
+      kind: "assistant-execution";
+      userId: number;
+      conversationId: number;
+      suggestionId: number;
+      flightId: number;
+      cabinClass: "economy" | "business";
+      /** Integer minor units the user was shown. */
+      amount: number;
+      /** SHA-256 over the priced offer, see assistantOfferVersion(). */
+      offerVersion: string;
     };
 
 const TTL_SECONDS: Record<SelfServiceCapability["kind"], number> = {
   "kiosk-session": 15 * 60,
   "bag-drop-admission": 5 * 60,
   "bag-drop-session": 10 * 60,
+  "assistant-execution": 10 * 60,
 };
+
+export type AssistantExecutionCapability = Extract<
+  SelfServiceCapability,
+  { kind: "assistant-execution" }
+>;
+
+/** The version of a priced alternative: changes whenever flight, cabin or
+ * price change, so an execution authorised against one price cannot be
+ * applied to another. */
+export function assistantOfferVersion(offer: {
+  suggestionId: number;
+  flightId: number;
+  cabinClass: string;
+  totalPrice: number;
+}): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        offer.suggestionId,
+        offer.flightId,
+        offer.cabinClass,
+        offer.totalPrice,
+      ])
+    )
+    .digest("hex");
+}
+
+function isPositiveInt(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0;
+}
 
 function getSecret(override?: string): string {
   const secret =
@@ -85,6 +137,19 @@ export function verifySelfServiceCapability<
     if (decoded.kind !== expectedKind) {
       throw new Error("Capability scope mismatch");
     }
+    if (decoded.kind === "assistant-execution") {
+      if (
+        !isPositiveInt(decoded.userId) ||
+        !isPositiveInt(decoded.conversationId) ||
+        !isPositiveInt(decoded.suggestionId) ||
+        !isPositiveInt(decoded.flightId) ||
+        !["economy", "business"].includes(decoded.cabinClass) ||
+        !isPositiveInt(decoded.amount) ||
+        !/^[a-f0-9]{64}$/.test(decoded.offerVersion)
+      )
+        throw new Error("Invalid assistant execution scope");
+      return decoded as Extract<SelfServiceCapability, { kind: K }>;
+    }
     if (!Number.isInteger(decoded.bookingId) || decoded.bookingId <= 0) {
       throw new Error("Invalid booking scope");
     }
@@ -135,6 +200,56 @@ export function verifySelfServiceCapability<
       message: "Invalid, expired, or out-of-scope self-service capability",
     });
   }
+}
+
+/**
+ * Gate for any path that executes an assistant-surfaced alternative. The
+ * token alone is not enough: it must belong to the acting user, name the
+ * same suggestion, and carry the amount and offer version the execution is
+ * about to commit. Absence is UNAUTHORIZED, another user's token is
+ * FORBIDDEN, a stale price or version is PRECONDITION_FAILED so the client
+ * fetches alternatives again instead of silently paying a different amount.
+ */
+export function assertAssistantExecutionAuthorised(
+  token: string | null | undefined,
+  expected: {
+    userId: number;
+    suggestionId: number;
+    amount: number;
+    offerVersion: string;
+  },
+  opts: { secret?: string } = {}
+): AssistantExecutionCapability {
+  if (!token)
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Executing an assistant alternative requires an authorisation",
+    });
+  const capability = verifySelfServiceCapability(
+    token,
+    "assistant-execution",
+    opts
+  );
+  if (capability.userId !== expected.userId)
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Authorisation belongs to a different user",
+    });
+  if (capability.suggestionId !== expected.suggestionId)
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Authorisation names a different alternative",
+    });
+  if (
+    capability.amount !== expected.amount ||
+    capability.offerVersion !== expected.offerVersion
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "The alternative was repriced after it was authorised; fetch alternatives again",
+    });
+  return capability;
 }
 
 export function assertPassengerInKioskCapability(
