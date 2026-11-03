@@ -14,7 +14,7 @@ export {
  *
  * Handles kiosk device management, passenger authentication at kiosks,
  * check-in processing, seat selection, boarding pass / bag tag generation,
- * ancillary service purchases, and kiosk usage analytics.
+ * existing ancillary details, and kiosk usage analytics.
  */
 
 import { getDb } from "../db";
@@ -296,12 +296,6 @@ export async function getCheckInData(bookingId: number) {
     .map(s => s.seatNumber)
     .filter((s): s is string => s !== null);
 
-  // Get available ancillary services
-  const availableAncillaries = await db
-    .select()
-    .from(ancillaryServices)
-    .where(eq(ancillaryServices.available, true));
-
   // Get already purchased ancillaries for this booking
   const purchasedAncillaries = await db
     .select({
@@ -374,15 +368,8 @@ export async function getCheckInData(bookingId: number) {
       takenSeats: takenSeatNumbers,
     },
     ancillaries: {
-      available: availableAncillaries.map(a => ({
-        id: a.id,
-        code: a.code,
-        category: a.category,
-        name: a.name,
-        description: a.description,
-        price: a.price,
-        currency: a.currency,
-      })),
+      // A kiosk session has no collection or no-charge authorization for a sale.
+      available: [],
       purchased: purchasedAncillaries,
     },
   };
@@ -666,150 +653,6 @@ export async function printBagTag(
   return {
     bagTags,
     totalBags: bagCount,
-    passengerName: `${passenger.firstName} ${passenger.lastName}`,
-  };
-}
-
-// ============================================================================
-// Ancillary Service Purchase at Kiosk
-// ============================================================================
-
-/**
- * Add an ancillary service at the kiosk (e.g., extra baggage, meal, lounge).
- */
-export async function addAncillary(
-  bookingId: number,
-  serviceType: string,
-  passengerId: number
-) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Verify booking
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-
-  if (booking.status !== "confirmed" && booking.status !== "completed") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot add ancillary: booking is not confirmed",
-    });
-  }
-
-  // Verify passenger belongs to booking
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
-
-  if (!passenger)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found for this booking",
-    });
-
-  // Find the ancillary service by code
-  const [service] = await db
-    .select()
-    .from(ancillaryServices)
-    .where(
-      and(
-        eq(ancillaryServices.code, serviceType),
-        eq(ancillaryServices.available, true)
-      )
-    )
-    .limit(1);
-
-  if (!service) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `Ancillary service '${serviceType}' not found or unavailable`,
-    });
-  }
-
-  // Check cabin class restrictions
-  if (service.applicableCabinClasses) {
-    let allowedClasses: string[] = [];
-    try {
-      allowedClasses = JSON.parse(service.applicableCabinClasses);
-    } catch (_parseError) {
-      // If the stored JSON is malformed, skip cabin class restriction check
-      console.warn(
-        `Failed to parse applicableCabinClasses for service '${service.code}': ${service.applicableCabinClasses}`
-      );
-    }
-    if (
-      allowedClasses.length > 0 &&
-      !allowedClasses.includes(booking.cabinClass)
-    ) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Service '${service.name}' is not available for ${booking.cabinClass} class`,
-      });
-    }
-  }
-
-  // Check for duplicate purchase (same service for same passenger on same booking)
-  const [existing] = await db
-    .select({ id: bookingAncillaries.id })
-    .from(bookingAncillaries)
-    .where(
-      and(
-        eq(bookingAncillaries.bookingId, bookingId),
-        eq(bookingAncillaries.passengerId, passengerId),
-        eq(bookingAncillaries.ancillaryServiceId, service.id),
-        eq(bookingAncillaries.status, "active")
-      )
-    )
-    .limit(1);
-
-  if (existing) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: `Service '${service.name}' is already added for this passenger`,
-    });
-  }
-
-  // Add the ancillary
-  const [result] = await db.insert(bookingAncillaries).values({
-    bookingId,
-    passengerId,
-    ancillaryServiceId: service.id,
-    quantity: 1,
-    unitPrice: service.price,
-    totalPrice: service.price,
-  });
-
-  // Track session
-  await db.insert(kioskSessions).values({
-    bookingId,
-    passengerId,
-    sessionType: "ancillary",
-    status: "completed",
-    completedAt: new Date(),
-  });
-
-  return {
-    success: true,
-    ancillaryId: Number(result.insertId),
-    serviceName: service.name,
-    serviceCode: service.code,
-    category: service.category,
-    price: service.price,
-    currency: service.currency,
     passengerName: `${passenger.firstName} ${passenger.lastName}`,
   };
 }

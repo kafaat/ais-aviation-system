@@ -57,23 +57,30 @@ export async function assertNoCollectionReview(
     });
 }
 
+type BookingFunding = Extract<
+  NonNullable<typeof bookingAncillaries.$inferSelect.fundingReference>,
+  { bookingId: number }
+>;
+
 /** Caller holds the booking row lock; flight locking also serializes new holds. */
 export async function confirmFundedBooking(
   tx: SettlementTx,
   booking: Booking,
-  paymentIntentId?: string
+  paymentIntentId?: string,
+  funding?: BookingFunding
 ) {
   // A rejected later leg must undo earlier leg reservations before the outer
   // payment transaction records the collected funds for operator review.
   return await tx.transaction(inner =>
-    applyFundedBooking(inner, booking, paymentIntentId)
+    applyFundedBooking(inner, booking, paymentIntentId, funding)
   );
 }
 
 async function applyFundedBooking(
   tx: SettlementTx,
   booking: Booking,
-  paymentIntentId?: string
+  paymentIntentId?: string,
+  funding?: BookingFunding
 ) {
   if (booking.paymentStatus === "paid" && booking.seatsReserved) return;
   if (booking.status !== "pending")
@@ -141,45 +148,78 @@ async function applyFundedBooking(
       updatedAt: new Date(),
     })
     .where(eq(bookings.id, booking.id));
-  if (paymentIntentId && segments.length === 1) {
-    const bookingPassengers = await tx
-      .select({ id: passengers.id })
-      .from(passengers)
-      .where(eq(passengers.bookingId, booking.id));
-    if (bookingPassengers.length === 1) {
-      const unresolved = await tx
-        .select()
-        .from(bookingAncillaries)
-        .where(
-          and(
-            eq(bookingAncillaries.bookingId, booking.id),
-            eq(bookingAncillaries.status, "active"),
-            isNull(bookingAncillaries.passengerId),
-            eq(bookingAncillaries.scopeState, "unresolved"),
-            isNotNull(bookingAncillaries.weightSnapshotGrams)
+  const reference =
+    funding ??
+    (paymentIntentId
+      ? {
+          kind: "collected_booking" as const,
+          bookingId: booking.id,
+          paymentIntentId,
+        }
+      : undefined);
+  if (reference && segments.length) {
+    const candidates = await tx
+      .select()
+      .from(bookingAncillaries)
+      .where(
+        and(
+          eq(bookingAncillaries.bookingId, booking.id),
+          eq(bookingAncillaries.status, "active"),
+          isNull(bookingAncillaries.fundedAt),
+          isNull(bookingAncillaries.fundingReference)
+        )
+      );
+    if (candidates.length) {
+      const people = await tx
+        .select({ id: passengers.id })
+        .from(passengers)
+        .where(eq(passengers.bookingId, booking.id));
+      for (const item of candidates) {
+        let source;
+        try {
+          source = JSON.parse(item.metadata ?? "{}")?.source;
+        } catch {
+          continue;
+        }
+        const scoped =
+          (source === "initial_booking" || source === "editable_invoice") &&
+          item.scopeState === "specific_segment" &&
+          people.some(person => person.id === item.passengerId) &&
+          segments.some(leg => leg.id === item.segmentId);
+        let legacyScope = {};
+        if (!scoped) {
+          if (
+            reference.kind !== "collected_booking" ||
+            segments.length !== 1 ||
+            people.length !== 1 ||
+            item.passengerId != null ||
+            item.segmentId != null ||
+            item.scopeState !== "unresolved" ||
+            !item.weightSnapshotGrams ||
+            item.weightSnapshotGrams <= 0 ||
+            (source != null && source !== "editable_invoice")
           )
-        );
-      for (const ancillary of unresolved) {
-        const [service] = await tx
-          .select()
-          .from(ancillaryServices)
-          .where(eq(ancillaryServices.id, ancillary.ancillaryServiceId))
-          .limit(1);
-        if (service?.category !== "baggage") continue;
+            continue;
+          const [service] = await tx
+            .select()
+            .from(ancillaryServices)
+            .where(eq(ancillaryServices.id, item.ancillaryServiceId))
+            .limit(1);
+          if (service?.category !== "baggage") continue;
+          legacyScope = {
+            passengerId: people[0].id,
+            segmentId: segments[0].id,
+            scopeState: "specific_segment" as const,
+          };
+        }
         await tx
           .update(bookingAncillaries)
           .set({
-            passengerId: bookingPassengers[0].id,
-            segmentId: segments[0].id,
-            scopeState: "specific_segment",
+            ...legacyScope,
             fundedAt: new Date(),
-            fundingReference: {
-              kind: "collected_booking",
-              bookingId: booking.id,
-              paymentIntentId,
-            },
+            fundingReference: reference,
           })
-          .where(eq(bookingAncillaries.id, ancillary.id));
+          .where(eq(bookingAncillaries.id, item.id));
       }
     }
   }

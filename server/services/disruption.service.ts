@@ -1,3 +1,4 @@
+import { extraNeedsRecoveryReview } from "./recovery-extra-scope";
 import { transitionFlight } from "./flight-state.service";
 import { resolveIROPSEvent } from "./irops.service";
 import { recordEvent } from "./outbox.service";
@@ -5,12 +6,14 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   flightDisruptions,
+  bookingAncillaries,
+  seatInventory,
   bookingSegments,
   flights,
   bookings,
   airports,
 } from "../../drizzle/schema";
-import { eq, and, sql, ne, inArray } from "drizzle-orm";
+import { eq, and, sql, ne, inArray, gt } from "drizzle-orm";
 
 /**
  * Report a flight disruption (admin)
@@ -196,12 +199,58 @@ export async function getUserDisruptions(userId: number) {
     )
     .orderBy(sql`${flightDisruptions.createdAt} DESC`);
 
+  const disruptedFlights = new Set(userFlightDisruptions.map(d => d.flightId));
+  const affectedIds = [
+    ...new Set(
+      memberships
+        .filter(b => disruptedFlights.has(b.flightId))
+        .map(b => b.bookingId)
+    ),
+  ];
+  if (!affectedIds.length) return [];
+  const [extras, seats] = await Promise.all([
+    db
+      .selectDistinct({
+        bookingId: bookingAncillaries.bookingId,
+        segmentId: bookingAncillaries.segmentId,
+        scopeState: bookingAncillaries.scopeState,
+      })
+      .from(bookingAncillaries)
+      .where(
+        and(
+          inArray(bookingAncillaries.bookingId, affectedIds),
+          eq(bookingAncillaries.status, "active")
+        )
+      ),
+    db
+      .selectDistinct({
+        bookingId: seatInventory.bookingId,
+        flightId: seatInventory.flightId,
+      })
+      .from(seatInventory)
+      .where(
+        and(
+          inArray(seatInventory.bookingId, affectedIds),
+          inArray(seatInventory.flightId, [...disruptedFlights]),
+          gt(seatInventory.seatPrice, 0)
+        )
+      ),
+  ]);
+  const pricedSeats = new Set(
+    seats.map(row => `${row.bookingId}:${row.flightId}`)
+  );
   // Each affected reservation needs its own reference, even for a shared flight.
   return userFlightDisruptions.flatMap(disruption =>
     memberships
       .filter(booking => booking.flightId === disruption.flightId)
       .map(booking => ({
         ...disruption,
+        extrasReviewRequired:
+          extras.some(
+            extra =>
+              extra.bookingId === booking.bookingId &&
+              extraNeedsRecoveryReview(extra, legs, disruption.flightId)
+          ) || pricedSeats.has(`${booking.bookingId}:${disruption.flightId}`),
         bookingId: booking.bookingId,
         bookingReference: booking.bookingReference,
       }))

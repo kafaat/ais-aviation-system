@@ -1,3 +1,4 @@
+import { BookingAncillariesDisplay } from "@/components/BookingAncillariesDisplay";
 import { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import { useTranslation } from "react-i18next";
@@ -214,6 +215,11 @@ export default function CheckIn() {
       )}
       {(booking.error || states.error) && (
         <p role="alert">{booking.error?.message || states.error?.message}</p>
+      )}
+      {booking.data && (
+        <div className="print:hidden">
+          <BookingAncillariesDisplay bookingId={booking.data.id} />
+        </div>
       )}
       {booking.data && states.data && (
         <>

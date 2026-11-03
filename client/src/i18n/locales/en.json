@@ -340,6 +340,8 @@
   "disruptions": {
     "title": "Flight Disruptions",
     "noDisruptions": "No disruptions affecting your flights",
+    "extrasReview": "This booking has extras or a priced seat. Contact the airline with your booking reference before changing flights so it can review these services.",
+    "alternativesAdvisory": "These flights are suggestions. Viewing them does not change your booking or transfer extras.",
     "findAlternatives": "Find Alternative Flights",
     "noAlternatives": "No alternative flights available",
     "alternativeFlights": "Alternative Flights",

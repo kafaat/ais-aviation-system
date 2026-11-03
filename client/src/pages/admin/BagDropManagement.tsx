@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
+import { BookingAncillariesDisplay } from "@/components/BookingAncillariesDisplay";
 import { BaggageEntitlement } from "@/components/BaggageEntitlement";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -20,6 +21,7 @@ function BagDropConsole() {
   const l = useOperationalLabels();
   const [airportId, setAirportId] = useState(0);
   const [bookingId, setBookingId] = useState(0);
+  const [extrasBookingId, setExtrasBookingId] = useState(0);
   const [passengerId, setPassengerId] = useState(0);
   const period = useMemo(
     () => ({
@@ -46,7 +48,10 @@ function BagDropConsole() {
             type="number"
             min={1}
             value={bookingId || ""}
-            onChange={e => setBookingId(Number(e.target.value))}
+            onChange={e => {
+              setBookingId(Number(e.target.value));
+              setExtrasBookingId(0);
+            }}
           />
         </label>
         <label>
@@ -58,6 +63,20 @@ function BagDropConsole() {
             onChange={e => setPassengerId(Number(e.target.value))}
           />
         </label>
+        <button
+          type="button"
+          className="underline"
+          disabled={!Number.isSafeInteger(bookingId) || bookingId < 1}
+          onClick={() => setExtrasBookingId(bookingId)}
+        >
+          {l(
+            "عرض خدمات الحجز حسب المسافر والمقطع",
+            "Show booking extras by passenger and sector"
+          )}
+        </button>
+        {extrasBookingId > 0 && (
+          <BookingAncillariesDisplay bookingId={extrasBookingId} />
+        )}
         {bookingId > 0 && passengerId > 0 && (
           <BaggageEntitlement bookingId={bookingId} passengerId={passengerId} />
         )}

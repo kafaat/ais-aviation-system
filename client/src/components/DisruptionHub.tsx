@@ -106,6 +106,12 @@ export function DisruptionHub() {
             {/* Reason */}
             <p className="text-sm text-muted-foreground">{disruption.reason}</p>
 
+            {disruption.extrasReviewRequired && (
+              <p role="note" className="text-sm font-medium">
+                {t("disruptions.extrasReview")}
+              </p>
+            )}
+
             {/* Time Info */}
             {disruption.type === "delay" && disruption.newDepartureTime && (
               <div className="flex items-center gap-3 text-sm">
@@ -192,6 +198,9 @@ function AlternativeFlightsButton({ flightId }: { flightId: number }) {
       <Separator />
       <p className="text-sm font-medium">
         {t("disruptions.alternativeFlights")}:
+      </p>
+      <p className="text-sm text-muted-foreground">
+        {t("disruptions.alternativesAdvisory")}
       </p>
       {data.alternatives.map(alt => (
         <div

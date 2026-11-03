@@ -64,7 +64,14 @@ beforeEach(() => {
       departureTime: new Date("2030-01-01T10:00:00Z"),
     })),
     ancillary_services: [
-      { id: 1, available: true, currency: "SAR", price: 500 },
+      {
+        id: 1,
+        available: true,
+        currency: "SAR",
+        price: 500,
+        category: "baggage",
+        weightGrams: 20000,
+      },
     ],
     price_locks: [
       {
@@ -211,6 +218,196 @@ describe("atomic booking commands", () => {
       })
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
     expect(fixture.rows("bookings")).toHaveLength(0);
+  });
+});
+
+describe("initial ancillary scope and pricing", () => {
+  const line = {
+    ancillaryServiceId: 1,
+    passengerIndex: 0,
+    segmentIndex: 0,
+    quantity: 2,
+    unitPrice: 500,
+    totalPrice: 1000,
+  };
+  it("preserves the purchased allowance and binds both the invoice and baggage to the issued passenger and sector", async () => {
+    const command = { ...input, ancillaries: [line] };
+    const sale = await createBooking(command);
+    expect(await createBooking(command)).toEqual(sale);
+    expect(sale.totalAmount).toBe(11000);
+    const [sector] = fixture.rows("booking_segments");
+    const [person] = fixture.rows("passengers");
+    expect(sector).toMatchObject({
+      flightId: 11,
+      segmentAmount: 11000,
+      inventoryLockId: fixture.rows("inventory_locks")[0].id,
+    });
+    expect(fixture.rows("booking_ancillaries")).toMatchObject([
+      {
+        passengerId: person.id,
+        segmentId: sector.id,
+        scopeState: "specific_segment",
+        totalPrice: 1000,
+        weightSnapshotGrams: 40000,
+        metadata: JSON.stringify({ source: "initial_booking" }),
+      },
+    ]);
+    expect(
+      fixture
+        .rows("booking_fare_components")
+        .find(row => row.componentType === "ancillary")
+    ).toMatchObject({
+      bookingSegmentId: sector.id,
+      passengerId: person.id,
+      amount: 1000,
+    });
+  });
+  it.each([
+    ["stale price", [{ ...line, totalPrice: 999 }], "CONFLICT"],
+    ["wrong passenger", [{ ...line, passengerIndex: 1 }], "BAD_REQUEST"],
+    ["wrong flight", [{ ...line, segmentIndex: 1 }], "BAD_REQUEST"],
+    ["missing scope", [{ ...line, passengerIndex: undefined }], "BAD_REQUEST"],
+    ["raw passenger ID", [{ ...line, passengerId: 1 }], "BAD_REQUEST"],
+    ["duplicate service", [line, line], "BAD_REQUEST"],
+  ] as const)("rejects %s without retaining a hold", async (_, lines, code) => {
+    await expect(
+      createBooking({ ...input, ancillaries: [...lines] })
+    ).rejects.toMatchObject({ code });
+    for (const table of ["bookings", "inventory_locks", "booking_ancillaries"])
+      expect(fixture.rows(table)).toHaveLength(0);
+  });
+  it("keeps scoped fees on the sold sector during a reprice and reverses only the removed passenger's line", async () => {
+    const { setInvoiceTotal } =
+      await import("../services/booking-invoice.service");
+    const { removeAncillaryFromBooking } =
+      await import("../services/ancillary-services.service");
+    const command = {
+      ...input,
+      passengers: [
+        ...input.passengers,
+        { ...input.passengers[0], firstName: "Sara" },
+      ],
+      segments: [11, 12].map(flightId => ({
+        flightId,
+        departureDate: new Date("2030-01-01"),
+      })),
+      expectedTotalMinor: 22000,
+      ancillaries: [line, { ...line, passengerIndex: 1 }],
+    };
+    await createMultiCityBooking(command);
+    const [first, second] = fixture.rows("booking_ancillaries");
+    const charges = fixture
+      .rows("booking_fare_components")
+      .filter(row => row.componentType === "ancillary");
+    expect(charges.map(row => row.sourceReference)).toEqual([
+      String(first.id),
+      String(second.id),
+    ]);
+    await fixture.db.transaction((tx: any) =>
+      setInvoiceTotal(tx, fixture.rows("bookings")[0], 20000)
+    );
+    expect(
+      fixture.rows("booking_segments").map(row => row.segmentAmount)
+    ).toEqual([11000, 9000]);
+    await removeAncillaryFromBooking(first.id, { userId: input.userId });
+    await removeAncillaryFromBooking(first.id, { userId: input.userId });
+    expect(charges[0].reversedAt).toBeDefined();
+    expect(charges[1].reversedAt).toBeUndefined();
+    expect(first.status).toBe("cancelled");
+    expect(second.status).toBe("active");
+    expect(
+      fixture.rows("booking_segments").map(row => row.segmentAmount)
+    ).toEqual([10000, 9000]);
+    expect(fixture.rows("bookings")[0].totalAmount).toBe(19000);
+  });
+  it.each([
+    "missing",
+    "duplicate",
+    "wrong amount",
+    "wrong traveler",
+    "wrong sector",
+  ])(
+    "does not reduce the invoice when the linked charge is %s",
+    async corruption => {
+      const { removeAncillaryFromBooking } =
+        await import("../services/ancillary-services.service");
+      const sale = await createBooking({ ...input, ancillaries: [line] });
+      const [purchase] = fixture.rows("booking_ancillaries");
+      const rows = fixture.rows("booking_fare_components");
+      const charge = rows.find(row => row.componentType === "ancillary");
+      if (corruption === "missing") rows.splice(rows.indexOf(charge), 1);
+      if (corruption === "duplicate")
+        rows.push({ ...charge, id: charge.id + 50 });
+      if (corruption === "wrong amount") charge.amount--;
+      if (corruption === "wrong traveler") charge.passengerId++;
+      if (corruption === "wrong sector") charge.bookingSegmentId++;
+      await expect(
+        removeAncillaryFromBooking(purchase.id, { userId: input.userId })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+      expect(fixture.rows("bookings")[0].totalAmount).toBe(sale.totalAmount);
+      expect(fixture.rows("booking_ancillaries")[0].status).toBe("active");
+      expect(
+        fixture
+          .rows("booking_fare_components")
+          .some(row => row.reversedAt != null)
+      ).toBe(false);
+    }
+  );
+  it("rejects removal when a scoped charge loses its segment reference", async () => {
+    const { removeAncillaryFromBooking } =
+      await import("../services/ancillary-services.service");
+    const sale = await createBooking({ ...input, ancillaries: [line] });
+    const [purchase] = fixture.rows("booking_ancillaries");
+    purchase.segmentId = null;
+    await expect(
+      removeAncillaryFromBooking(purchase.id, { userId: input.userId })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(fixture.rows("bookings")[0].totalAmount).toBe(sale.totalAmount);
+    expect(fixture.rows("booking_ancillaries")[0].status).toBe("active");
+    expect(
+      fixture
+        .rows("booking_fare_components")
+        .find(row => row.componentType === "ancillary").reversedAt
+    ).toBeUndefined();
+  });
+  it("checks the grand total, airline and sector order even when flights lock in a different order", async () => {
+    fixture.rows("flights")[0].airlineId = 99;
+    fixture.rows("ancillary_services")[0].applicableAirlines = "[99]";
+    const command = {
+      ...input,
+      segments: [12, 11].map(flightId => ({
+        flightId,
+        departureDate: new Date("2030-01-01"),
+      })),
+      expectedTotalMinor: 21000,
+      ancillaries: [{ ...line, segmentIndex: 1 }],
+    };
+    await expect(
+      createMultiCityBooking({ ...command, ancillaries: [line] })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      createMultiCityBooking({ ...command, expectedTotalMinor: 20000 })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(fixture.rows("inventory_locks")).toHaveLength(0);
+    const sale = await createMultiCityBooking(command);
+    expect(await createMultiCityBooking(command)).toEqual(sale);
+    expect(sale.totalAmount).toBe(21000);
+    expect(fixture.rows("booking_segments")).toMatchObject([
+      { flightId: 12, segmentAmount: 10000 },
+      { flightId: 11, segmentAmount: 11000 },
+    ]);
+    expect(fixture.rows("booking_ancillaries")).toMatchObject([
+      { segmentId: sale.segments[1].segmentId },
+    ]);
+    const invoice = fixture.rows("booking_fare_components");
+    expect(invoice.reduce((sum, row) => sum + row.amount, 0)).toBe(21000);
+    expect(
+      invoice.find(row => row.componentType === "ancillary")
+    ).toMatchObject({
+      flightId: 11,
+      amount: 1000,
+      bookingSegmentId: sale.segments[1].segmentId,
+    });
   });
 });
 

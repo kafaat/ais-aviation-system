@@ -225,7 +225,14 @@
         "server/services/seat-exchange.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["ancillaryServices", "bookingAncillaries"],
+        "reads": [
+          "ancillaryServices",
+          "bookingAncillaries",
+          "bookingFareComponents",
+          "bookingSegments",
+          "flights",
+          "passengers"
+        ],
         "writes": [
           "ancillaryServices",
           "bookingAncillaries",
@@ -558,8 +565,10 @@
           "bookingModifications",
           "bookingSegments",
           "bookings",
+          "financialLedger",
           "passengers",
-          "paymentReceipts"
+          "paymentReceipts",
+          "paymentSplits"
         ],
         "writes": []
       },
@@ -1010,6 +1019,7 @@
         "server/services/booking-settlement.service.ts",
         "server/services/fare-components.service.ts",
         "server/services/idempotency-v2.service.ts",
+        "server/services/initial-booking-ancillaries.ts",
         "server/services/inventory-capacity.service.ts",
         "server/services/inventory-lock.service.ts",
         "server/services/metrics.service.ts",
@@ -1021,7 +1031,6 @@
       ],
       "tableExpressions": {
         "reads": [
-          "ancillaryServices",
           "bookings",
           "flights",
           "groupBookings",
@@ -1031,7 +1040,7 @@
           "waitlist"
         ],
         "writes": [
-          "bookingAncillaries",
+          "bookingSegments",
           "bookings",
           "groupBookings",
           "passengers",
@@ -1857,15 +1866,18 @@
         "server/db.ts",
         "server/services/flight-state.service.ts",
         "server/services/irops.service.ts",
-        "server/services/outbox.service.ts"
+        "server/services/outbox.service.ts",
+        "server/services/recovery-extra-scope.ts"
       ],
       "tableExpressions": {
         "reads": [
           "airports",
+          "bookingAncillaries",
           "bookingSegments",
           "bookings",
           "flightDisruptions",
-          "flights"
+          "flights",
+          "seatInventory"
         ],
         "writes": ["flightDisruptions"]
       },
@@ -2625,6 +2637,28 @@
       "replacement": "server/services/idempotency-v2.service.ts"
     },
     {
+      "file": "server/services/initial-booking-ancillaries.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/initial-booking-ancillaries.ts",
+      "domain": "commercial",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/bookings.ts",
+        "server/routers/multi-city.ts",
+        "server/services/bookings.service.ts",
+        "server/services/multi-city.service.ts"
+      ],
+      "dependencies": ["drizzle/schema.ts"],
+      "tableExpressions": {
+        "reads": ["ancillaryServices"],
+        "writes": ["bookingAncillaries"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/integration-config.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/integration-config.service.ts",
@@ -3027,6 +3061,7 @@
         "server/services/irops.service.ts",
         "server/services/outbox.service.ts",
         "server/services/rbd-inventory.service.ts",
+        "server/services/recovery-extra-scope.ts",
         "server/services/recovery-feasibility.service.ts",
         "server/services/recovery-solver.ts",
         "server/services/required-value.ts",
@@ -3044,7 +3079,8 @@
           "flights",
           "iropsActions",
           "iropsRecoveryPlans",
-          "ndcOrders"
+          "ndcOrders",
+          "seatInventory"
         ],
         "writes": [
           "bookingSegments",
@@ -3126,7 +3162,7 @@
           "kioskSessions",
           "passengers"
         ],
-        "writes": ["bookingAncillaries", "kioskDevices", "kioskSessions"]
+        "writes": ["kioskDevices", "kioskSessions"]
       },
       "replacement": null
     },
@@ -3524,6 +3560,7 @@
         "server/services/fare-components.service.ts",
         "server/services/flights.service.ts",
         "server/services/idempotency-v2.service.ts",
+        "server/services/initial-booking-ancillaries.ts",
         "server/services/inventory-capacity.service.ts",
         "server/services/inventory-lock.service.ts",
         "server/services/metrics.service.ts",
@@ -5161,6 +5198,26 @@
           "flights",
           "passengers"
         ],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/recovery-extra-scope.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/recovery-extra-scope.ts",
+      "domain": "airline-operations",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/disruption.service.ts",
+        "server/services/irops-recovery.service.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
         "writes": []
       },
       "replacement": null

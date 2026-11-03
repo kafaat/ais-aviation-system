@@ -109,9 +109,10 @@ rejection handling still require a real integration.
 - Set `BAGGAGE_AIRLINE_NUMERIC_CODE` to the carrier's configured three-digit numeric
   code. The synthetic `123` value exists only in disposable tests. Carrier allocation,
   station acceptance and hardware validation remain operator deployment work.
-- PR #246's passenger/segment ancillary purchase and funding work remains a separate
-  change. This delivery consumes the canonical entitlement reader and does not
-  replace or duplicate that purchasing implementation.
+- PR #246's passenger/segment ancillary purchase and funding work was merged in
+  main `128e67c640ebb1e57f9e944471b89b1bb4711660` during this delivery. This branch
+  incorporates that main revision and consumes its canonical entitlement reader
+  without replacing or duplicating the purchasing implementation.
 - Rollback should preserve the new receipt and history tables. Do not drop evidence
   or null out baggage scope to work around an operational refusal.
 

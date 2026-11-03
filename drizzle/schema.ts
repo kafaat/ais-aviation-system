@@ -1192,6 +1192,19 @@ export const bookingAncillaries = mysqlTable(
           executionEventId: string;
         }
       | {
+          kind: "internal_booking";
+          bookingId: number;
+          ledgerId: number;
+          tender: "wallet" | "user_credit" | "corporate_credit";
+          amountMinor: number;
+        }
+      | {
+          kind: "split_booking";
+          bookingId: number;
+          paymentIntentId: string;
+          amountMinor: number;
+        }
+      | {
           kind: "collected_booking";
           bookingId: number;
           paymentIntentId: string;

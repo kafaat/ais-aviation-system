@@ -1,3 +1,4 @@
+import { initialAncillarySchema } from "../services/initial-booking-ancillaries";
 import { checkInPassengers } from "../services/departure-control.service";
 import { responseContracts } from "../contracts/bookings";
 import { z } from "zod";
@@ -104,25 +105,7 @@ export const bookingsRouter = router({
         priceLockId: z.number().int().positive().optional(),
         offerId: z.string().uuid().optional(),
         idempotencyKey: z.string().min(1).max(255).optional(),
-        ancillaries: z
-          .array(
-            z.object({
-              ancillaryServiceId: z.number().describe("Ancillary service ID"),
-              quantity: z.number().describe("Quantity"),
-              unitPrice: z
-                .number()
-                .describe("Unit price in smallest currency unit"),
-              totalPrice: z
-                .number()
-                .describe("Total price in smallest currency unit"),
-              passengerId: z
-                .number()
-                .optional()
-                .describe("Passenger ID if service is per-passenger"),
-            })
-          )
-          .optional()
-          .describe("Optional ancillary services"),
+        ancillaries: z.array(initialAncillarySchema).max(200).optional(),
       })
     )
     .output(responseContracts["create"])

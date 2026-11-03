@@ -71,15 +71,37 @@ function activeItems(tx: SettlementTx, bookingId: number) {
     .for("update");
 }
 
-/** Keep sold seat fees on their own sector when another line changes the invoice. */
-export async function seatFeesBySegment(tx: SettlementTx, bookingId: number) {
+/** Historical baggage could be assigned for fulfillment while its price was spread across legs. */
+export function allocatedAncillarySegmentId(item: Ancillary) {
+  if (!item.metadata) return;
+  let metadata;
+  try {
+    metadata = JSON.parse(item.metadata);
+  } catch {
+    return;
+  }
+  if (
+    !(
+      metadata?.source === "initial_booking" ||
+      metadata?.segmentAllocated === true ||
+      getBinding(item)
+    )
+  )
+    return;
+  if (!item.segmentId || item.scopeState !== "specific_segment")
+    throw blocked("Ancillary segment allocation requires reconciliation");
+  return item.segmentId;
+}
+
+export async function allocatedAncillaryFeesBySegment(
+  tx: SettlementTx,
+  bookingId: number
+) {
   const fees = new Map<number, number>();
   for (const item of await activeItems(tx, bookingId)) {
-    if (item.segmentId && getBinding(item))
-      fees.set(
-        item.segmentId,
-        (fees.get(item.segmentId) ?? 0) + item.totalPrice
-      );
+    const segmentId = allocatedAncillarySegmentId(item);
+    if (segmentId !== undefined)
+      fees.set(segmentId, (fees.get(segmentId) ?? 0) + item.totalPrice);
   }
   return fees;
 }

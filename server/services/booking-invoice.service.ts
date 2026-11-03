@@ -1,5 +1,8 @@
 import { canServiceOrder, type NdcAction } from "./ndc-capabilities";
-import { holdInvoiceSeat, seatFeesBySegment } from "./seat-exchange.service";
+import {
+  holdInvoiceSeat,
+  allocatedAncillaryFeesBySegment,
+} from "./seat-exchange.service";
 import { TRPCError } from "@trpc/server";
 import { and, eq, asc } from "drizzle-orm";
 import {
@@ -146,17 +149,19 @@ export async function setInvoiceTotal(
     allocatedSegmentId !== undefined &&
     !legs.some(l => l.id === allocatedSegmentId)
   )
-    throw invoiceBlocked("Seat segment is no longer on the invoice");
+    throw invoiceBlocked("Ancillary segment is no longer on the invoice");
   let allocation: number[];
   if (allocatedSegmentId === undefined && legs.length) {
-    const fees = await seatFeesBySegment(tx, booking.id);
+    const fees = await allocatedAncillaryFeesBySegment(tx, booking.id);
+    if ([...fees.keys()].some(id => !legs.some(leg => leg.id === id)))
+      throw invoiceBlocked("Ancillary segment is no longer on the invoice");
     const fareWeights = legs.map(
       (leg, i) => segmentAmounts[i] - (fees.get(leg.id) ?? 0)
     );
     const fareTotal =
       totalAmount - [...fees.values()].reduce((sum, n) => sum + n, 0);
     if (fareTotal < 0 || fareWeights.some(n => n < 0))
-      throw invoiceBlocked("Seat fee exceeds invoice allocation");
+      throw invoiceBlocked("Ancillary fees exceed invoice allocation");
     allocation = allocateProportional(fareTotal, fareWeights).map(
       (n, i) => n + (fees.get(legs[i].id) ?? 0)
     );
@@ -168,7 +173,7 @@ export async function setInvoiceTotal(
     );
   }
   if (allocation.some(n => n < 0))
-    throw invoiceBlocked("Invalid seat segment allocation");
+    throw invoiceBlocked("Invalid ancillary segment allocation");
   for (const [i, leg] of legs.entries())
     await tx
       .update(bookingSegments)
@@ -217,6 +222,7 @@ export async function quoteInvoiceAncillary(
   booking: Booking,
   data: {
     ancillaryServiceId: number;
+    expectedUnitPrice?: number;
     passengerId?: number;
     quantity?: number;
     flightId?: number;
@@ -244,6 +250,15 @@ export async function quoteInvoiceAncillary(
     throw invoiceBlocked(
       "Ancillary catalog price or availability is unsupported"
     );
+  if (
+    data.expectedUnitPrice !== undefined &&
+    service.price !== data.expectedUnitPrice
+  )
+    throw new TRPCError({
+      code: "CONFLICT",
+      message:
+        "The extra price has changed. Review the current price before adding it.",
+    });
   if (data.seatNumber !== undefined && service.category !== "seat")
     throw invoiceBlocked("Seat selection requires a seat catalog item");
   if (
@@ -288,7 +303,8 @@ export async function quoteInvoiceAncillary(
   const legs = await tx
     .select()
     .from(bookingSegments)
-    .where(eq(bookingSegments.bookingId, booking.id));
+    .where(eq(bookingSegments.bookingId, booking.id))
+    .for("share");
   const flightIds = legs.length
     ? legs.map(l => l.flightId)
     : [booking.flightId];
@@ -297,6 +313,20 @@ export async function quoteInvoiceAncillary(
       code: "NOT_FOUND",
       message: "Invoice segment not found",
     });
+  // A named passenger and flight are an explicit assignment. A stale or
+  // ambiguous selection must never become an unresolved, chargeable service.
+  let scopedSegment;
+  if (data.passengerId != null && data.flightId != null) {
+    const matches = legs.filter(leg => leg.flightId === data.flightId);
+    if (
+      matches.length !== 1 ||
+      !["pending", "confirmed"].includes(matches[0].status)
+    )
+      throw invoiceBlocked(
+        "Ancillary assignment requires a unique active booked flight segment"
+      );
+    scopedSegment = matches[0];
+  }
   for (const flightId of [
     ...new Set(data.flightId == null ? flightIds : [data.flightId]),
   ].sort((a, b) => a - b)) {
@@ -315,7 +345,7 @@ export async function quoteInvoiceAncillary(
       throw invoiceBlocked("Ancillary is unavailable for this flight");
   }
   const totalPrice = service.price * quantity;
-  return { totalPrice, service, quantity };
+  return { totalPrice, service, quantity, scopedSegment };
 }
 
 export async function insertInvoiceAncillary(
@@ -324,31 +354,8 @@ export async function insertInvoiceAncillary(
   data: Parameters<typeof quoteInvoiceAncillary>[2],
   mode: "editable_invoice" | "completed_servicing" = "editable_invoice"
 ) {
-  const { totalPrice, service, quantity } = await quoteInvoiceAncillary(
-    tx,
-    booking,
-    data
-  );
-  const matchingSegments =
-    ["baggage", "seat"].includes(service.category) &&
-    data.passengerId &&
-    data.flightId
-      ? await tx
-          .select({ id: bookingSegments.id })
-          .from(bookingSegments)
-          .where(
-            and(
-              eq(bookingSegments.bookingId, booking.id),
-              eq(bookingSegments.flightId, data.flightId)
-            )
-          )
-          .limit(2)
-      : [];
-  if (service.category === "seat" && matchingSegments.length !== 1)
-    throw invoiceBlocked(
-      "Seat assignment requires a unique booked flight segment"
-    );
-  const scopedSegment = matchingSegments[0];
+  const { totalPrice, service, quantity, scopedSegment } =
+    await quoteInvoiceAncillary(tx, booking, data);
   const weightSnapshotGrams =
     service.category === "baggage" &&
     service.weightGrams != null &&
@@ -389,6 +396,8 @@ export async function insertInvoiceAncillary(
     scopeState: scopedSegment ? "specific_segment" : "unresolved",
     status: "active",
     metadata: JSON.stringify({
+      ...(mode === "editable_invoice" && { source: "editable_invoice" }),
+      ...(scopedSegment && { segmentAllocated: true }),
       ...(paidSeat && { paidSeat }),
       preferences: data.metadata ?? null,
       flightId: data.flightId ?? null,
@@ -415,7 +424,7 @@ export async function insertInvoiceAncillary(
     booking,
     booking.totalAmount + totalPrice,
     mode,
-    paidSeat ? scopedSegment?.id : undefined
+    scopedSegment?.id
   );
   return { id: Number(result.insertId), totalPrice, service };
 }

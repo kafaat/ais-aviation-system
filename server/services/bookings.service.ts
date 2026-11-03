@@ -1,3 +1,9 @@
+import {
+  priceInitialAncillaries,
+  persistInitialAncillaries,
+  type SelectedAncillary,
+} from "./initial-booking-ancillaries";
+export type { SelectedAncillary } from "./initial-booking-ancillaries";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { selectSeat } from "./seat-map.service";
 import { assertTenantOperational } from "./tenant.service";
@@ -10,8 +16,7 @@ import {
   flights,
   passengers,
   inventoryLocks,
-  bookingAncillaries,
-  ancillaryServices,
+  bookingSegments,
   priceLocks,
   seatInventory,
   waitlist,
@@ -51,14 +56,6 @@ export interface Passenger {
   passportExpiry?: Date;
   nationality?: string;
   seatNumber?: string;
-}
-
-export interface SelectedAncillary {
-  ancillaryServiceId: number;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  passengerId?: number;
 }
 
 export interface CreateBookingInput {
@@ -361,48 +358,13 @@ export async function createBooking(
               )
             ).lockId;
           }
-          const selected = [];
-          for (const item of input.ancillaries || []) {
-            if (
-              !Number.isSafeInteger(item.quantity) ||
-              item.quantity <= 0 ||
-              item.quantity > 20 ||
-              item.passengerId != null
-            )
-              throw new Error("Invalid ancillary selection");
-            const [service] = await tx
-              .select()
-              .from(ancillaryServices)
-              .where(
-                and(
-                  eq(ancillaryServices.id, item.ancillaryServiceId),
-                  eq(ancillaryServices.available, true)
-                )
-              )
-              .limit(1);
-            if (!service || service.currency !== "SAR")
-              throw new Error("Ancillary unavailable");
-            if (
-              service.applicableCabinClasses &&
-              !JSON.parse(service.applicableCabinClasses).includes(
-                input.cabinClass
-              )
-            )
-              throw new Error("Ancillary not available in this cabin");
-            if (
-              service.applicableAirlines &&
-              !JSON.parse(service.applicableAirlines).includes(
-                currentFlight.airlineId
-              )
-            )
-              throw new Error("Ancillary not available for this airline");
-            selected.push({
-              ancillaryServiceId: service.id,
-              quantity: item.quantity,
-              unitPrice: service.price,
-              totalPrice: service.price * item.quantity,
-            });
-          }
+          const selected = await priceInitialAncillaries(
+            tx,
+            input.ancillaries ?? [],
+            input.cabinClass,
+            [currentFlight.airlineId],
+            input.passengers.length
+          );
           let fareAmount = group?.totalPrice ?? selectedOffer?.totalAmount ?? 0;
           if (input.priceLockId) {
             const [priceLock] = await tx
@@ -504,12 +466,31 @@ export async function createBooking(
                 tx
               );
           }
-          if (selected.length)
-            await tx
-              .insert(bookingAncillaries)
-              .values(selected.map(item => ({ bookingId, ...item })));
+          let bookingSegmentId: number | undefined;
+          if (selected.some(item => item.segmentIndex !== undefined)) {
+            const [segment] = await tx.insert(bookingSegments).values({
+              bookingId,
+              segmentOrder: 1,
+              flightId: input.flightId,
+              fareClassId: selectedFareClass?.fareClass.id,
+              inventoryLockId: lockId,
+              departureDate: currentFlight.departureTime,
+              segmentAmount: totalAmount,
+              status: "pending",
+            });
+            bookingSegmentId = segment.insertId;
+          }
+          const purchases = await persistInitialAncillaries(
+            tx,
+            selected,
+            bookingId,
+            passengerIds,
+            bookingSegmentId ? [bookingSegmentId] : []
+          );
+
           await persistInitialFareComponents(tx, {
             bookingId,
+            bookingSegmentId,
             tenantId: currentFlight.tenantId,
             flightId: currentFlight.id,
             passengerIds,
@@ -523,8 +504,10 @@ export async function createBooking(
             sourceReference:
               selectedOffer?.id ??
               (group ? String(group.id) : String(input.priceLockId ?? "")),
-            ancillaries: selected.map(item => ({
+            ancillaries: purchases.map(item => ({
+              passengerId: item.passengerId,
               amount: item.totalPrice,
+              sourceReference: item.sourceReference,
               code: `ANCILLARY_${item.ancillaryServiceId}`,
             })),
           });

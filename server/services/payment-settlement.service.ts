@@ -445,7 +445,19 @@ async function confirmCollectedBooking(
   payment: VerifiedPayment
 ) {
   try {
-    await confirmFundedBooking(tx, booking, payment.paymentIntentId);
+    await confirmFundedBooking(
+      tx,
+      booking,
+      payment.paymentIntentId,
+      payment.metadata.type === "split_payment"
+        ? {
+            kind: "split_booking",
+            bookingId: booking.id,
+            paymentIntentId: payment.paymentIntentId,
+            amountMinor: booking.totalAmount,
+          }
+        : undefined
+    );
   } catch (error) {
     // These errors occur before inventory is changed. Other failures must roll
     // back the whole transaction and remain retryable (never acknowledge them).

@@ -1,9 +1,11 @@
+import { extraNeedsRecoveryReview } from "./recovery-extra-scope";
 import { exchangeLocalCoupons } from "./ticket-coupons.service";
 import { readRecoveryFeasibility } from "./recovery-feasibility.service";
 import { requireValue } from "./required-value";
+import { TRPCError } from "@trpc/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
@@ -118,25 +120,36 @@ async function readInputs(
         )
       )
       .limit(1);
-    const [ancillary] = await tx
-      .select()
+    const activeExtras = await tx
+      .select({
+        bookingId: bookingAncillaries.bookingId,
+        scopeState: bookingAncillaries.scopeState,
+        segmentId: bookingAncillaries.segmentId,
+      })
       .from(bookingAncillaries)
       .where(
         and(
           eq(bookingAncillaries.bookingId, id),
-          ne(bookingAncillaries.status, "cancelled")
+          eq(bookingAncillaries.status, "active")
         )
       )
-      .limit(1);
-    if (pending || ancillary)
-      throw new Error(
-        "Resolve pending servicing or ancillary rerouting before recovery"
-      );
+      .for("update");
+    if (pending) throw new Error("Resolve pending servicing before recovery");
     const segments = await tx
       .select()
       .from(bookingSegments)
       .where(eq(bookingSegments.bookingId, id))
-      .orderBy(asc(bookingSegments.segmentOrder));
+      .orderBy(asc(bookingSegments.segmentOrder))
+      .for("update");
+    if (
+      activeExtras.some(extra =>
+        extraNeedsRecoveryReview(extra, segments, event.flightId)
+      )
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `Booking ${id} has active extras. Airline servicing must reconcile them before changing the flight.`,
+      });
     const legs = segments.length
       ? segments.map(s => s.flightId)
       : [booking.flightId];
@@ -174,6 +187,25 @@ async function readInputs(
     if (!f) throw new Error("Recovery flight unavailable");
     locked.push(f);
   }
+  // Legacy assigned seats can carry a price without a matching ancillary row.
+  // Lock after the flights, following the seat assignment writer's lock order.
+  const [pricedSeat] = await tx
+    .select({ bookingId: seatInventory.bookingId })
+    .from(seatInventory)
+    .where(
+      and(
+        eq(seatInventory.flightId, event.flightId),
+        inArray(seatInventory.bookingId, input.bookingIds),
+        gt(seatInventory.seatPrice, 0)
+      )
+    )
+    .limit(1)
+    .for("update");
+  if (pricedSeat)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Booking ${pricedSeat.bookingId} has a priced seat on the disrupted flight. Airline servicing must reconcile it before changing the flight.`,
+    });
   const operationalEvidence = [];
   for (const f of locked.filter(f => input.candidateFlightIds.includes(f.id))) {
     if (f.airlineId !== scope.airlineId || f.tenantId !== original[0].tenantId)

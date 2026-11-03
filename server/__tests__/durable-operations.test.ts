@@ -197,6 +197,7 @@ describe("bag-drop persistence and evidence", () => {
       fixture.rows("payment_receipts").push({
         paymentIntentId: "pi_bag",
         kind: "modification",
+        refundedAmount: 0,
         bookingId: 1,
         targetId: 51,
         settlementStatus: "applied",
