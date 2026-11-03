@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { responseContracts } from "../contracts/kiosk";
 /** Self-Service Kiosk Router */
 
@@ -142,14 +143,14 @@ export const kioskRouter = router({
       })
     )
     .output(responseContracts["addAncillary"])
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       const capability = kioskCapability(input.capabilityToken);
       assertPassengerInKioskCapability(capability, input.passengerId);
-      return await kioskService.addAncillary(
-        capability.bookingId,
-        input.serviceType,
-        input.passengerId
-      );
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Ancillary services cannot be issued at this kiosk. Contact the airline service desk.",
+      });
     }),
 
   getDevices: adminProcedure

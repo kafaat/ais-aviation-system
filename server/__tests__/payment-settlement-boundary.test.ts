@@ -92,6 +92,97 @@ beforeEach(() => {
 });
 
 describe("verified payment settlement", () => {
+  it.each(["direct", "wallet", "split"] as const)(
+    "funds scoped checkout items exactly once through %s",
+    async method => {
+      const {
+        passengers,
+        bookingSegments,
+        ancillaryServices,
+        bookingAncillaries,
+        paymentSplits,
+      } = await import("../../drizzle/schema");
+      const { computeBaggageEntitlement } =
+        await import("../services/baggage-entitlement.service");
+      await fixture.db.insert(passengers).values([
+        { id: 11, bookingId: 7 },
+        { id: 12, bookingId: 7 },
+      ]);
+      await fixture.db
+        .insert(bookingSegments)
+        .values({ id: 21, bookingId: 7, flightId: 4 });
+      await fixture.db
+        .insert(ancillaryServices)
+        .values({ id: 41, category: "baggage", name: "10kg" });
+      await fixture.db.insert(bookingAncillaries).values({
+        id: 51,
+        bookingId: 7,
+        ancillaryServiceId: 41,
+        passengerId: 11,
+        segmentId: 21,
+        scopeState: "specific_segment",
+        status: "active",
+        fundedAt: null,
+        fundingReference: null,
+        weightSnapshotGrams: 20000,
+        quantity: 2,
+        metadata: JSON.stringify({ source: "initial_booking" }),
+      });
+      if (method === "wallet") {
+        await payFromWallet(9, 7, 100000);
+        expect(await payFromWallet(9, 7, 100000)).toMatchObject({
+          balance: 50000,
+          amountPaid: 100000,
+        });
+        expect(fixture.rows("financial_ledger")).toHaveLength(1);
+      } else if (method === "split") {
+        await fixture.db.insert(paymentSplits).values([
+          { id: 1, bookingId: 7, amount: 40000, status: "pending" },
+          { id: 2, bookingId: 7, amount: 60000, status: "pending" },
+        ]);
+        await event(
+          "checkout.session.completed",
+          payment(
+            { type: "split_payment", splitId: "1", bookingId: "7" },
+            40000,
+            "pi_1"
+          )
+        );
+        expect(fixture.rows("booking_ancillaries")[0].fundedAt).toBeNull();
+        const second = payment(
+          { type: "split_payment", splitId: "2", bookingId: "7" },
+          60000,
+          "pi_2"
+        );
+        await event("checkout.session.completed", second);
+        await event("checkout.session.completed", second);
+      } else {
+        await event("checkout.session.completed", payment());
+        await event("checkout.session.completed", payment());
+      }
+      expect(fixture.rows("booking_ancillaries")[0].fundingReference.kind).toBe(
+        {
+          direct: "collected_booking",
+          wallet: "internal_booking",
+          split: "split_booking",
+        }[method]
+      );
+      const entitlement = (passengerId: number) =>
+        computeBaggageEntitlement(fixture.db, {
+          bookingId: 7,
+          passengerId,
+          segmentId: 21,
+        });
+      expect(await entitlement(11)).toMatchObject({
+        totalWeightGrams: 43000,
+        requiresOperationalReview: false,
+      });
+      expect(await entitlement(12)).toMatchObject({
+        totalWeightGrams: 23000,
+        requiresOperationalReview: false,
+      });
+    }
+  );
   it.each([true, false])(
     "settles PI-first=%s once with inventory, ledger and a durable notification",
     async piFirst => {

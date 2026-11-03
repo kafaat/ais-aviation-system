@@ -46,6 +46,7 @@ import {
   formatFlightTime,
 } from "@/lib/flight-time";
 import AncillarySelection, {
+  ancillaryCommandLines,
   type SelectedAncillary,
 } from "@/components/AncillarySelection";
 import { SeatMap } from "@/components/SeatMap";
@@ -81,14 +82,30 @@ type Passenger = {
 };
 
 export default function BookingPage() {
+  const [, params] = useRoute("/booking/:id");
+  const search = useSearch();
+  return (
+    <BookingForm
+      key={JSON.stringify([params?.id, search])}
+      flightId={Number(params?.id) || 0}
+      search={search}
+    />
+  );
+}
+
+function BookingForm({
+  flightId,
+  search,
+}: {
+  flightId: number;
+  search: string;
+}) {
   const { t, i18n } = useTranslation();
   const l = useOperationalLabels();
-  const [, params] = useRoute("/booking/:id");
   const { user, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
 
-  const flightId = params?.id ? parseInt(params.id) : 0;
-  const searchParams = new URLSearchParams(useSearch());
+  const searchParams = new URLSearchParams(search);
   const cabinClass = (searchParams.get("class") || "economy") as
     | "economy"
     | "business";
@@ -113,6 +130,7 @@ export default function BookingPage() {
     const key = `${waitlistId}:${groupBookingId}`;
     if (allocation.data && loadedAllocation.current !== key) {
       loadedAllocation.current = key;
+      setSelectedAncillaries([]);
       setPassengers(
         Array.from({ length: allocation.data.passengers }, () => ({
           type: "adult" as const,
@@ -129,7 +147,10 @@ export default function BookingPage() {
   const [selectedAncillaries, setSelectedAncillaries] = useState<
     SelectedAncillary[]
   >([]);
-  const [ancillariesTotalCost, setAncillariesTotalCost] = useState(0);
+  const ancillariesTotalCost = selectedAncillaries.reduce(
+    (sum, row) => sum + row.totalPrice,
+    0
+  );
   const [selectedSeats, setSelectedSeats] = useState<
     { id: string; row: number; column: string }[]
   >([]);
@@ -147,7 +168,14 @@ export default function BookingPage() {
   const { data: flight, isLoading } = trpc.flights.getById.useQuery({
     id: flightId,
   });
-  const createBooking = trpc.bookings.create.useMutation();
+  const utils = trpc.useUtils();
+  const createBooking = trpc.bookings.create.useMutation({
+    onError(error) {
+      if (error.data?.code === "CONFLICT") {
+        void utils.ancillary.getAvailable.invalidate();
+      }
+    },
+  });
   const createOffer = trpc.priceQuote.createOffer.useMutation();
   const [selectedOffer, setSelectedOffer] = useState<
     | (Awaited<ReturnType<typeof createOffer.mutateAsync>> & {
@@ -176,7 +204,7 @@ export default function BookingPage() {
       flightId,
       cabinClass,
       passengers,
-      selectedAncillaries,
+      ancillaries: ancillaryCommandLines(selectedAncillaries),
       selectedSeats,
       waitlistId,
       groupBookingId,
@@ -236,6 +264,7 @@ export default function BookingPage() {
         nationality: p.nationality ?? undefined,
       }));
       if (prefilled.length > 0) {
+        setSelectedAncillaries([]);
         setPassengers(prefilled);
       }
       setRebookLoaded(true);
@@ -309,6 +338,15 @@ export default function BookingPage() {
     if (waitlistId || groupBookingId) return;
     if (passengers.length > 1) {
       setPassengers(passengers.filter((_, i) => i !== index));
+      setSelectedAncillaries(lines =>
+        lines
+          .filter(line => line.passengerIndex !== index)
+          .map(line =>
+            line.passengerIndex > index
+              ? { ...line, passengerIndex: line.passengerIndex - 1 }
+              : line
+          )
+      );
     }
   };
 
@@ -402,8 +440,9 @@ export default function BookingPage() {
           : {}),
         waitlistId: Number(searchParams.get("waitlistId")) || undefined,
         groupBookingId: Number(searchParams.get("groupBookingId")) || undefined,
-        ancillaries:
-          selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
+        ancillaries: selectedAncillaries.length
+          ? ancillaryCommandLines(selectedAncillaries)
+          : undefined,
       });
 
       // Redirect to the provider; creating a booking is not payment proof.
@@ -480,8 +519,9 @@ export default function BookingPage() {
           : {}),
         waitlistId: Number(searchParams.get("waitlistId")) || undefined,
         groupBookingId: Number(searchParams.get("groupBookingId")) || undefined,
-        ancillaries:
-          selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
+        ancillaries: selectedAncillaries.length
+          ? ancillaryCommandLines(selectedAncillaries)
+          : undefined,
       });
 
       // Save passengers that are marked for future use
@@ -570,14 +610,6 @@ export default function BookingPage() {
     (Boolean(waitlistId || groupBookingId) &&
       (!allocation.data || allocation.isError));
   const totalAmount = baseAmount + ancillariesTotalCost / 100;
-
-  const handleAncillariesChange = (
-    ancillaries: SelectedAncillary[],
-    totalCost: number
-  ) => {
-    setSelectedAncillaries(ancillaries);
-    setAncillariesTotalCost(totalCost);
-  };
 
   const isFavorited = isRouteFavorited();
 
@@ -1130,8 +1162,11 @@ export default function BookingPage() {
             {/* Ancillary Services */}
             <AncillarySelection
               cabinClass={cabinClass}
-              numberOfPassengers={passengers.length}
-              onSelectionChange={handleAncillariesChange}
+              flightIds={[flight.id]}
+              passengers={passengers}
+              selected={selectedAncillaries}
+              onChange={setSelectedAncillaries}
+              disabled={createBooking.isPending || createCheckout.isPending}
             />
 
             {/* Travel Requirements & Carbon Offset */}

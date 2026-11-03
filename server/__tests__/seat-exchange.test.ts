@@ -106,6 +106,19 @@ async function fund() {
 const quote = () =>
   quoteSeatExchange(db.db, booking(), [10, 20], [10, 30], "economy");
 describe("sector paid-seat contract", () => {
+  it("requires the displayed catalog price before changing the invoice or holding a seat", async () => {
+    await expect(
+      db.db.transaction((tx: any) =>
+        insertInvoiceAncillary(tx, booking(), {
+          ...request,
+          expectedUnitPrice: 1900,
+        })
+      )
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(booking().totalAmount).toBe(10000);
+    expect(db.rows("seat_inventory")[0].status).toBe("available");
+    expect(db.rows("booking_ancillaries")).toHaveLength(0);
+  });
   it("preserves a funded fee through a same-seat exchange without writing a second charge", async () => {
     await buy();
     expect(db.rows("booking_segments").map(s => s.segmentAmount)).toEqual([

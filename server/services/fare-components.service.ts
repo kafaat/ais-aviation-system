@@ -27,7 +27,12 @@ export type InitialFareComponentInput = {
   bookingSegmentId?: number;
   source: ComponentSource;
   sourceReference?: string;
-  ancillaries?: Array<{ amount: number; code?: string }>;
+  ancillaries?: Array<{
+    amount: number;
+    code?: string;
+    passengerId?: number;
+    sourceReference?: string;
+  }>;
 };
 
 export function composeInitialFareComponents(
@@ -121,12 +126,13 @@ export function composeInitialFareComponents(
   for (const ancillary of input.ancillaries ?? [])
     rows.push({
       ...common,
-      passengerId: null,
+      passengerId: ancillary.passengerId ?? null,
       componentType: "ancillary",
       code: ancillary.code ?? "ANCILLARY",
       amount: ancillary.amount,
       policyVersion: null,
       source: "ancillary_catalog",
+      sourceReference: ancillary.sourceReference ?? common.sourceReference,
     });
 
   if (

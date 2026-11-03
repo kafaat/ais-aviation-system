@@ -1,3 +1,4 @@
+import { useOperationalLabels } from "./OperationalReadState";
 import { matchesPaidSeatProduct } from "@shared/paid-seat";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -52,8 +53,24 @@ const categoryNameKeys: Record<string, string> = {
   priority_boarding: "ancillary.categories.priority_boarding",
 };
 
-type NamedSeat = { passengerId: number; flightId: number; seatNumber: string };
-function SeatPurchaseControls({
+type ServiceScope = {
+  passengerId: number;
+  flightId: number;
+  seatNumber?: string;
+};
+function permits(
+  restriction: string | null,
+  value: string | number | undefined
+) {
+  if (restriction == null) return true;
+  try {
+    const values: unknown = JSON.parse(restriction);
+    return Array.isArray(values) && values.includes(value);
+  } catch {
+    return false;
+  }
+}
+function ScopedPurchaseControls({
   bookingId,
   cabinClass,
   service,
@@ -62,11 +79,19 @@ function SeatPurchaseControls({
 }: {
   bookingId: number;
   cabinClass: "economy" | "business";
-  service: { code: string; price: number };
+  service: {
+    code: string;
+    price: number;
+    category: string;
+    applicableAirlines: string | null;
+  };
   disabled: boolean;
-  onAdd: (selection: NamedSeat) => void;
+  onAdd: (selection: ServiceScope, quantity: number) => void;
 }) {
   const { t } = useTranslation();
+  const l = useOperationalLabels();
+  const isSeat = service.category === "seat";
+  const [quantity, setQuantity] = useState("1");
   const [flightId, setFlightId] = useState(0);
   const [passengerId, setPassengerId] = useState(0);
   const [number, setNumber] = useState("");
@@ -74,10 +99,21 @@ function SeatPurchaseControls({
   const pax = trpc.bookings.getPassengers.useQuery({ bookingId });
   const map = trpc.seatMap.getFlightSeatMap.useQuery(
     { flightId },
-    { enabled: flightId > 0 }
+    { enabled: isSeat && flightId > 0 }
   );
-  const sector = legs.data?.find(leg => leg.flightId === flightId);
-  const unseated = sector?.passengers.filter(p => !p.seatNumber);
+  const carrier = trpc.flights.getById.useQuery(
+    { id: flightId },
+    { enabled: !!service.applicableAirlines && flightId > 0 }
+  );
+  const eligibleLegs = legs.data?.filter(
+    leg =>
+      ["scheduled", "delayed"].includes(leg.status) &&
+      new Date(leg.departureTime).getTime() > Date.now()
+  );
+  const sector = eligibleLegs?.find(leg => leg.flightId === flightId);
+  const eligiblePassengers = sector?.passengers.filter(
+    p => !isSeat || !p.seatNumber
+  );
   const options =
     map.data?.cabins
       .filter(c => c.cabinClass === cabinClass)
@@ -90,8 +126,16 @@ function SeatPurchaseControls({
           matchesPaidSeatProduct(service.code, seat)
       ) ?? [];
   const valid =
-    unseated?.some(p => p.passengerId === passengerId) &&
-    options.some(s => s.seatNumber === number);
+    !legs.isError &&
+    !pax.isError &&
+    !(isSeat && map.isError) &&
+    !(service.applicableAirlines && carrier.isError) &&
+    eligiblePassengers?.some(p => p.passengerId === passengerId) &&
+    pax.data?.some(p => p.id === passengerId) &&
+    permits(service.applicableAirlines, carrier.data?.airline.id) &&
+    (isSeat
+      ? options.some(s => s.seatNumber === number)
+      : /^[1-9]$|^10$/.test(quantity));
   const selectClass = "border rounded px-2 py-1 text-sm";
   return (
     <div className="grid gap-2">
@@ -107,11 +151,14 @@ function SeatPurchaseControls({
           }}
         >
           <option value={0}>{t("manageAncillaries.choose")}</option>
-          {legs.data?.map((leg, i) => (
-            <option key={leg.flightId} value={leg.flightId}>
-              {i + 1} · {leg.flightNumber}
-            </option>
-          ))}
+          {legs.data?.map(
+            (leg, i) =>
+              eligibleLegs?.includes(leg) && (
+                <option key={leg.flightId} value={leg.flightId}>
+                  {i + 1} · {leg.flightNumber}
+                </option>
+              )
+          )}
         </select>
       </label>
       <label>
@@ -124,7 +171,7 @@ function SeatPurchaseControls({
         >
           <option value={0}>{t("manageAncillaries.choose")}</option>
           {pax.data
-            ?.filter(p => unseated?.some(s => s.passengerId === p.id))
+            ?.filter(p => eligiblePassengers?.some(s => s.passengerId === p.id))
             .map(p => (
               <option key={p.id} value={p.id}>
                 {p.firstName} {p.lastName}
@@ -132,25 +179,69 @@ function SeatPurchaseControls({
             ))}
         </select>
       </label>
-      <label>
-        {t("manageAncillaries.seat")}{" "}
-        <select
-          className={selectClass}
-          disabled={!options.length}
-          value={number}
-          onChange={e => setNumber(e.target.value)}
-        >
-          <option value="">{t("manageAncillaries.choose")}</option>
-          {options.map(s => (
-            <option key={s.id} value={s.seatNumber}>
-              {s.seatNumber}
-            </option>
-          ))}
-        </select>
-      </label>
-      {legs.isError || pax.isError || map.isError ? (
-        <p role="alert">{t("manageAncillaries.seatError")}</p>
+      {isSeat ? (
+        <label>
+          {t("manageAncillaries.seat")}{" "}
+          <select
+            className={selectClass}
+            disabled={!options.length}
+            value={number}
+            onChange={e => setNumber(e.target.value)}
+          >
+            <option value="">{t("manageAncillaries.choose")}</option>
+            {options.map(s => (
+              <option key={s.id} value={s.seatNumber}>
+                {s.seatNumber}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : (
+        <label>
+          {t("manageAncillaries.quantity")}{" "}
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={quantity}
+            onChange={e => setQuantity(e.target.value)}
+          />
+        </label>
+      )}
+      {sector &&
+        !permits(service.applicableAirlines, carrier.data?.airline.id) &&
+        !carrier.isLoading && (
+          <p role="status">
+            {l(
+              "هذه الخدمة غير متاحة للناقل المختار.",
+              "This service is unavailable for the selected carrier."
+            )}
+          </p>
+        )}
+      {legs.isError ||
+      pax.isError ||
+      (isSeat && map.isError) ||
+      (service.applicableAirlines && carrier.isError) ? (
+        <p role="alert">
+          {l(
+            "تعذر تحميل خيارات الخدمة.",
+            "Service options could not be loaded."
+          )}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              if (legs.isError) void legs.refetch();
+              if (pax.isError) void pax.refetch();
+              if (isSeat && map.isError) void map.refetch();
+              if (service.applicableAirlines && carrier.isError)
+                void carrier.refetch();
+            }}
+          >
+            {l("إعادة المحاولة", "Retry")}
+          </button>
+        </p>
+      ) : (
+        isSeat &&
         sector &&
         !map.isLoading &&
         !options.length && <p role="status">{t("manageAncillaries.noSeats")}</p>
@@ -158,7 +249,12 @@ function SeatPurchaseControls({
       <Button
         size="sm"
         disabled={disabled || !valid}
-        onClick={() => onAdd({ flightId, passengerId, seatNumber: number })}
+        onClick={() =>
+          onAdd(
+            { flightId, passengerId, ...(isSeat && { seatNumber: number }) },
+            isSeat ? 1 : Number(quantity)
+          )
+        }
       >
         {t("common.add")}
       </Button>
@@ -175,6 +271,7 @@ export function ManageAncillariesDialog({
   numberOfPassengers,
 }: ManageAncillariesDialogProps) {
   const { t } = useTranslation();
+  const l = useOperationalLabels();
   const utils = trpc.useUtils();
   const [selectedServices, setSelectedServices] = useState<
     Record<number, number>
@@ -198,6 +295,12 @@ export function ManageAncillariesDialog({
       toast.success(t("manageAncillaries.addSuccess"));
     },
     onError: error => {
+      if (
+        error.data?.code === "CONFLICT" ||
+        error.data?.code === "PRECONDITION_FAILED"
+      ) {
+        void utils.ancillary.getAvailable.invalidate();
+      }
       toast.error(error.message || t("manageAncillaries.addError"));
     },
   });
@@ -215,21 +318,38 @@ export function ManageAncillariesDialog({
     },
   });
 
-  const pendingCommands = useRef(new Map<string, string>());
-  const handleAddService = (serviceId: number, seat?: NamedSeat) => {
-    const quantity = seat ? 1 : selectedServices[serviceId] || 1;
-    const signature = JSON.stringify([bookingId, serviceId, quantity, seat]);
-    const key = pendingCommands.current.get(signature) ?? crypto.randomUUID();
-    pendingCommands.current.set(signature, key);
+  const pendingCommands = useRef(
+    new Map<string, { key: string; expectedUnitPrice: number }>()
+  );
+  const handleAddService = (
+    service: { id: number; price: number },
+    scope?: ServiceScope,
+    quantity = selectedServices[service.id] || 1
+  ) => {
+    const serviceId = service.id;
+    const signature = JSON.stringify([bookingId, serviceId, quantity, scope]);
+    const command = pendingCommands.current.get(signature) ?? {
+      key: crypto.randomUUID(),
+      expectedUnitPrice: service.price,
+    };
+    pendingCommands.current.set(signature, command);
     addAncillary.mutate(
       {
-        idempotencyKey: key,
+        idempotencyKey: command.key,
+        expectedUnitPrice: command.expectedUnitPrice,
         bookingId,
         ancillaryServiceId: serviceId,
         quantity,
-        ...seat,
+        ...scope,
       },
       {
+        onError(error) {
+          if (
+            error.data?.code === "CONFLICT" ||
+            error.data?.code === "PRECONDITION_FAILED"
+          )
+            pendingCommands.current.delete(signature);
+        },
         onSuccess: () => {
           pendingCommands.current.delete(signature);
           setSelectedServices(prev => ({ ...prev, [serviceId]: 0 }));
@@ -238,16 +358,18 @@ export function ManageAncillariesDialog({
     );
   };
 
-  const handleRemoveAncillary = async (ancillaryId: number) => {
-    await removeAncillary.mutateAsync({
-      ancillaryId,
-    });
+  const handleRemoveAncillary = (ancillaryId: number) => {
+    removeAncillary.mutate({ ancillaryId });
   };
 
   const incrementQuantity = (serviceId: number) => {
     setSelectedServices(prev => ({
       ...prev,
-      [serviceId]: Math.min((prev[serviceId] || 0) + 1, numberOfPassengers * 3),
+      [serviceId]: Math.min(
+        (prev[serviceId] || 0) + 1,
+        numberOfPassengers * 3,
+        10
+      ),
     }));
   };
 
@@ -296,6 +418,7 @@ export function ManageAncillariesDialog({
                   return (
                     <div
                       key={ancillary.id}
+                      data-testid={`extra-line-${ancillary.id}`}
                       className="flex items-center justify-between p-3 border rounded-lg bg-gray-50"
                     >
                       <div className="flex items-center gap-3">
@@ -304,6 +427,36 @@ export function ManageAncillariesDialog({
                           <p className="font-medium">
                             {ancillary.service.name}
                           </p>
+                          {["meal", "baggage", "seat"].includes(
+                            ancillary.service.category
+                          ) && (
+                            <p className="text-sm">
+                              {[
+                                ancillary.passengerFirstName,
+                                ancillary.passengerLastName,
+                              ]
+                                .filter(Boolean)
+                                .join(" ") ||
+                                l(
+                                  "الراكب غير محدد",
+                                  "Passenger not assigned"
+                                )}{" "}
+                              ·{" "}
+                              {ancillary.scopeState === "all_segments"
+                                ? l("كل المقاطع", "All sectors")
+                                : ancillary.scopeState === "specific_segment" &&
+                                    ancillary.segmentOrder != null
+                                  ? [
+                                      t("manageAncillaries.sector") +
+                                        " " +
+                                        ancillary.segmentOrder,
+                                      ancillary.flightNumber,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ")
+                                  : l("المقطع غير محدد", "Sector not assigned")}
+                            </p>
+                          )}
                           <p className="text-sm text-muted-foreground">
                             {t("manageAncillaries.quantity")}:{" "}
                             {ancillary.quantity} •{" "}
@@ -315,6 +468,7 @@ export function ManageAncillariesDialog({
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label={l("إزالة", "Remove")}
                         onClick={() => handleRemoveAncillary(ancillary.id)}
                         disabled={!editable || removeAncillary.isPending}
                       >
@@ -358,6 +512,7 @@ export function ManageAncillariesDialog({
                             {services.map(service => (
                               <div
                                 key={service.id}
+                                data-testid={`extra-offer-${service.id}`}
                                 className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
                               >
                                 <div className="flex-1">
@@ -372,15 +527,35 @@ export function ManageAncillariesDialog({
                                     {t("common.sar")}
                                   </p>
                                 </div>
-                                {category === "seat" ? (
-                                  <SeatPurchaseControls
+                                {!permits(
+                                  service.applicableCabinClasses,
+                                  cabinClass
+                                ) ||
+                                service.currency !== "SAR" ||
+                                (category === "baggage" &&
+                                  !(
+                                    service.weightGrams &&
+                                    service.weightGrams > 0
+                                  )) ||
+                                category === "insurance" ||
+                                category === "lounge" ? (
+                                  <p>
+                                    {l(
+                                      "غير متاح للشراء لهذا الحجز.",
+                                      "Unavailable for purchase on this booking."
+                                    )}
+                                  </p>
+                                ) : ["seat", "meal", "baggage"].includes(
+                                    category
+                                  ) ? (
+                                  <ScopedPurchaseControls
                                     key={bookingId}
                                     bookingId={bookingId}
                                     cabinClass={cabinClass}
                                     service={service}
                                     disabled={addAncillary.isPending}
-                                    onAdd={seat =>
-                                      handleAddService(service.id, seat)
+                                    onAdd={(scope, quantity) =>
+                                      handleAddService(service, scope, quantity)
                                     }
                                   />
                                 ) : (
@@ -411,9 +586,7 @@ export function ManageAncillariesDialog({
                                     </div>
                                     <Button
                                       size="sm"
-                                      onClick={() =>
-                                        handleAddService(service.id)
-                                      }
+                                      onClick={() => handleAddService(service)}
                                       disabled={
                                         !selectedServices[service.id] ||
                                         addAncillary.isPending

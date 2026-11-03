@@ -4,6 +4,7 @@ import { outputNumber } from "./primitives";
 export const responseContracts = {
   myDisruptions: z.array(
     z.object({
+      extrasReviewRequired: z.boolean(),
       bookingReference: z.union([z.undefined(), z.string()]),
       bookingId: z.union([z.undefined(), outputNumber]),
       id: outputNumber,

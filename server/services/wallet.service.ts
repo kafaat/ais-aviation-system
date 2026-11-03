@@ -240,7 +240,6 @@ export async function payFromWallet(
       );
     if (deduction.affectedRows !== 1)
       throw new Error("Wallet payment conflict");
-    await confirmFundedBooking(tx, booking);
     await tx.insert(walletTransactions).values({
       walletId: wallet.id,
       userId,
@@ -251,7 +250,7 @@ export async function payFromWallet(
       description: `Booking ${booking.bookingReference}`,
       status: "completed",
     });
-    await tx.insert(financialLedger).values({
+    const [posted] = await tx.insert(financialLedger).values({
       bookingId,
       userId,
       type: "charge",
@@ -263,6 +262,13 @@ export async function payFromWallet(
       stripeEventId: `wallet-credit:${bookingId}`,
       description: "Wallet booking settlement",
       metadata: JSON.stringify({ tender: "wallet", walletId: wallet.id }),
+    });
+    await confirmFundedBooking(tx, booking, undefined, {
+      kind: "internal_booking",
+      bookingId,
+      ledgerId: posted.insertId,
+      tender: "wallet",
+      amountMinor: amount,
     });
     return { balance: wallet.balance - amount, amountPaid: amount };
   });

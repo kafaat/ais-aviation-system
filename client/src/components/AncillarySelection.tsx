@@ -1,301 +1,347 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import {
-  Package,
-  UtensilsCrossed,
-  Armchair,
-  Shield,
-  Coffee,
-  Zap,
-  Plus,
-  Minus,
-  type LucideIcon,
-} from "lucide-react";
-
-interface AncillarySelectionProps {
-  cabinClass: "economy" | "business";
-  numberOfPassengers: number;
-  onSelectionChange: (
-    selectedAncillaries: SelectedAncillary[],
-    totalCost: number
-  ) => void;
-}
+import { Card } from "@/components/ui/card";
+import { useOperationalLabels } from "./OperationalReadState";
 
 export interface SelectedAncillary {
+  passengerIndex: number;
+  segmentIndex: number;
   ancillaryServiceId: number;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  passengerId?: number;
+  serviceName: string;
+  flightNumber: string;
 }
 
-const categoryIcons: Record<string, LucideIcon> = {
-  baggage: Package,
-  meal: UtensilsCrossed,
-  seat: Armchair,
-  insurance: Shield,
-  lounge: Coffee,
-  priority_boarding: Zap,
-};
+export function ancillaryCommandLines(items: SelectedAncillary[]) {
+  return items.map(
+    ({
+      passengerIndex,
+      segmentIndex,
+      ancillaryServiceId,
+      quantity,
+      unitPrice,
+      totalPrice,
+    }) => ({
+      passengerIndex,
+      segmentIndex,
+      ancillaryServiceId,
+      quantity,
+      unitPrice,
+      totalPrice,
+    })
+  );
+}
+
+function applies(restriction: string | null, value: string | number) {
+  if (restriction === null) return true;
+  try {
+    const list: unknown = JSON.parse(restriction);
+    return Array.isArray(list) && list.includes(value);
+  } catch {
+    return false;
+  }
+}
 
 export default function AncillarySelection({
   cabinClass,
-  numberOfPassengers,
-  onSelectionChange,
-}: AncillarySelectionProps) {
-  const { t } = useTranslation();
-  const [selectedServices, setSelectedServices] = useState<Map<number, number>>(
-    new Map()
+  flightIds,
+  passengers,
+  selected,
+  onChange,
+  disabled = false,
+}: {
+  cabinClass: "economy" | "business";
+  flightIds: number[];
+  passengers: { firstName: string; lastName: string }[];
+  selected: SelectedAncillary[];
+  onChange: (items: SelectedAncillary[]) => void;
+  disabled?: boolean;
+}) {
+  const { t, i18n } = useTranslation();
+  const l = useOperationalLabels();
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const [passengerIndex, setPassengerIndex] = useState(0);
+  const [productId, setProductId] = useState(0);
+  const [quantity, setQuantity] = useState("1");
+  const flightId = flightIds[segmentIndex];
+  const flight = trpc.flights.getById.useQuery(
+    { id: flightId },
+    { enabled: !!flightId }
   );
-
-  const { data: ancillaries, isLoading } = trpc.ancillary.getAvailable.useQuery(
-    {}
-  );
-
-  // Filter ancillaries by cabin class
-  const filteredAncillaries = ancillaries?.filter(service => {
-    if (!service.applicableCabinClasses) return true;
-    try {
-      const classes = JSON.parse(service.applicableCabinClasses);
-      return classes.includes(cabinClass);
-    } catch {
-      return true;
-    }
-  });
-
-  // Group by category
-  const groupedAncillaries = filteredAncillaries?.reduce(
-    (acc, service) => {
-      if (!acc[service.category]) {
-        acc[service.category] = [];
-      }
-      acc[service.category].push(service);
-      return acc;
-    },
-    {} as Record<string, typeof filteredAncillaries>
-  );
-
-  const handleQuantityChange = (
-    serviceId: number,
-    delta: number,
-    _price: number
-  ) => {
-    const newSelected = new Map(selectedServices);
-    const current = newSelected.get(serviceId) || 0;
-    const newQuantity = Math.max(
-      0,
-      Math.min(numberOfPassengers * 3, current + delta)
-    );
-
-    if (newQuantity === 0) {
-      newSelected.delete(serviceId);
-    } else {
-      newSelected.set(serviceId, newQuantity);
-    }
-
-    setSelectedServices(newSelected);
-
-    // Calculate total and notify parent
-    const selected: SelectedAncillary[] = [];
-    let totalCost = 0;
-
-    newSelected.forEach((quantity, id) => {
-      const service = ancillaries?.find(s => s.id === id);
-      if (service) {
-        const itemTotal = service.price * quantity;
-        selected.push({
-          ancillaryServiceId: id,
-          quantity,
-          unitPrice: service.price,
-          totalPrice: itemTotal,
-        });
-        totalCost += itemTotal;
-      }
-    });
-
-    onSelectionChange(selected, totalCost);
-  };
-
-  const toggleService = (serviceId: number, _price: number) => {
-    const current = selectedServices.get(serviceId) || 0;
-    if (current > 0) {
-      handleQuantityChange(serviceId, -current, _price);
-    } else {
-      handleQuantityChange(serviceId, 1, _price);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("ancillary.title")}</CardTitle>
-          <CardDescription>{t("ancillary.loading")}</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  if (!groupedAncillaries || Object.keys(groupedAncillaries).length === 0) {
+  const catalog = trpc.ancillary.getAvailable.useQuery({});
+  const sector = flight.data?.id === flightId ? flight.data : null;
+  const applicableProducts =
+    catalog.data?.filter(
+      item =>
+        sector &&
+        item.available &&
+        item.currency === "SAR" &&
+        Number.isSafeInteger(item.price) &&
+        item.price >= 0 &&
+        applies(item.applicableCabinClasses, cabinClass) &&
+        applies(item.applicableAirlines, sector.airline.id)
+    ) ?? [];
+  function unavailableReason(item: (typeof applicableProducts)[number]) {
+    if (item.category === "seat")
+      return l("يتطلب حجز مقعد محدد.", "Requires a specific seat assignment.");
+    if (item.category === "insurance" || item.category === "lounge")
+      return l(
+        "يتطلب تأكيداً من مقدم الخدمة.",
+        "Requires confirmation from the provider."
+      );
+    if (
+      item.category === "baggage" &&
+      !(item.weightGrams && item.weightGrams > 0)
+    )
+      return l(
+        "لم يؤكد الناقل وزن الأمتعة.",
+        "The carrier has not confirmed a baggage weight."
+      );
     return null;
   }
-
+  const products = applicableProducts.filter(item => !unavailableReason(item));
+  const unavailable = applicableProducts.filter(item =>
+    unavailableReason(item)
+  );
+  const product = products.find(p => p.id === productId);
+  function changedQuote(line: SelectedAncillary) {
+    if (!catalog.data || disabled) return false;
+    const current = catalog.data.find(
+      item => item.id === line.ancillaryServiceId
+    );
+    return !current || !current.available || current.price !== line.unitPrice;
+  }
+  const qty = Number(quantity);
+  const alreadyAdded = selected.some(
+    s =>
+      s.segmentIndex === segmentIndex &&
+      s.passengerIndex === passengerIndex &&
+      s.ancillaryServiceId === productId
+  );
+  const canAdd = Boolean(
+    product &&
+    passengers[passengerIndex] &&
+    sector &&
+    !catalog.isError &&
+    !flight.isError &&
+    !alreadyAdded &&
+    Number.isSafeInteger(qty) &&
+    qty >= 1 &&
+    qty <= 10
+  );
+  const money = (minor: number) =>
+    new Intl.NumberFormat(i18n.language, {
+      style: "currency",
+      currency: "SAR",
+    }).format(minor / 100);
+  const paxLabel = (index: number) => {
+    const p = passengers[index];
+    return [
+      l("الراكب", "Passenger") + " " + (index + 1),
+      p && (p.firstName + " " + p.lastName).trim(),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  };
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("ancillary.title")}</CardTitle>
-        <CardDescription>{t("ancillary.description")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {Object.entries(groupedAncillaries).map(([category, services]) => {
-          const Icon = categoryIcons[category] || Package;
-          return (
-            <div key={category} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Icon className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold capitalize">
-                  {t(`ancillary.categories.${category}`)}
-                </h3>
-              </div>
-              <div className="grid gap-3">
-                {services.map(service => {
-                  const quantity = selectedServices.get(service.id) || 0;
-                  const isSelected = quantity > 0;
-
-                  return (
-                    <div
-                      key={service.id}
-                      className={`border rounded-lg p-4 transition-all ${
-                        isSelected
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() =>
-                              toggleService(service.id, service.price)
-                            }
-                            id={`service-${service.id}`}
-                          />
-                          <div className="flex-1">
-                            <Label
-                              htmlFor={`service-${service.id}`}
-                              className="font-medium cursor-pointer"
-                            >
-                              {service.name}
-                            </Label>
-                            {service.description && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {service.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-end">
-                          <p className="font-semibold text-lg">
-                            {(service.price / 100).toFixed(2)}{" "}
-                            {t("common.currency")}
-                          </p>
-                        </div>
-                      </div>
-
-                      {isSelected && (
-                        <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                handleQuantityChange(
-                                  service.id,
-                                  -1,
-                                  service.price
-                                )
-                              }
-                              disabled={quantity <= 1}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-12 text-center font-medium">
-                              {quantity}
-                            </span>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                handleQuantityChange(
-                                  service.id,
-                                  1,
-                                  service.price
-                                )
-                              }
-                              disabled={quantity >= numberOfPassengers * 3}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <div className="text-end">
-                            <p className="text-sm text-muted-foreground">
-                              {t("ancillary.subtotal")}
-                            </p>
-                            <p className="font-semibold">
-                              {((service.price * quantity) / 100).toFixed(2)}{" "}
-                              {t("common.currency")}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-
-        {selectedServices.size > 0 && (
+    <Card className="space-y-4 p-5" data-testid="ancillary-services">
+      <h2 className="text-xl font-semibold">{t("ancillary.title")}</h2>
+      <fieldset disabled={disabled} className="grid gap-3">
+        <label>
+          {t("manageAncillaries.sector")}{" "}
+          <select
+            data-testid="ancillary-segment"
+            value={segmentIndex}
+            onChange={e => {
+              setSegmentIndex(Number(e.target.value));
+              setProductId(0);
+            }}
+          >
+            {flightIds.map((id, i) => (
+              <option key={i} value={i}>
+                {i + 1} · {l("معرف الرحلة", "Flight ID")} {id}
+              </option>
+            ))}
+          </select>
+        </label>
+        {sector && (
+          <p>
+            {sector.flightNumber} · {sector.origin.code} →{" "}
+            {sector.destination.code}
+          </p>
+        )}
+        <label>
+          {t("manageAncillaries.passenger")}{" "}
+          <select
+            data-testid="ancillary-passenger"
+            value={passengers[passengerIndex] ? passengerIndex : ""}
+            onChange={e => setPassengerIndex(Number(e.target.value))}
+          >
+            <option value="" disabled>
+              {t("manageAncillaries.choose")}
+            </option>
+            {passengers.map((_, i) => (
+              <option key={i} value={i}>
+                {paxLabel(i)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {catalog.isError || flight.isError ? (
+          <div role="alert">
+            {l(
+              "تعذّر تحميل الخدمات لهذا القطاع.",
+              "Services could not be loaded for this sector."
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void catalog.refetch();
+                void flight.refetch();
+              }}
+            >
+              {l("إعادة المحاولة", "Retry")}
+            </Button>
+          </div>
+        ) : catalog.isLoading || flight.isLoading ? (
+          <p role="status">{t("ancillary.loading")}</p>
+        ) : products.length === 0 ? (
+          <p>
+            {l(
+              "لا توجد خدمات إضافية متاحة لهذا القطاع.",
+              "No extras are available for this sector."
+            )}
+          </p>
+        ) : (
           <>
-            <Separator />
-            <div className="bg-muted/50 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{t("ancillary.totalExtras")}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedServices.size} {t("ancillary.servicesSelected")}
-                  </p>
-                </div>
-                <p className="text-2xl font-bold text-primary">
-                  {(
-                    Array.from(selectedServices.entries()).reduce(
-                      (sum, [id, qty]) => {
-                        const service = ancillaries?.find(s => s.id === id);
-                        return sum + (service ? service.price * qty : 0);
-                      },
-                      0
-                    ) / 100
-                  ).toFixed(2)}{" "}
-                  {t("common.currency")}
-                </p>
-              </div>
-            </div>
+            <label>
+              {l("الخدمة", "Service")}{" "}
+              <select
+                data-testid="ancillary-product"
+                value={product?.id ?? ""}
+                onChange={e => setProductId(Number(e.target.value))}
+              >
+                <option value="">{t("manageAncillaries.choose")}</option>
+                {products.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} · {money(item.price)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {l("الكمية", "Quantity")}{" "}
+              <input
+                type="text"
+                inputMode="numeric"
+                data-testid="ancillary-quantity"
+                value={quantity}
+                onChange={e => setQuantity(e.target.value)}
+              />
+            </label>
+            <Button
+              type="button"
+              data-testid="ancillary-add"
+              disabled={!canAdd}
+              onClick={() => {
+                if (!canAdd || !product || !sector) return;
+                onChange([
+                  ...selected,
+                  {
+                    passengerIndex,
+                    segmentIndex,
+                    ancillaryServiceId: product.id,
+                    quantity: qty,
+                    unitPrice: product.price,
+                    totalPrice: product.price * qty,
+                    serviceName: product.name,
+                    flightNumber: sector.flightNumber,
+                  },
+                ]);
+                setProductId(0);
+                setQuantity("1");
+              }}
+            >
+              {l("إضافة الخدمة", "Add service")}
+            </Button>
+            {alreadyAdded && (
+              <p>
+                {l(
+                  "أزل البند لتغيير كميته.",
+                  "Remove the existing line to change its quantity."
+                )}
+              </p>
+            )}
           </>
         )}
-      </CardContent>
+        {!catalog.isError && !flight.isError && unavailable.length > 0 && (
+          <details>
+            <summary>
+              {l(
+                "الخدمات غير المتاحة للشراء هنا",
+                "Services unavailable for purchase here"
+              )}
+            </summary>
+            <ul>
+              {unavailable.map(item => (
+                <li key={item.id}>
+                  {item.name} · {unavailableReason(item)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </fieldset>
+      {selected.length > 0 && (
+        <div>
+          <h3>
+            {l("مراجعة الخدمات قبل الدفع", "Review extras before payment")}
+          </h3>
+          <ul data-testid="ancillary-review" className="space-y-2">
+            {selected.map((item, i) => (
+              <li
+                key={
+                  item.segmentIndex +
+                  ":" +
+                  item.passengerIndex +
+                  ":" +
+                  item.ancillaryServiceId
+                }
+              >
+                {paxLabel(item.passengerIndex)} ·{" "}
+                {t("manageAncillaries.sector")} {item.segmentIndex + 1} (
+                {item.flightNumber}) · {item.serviceName} · {item.quantity} ×{" "}
+                {money(item.unitPrice)} = {money(item.totalPrice)}{" "}
+                {changedQuote(item) && (
+                  <span role="status">
+                    {l(
+                      "تغير السعر أو التوفر. أزل البند واختره مجدداً لمراجعة العرض الحالي.",
+                      "Price or availability changed. Remove this line and select again to review the current offer."
+                    )}{" "}
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disabled}
+                  onClick={() => onChange(selected.filter((_, n) => n !== i))}
+                >
+                  {l("إزالة", "Remove")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <p>
+            {t("ancillary.totalExtras")}{" "}
+            {money(selected.reduce((sum, item) => sum + item.totalPrice, 0))}
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

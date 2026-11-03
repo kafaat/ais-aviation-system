@@ -1,3 +1,4 @@
+import { initialAncillarySchema } from "../services/initial-booking-ancillaries";
 import { responseContracts } from "../contracts/multi-city";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
@@ -158,6 +159,7 @@ export const multiCityRouter = router({
           )
           .min(1)
           .describe("List of passengers"),
+        ancillaries: z.array(initialAncillarySchema).max(200).optional(),
         checkoutContractVersion: z.literal(1).optional(),
         expectedTotalMinor: z.number().int().nonnegative().optional(),
         sessionId: z.string().describe("Booking session ID"),
@@ -172,6 +174,7 @@ export const multiCityRouter = router({
         cabinClass: input.cabinClass,
         passengers: input.passengers,
         sessionId: input.sessionId,
+        ...(input.ancillaries && { ancillaries: input.ancillaries }),
         ...(input.expectedTotalMinor !== undefined && {
           expectedTotalMinor: input.expectedTotalMinor,
         }),

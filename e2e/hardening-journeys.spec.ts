@@ -122,6 +122,184 @@ test.describe("Funded journeys and truthful operational reads", () => {
     ).rejects.toThrow(/Issuing channel/);
   });
 
+  test("outbound bag and meal selected in checkout belong only to their passenger and sector", async ({
+    page,
+  }) => {
+    await useBrowserSession(page, "regular");
+    const client = rpc(page);
+    const outboundId = await fixtureFlight();
+    const returnId = await fixtureFlight();
+    const outbound = await client.flights.getById.query({ id: outboundId });
+    if (!outbound) throw new Error("Missing outbound fixture");
+    await sqlRows<RowDataPacket>(
+      "UPDATE flights SET originId=?, destinationId=?, departureTime=DATE_ADD(departureTime,INTERVAL 1 DAY), arrivalTime=DATE_ADD(arrivalTime,INTERVAL 1 DAY) WHERE id=?",
+      [outbound.destination.id, outbound.origin.id, returnId]
+    );
+    const inbound = await client.flights.getById.query({ id: returnId });
+    if (!inbound) throw new Error("Missing return fixture");
+    const catalog = await client.ancillary.getAvailable.query({});
+    const bag = catalog.find(item => item.code === "BAG_20KG");
+    const meal = catalog.find(item => item.code === "MEAL_VEG");
+    if (!bag || !meal) throw new Error("Seed passenger extras missing");
+    const itinerary = {
+      version: 1,
+      passengerCount: 2,
+      sessionId: randomUUID(),
+      cabinClass: "economy",
+      segments: [outbound, inbound].map(f => ({
+        flightId: f.id,
+        departureDate: f.departureTime.toISOString(),
+      })),
+    };
+    await page.goto(
+      "/booking/multi-city?" +
+        new URLSearchParams({ data: JSON.stringify(itinerary) })
+    );
+    for (const [index, name] of ["Ahmed", "Sara"].entries()) {
+      await page
+        .getByLabel("First Name", { exact: true })
+        .nth(index)
+        .fill(name);
+      await page
+        .getByLabel("Last Name", { exact: true })
+        .nth(index)
+        .fill("Journey");
+    }
+    await page.getByTestId("ancillary-segment").selectOption("0");
+    await page.getByTestId("ancillary-passenger").selectOption("0");
+    for (const item of [bag, meal]) {
+      await page.getByTestId("ancillary-product").selectOption(String(item.id));
+      await page.getByTestId("ancillary-add").click();
+      await expect(page.getByTestId("ancillary-review")).toContainText(
+        item.name
+      );
+    }
+    await page.getByRole("button", { name: "Book Now", exact: true }).click();
+    await expect(page).toHaveURL(/\/my-bookings/);
+    const user = await client.auth.me.query();
+    if (!user) throw new Error("Authenticated passenger missing");
+    const [booking] = await sqlRows<RowDataPacket>(
+      "SELECT id, bookingReference, totalAmount FROM bookings WHERE userId=? AND flightId=?",
+      [user.id, outboundId]
+    );
+    const passengers = await client.bookings.getPassengers.query({
+      bookingId: booking.id,
+    });
+    const ahmed = passengers.find(p => p.firstName === "Ahmed");
+    const sara = passengers.find(p => p.firstName === "Sara");
+    if (!ahmed || !sara) throw new Error("Missing travellers");
+    const currentItems = () =>
+      client.ancillary.getBookingAncillaries.query({ bookingId: booking.id });
+    const invoiceTotal = async () =>
+      (await client.bookings.myBookings.query()).find(
+        row => row.id === booking.id
+      )?.totalAmount;
+    const purchased = await currentItems();
+    expect(purchased).toHaveLength(2);
+    const card = page.locator('[data-slot="card"]').filter({
+      hasText: booking.bookingReference,
+    });
+    await card.getByRole("button", { name: "Manage Services" }).click();
+    const dialog = page.getByRole("dialog");
+    const offer = dialog.getByTestId(`extra-offer-${meal.id}`);
+    await offer.getByLabel("Flight sector").selectOption(String(returnId));
+    await offer.getByLabel("Passenger").selectOption(String(sara.id));
+    await offer.getByRole("button", { name: "Add", exact: true }).click();
+    const addedLine = dialog
+      .locator('[data-testid^="extra-line-"]')
+      .filter({ hasText: "Sara Journey" })
+      .filter({ hasText: meal.name });
+    await expect(addedLine).toContainText(inbound.flightNumber);
+    const changed = await currentItems();
+    expect(changed).toHaveLength(3);
+    expect(await invoiceTotal()).toBe(booking.totalAmount + meal.price);
+    const added = changed.find(line => line.passengerId === sara.id);
+    expect(added).toMatchObject({
+      scopeState: "specific_segment",
+      segmentOrder: 2,
+      flightNumber: inbound.flightNumber,
+      quantity: 1,
+      totalPrice: meal.price,
+      status: "active",
+    });
+    if (!added) throw new Error("Return meal was not added");
+    await dialog
+      .getByTestId(`extra-line-${added.id}`)
+      .getByRole("button")
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (await currentItems()).find(line => line.id === added.id)?.status
+      )
+      .toBe("cancelled");
+    const remaining = (await currentItems()).filter(
+      line => line.status === "active"
+    );
+    expect(remaining).toHaveLength(2);
+    expect(remaining).toEqual(expect.arrayContaining(purchased));
+    expect(await invoiceTotal()).toBe(booking.totalAmount);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await sqlRows<RowDataPacket>(
+      "INSERT INTO user_credits (userId, amount, source) VALUES (?, ?, 'promo')",
+      [user.id, booking.totalAmount]
+    );
+    await client.vouchers.useCredits.mutate({
+      bookingId: booking.id,
+      amount: booking.totalAmount,
+    });
+    const rows = await client.bookings.baggageEntitlements.query({
+      bookingId: booking.id,
+    });
+    expect(rows).toHaveLength(4);
+    for (const passenger of [ahmed, sara]) {
+      for (const flightId of [outboundId, returnId]) {
+        expect(rows).toContainEqual(
+          expect.objectContaining({
+            passengerId: passenger.id,
+            flightId,
+            requiresOperationalReview: false,
+            totalWeightGrams:
+              passenger.id === ahmed.id && flightId === outboundId
+                ? 43000
+                : 23000,
+          })
+        );
+      }
+    }
+    await loginAsAdmin(page);
+    await page.goto("/admin/bag-drop");
+    await page
+      .getByLabel("Booking ID", { exact: true })
+      .fill(String(booking.id));
+    await page
+      .getByRole("button", {
+        name: "Show booking extras by passenger and sector",
+      })
+      .click();
+    for (const item of [bag, meal]) {
+      await expect(
+        page
+          .getByTestId("booked-extra")
+          .filter({ hasText: item.name })
+          .filter({ hasText: "Ahmed Journey" })
+      ).toContainText("Ahmed Journey · Sector 1");
+    }
+    for (const passenger of [ahmed, sara]) {
+      await page
+        .getByLabel("Passenger ID", { exact: true })
+        .fill(String(passenger.id));
+      const summary = page.getByRole("region", { name: "Baggage allowance" });
+      await expect(summary).toContainText(
+        "Segment 1: " +
+          (passenger.id === ahmed.id ? "43" : "23") +
+          " kg verified"
+      );
+      await expect(summary).toContainText("Segment 2: 23 kg verified");
+    }
+  });
+
   test("second-sector exchange recovers the completed change after its response is lost", async ({
     page,
   }) => {
