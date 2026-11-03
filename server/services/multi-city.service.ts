@@ -23,6 +23,11 @@ import {
   calculateFlightPrice,
 } from "./flights.service";
 import { trackBookingStarted } from "./metrics.service";
+import { composeOfferPolicy } from "./retail-offer.service";
+import {
+  holdBookingClass,
+  resolveSellableFareClass,
+} from "./rbd-inventory.service";
 
 /**
  * Multi-City Flights Service
@@ -63,6 +68,8 @@ export interface MultiCityBookingInput {
   segments: Array<{
     flightId: number;
     departureDate: Date;
+    /** Booking class (RBD) for this leg; omitted = cabin-level sale (ADR 0002). */
+    fareClassId?: number;
   }>;
   cabinClass: "economy" | "business";
   passengers: Array<{
@@ -210,7 +217,11 @@ export async function searchMultiCityFlights(
  * Calculate total price for multi-city booking with applicable discounts
  */
 export async function calculateMultiCityPrice(
-  segments: Array<{ flightId: number; cabinClass: "economy" | "business" }>,
+  segments: Array<{
+    flightId: number;
+    cabinClass: "economy" | "business";
+    fareClassId?: number;
+  }>,
   passengerCount: number
 ): Promise<MultiCityPriceResult> {
   if (segments.length < MIN_SEGMENTS) {
@@ -249,11 +260,29 @@ export async function calculateMultiCityPrice(
           segment.cabinClass,
           passengerCount
         );
+        // RBD (ADR 0002): the class multiplier scales the dynamic fare
+        // through the shared offer policy; no second pricing path.
+        let basePrice = Math.round(pricingResult.price);
+        if (segment.fareClassId) {
+          const database = await db.getDb();
+          if (!database) throw new Error("Database not available");
+          const fareClass = await resolveSellableFareClass(
+            database,
+            segment.fareClassId,
+            flight.airline.id,
+            segment.cabinClass
+          );
+          basePrice = composeOfferPolicy(basePrice, {
+            name: `direct:rbd:${fareClass.code}:v1`,
+            fareMultiplier: Number(fareClass.basePriceMultiplier),
+            taxRate: 0,
+          }).totalAmount;
+        }
 
         return {
           segmentIndex: index,
           flightId: segment.flightId,
-          basePrice: pricingResult.price,
+          basePrice,
           cabinClass: segment.cabinClass,
         };
       })
@@ -335,6 +364,7 @@ export async function createMultiCityBooking(
       input.segments.map(s => ({
         flightId: s.flightId,
         cabinClass: input.cabinClass,
+        fareClassId: s.fareClassId,
       })),
       input.passengers.length
     );
@@ -398,6 +428,16 @@ export async function createMultiCityBooking(
             input.userId,
             tx
           );
+          // RBD inventory hook (ADR 0002): the leg's booking class is held
+          // in the same transaction as its cabin hold.
+          if (segment.fareClassId)
+            await holdBookingClass(tx, {
+              flightId: flight.id,
+              cabinClass: input.cabinClass,
+              fareClassId: segment.fareClassId,
+              seats: input.passengers.length,
+              lockId: hold.lockId,
+            });
           held.set(flight.id, {
             lockId: hold.lockId,
             tenantId: flight.tenantId,
@@ -449,6 +489,7 @@ export async function createMultiCityBooking(
             flightId: segment.flightId,
             departureDate: requireHold(held, segment.flightId).departureTime,
             inventoryLockId: requireHold(held, segment.flightId).lockId,
+            fareClassId: segment.fareClassId ?? null,
             status: "pending",
           });
 

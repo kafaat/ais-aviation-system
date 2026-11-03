@@ -43,6 +43,8 @@ const payloadSchema = z.object({
   baseAmount: z.number().int().nonnegative(),
   taxesAndFees: z.number().int().nonnegative(),
   totalAmount: z.number().int().nonnegative(),
+  /** Booking class (RBD) the direct offer was priced for; absent = cabin fare. */
+  fareClassId: z.number().int().positive().optional(),
 });
 type OfferPayload = z.infer<typeof payloadSchema>;
 export type RetailOffer = typeof retailOffers.$inferSelect;
@@ -93,6 +95,9 @@ export async function createRetailOffer(
       taxRate: number;
       fareClassId?: number;
     };
+    /** Direct-channel booking class (ADR 0002): its multiplier scales the
+     * dynamic base fare; taxes and fees stay as the pricing engine quoted. */
+    fareClass?: { id: number; code: string; priceMultiplier: number };
     expiresAt?: Date;
   },
   transaction?: SettlementTx
@@ -127,8 +132,22 @@ export async function createRetailOffer(
           fareMultiplier: input.ndcPolicy?.fareMultiplier ?? 1,
           taxRate: input.ndcPolicy?.taxRate ?? DEFAULT_TAX_RATE,
         }
-      : { name: "direct:v1", fareMultiplier: 1, taxRate: 0 };
+      : input.fareClass
+        ? {
+            name: `direct:rbd:${input.fareClass.code}:v1`,
+            fareMultiplier: input.fareClass.priceMultiplier,
+            taxRate: 0,
+          }
+        : { name: "direct:v1", fareMultiplier: 1, taxRate: 0 };
   const fareLines = price.fareLines?.map(line => {
+    if (input.channel === "direct" && input.fareClass) {
+      const baseFare = composeOfferPolicy(line.baseFare, policy).baseAmount;
+      return {
+        ...line,
+        baseFare,
+        total: baseFare + line.tax + line.bookingFee,
+      };
+    }
     if (input.channel === "direct") return line;
     // Apply the channel's price and tax policy to the fare before tax.
     const adjusted = composeOfferPolicy(line.baseFare, policy);
@@ -163,6 +182,9 @@ export async function createRetailOffer(
     passengerTypes: types,
     policy,
     ...amounts,
+    ...(input.channel === "direct" && input.fareClass
+      ? { fareClassId: input.fareClass.id }
+      : {}),
   };
   const now = new Date();
   const expiresAt = new Date(
@@ -242,6 +264,8 @@ export function validateRetailOffer(
     channel: "direct" | "ndc";
     cabinClass: string;
     passengerTypes: string[];
+    /** When given (null = cabin sale), the offer must be priced for that class. */
+    fareClassId?: number | null;
   },
   now = new Date()
 ) {
@@ -250,6 +274,8 @@ export function validateRetailOffer(
     offer.flightId !== input.flightId ||
     offer.cabinClass !== input.cabinClass ||
     offer.channel !== input.channel ||
+    (input.fareClassId !== undefined &&
+      (payload.fareClassId ?? null) !== input.fareClassId) ||
     (input.tenantId != null && offer.tenantId !== input.tenantId) ||
     (offer.userId !== null && offer.userId !== input.userId) ||
     (input.channel === "direct" && offer.userId === null)

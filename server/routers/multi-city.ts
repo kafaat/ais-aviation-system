@@ -68,6 +68,12 @@ export const multiCityRouter = router({
               cabinClass: z
                 .enum(["economy", "business"])
                 .describe("Cabin class"),
+              fareClassId: z
+                .number()
+                .int()
+                .positive()
+                .optional()
+                .describe("Booking class (RBD) for this segment"),
             })
           )
           .min(2, "At least 2 segments required")
@@ -111,6 +117,14 @@ export const multiCityRouter = router({
             z.object({
               flightId: z.number().describe("Flight ID for this segment"),
               departureDate: z.date().describe("Departure date"),
+              fareClassId: z
+                .number()
+                .int()
+                .positive()
+                .optional()
+                .describe(
+                  "Booking class (RBD) for this segment, from flights.search bookingClasses"
+                ),
             })
           )
           .min(2, "At least 2 segments required")

@@ -32,6 +32,36 @@ vi.mock("../services/redis-cache.service", () => ({
 
 import { getFlightById, searchFlights } from "../services/flights.service";
 
+/** A cached booking-class row; its `available` goes stale like the counters. */
+const bookingClass = (available: number) => ({
+  fareClassId: 41,
+  code: "M",
+  name: "Economy Value",
+  cabinClass: "economy" as const,
+  fareFamily: "Value",
+  priority: 50,
+  priceMultiplier: 0.8,
+  baseFare: 8000,
+  available,
+  authorized: 5,
+  sold: 5 - available,
+  held: 0,
+  nested: true,
+  rules: {
+    refundable: false,
+    changeable: true,
+    changeFee: 15000,
+    upgradeable: true,
+    baggageAllowance: 23,
+    baggagePieces: 1,
+    carryOnAllowance: 7,
+    seatSelection: "paid" as const,
+    mealIncluded: false,
+    loungeAccess: false,
+    priorityBoarding: false,
+  },
+});
+
 const row = (id: number) => ({
   id,
   flightNumber: `ZX${id}`,
@@ -43,6 +73,7 @@ const row = (id: number) => ({
   businessPrice: 20000,
   economyAvailable: 9,
   businessAvailable: 2,
+  bookingClasses: [bookingClass(5)],
   airline: { code: "ZX", name: "Synthetic", logo: null },
   origin: {
     code: "RUH",
@@ -93,6 +124,41 @@ describe("cached search results", () => {
     expect(
       (await searchFlights(query)).map(r => `${r.id}:${r.status}`)
     ).toEqual(["1:delayed", "2:scheduled"]);
+  });
+
+  it("replace cached booking-class availability with the live RBD state", async () => {
+    spies.live.mockResolvedValue([
+      {
+        id: 1,
+        status: "scheduled",
+        economyAvailable: 4,
+        businessAvailable: 2,
+        // M sold out and dropped by the live view; only the full fare remains.
+        bookingClasses: [{ ...bookingClass(4), fareClassId: 40, code: "Y" }],
+      },
+      {
+        id: 2,
+        status: "scheduled",
+        economyAvailable: 9,
+        businessAvailable: 2,
+        bookingClasses: [],
+      },
+    ]);
+    const results = await searchFlights(query);
+    expect(results.map(r => r.bookingClasses.map(c => c.code))).toEqual([
+      ["Y"],
+      [],
+    ]);
+    expect(results[0].bookingClasses[0].available).toBe(4);
+  });
+
+  it("give rows cached before booking classes existed an empty list", async () => {
+    const { bookingClasses: _legacy, ...legacy } = row(1);
+    spies.cachedSearch = [legacy];
+    spies.live.mockResolvedValue([
+      { id: 1, status: "scheduled", economyAvailable: 9, businessAvailable: 2 },
+    ]);
+    expect((await searchFlights(query))[0].bookingClasses).toEqual([]);
   });
 
   it("do not touch the database for an empty cached result", async () => {

@@ -33,6 +33,10 @@ import {
   withTransactionalIdempotency,
 } from "./idempotency-v2.service";
 import { recordEvent } from "./outbox.service";
+import {
+  holdBookingClass,
+  resolveSellableFareClass,
+} from "./rbd-inventory.service";
 
 /**
  * Bookings Service
@@ -64,6 +68,8 @@ export interface CreateBookingInput {
   tenantId?: number | null;
   flightId: number;
   cabinClass: "economy" | "business";
+  /** Booking class (RBD) within the cabin; omitted = cabin-level sale (ADR 0002). */
+  fareClassId?: number;
   passengers: Passenger[];
   sessionId: string;
   lockId?: number;
@@ -82,6 +88,11 @@ function assertTenantMatch(
   if (tenantId != null && rowTenantId !== tenantId) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
+}
+
+function requireDb<T>(database: T | null | undefined): T {
+  if (!database) throw new Error("Database not available");
+  return database;
 }
 
 /**
@@ -154,6 +165,21 @@ export async function createBooking(
         code: "BAD_REQUEST",
         message: "Choose an offer or a purchased price lock",
       });
+    if (input.fareClassId && (input.priceLockId || input.groupBookingId))
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Price locks and group allocations are priced at cabin level",
+      });
+    // RBD (ADR 0002): the class must be the flight's airline and cabin; its
+    // multiplier prices the offer, and the hold below consumes its inventory.
+    const fareClass = input.fareClassId
+      ? await resolveSellableFareClass(
+          transaction ?? requireDb(await getDb()),
+          input.fareClassId,
+          flight.airline.id,
+          input.cabinClass
+        )
+      : undefined;
     const offerId =
       input.priceLockId || input.groupBookingId
         ? undefined
@@ -167,6 +193,13 @@ export async function createBooking(
                 userId: input.userId,
                 sessionId: input.sessionId,
                 channel: "direct",
+                fareClass: fareClass
+                  ? {
+                      id: fareClass.id,
+                      code: fareClass.code,
+                      priceMultiplier: Number(fareClass.basePriceMultiplier),
+                    }
+                  : undefined,
               },
               transaction
             )
@@ -231,6 +264,7 @@ export async function createBooking(
                 channel: "direct",
                 cabinClass: input.cabinClass,
                 passengerTypes: input.passengers.map(p => p.type),
+                fareClassId: input.fareClassId ?? null,
               })
             : undefined;
           const [waiting] = input.waitlistId
@@ -304,6 +338,16 @@ export async function createBooking(
               )
             ).lockId;
           }
+          // RBD inventory hook (ADR 0002): the booking class is held in the
+          // same transaction as the cabin hold, with nested availability.
+          if (input.fareClassId)
+            await holdBookingClass(tx, {
+              flightId: input.flightId,
+              cabinClass: input.cabinClass,
+              fareClassId: input.fareClassId,
+              seats: input.passengers.length,
+              lockId,
+            });
           const selected = [];
           for (const item of input.ancillaries || []) {
             if (
@@ -402,6 +446,7 @@ export async function createBooking(
             userId: input.userId,
             flightId: input.flightId,
             inventoryLockId: lockId,
+            fareClassId: input.fareClassId ?? null,
             bookingReference,
             pnr,
             status: "pending",

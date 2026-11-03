@@ -80,6 +80,7 @@
 | eventInbox | implemented | Migration applied; local transaction or authenticated receiver acknowledgement |
 | scheduledTasks | implemented | Shared database lease and observed lastSuccessAt |
 | slaObservations | implemented | Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA |
+| rbdInventory | implemented | Booking classes nested inside the cabin counters (ADR 0002): per-flight authorization rows backfilled by scripts/db/backfill-rbd-inventory.ts, FOR UPDATE sale and hold, release on cancellation and hold expiry. Exchange, IROPS and group paths still move cabin seats only; the order remains a view over the booking. |
 
 <!-- capability-catalog:end -->
 

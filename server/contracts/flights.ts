@@ -1,6 +1,36 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+/** Sellable booking class (RBD) within a cabin, ADR 0002. Additive: absent
+ * on rows cached before the field existed and on flights without RBD rows. */
+export const bookingClassContract = z.object({
+  fareClassId: outputNumber,
+  code: z.string(),
+  name: z.string(),
+  cabinClass: z.enum(["economy", "business"]),
+  fareFamily: z.union([z.null(), z.string()]),
+  priority: outputNumber,
+  priceMultiplier: outputNumber,
+  baseFare: outputNumber,
+  available: outputNumber,
+  authorized: outputNumber,
+  sold: outputNumber,
+  held: outputNumber,
+  nested: z.boolean(),
+  rules: z.object({
+    refundable: z.boolean(),
+    changeable: z.boolean(),
+    changeFee: outputNumber,
+    upgradeable: z.boolean(),
+    baggageAllowance: outputNumber,
+    baggagePieces: outputNumber,
+    carryOnAllowance: outputNumber,
+    seatSelection: z.enum(["free", "paid", "none"]),
+    mealIncluded: z.boolean(),
+    loungeAccess: z.boolean(),
+    priorityBoarding: z.boolean(),
+  }),
+});
 export const responseContracts = {
   search: z.array(
     z.object({
@@ -14,6 +44,7 @@ export const responseContracts = {
       businessPrice: outputNumber,
       economyAvailable: outputNumber,
       businessAvailable: outputNumber,
+      bookingClasses: z.array(bookingClassContract).optional(),
       airline: z.object({
         code: z.string(),
         name: z.string(),
@@ -48,6 +79,7 @@ export const responseContracts = {
       businessPrice: outputNumber,
       economyAvailable: outputNumber,
       businessAvailable: outputNumber,
+      bookingClasses: z.array(bookingClassContract).optional(),
       airline: z.object({
         id: outputNumber,
         code: z.string(),

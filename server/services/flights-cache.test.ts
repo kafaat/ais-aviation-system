@@ -43,6 +43,8 @@ const flight = {
   businessPrice: 20000,
   economyAvailable: 9,
   businessAvailable: 2,
+  // db.getFlightById / db.searchFlights always attach booking classes (ADR 0002).
+  bookingClasses: [],
   airline: { id: 1, code: "ZX", name: "Synthetic", logo: null },
   origin: {
     id: 1,
@@ -72,6 +74,7 @@ const searchRow = {
   businessPrice: flight.businessPrice,
   economyAvailable: flight.economyAvailable,
   businessAvailable: flight.businessAvailable,
+  bookingClasses: [],
   airline: { code: "ZX", name: "Synthetic", logo: null },
   origin: {
     code: "RUH",
@@ -146,6 +149,12 @@ describe("flight JSON cache boundary", () => {
       expect(db.getFlightById).toHaveBeenCalledOnce();
     }
   );
+  it("serves rows cached before booking classes existed with an empty list", async () => {
+    const { bookingClasses: _legacyClasses, ...legacyRow } = searchRow;
+    cache.search = [legacyRow];
+    expect(await searchFlights(input)).toEqual([searchRow]);
+    expect(db.searchFlights).not.toHaveBeenCalled();
+  });
   it("treats a missing cached tenantId as a cache miss", async () => {
     const { tenantId: _tenantId, ...legacy } = flight;
     cache.detail = legacy;

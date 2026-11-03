@@ -37,6 +37,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { createServiceLogger } from "./_core/logger";
+import { listBookingClasses } from "./services/rbd-inventory.service";
 
 const log = createServiceLogger("database");
 
@@ -647,24 +648,43 @@ export async function searchFlights(params: {
     )
     .orderBy(asc(flights.departureTime), asc(flights.id));
 
-  return result;
+  // Sellable booking classes per cabin (ADR 0002); additive to the cabin counters.
+  const bookingClasses = await listBookingClasses(db, result);
+  return result.map(row => ({
+    ...row,
+    bookingClasses: bookingClasses.get(row.id) ?? [],
+  }));
 }
 
-/** Seat counts and status change under bookings, refunds and operations;
- * cached search and detail rows are overlaid with these before they are
- * served so a sold-out or cancelled flight never shows as bookable. */
+/** Seat counts, status and booking-class availability change under
+ * bookings, refunds and operations; cached search and detail rows are
+ * overlaid with these before they are served so a sold-out or cancelled
+ * flight never shows as bookable. */
 export async function getFlightLiveState(ids: number[]) {
   const db = await getDb();
   if (!db || !ids.length) return [];
-  return db
+  const rows = await db
     .select({
       id: flights.id,
       status: flights.status,
       economyAvailable: flights.economyAvailable,
       businessAvailable: flights.businessAvailable,
+      economyPrice: flights.economyPrice,
+      businessPrice: flights.businessPrice,
     })
     .from(flights)
     .where(inArray(flights.id, ids));
+  const bookingClasses = await listBookingClasses(db, rows);
+  return rows.map(
+    ({
+      economyPrice: _economyPrice,
+      businessPrice: _businessPrice,
+      ...row
+    }) => ({
+      ...row,
+      bookingClasses: bookingClasses.get(row.id) ?? [],
+    })
+  );
 }
 
 export async function getFlightById(id: number) {
@@ -716,7 +736,9 @@ export async function getFlightById(id: number) {
     .where(eq(flights.id, id))
     .limit(1);
 
-  return result.length > 0 ? result[0] : null;
+  if (!result.length) return null;
+  const bookingClasses = await listBookingClasses(db, result);
+  return { ...result[0], bookingClasses: bookingClasses.get(id) ?? [] };
 }
 
 // ============ Booking Functions ============

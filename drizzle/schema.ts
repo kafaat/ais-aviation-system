@@ -270,6 +270,8 @@ export const bookings = mysqlTable(
       .default("pending")
       .notNull(),
     inventoryLockId: int("inventoryLockId").unique(),
+    // Booking class (RBD) sold within the cabin; NULL = cabin-level sale (ADR 0002).
+    fareClassId: int("fareClassId"),
     seatsReserved: boolean("seatsReserved").default(false).notNull(),
     totalAmount: int("totalAmount").notNull(), // Total price in SAR cents
     paymentStatus: mysqlEnum("paymentStatus", [
@@ -783,6 +785,9 @@ export const inventoryLocks = mysqlTable(
     flightId: int("flightId").notNull(),
     numberOfSeats: int("numberOfSeats").notNull(),
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    // Booking class (RBD) the hold counts against; NULL = cabin-level hold.
+    // RBD "held" seats are derived from active rows here (ADR 0002).
+    fareClassId: int("fareClassId"),
 
     // User and session info
     userId: int("userId"),
@@ -2549,6 +2554,8 @@ export const bookingSegments = mysqlTable(
     segmentOrder: int("segmentOrder").notNull(), // Order of segment in the trip (1, 2, 3, etc.)
     flightId: int("flightId").notNull(),
     inventoryLockId: int("inventoryLockId"),
+    // Booking class (RBD) sold on this leg; NULL = cabin-level sale (ADR 0002).
+    fareClassId: int("fareClassId"),
     seatsReserved: boolean("seatsReserved").default(false).notNull(),
     segmentAmount: int("segmentAmount"), // Allocated share of the quoted itinerary total; NULL for historical unknowns.
     departureDate: timestamp("departureDate").notNull(),
@@ -4776,6 +4783,46 @@ export const fareClasses = mysqlTable(
 
 export type FareClass = typeof fareClasses.$inferSelect;
 export type InsertFareClass = typeof fareClasses.$inferInsert;
+
+/**
+ * Per-flight booking-class (RBD) inventory, nested inside the cabin counters
+ * on `flights` (ADR 0002). `authorizedSeats` is the class authorization level
+ * (AU); `sold` moves with the cabin decrement in the same transaction. Held
+ * seats are not stored: they are the active `inventory_locks` rows carrying
+ * this `fareClassId`, exactly as cabin holds are derived today.
+ */
+export const flightFareClassInventory = mysqlTable(
+  "flight_fare_class_inventory",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    fareClassId: int("fareClassId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    authorizedSeats: int("authorizedSeats").notNull(),
+    sold: int("sold").default(0).notNull(),
+    // true: serially nested with the other nested classes of the cabin (a
+    // sale in a lower class consumes every higher nested class). false: a
+    // discrete bucket bounded only by its own AU and the physical cabin.
+    nested: boolean("nested").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    flightFareClassIdx: uniqueIndex("flight_fare_class_inventory_idx").on(
+      table.flightId,
+      table.fareClassId
+    ),
+    flightCabinIdx: index("flight_fare_class_inventory_cabin_idx").on(
+      table.flightId,
+      table.cabinClass
+    ),
+  })
+);
+
+export type FlightFareClassInventory =
+  typeof flightFareClassInventory.$inferSelect;
+export type InsertFlightFareClassInventory =
+  typeof flightFareClassInventory.$inferInsert;
 
 /**
  * Fare Rules - Complex fare restrictions and conditions

@@ -5,6 +5,7 @@ import * as db from "../db";
 import { DynamicPricingService } from "./pricing/dynamic-pricing.service";
 import { redisCacheService, CacheTTL } from "./redis-cache.service";
 import { civilDateOf } from "./civil-day";
+import type { BookingClassAvailability } from "./rbd-inventory.service";
 
 // Only known cache date fields are restored. Public contracts remain strict.
 const cachedDate = z.union([
@@ -45,27 +46,33 @@ export type FlightSearchResult = Awaited<
   ReturnType<typeof import("../db").searchFlights>
 >;
 
-/** Overlay the live seat counts and status onto cached rows. With
- * `sellable`, rows whose flight is no longer on sale (cancelled, completed,
- * or gone) are dropped, as a fresh search would drop them. */
+/** Overlay the live seat counts, status and booking-class availability onto
+ * cached rows. With `sellable`, rows whose flight is no longer on sale
+ * (cancelled, completed, or gone) are dropped, as a fresh search would drop
+ * them. Rows cached before booking classes existed get an empty list. */
 async function overlayLiveState<
   T extends {
     id: number;
     status: string;
     economyAvailable: number;
     businessAvailable: number;
+    bookingClasses?: BookingClassAvailability[];
   },
->(rows: T[], options: { sellable: boolean }): Promise<T[]> {
-  if (!rows.length) return rows;
+>(
+  rows: T[],
+  options: { sellable: boolean }
+): Promise<Array<T & { bookingClasses: BookingClassAvailability[] }>> {
+  if (!rows.length) return [];
   const live = new Map(
     (await db.getFlightLiveState(rows.map(r => r.id))).map(l => [l.id, l])
   );
   return rows.flatMap(row => {
     const state = live.get(row.id);
-    if (!state) return options.sellable ? [] : [row];
+    const cached = { ...row, bookingClasses: row.bookingClasses ?? [] };
+    if (!state) return options.sellable ? [] : [cached];
     if (options.sellable && !["scheduled", "delayed"].includes(state.status))
       return [];
-    return [{ ...row, ...state }];
+    return [{ ...cached, ...state }];
   });
 }
 
