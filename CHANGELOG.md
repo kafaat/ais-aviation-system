@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.35.1
+
+### Bug Fixes
+
+- fix(kiosk): distinguish sessions from prints and add a station pilot label (7ac506e)
+- fix(kiosk): separate document issuance from printer evidence (c2c5efc)
+
+### Documentation
+
+- docs(kiosk): apply table formatting to the API reference (19f7339)
+
+### Other Changes
+
+- Merge station field check from #253 and retain one printer acceptance command (17d412e)
+- Merge pull request #252 from kafaat/fix/kiosk-print-evidence (7e6f01c)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.35.0...v1.35.1
+
+---
+
 ## What's Changed in v1.35.0
 
 ### Features
