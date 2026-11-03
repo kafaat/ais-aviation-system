@@ -4780,6 +4780,7 @@
     "returnDate": "Return date",
     "previousDay": "Previous day",
     "nextDay": "Next day",
+    "hostedBooking": "Book or manage a reservation with Videcom",
     "manageBooking": "Manage booking",
     "agentPortal": "Travel agent portal",
     "passengerSummary": "{{count}} passengers",

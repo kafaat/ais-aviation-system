@@ -6,6 +6,7 @@ import Home from "../Home";
 const calls = vi.hoisted(() => ({
   navigate: vi.fn(),
   search: "origin=1&destination=2&date=2027-01-15",
+  videcomEnabled: false,
   historyDate: "2027-01-15",
 }));
 vi.mock("wouter", async original => ({
@@ -68,6 +69,11 @@ vi.mock("@/components/ui/calendar", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    ibePublic: {
+      config: {
+        useQuery: () => ({ data: { videcomEnabled: calls.videcomEnabled } }),
+      },
+    },
     reference: {
       airports: {
         useQuery: () => ({
@@ -82,6 +88,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 beforeEach(() => {
+  calls.videcomEnabled = false;
   calls.navigate.mockReset();
   calls.search = "origin=1&destination=2&date=2027-01-15";
   calls.historyDate = "2027-01-15";
@@ -157,4 +164,14 @@ it("does not search with a party larger than the booking contract supports", () 
   });
   expect(screen.getByTestId("home-search-button")).toBeDisabled();
   expect(screen.getByRole("alert")).toHaveTextContent("ibe.passengerLimit");
+});
+
+it("offers a full document navigation only when the hosted service is enabled", () => {
+  const { rerender } = render(<Home />);
+  expect(screen.queryByRole("link", { name: "ibe.hostedBooking" })).toBeNull();
+  calls.videcomEnabled = true;
+  rerender(<Home />);
+  expect(
+    screen.getByRole("link", { name: "ibe.hostedBooking" })
+  ).toHaveAttribute("href", "/videcom?lang=en");
 });
