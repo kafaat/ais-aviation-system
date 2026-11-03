@@ -23,6 +23,12 @@ const TEST_USERS = [
     role: "user" as const,
   },
   {
+    name: "Reporting User",
+    email: "test.reporting@example.com",
+    password: "TestPassword123!",
+    role: "user" as const,
+  },
+  {
     name: "Admin User",
     email: "admin@ais-aviation.com",
     password: "AdminPassword123!",
@@ -124,6 +130,8 @@ export default async function globalSetup(config: FullConfig) {
   }
   console.info("[e2e-setup] Consent recorded for all accounts");
   const cleanup = await prepareBrowserSessions(config);
-  console.info("[e2e-setup] Real user/admin/ops UI logins complete");
+  console.info(
+    "[e2e-setup] Real regular/reporting/admin/ops UI logins complete"
+  );
   return cleanup;
 }

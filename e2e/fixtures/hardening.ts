@@ -117,6 +117,12 @@ export async function ownedBooking(
   return { booking, flightId, userId: user.id, command };
 }
 
+/** Report/export setup has its own customer quota and remains distinct from the
+ * administrator reading the results. Creation and funding still use real APIs. */
+export function reportBooking(page: Page, funded = false) {
+  return ownedBooking(page, funded, undefined, "reporting");
+}
+
 async function invalidateFlightSearchCache(): Promise<void> {
   const url = process.env.REDIS_URL;
   if (!url) return;

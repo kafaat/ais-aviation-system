@@ -10,9 +10,11 @@ import type { Page } from "@playwright/test";
 import {
   fixtureFlight,
   ownedBooking,
+  reportBooking,
   rpc,
   sqlRows,
 } from "./fixtures/hardening";
+import { testUsers } from "./fixtures/test-data";
 import type { RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -1022,7 +1024,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test("a profile export reaches an authenticated browser download and a different account receives 404", async ({
     page,
   }) => {
-    const { booking } = await ownedBooking(page);
+    const { booking, userId } = await reportBooking(page);
     await page.goto("/profile");
     await page.getByRole("tab", { name: "Security and privacy" }).click();
     await page.getByLabel("File format").selectOption("json");
@@ -1058,22 +1060,27 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const filePath = await file.path();
     if (!filePath) throw new Error("Export download missing");
     const document = JSON.parse(await readFile(filePath, "utf8"));
-    expect(document.profile.email).toBe("test.user@example.com");
+    expect(document.profile.email).toBe(testUsers.reporting.email);
     expect(document.bookings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ bookingReference: booking.bookingReference }),
       ])
     );
     await loginAsAdmin(page);
+    const otherAccount = await rpc(page).auth.me.query();
+    expect(otherAccount).toMatchObject({ role: "admin" });
+    expect(otherAccount?.id).not.toBe(userId);
     expect((await page.request.get(downloadUrl)).status()).toBe(404);
   });
   test("demonstrates operational booking values alongside unverified earned revenue", async ({
     page,
   }) => {
-    // This reader journey funds the admin's own booking so unrelated customer
-    // journeys cannot exhaust its per-user booking-creation quota in parallel.
-    const { booking } = await ownedBooking(page, true, undefined, "admin");
+    const { booking, userId } = await reportBooking(page, true);
+    await useBrowserSession(page, "admin");
     const client = rpc(page);
+    const administrator = await client.auth.me.query();
+    expect(administrator).toMatchObject({ role: "admin" });
+    expect(administrator?.id).not.toBe(userId);
     const summary = await client.revenueAccounting.getDashboard.query();
     expect(summary.recognizedRevenue).toBeNull();
     expect(summary.deferredRevenue).toBeNull();

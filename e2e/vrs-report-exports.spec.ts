@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
-import { fixtureFlight, ownedBooking, rpc } from "./fixtures/hardening";
+import { fixtureFlight, reportBooking, rpc } from "./fixtures/hardening";
 import { testUsers } from "./fixtures/test-data";
 import { disposableDatabaseUrl } from "./disposable-database";
 import mysql, {
@@ -70,7 +70,7 @@ test("booking downloads include the whole UTC creation day and only the selected
           amount,
           day + " " + time,
           offset,
-          testUsers.regular.email,
+          testUsers.reporting.email,
         ]
       );
       expect(entry.affectedRows).toBe(1);
@@ -194,15 +194,13 @@ test("flight exports use the same flight IDs, departure day, status and seat tot
 test("revenue downloads reconcile a paid ticket and a later partial refund by UTC day", async ({
   page,
 }, info) => {
-  // The reporting account owns these fixtures so parallel customer journeys
-  // can exercise their own booking quota independently.
-  const { booking, userId, flightId } = await ownedBooking(
-    page,
-    false,
-    undefined,
-    "admin"
-  );
+  const { booking, userId, flightId } = await reportBooking(page);
   const passenger = rpc(page);
+  expect(await passenger.auth.me.query()).toMatchObject({
+    id: userId,
+    email: testUsers.reporting.email,
+    role: "user",
+  });
   const db = await mysql.createConnection(disposableDatabaseUrl());
   const date = new Date(Date.UTC(2034, 4, 1 + (info.parallelIndex % 12) * 2));
   const first = date.toISOString().slice(0, 10);
@@ -228,8 +226,14 @@ test("revenue downloads reconcile a paid ticket and a later partial refund by UT
       bookingId: booking.bookingId,
       passengerId: traveller.id,
     });
-    const credit = await ownedBooking(page, true, undefined, "admin");
-    const refund = await rpc(page).refunds.refundInternalFunding.mutate({
+    const credit = await reportBooking(page, true);
+    expect(credit.userId).toBe(userId);
+    await useBrowserSession(page, "admin");
+    const operator = rpc(page);
+    const administrator = await operator.auth.me.query();
+    expect(administrator).toMatchObject({ role: "admin" });
+    expect(administrator?.id).not.toBe(userId);
+    const refund = await operator.refunds.refundInternalFunding.mutate({
       bookingId: booking.bookingId,
       amount: 1234,
       requestId: randomUUID(),

@@ -17,12 +17,13 @@ try {
     .where(
       inArray(users.email, [
         "test.user@example.com",
+        "test.reporting@example.com",
         "admin@ais-aviation.com",
         "test.ops@example.com",
       ])
     );
-  if (accounts.length !== 3)
-    throw new Error("All three registered E2E accounts are required");
+  if (accounts.length !== 4)
+    throw new Error("All four registered E2E accounts are required");
   for (const account of accounts) {
     const current = await getMyConsent(account.id);
     if (!current.needsReconsent) continue;

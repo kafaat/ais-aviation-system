@@ -13,7 +13,7 @@ import { prepareAnonymousConsent } from "./consent";
 import { login } from "./test-helpers";
 import { testUsers } from "./test-data";
 
-type Account = "regular" | "admin" | "ops";
+type Account = "regular" | "reporting" | "admin" | "ops";
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
 /** Real UI logins, then isolated contexts reuse their authenticated cookies.
@@ -27,7 +27,7 @@ export async function prepareBrowserSessions(config: FullConfig) {
       config.projects.find(project => project.name === "chromium")?.use
         .launchOptions
     );
-    for (const account of ["regular", "admin", "ops"] as const) {
+    for (const account of ["regular", "reporting", "admin", "ops"] as const) {
       const context = await browser.newContext({
         baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
       });
