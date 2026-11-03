@@ -47,6 +47,9 @@ interface SplitPaymentFormProps {
   bookingReference: string;
   onSuccess?: () => void;
   onCancel?: () => void;
+  disabled?: boolean;
+  onPaymentStart?: () => boolean;
+  onPaymentSettled?: () => Promise<unknown> | void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 11);
@@ -57,6 +60,9 @@ export function SplitPaymentForm({
   bookingReference,
   onSuccess,
   onCancel,
+  disabled = false,
+  onPaymentStart,
+  onPaymentSettled,
 }: SplitPaymentFormProps) {
   const { t } = useTranslation();
 
@@ -87,6 +93,7 @@ export function SplitPaymentForm({
     onError: error => {
       toast.error(error.message || t("splitPayment.initiateError"));
     },
+    onSettled: () => onPaymentSettled?.(),
   });
 
   // Calculate remaining amount
@@ -173,7 +180,13 @@ export function SplitPaymentForm({
 
   // Submit the split payment
   const handleSubmit = () => {
-    if (!isValid) return;
+    if (
+      !isValid ||
+      disabled ||
+      initiateMutation.isPending ||
+      onPaymentStart?.() === false
+    )
+      return;
 
     initiateMutation.mutate({
       bookingId,
@@ -394,7 +407,7 @@ export function SplitPaymentForm({
           )}
           <Button
             onClick={handleSubmit}
-            disabled={!isValid || initiateMutation.isPending}
+            disabled={disabled || !isValid || initiateMutation.isPending}
             className="flex-1"
           >
             {initiateMutation.isPending ? (

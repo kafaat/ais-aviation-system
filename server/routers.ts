@@ -4,10 +4,12 @@ import { operationsRouter } from "./routers/operations";
 import { tenantsRouter } from "./routers/tenants";
 import { systemRouter } from "./_core/systemRouter";
 import { router } from "./_core/trpc";
+import { ibePublicRouter } from "./routers/ibe-public";
 
 // Import domain routers
 import { flightsRouter } from "./routers/flights";
 import { bookingsRouter } from "./routers/bookings";
+import { manageBookingRouter } from "./routers/manage-booking";
 import { paymentsRouter } from "./routers/payments";
 import { refundsRouter } from "./routers/refunds";
 import { adminRouter } from "./routers/admin";
@@ -40,6 +42,7 @@ import { splitPaymentsRouter } from "./routers/split-payments";
 import { corporateRouter } from "./routers/corporate";
 import { priceCalendarRouter } from "./routers/price-calendar";
 import { travelAgentRouter } from "./routers/travel-agent";
+import { agentPortalRouter } from "./routers/agent-portal";
 import { smsRouter } from "./routers/sms";
 import { gatesRouter } from "./routers/gates";
 import { weatherRouter } from "./routers/weather";
@@ -109,6 +112,7 @@ import { webhooksRouter } from "./routers/webhooks";
  * Combines all domain routers into a single API
  */
 export const appRouter = router({
+  ibePublic: ibePublicRouter,
   aviationIntegrations: aviationIntegrationsRouter,
   operations: operationsRouter,
   supplierFinance: supplierFinanceRouter,
@@ -132,6 +136,7 @@ export const appRouter = router({
   // Domain routers
   flights: flightsRouter,
   bookings: bookingsRouter,
+  manageBooking: manageBookingRouter,
   payments: paymentsRouter,
   refunds: refundsRouter,
   admin: adminRouter,
@@ -163,6 +168,7 @@ export const appRouter = router({
   corporate: corporateRouter,
   priceCalendar: priceCalendarRouter,
   travelAgent: travelAgentRouter,
+  agentPortal: agentPortalRouter,
   sms: smsRouter,
   gates: gatesRouter,
   weather: weatherRouter,

@@ -5,7 +5,7 @@ export const APP_TITLE = import.meta.env.VITE_APP_TITLE || "App";
 export const APP_LOGO = "https://placehold.co/128x128/E1E7EF/1F2937?text=App";
 
 // Generate login URL at runtime so redirect URI reflects the current origin.
-export const getLoginUrl = (): string => {
+export const getLoginUrl = (returnTo?: string): string => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   const appId = import.meta.env.VITE_APP_ID;
 
@@ -17,7 +17,10 @@ export const getLoginUrl = (): string => {
   }
 
   try {
-    const redirectUri = `${window.location.origin}/api/oauth/callback`;
+    const callback = new URL("/api/oauth/callback", window.location.origin);
+    const target = safeReturnTo(returnTo);
+    if (target !== "/") callback.searchParams.set("returnTo", target);
+    const redirectUri = callback.toString();
     const state = btoa(redirectUri);
 
     const url = new URL(`${oauthPortalUrl}/app-auth`);
@@ -32,3 +35,4 @@ export const getLoginUrl = (): string => {
     return "#login-not-configured";
   }
 };
+import { safeReturnTo } from "@shared/return-to";

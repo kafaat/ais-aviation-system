@@ -790,6 +790,11 @@ export default function MyBookings() {
                           {booking.paymentStatus === "pending" &&
                             booking.status === "pending" && (
                               <>
+                                <Button asChild className="w-full">
+                                  <Link href={`/checkout/${booking.id}`}>
+                                    {t("checkoutResume.continue")}
+                                  </Link>
+                                </Button>
                                 <BookingCreditPayment
                                   bookingId={booking.id}
                                   amount={booking.totalAmount}

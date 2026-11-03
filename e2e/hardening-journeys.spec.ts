@@ -1,3 +1,5 @@
+import { registerIbeJourneyTests } from "./fixtures/ibe-journeys";
+import { registerAgentPortalTests } from "./fixtures/agent-portal";
 import { registerBaggageConsistencyTest } from "./fixtures/baggage-consistency";
 import { registerCodeshareTests } from "./fixtures/codeshare";
 import { passengerRightsSource } from "../shared/passenger-policy";
@@ -18,6 +20,8 @@ import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 
 registerProviderCheckoutTests();
+registerIbeJourneyTests();
+registerAgentPortalTests();
 registerBaggageConsistencyTest();
 registerCodeshareTests();
 
@@ -212,7 +216,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
       );
     }
     await page.getByRole("button", { name: "Book Now", exact: true }).click();
-    await expect(page).toHaveURL(/\/my-bookings/);
+    await expect(page).toHaveURL(/\/checkout\/\d+/);
     const user = await client.auth.me.query();
     if (!user) throw new Error("Authenticated passenger missing");
     const [booking] = await sqlRows<RowDataPacket>(
@@ -255,6 +259,12 @@ test.describe("Funded journeys and truthful operational reads", () => {
         }),
       ])
     );
+    // Creation stops at invoice review; servicing belongs to the owned booking card.
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: "My bookings", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/my-bookings$/);
     const card = page.locator('[data-slot="card"]').filter({
       hasText: booking.bookingReference,
     });
@@ -447,7 +457,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
     await submit.click();
     await expect(page.getByRole("alert")).toBeVisible();
     await submit.click();
-    await expect(page).toHaveURL(/\/my-bookings/);
+    await expect(page).toHaveURL(/\/checkout\/\d+/);
     expect(bookingAttempts).toBe(2);
     const bookingsAfterRetry = await sqlRows<RowDataPacket>(
       "SELECT id AS bookingId, bookingReference, totalAmount FROM bookings WHERE userId=? AND flightId=?",
@@ -688,13 +698,29 @@ test.describe("Funded journeys and truthful operational reads", () => {
     );
     const flight = await rpc(page).flights.getById.query({ id: flightId });
     if (!flight) throw new Error("Fixture flight missing");
-    await page.goto(
-      `/search?origin=${flight.origin.id}&destination=${flight.destination.id}&date=${flight.departureTime.toISOString().slice(0, 10)}`
-    );
-    const familyLink = page.locator(
-      `a[href="/booking/${flightId}?class=economy&fareClassCode=Q"]`
-    );
+    const originalSearch = new URLSearchParams({
+      origin: String(flight.origin.id),
+      destination: String(flight.destination.id),
+      date: flight.departureTime.toISOString().slice(0, 10),
+    });
+    await page.goto(`/search?${originalSearch}`);
+    const familyLink = page
+      .getByTestId("flight-card")
+      .filter({ hasText: flight.flightNumber })
+      .getByRole("link", { name: /Evidence Flex/ });
     await expect(familyLink).toHaveAccessibleName(/Evidence Flex/);
+    const target = new URL(
+      (await familyLink.getAttribute("href")) ?? "",
+      page.url()
+    );
+    expect(target.pathname).toBe(`/booking/${flightId}`);
+    expect(target.searchParams.get("class")).toBe("economy");
+    expect(target.searchParams.get("fareClassCode")).toBe("Q");
+    expect(
+      Object.fromEntries(
+        new URLSearchParams(target.searchParams.get("search") ?? "")
+      )
+    ).toEqual(Object.fromEntries(originalSearch));
     await familyLink.click();
     await expect(page).toHaveURL(
       new RegExp(`/booking/${flightId}.*fareClassCode=Q`)
