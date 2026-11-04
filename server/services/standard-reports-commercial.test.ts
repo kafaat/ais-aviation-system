@@ -36,6 +36,10 @@ import {
   commercialReportDefinitions,
   getCommercialStandardReport,
 } from "./standard-reports-commercial.service";
+import {
+  renderStandardReport,
+  runStandardReport,
+} from "./standard-reports.service";
 import type {
   StandardReportFilters,
   StandardReportScope,
@@ -774,6 +778,212 @@ describe("unified local PNR snapshots and timelines", () => {
     ).toBeNull();
     expect(result.rows.every(row => row.bookingId === 1)).toBe(true);
     expect(JSON.stringify(result)).not.toContain("NEVER-EXPORT");
+  });
+
+  it("retains legacy nullable-tenant children through their owning booking in snapshots and history", async () => {
+    database.exec("UPDATE passengers SET tenantId=NULL WHERE id=101");
+    database.exec("UPDATE payments SET tenantId=NULL WHERE id=1");
+    database.exec(
+      "UPDATE booking_fare_components SET tenantId=NULL WHERE id=1"
+    );
+
+    const result = await run(59, { bookingReference: "B00001" });
+    for (const recordType of [
+      "passenger",
+      "local_coupon",
+      "payment",
+      "payment_event",
+      "fare_component",
+    ]) {
+      expect(
+        result.rows.filter(row => row.recordType === recordType),
+        recordType
+      ).toHaveLength(1);
+    }
+    expect(
+      (await run(60, { ...day, bookingReference: "B00001" })).rows.filter(
+        row => row.recordType === "payment_event"
+      )
+    ).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("Foreign Mismatch");
+    expect(JSON.stringify(result)).not.toContain("NEVER-EXPORT");
+  });
+
+  it.each([
+    ["tenant", ownScope],
+    ["global", globalScope],
+  ] as const)(
+    "validates each PNR child's booking relationships in %s scope",
+    async (_label, scope) => {
+      booking(3);
+      insert(passengers, {
+        id: 103,
+        tenantId: 101,
+        bookingId: 3,
+        firstName: "Different",
+        lastName: "Booking",
+        createdAt: "2030-01-02 12:00:00",
+      });
+      insert(payments, {
+        id: 3,
+        tenantId: 202,
+        bookingId: 1,
+        amount: 99000,
+        currency: "USD",
+        status: "completed",
+        createdAt: "2030-01-02 12:01:00",
+      });
+      insert(paymentHistory, {
+        id: 3,
+        paymentId: 3,
+        bookingId: 1,
+        event: "completed",
+        amount: 99000,
+        currency: "USD",
+        createdAt: "2030-01-02 12:01:00",
+      });
+      insert(bookingSegments, {
+        id: 100,
+        bookingId: 1,
+        flightId: 20,
+        segmentOrder: 1,
+        status: "confirmed",
+        createdAt: "2030-01-02 12:00:00",
+      });
+      for (const [id, passengerId, flightId] of [
+        [2, 102, 10],
+        [3, 101, 20],
+        [4, 103, 10],
+      ]) {
+        insert(ticketCoupons, {
+          id,
+          bookingId: 1,
+          passengerId,
+          flightId,
+          ticketNumber: `999000000000${id}`,
+          couponNumber: 1,
+          status: "O",
+          createdAt: "2030-01-02 12:00:00",
+        });
+      }
+      for (const [id, tenantId, passengerId, flightId] of [
+        [2, 202, 101, 10],
+        [3, 101, 102, 10],
+        [4, 101, 101, 20],
+        [5, 101, 999, 10],
+        [6, 101, 103, 10],
+      ]) {
+        insert(bookingFareComponents, {
+          id,
+          tenantId,
+          bookingId: 1,
+          passengerId,
+          flightId,
+          componentType: "base_fare",
+          code: "INVALID_RELATIONSHIP",
+          amount: 99000,
+          currency: "USD",
+          createdAt: "2030-01-02 12:00:00",
+          reversedAt: null,
+        });
+      }
+      insert(bookingAncillaries, {
+        id: 2,
+        bookingId: 1,
+        passengerId: 102,
+        ancillaryServiceId: 1,
+        quantity: 1,
+        totalPrice: 99000,
+        status: "active",
+        createdAt: "2030-01-02 12:00:00",
+      });
+      insert(bookingAncillaries, {
+        id: 3,
+        bookingId: 1,
+        passengerId: 103,
+        ancillaryServiceId: 1,
+        quantity: 1,
+        totalPrice: 99000,
+        status: "active",
+        createdAt: "2030-01-02 12:00:00",
+      });
+
+      const result = await run(59, { bookingReference: "B00001" }, scope);
+      for (const recordType of [
+        "passenger",
+        "local_coupon",
+        "payment",
+        "payment_event",
+        "fare_component",
+        "ancillary_purchase",
+      ]) {
+        expect(
+          result.rows.filter(row => row.recordType === recordType),
+          recordType
+        ).toHaveLength(1);
+      }
+      expect(result.rows.some(row => row.recordType === "segment")).toBe(false);
+      expect(JSON.stringify(result)).not.toContain("Foreign Mismatch");
+      expect(JSON.stringify(result)).not.toContain("Different Booking");
+      expect(JSON.stringify(result)).not.toContain("INVALID_RELATIONSHIP");
+      expect(
+        (await run(60, { ...day, bookingReference: "B00001" }, scope)).rows
+          .filter(row => row.recordType === "payment_event")
+          .map(row => row.recordId)
+      ).toEqual([1]);
+    }
+  );
+
+  it("does not attribute a different tenant's PNR to a flight in global scope", async () => {
+    insert(bookingSegments, {
+      id: 100,
+      bookingId: 1,
+      flightId: 20,
+      segmentOrder: 1,
+      status: "confirmed",
+      createdAt: "2030-01-02 12:00:00",
+    });
+    booking(3, 101, { flightId: 20 });
+    const result = await run(62, { flightId: 20 }, globalScope);
+    expect([...new Set(result.rows.map(row => row.bookingId))]).toEqual([2]);
+  });
+
+  it("excludes malformed children before the source cap and retains preview/export record counts", async () => {
+    const request = {
+      reportId: 59,
+      filters: { bookingReference: "B00001" },
+    };
+    const before = await runStandardReport(request, globalScope);
+    database.exec("BEGIN");
+    for (let id = 10; id < 10015; id++) {
+      insert(bookingFareComponents, {
+        id,
+        tenantId: 101,
+        bookingId: 1,
+        passengerId: 102,
+        flightId: 10,
+        amount: 99000,
+        currency: "USD",
+        code: "INVALID_RELATIONSHIP",
+        createdAt: "2030-01-02 12:00:00",
+      });
+      insert(payments, {
+        id,
+        tenantId: 202,
+        bookingId: 1,
+        amount: 99000,
+        currency: "USD",
+        createdAt: "2030-01-02 12:00:00",
+      });
+    }
+    database.exec("COMMIT");
+
+    const after = await runStandardReport(request, globalScope);
+    expect(after.rows).toEqual(before.rows);
+    expect(after.total).toBe(before.total);
+    expect(renderStandardReport(after, "csv").recordCount).toBe(before.total);
+    expect(renderStandardReport(after, "html").recordCount).toBe(before.total);
+    expect(renderStandardReport(after, "xml").recordCount).toBe(before.total);
   });
 
   it("filters the timeline by event time and retains distinguishable sources and exact ledger units", async () => {

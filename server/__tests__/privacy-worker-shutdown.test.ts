@@ -7,7 +7,14 @@ import mysql from "mysql2";
 import { describe, expect, it } from "vitest";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-type Scenario = "normal" | "hold-quit" | "query-error" | "quit-reset" | "drain";
+type Scenario =
+  | "normal"
+  | "hold-quit"
+  | "query-error"
+  | "quit-reset"
+  | "drain"
+  | "query-stall"
+  | "logger-stall";
 
 // Exercise the real singleton with work pending, not a mock of pool.end().
 const drainProgram = `
@@ -37,7 +44,10 @@ const drainProgram = `
   }
 `;
 
-async function runWorker(scenario: Scenario) {
+async function runWorker(
+  scenario: Scenario,
+  options: { signal?: "SIGTERM" | "SIGINT"; budget?: string } = {}
+) {
   const sockets = new Set<Socket>();
   const replyTimers = new Set<ReturnType<typeof setTimeout>>();
   const warnings: string[] = [];
@@ -46,6 +56,7 @@ async function runWorker(scenario: Scenario) {
   let completedSelects = 0;
   let closedSockets = 0;
   let workWasPendingAtQuit = false;
+  let onStalledQuery: (() => void) | undefined;
 
   // mysql2's test server supplies the real wire protocol parser. This fixture
   // exposes only an empty synthetic privacy database on an ephemeral loopback
@@ -99,6 +110,10 @@ async function runWorker(scenario: Scenario) {
       const kind = query.split(" ")[0].toLowerCase();
       commands.push(kind);
       if (kind === "select") {
+        if (scenario === "query-stall") {
+          onStalledQuery?.();
+          return;
+        }
         if (scenario === "query-error") {
           rejectQuery();
           return;
@@ -142,7 +157,12 @@ async function runWorker(scenario: Scenario) {
     connection.on("quit", () => {
       quitCount++;
       workWasPendingAtQuit ||= replyTimers.size > 0;
-      if (scenario === "normal" || scenario === "query-error") socket.end();
+      if (
+        scenario === "normal" ||
+        scenario === "query-error" ||
+        scenario === "logger-stall"
+      )
+        socket.end();
       if (scenario === "quit-reset") socket.resetAndDestroy();
       // hold-quit/drain deliberately send no FIN. The application owns cleanup.
     });
@@ -155,6 +175,7 @@ async function runWorker(scenario: Scenario) {
     scenario === "drain"
       ? ["--import", "tsx", "--input-type=module", "--eval", drainProgram]
       : ["--import", "tsx", "scripts/e2e/process-privacy.ts"];
+  const startedAt = performance.now();
   const child = spawn(process.execPath, args, {
     cwd: root,
     env: {
@@ -163,25 +184,57 @@ async function runWorker(scenario: Scenario) {
       AIS_DISPOSABLE_DATABASE: "true",
       DATABASE_URL: `mysql://fixture:fixture@127.0.0.1:${port}/ais_test`,
       JWT_SECRET: "privacy-shutdown-fixture-only",
+      ...(options.budget !== undefined ||
+      scenario === "query-stall" ||
+      scenario === "logger-stall"
+        ? { AIS_PRIVACY_WORKER_TIMEOUT_MS: options.budget ?? "3000" }
+        : {}),
+      ...(scenario === "logger-stall"
+        ? {
+            NODE_OPTIONS: `--require=${fileURLToPath(
+              new URL("./fixtures/privacy-logger-stall.cjs", import.meta.url)
+            )}`,
+          }
+        : {}),
       // LOG_FORMAT is intentionally omitted, as in the browser CI job.
     },
     stdio: ["ignore", "pipe", "pipe"],
+    // The failing test watchdog owns this isolated process group, including
+    // the supervised task. A regressed supervisor must not orphan its child.
+    detached: process.platform !== "win32",
   });
+  if (options.signal) onStalledQuery = () => child.kill(options.signal);
   let stdout = "";
   let stderr = "";
+  let processClosed = false;
   child.stdout.on("data", data => (stdout += data));
   child.stderr.on("data", data => (stderr += data));
   const closed = new Promise<{ code: number | null; signal: string | null }>(
     (resolve, reject) => {
       child.once("error", reject);
-      child.once("close", (code, signal) => resolve({ code, signal }));
+      child.once("close", (code, signal) => {
+        processClosed = true;
+        resolve({ code, signal });
+      });
     }
   );
+  const killFixtureGroup = () => {
+    if (processClosed) return;
+    if (process.platform === "win32" || !child.pid) {
+      child.kill("SIGKILL");
+      return;
+    }
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    }
+  };
   let timedOut = false;
   // This is a failing test watchdog, never a successful application exit path.
   const deadline = setTimeout(() => {
     timedOut = true;
-    child.kill("SIGKILL");
+    killFixtureGroup();
   }, 8000);
   try {
     const exit = await closed;
@@ -206,6 +259,7 @@ async function runWorker(scenario: Scenario) {
     }
     return {
       ...exit,
+      elapsedMs: performance.now() - startedAt,
       timedOut,
       stdout,
       stderr,
@@ -219,8 +273,7 @@ async function runWorker(scenario: Scenario) {
     };
   } finally {
     clearTimeout(deadline);
-    if (child.exitCode === null && child.signalCode === null)
-      child.kill("SIGKILL");
+    killFixtureGroup();
     for (const timer of replyTimers) clearTimeout(timer);
     for (const socket of sockets) socket.destroy();
     await new Promise<void>((resolve, reject) =>
@@ -230,6 +283,85 @@ async function runWorker(scenario: Scenario) {
 }
 
 describe("privacy worker database shutdown", () => {
+  it.each(["0", "99", "20001", "Infinity", "3000.5", "1e3", ""])(
+    "rejects an invalid total budget (%s) before launching database work",
+    async budget => {
+      const result = await runWorker("normal", { budget });
+      expect(result).toMatchObject({
+        code: 1,
+        signal: null,
+        timedOut: false,
+        commands: [],
+        completedSelects: 0,
+        closedSockets: 0,
+        openSockets: 0,
+      });
+      expect(result.stderr).toContain(
+        "AIS_PRIVACY_WORKER_TIMEOUT_MS must be an integer between 100 and 20000"
+      );
+      expect(result.stderr).not.toContain(
+        '"phase":"processPrivacyRequests:start"'
+      );
+    },
+    12000
+  );
+
+  it("fails within its own budget and closes its owned SQL socket when a query never replies", async () => {
+    const result = await runWorker("query-stall");
+    expect(result, result.stderr).toMatchObject({
+      code: 1,
+      signal: null,
+      timedOut: false,
+      completedSelects: 0,
+      closedSockets: 1,
+      openSockets: 0,
+      warnings: [],
+    });
+    expect(result.commands).toContain("select");
+    expect(result.elapsedMs).toBeLessThan(6000);
+    expect(result.stderr).toContain('"phase":"supervisor:deadline"');
+    expect(result.stderr).not.toContain('"phase":"closePool:return"');
+    expect(result.stderr).not.toContain('"phase":"closeLogger:return"');
+  }, 12000);
+
+  it("fails within its own budget while the real logger end handshake blocks the child event loop", async () => {
+    const result = await runWorker("logger-stall");
+    expect(result, result.stderr).toMatchObject({
+      code: 1,
+      signal: null,
+      timedOut: false,
+      completedSelects: 2,
+      closedSockets: 1,
+      openSockets: 0,
+      warnings: [],
+    });
+    expect(result.elapsedMs).toBeLessThan(6000);
+    expect(result.stderr).toContain("[privacy-stall] destination:end");
+    expect(result.stderr).toContain('"phase":"closePool:return"');
+    expect(result.stderr).toContain('"phase":"closeLogger:start"');
+    expect(result.stderr).toContain('"phase":"supervisor:deadline"');
+    expect(result.stderr).not.toContain('"phase":"closeLogger:return"');
+  }, 12000);
+
+  it.each(["SIGTERM", "SIGINT"] as const)(
+    "observes %s cancellation as failure and closes the owned child's pending SQL connection",
+    async signal => {
+      const result = await runWorker("query-stall", { signal });
+      expect(result, result.stderr).toMatchObject({
+        code: 1,
+        signal: null,
+        timedOut: false,
+        closedSockets: 1,
+        openSockets: 0,
+        warnings: [],
+      });
+      expect(result.stderr).toContain('"phase":"supervisor:signal"');
+      expect(result.stderr).not.toContain('"phase":"closePool:return"');
+      expect(result.stderr).not.toContain('"phase":"closeLogger:return"');
+    },
+    12000
+  );
+
   it.each(["normal", "hold-quit", "quit-reset"] as const)(
     "naturally exits after completed privacy work with a %s peer",
     async scenario => {

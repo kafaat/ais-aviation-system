@@ -2,7 +2,11 @@ import { z } from "zod";
 import { responseContracts } from "../contracts/reference";
 import { publicProcedure, router } from "../_core/trpc";
 import * as db from "../db";
-import { redisCacheService, CacheTTL } from "../services/redis-cache.service";
+import {
+  redisCacheService,
+  CacheTTL,
+  CacheNamespace,
+} from "../services/redis-cache.service";
 
 // Redis JSON serialization turns Date objects into ISO strings. Parse only the
 // cache boundary; the public output contract and DB producer remain strict.
@@ -31,7 +35,10 @@ export const referenceRouter = router({
     .output(responseContracts["airlines"])
     .query(async () => {
       // Try to get from cache
-      const cached = await redisCacheService.getCachedAirlines();
+      const generation = await redisCacheService.captureGeneration(
+        CacheNamespace.AIRLINES
+      );
+      const cached = await redisCacheService.getCachedAirlines(generation);
       const parsed = cachedAirlines.safeParse(cached);
       if (parsed.success) return parsed.data;
 
@@ -39,7 +46,11 @@ export const referenceRouter = router({
       const airlines = await db.getAllAirlines();
 
       // Cache the results
-      await redisCacheService.cacheAirlines(airlines, CacheTTL.AIRLINES);
+      await redisCacheService.cacheAirlines(
+        airlines,
+        CacheTTL.AIRLINES,
+        generation
+      );
 
       return airlines;
     }),
@@ -52,7 +63,10 @@ export const referenceRouter = router({
     .output(responseContracts["airports"])
     .query(async () => {
       // Try to get from cache
-      const cached = await redisCacheService.getCachedAirports();
+      const generation = await redisCacheService.captureGeneration(
+        CacheNamespace.AIRPORTS
+      );
+      const cached = await redisCacheService.getCachedAirports(generation);
       const parsed = cachedAirports.safeParse(cached);
       if (parsed.success) return parsed.data;
 
@@ -60,7 +74,11 @@ export const referenceRouter = router({
       const airports = await db.getAllAirports();
 
       // Cache the results
-      await redisCacheService.cacheAirports(airports, CacheTTL.AIRPORTS);
+      await redisCacheService.cacheAirports(
+        airports,
+        CacheTTL.AIRPORTS,
+        generation
+      );
 
       return airports;
     }),
