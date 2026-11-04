@@ -98,6 +98,7 @@ export default function Notifications() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const [typeFilter, setTypeFilter] = useState<NotificationType | "all">("all");
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [actionFailed, setActionFailed] = useState(false);
 
   const utils = trpc.useUtils();
 
@@ -107,6 +108,7 @@ export default function Notifications() {
     isLoading,
     refetch,
     isFetching,
+    isError,
   } = trpc.notifications.list.useQuery(
     {
       limit: 50,
@@ -126,34 +128,25 @@ export default function Notifications() {
     }
   );
 
-  // Mutations
-  const markAsRead = trpc.notifications.markAsRead.useMutation({
+  const mutationOptions = {
     onSuccess: () => {
+      setActionFailed(false);
       utils.notifications.list.invalidate();
       utils.notifications.unreadCount.invalidate();
     },
-  });
+    onError: () => setActionFailed(true),
+  };
 
-  const markAllAsRead = trpc.notifications.markAllAsRead.useMutation({
-    onSuccess: () => {
-      utils.notifications.list.invalidate();
-      utils.notifications.unreadCount.invalidate();
-    },
-  });
+  // Each mutation keeps its own pending state and shares visible failure feedback.
+  const markAsRead = trpc.notifications.markAsRead.useMutation(mutationOptions);
 
-  const deleteNotification = trpc.notifications.delete.useMutation({
-    onSuccess: () => {
-      utils.notifications.list.invalidate();
-      utils.notifications.unreadCount.invalidate();
-    },
-  });
+  const markAllAsRead =
+    trpc.notifications.markAllAsRead.useMutation(mutationOptions);
 
-  const deleteAll = trpc.notifications.deleteAll.useMutation({
-    onSuccess: () => {
-      utils.notifications.list.invalidate();
-      utils.notifications.unreadCount.invalidate();
-    },
-  });
+  const deleteNotification =
+    trpc.notifications.delete.useMutation(mutationOptions);
+
+  const deleteAll = trpc.notifications.deleteAll.useMutation(mutationOptions);
 
   const unreadCount = unreadData?.count ?? 0;
 
@@ -317,7 +310,10 @@ export default function Notifications() {
                 setTypeFilter(value as NotificationType | "all")
               }
             >
-              <SelectTrigger className="w-[160px] rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <SelectTrigger
+                aria-label={t("notifications.filterByType")}
+                className="w-[160px] rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+              >
                 <SelectValue placeholder={t("notifications.filterByType")} />
               </SelectTrigger>
               <SelectContent>
@@ -352,6 +348,7 @@ export default function Notifications() {
                   : "hover:bg-slate-50 dark:hover:bg-slate-800"
               }`}
               onClick={() => setShowUnreadOnly(!showUnreadOnly)}
+              aria-pressed={showUnreadOnly}
             >
               {t("notifications.unreadOnly")}
             </Button>
@@ -399,6 +396,7 @@ export default function Notifications() {
                     variant="outline"
                     size="sm"
                     className="rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 dark:text-red-400 dark:hover:bg-red-900/20"
+                    disabled={deleteAll.isPending}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     {t("notifications.deleteAll")}
@@ -418,6 +416,7 @@ export default function Notifications() {
                     <AlertDialogAction
                       className="bg-red-600 hover:bg-red-700"
                       onClick={() => deleteAll.mutate()}
+                      disabled={deleteAll.isPending}
                     >
                       {deleteAll.isPending ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -433,8 +432,24 @@ export default function Notifications() {
           </div>
         </div>
 
+        {actionFailed && (
+          <Card
+            role="alert"
+            className="mb-6 p-4 text-red-700 dark:text-red-300"
+          >
+            {t("notifications.actionError")}
+          </Card>
+        )}
+
         {/* Notifications List */}
-        {!notifications || notifications.length === 0 ? (
+        {isError ? (
+          <Card role="alert" className="p-6 space-y-4">
+            <p>{t("notifications.loadError")}</p>
+            <Button onClick={() => refetch()} disabled={isFetching}>
+              {t("common.retry")}
+            </Button>
+          </Card>
+        ) : !notifications || notifications.length === 0 ? (
           <Empty className="border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 rounded-2xl py-16">
             <EmptyMedia>
               <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 flex items-center justify-center">
@@ -546,6 +561,9 @@ export default function Notifications() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
+                                      aria-label={t("notifications.markRead", {
+                                        title: notification.title,
+                                      })}
                                       className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400"
                                       onClick={e => {
                                         e.preventDefault();
@@ -562,6 +580,12 @@ export default function Notifications() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    aria-label={t(
+                                      "notifications.deleteNotification",
+                                      {
+                                        title: notification.title,
+                                      }
+                                    )}
                                     className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                                     onClick={e => {
                                       e.preventDefault();

@@ -7,14 +7,18 @@ import { getDb } from "../db";
 export async function resolveClaimFlight(
   bookingId: number,
   userId: number,
-  requestedFlightId?: number
+  requestedFlightId?: number,
+  tx?: NonNullable<ReturnType<typeof getDb>>
 ) {
-  const db = getDb();
+  const db = tx ?? getDb();
   if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
-  const [booking] = await db
+  const ownership = db
     .select()
     .from(bookings)
     .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)));
+  // Claim writers join the purge/booking parent-lock protocol on their own
+  // transaction connection. Read-only eligibility enquiries need no lock.
+  const [booking] = await (tx ? ownership.for("update") : ownership);
   if (!booking)
     throw new TRPCError({
       code: "NOT_FOUND",

@@ -170,6 +170,11 @@ jobs:
         timeout-minutes: 5
         run: bash scripts/ci/provision-test-redis.sh
 
+      - name: Verify coverage evidence tooling
+        run: |
+          node --test scripts/ci/coverage-partitions.test.mjs
+          python3 -m unittest scripts/ci/test_coverage_evidence.py
+
       - name: Run tests with coverage
         id: coverage
         env:
@@ -229,11 +234,41 @@ jobs:
           name: test-coverage
           path: test-results/coverage-evidence
 
-      - name: Upload coverage to Codecov
+      - name: Setup Node.js for coverage verification
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Verify source and complete coverage partitions
+        env:
+          COVERAGE_EVIDENCE_DIR: ${{ needs.test.outputs.evidence-dir }}
+        run: node scripts/ci/coverage-partitions.mjs verify "$COVERAGE_EVIDENCE_DIR"
+
+      - name: Upload server coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           use_oidc: true
-          files: ${{ needs.test.outputs.evidence-dir }}/coverage/lcov.info
+          files: ${{ needs.test.outputs.evidence-dir }}/coverage/codecov/server.lcov.info
+          flags: server
+          disable_search: true
+          fail_ci_if_error: false
+
+      - name: Upload client coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          use_oidc: true
+          files: ${{ needs.test.outputs.evidence-dir }}/coverage/codecov/client.lcov.info
+          flags: client
+          disable_search: true
+          fail_ci_if_error: false
+
+      - name: Upload shared coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          use_oidc: true
+          files: ${{ needs.test.outputs.evidence-dir }}/coverage/codecov/shared.lcov.info
+          flags: shared
           disable_search: true
           fail_ci_if_error: false
 

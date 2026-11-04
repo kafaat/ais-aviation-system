@@ -406,43 +406,49 @@ export async function createClaim(input: {
 }): Promise<CompensationClaim> {
   const db = await getDb();
   if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
-  const flightId = await resolveClaimFlight(
-    input.bookingId,
-    input.userId,
-    input.flightId
-  );
-  const travellers = await db
-    .select({ id: passengers.id })
-    .from(passengers)
-    .where(eq(passengers.bookingId, input.bookingId));
-  if (
-    input.passengerId !== undefined &&
-    !travellers.some(p => p.id === input.passengerId)
-  )
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger is not part of this booking",
+  return await db.transaction(async tx => {
+    // Lock the owning booking before checking its members or inserting evidence.
+    // A concurrent purge either observes the committed claim or removes the
+    // booking first, in which case the locking ownership read rejects this claim.
+    const flightId = await resolveClaimFlight(
+      input.bookingId,
+      input.userId,
+      input.flightId,
+      tx
+    );
+    const travellers = await tx
+      .select({ id: passengers.id })
+      .from(passengers)
+      .where(eq(passengers.bookingId, input.bookingId));
+    if (
+      input.passengerId !== undefined &&
+      !travellers.some(p => p.id === input.passengerId)
+    )
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Passenger is not part of this booking",
+      });
+    if (input.passengerId === undefined && travellers.length > 1)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Choose the passenger for this claim",
+      });
+    const [inserted] = await tx.insert(compensationClaims).values({
+      bookingId: input.bookingId,
+      flightId,
+      passengerId: input.passengerId ?? travellers[0]?.id ?? null,
+      regulationType: input.regulationType,
+      claimType: input.claimType,
+      status: "under_review",
+      calculatedAmount: null,
+      reason: input.reason ?? null,
     });
-  if (input.passengerId === undefined && travellers.length > 1)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Choose the passenger for this claim",
-    });
-  const [inserted] = await db.insert(compensationClaims).values({
-    bookingId: input.bookingId,
-    flightId,
-    passengerId: input.passengerId ?? travellers[0]?.id ?? null,
-    regulationType: input.regulationType,
-    claimType: input.claimType,
-    status: "under_review",
-    calculatedAmount: null,
-    reason: input.reason ?? null,
+    const [claim] = await tx
+      .select()
+      .from(compensationClaims)
+      .where(eq(compensationClaims.id, inserted.insertId));
+    return claim;
   });
-  const [claim] = await db
-    .select()
-    .from(compensationClaims)
-    .where(eq(compensationClaims.id, inserted.insertId));
-  return claim;
 }
 
 /**

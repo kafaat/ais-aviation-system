@@ -581,6 +581,7 @@
     "privacy": "Privacy Policy"
   },
   "profile": {
+    "loadError": "Could not load your preferences. Please retry before making changes.",
     "title": "User Profile",
     "subtitle": "Manage your account settings and preferences",
     "updateSuccess": "Preferences updated successfully",
@@ -1194,6 +1195,10 @@
     }
   },
   "notifications": {
+    "loadError": "Could not load your notifications. Please try again.",
+    "actionError": "Could not update your notifications. Please try again.",
+    "markRead": "Mark {{title}} as read",
+    "deleteNotification": "Delete notification: {{title}}",
     "title": "Notifications",
     "pageTitle": "Notifications",
     "pageDescription": "View and manage your notifications",
