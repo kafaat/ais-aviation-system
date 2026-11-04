@@ -32,7 +32,9 @@ describe("Production-Ready Features", () => {
         if (!isDatabaseAvailable) return; // Skip if db not reachable
         const result = await checkDatabase();
         expect(result.status).toBe("pass");
-        expect(result.responseTime).toBeGreaterThan(0);
+        // Date.now() has millisecond resolution; a successful query may take 0 ms.
+        expect(Number.isFinite(result.responseTime)).toBe(true);
+        expect(result.responseTime).toBeGreaterThanOrEqual(0);
       }
     );
 
