@@ -88,8 +88,42 @@ JSON transports, successful work, deliberate SQL errors, and a held database
 peer. All terminated naturally with their expected exit codes. Every observed
 Pino `flushSync()` returned; successful transports reached readiness and released
 their worker reference. The held-peer delay occurred after logger readiness,
-without a logger flush in progress. No logger defect was demonstrated, so the
-logger configuration and lifecycle were not changed.
+without a logger flush in progress. These local controls did not reproduce the
+remaining browser-run shutdown failure.
+
+The [next browser run](https://github.com/kafaat/ais-aviation-system/actions/runs/41855648189),
+on head `f8c5e483077602c02ed2bb752a101c4a8e2dc608`, passed all 3,954 unit tests
+and all database gates, but the privacy browser case still required a retry.
+Work returned at 141 ms and database cleanup at 143 ms. Its final resource
+snapshot contained `Immediate`, `MessagePort`, and `PipeWrap`, with no database
+TCP socket. The process was nevertheless terminated by the existing deadline.
+All eleven reporting cases passed on their first attempt. A green workflow that
+permits retries was not treated as completion of this shutdown investigation.
+
+## Explicit logger shutdown
+
+The one-shot worker now awaits the owned Pino transport as well as the database.
+The existing logger construction, formatting, destinations, and redaction are
+retained. Pino's exported stream symbol identifies that logger's transport.
+Concurrent shutdown callers share one promise: it waits for transport readiness,
+asynchronously flushes output, requests termination, and awaits the close event.
+The error listener spans the whole shutdown, including an error emitted after
+a flush callback has already rejected. Logger cleanup runs even when database
+cleanup fails.
+
+A referenced five-second watchdog keeps the event loop active while awaiting
+asynchronous startup and flush acknowledgements and reports failure if those
+waits stall. It cannot preempt thread-stream's synchronous `end()` handshake,
+which has its own library timeout. No complete five-second process-exit bound
+is claimed. A logger failure does not become successful work.
+
+Direct stderr phases now distinguish database and logger cleanup. The browser's
+existing allowlist accepts only those phase names, elapsed times, and safe
+resource-type names; arbitrary child logs remain excluded from its error report.
+Three additional subprocess cases verify final pretty/JSON records, redaction,
+concurrent and repeated closure, and rejection with the transport's delayed
+error-event ordering. The complete local shutdown regression file has eight
+cases. Browser first-attempt acceptance remains a separate current-head gate.
 
 The application does not force successful process exit. The browser case keeps
 its original timeout and retry policy, its authenticated export download and

@@ -1,6 +1,7 @@
 import { disposableDatabaseUrl } from "../../e2e/disposable-database";
 import { processPrivacyRequests } from "../../server/services/gdpr.service";
 import { closePool } from "../../server/db";
+import { closeLogger } from "../../server/_core/logger";
 
 const startedAt = performance.now();
 function markPhase(
@@ -8,7 +9,9 @@ function markPhase(
     | "processPrivacyRequests:start"
     | "processPrivacyRequests:return"
     | "closePool:start"
-    | "closePool:return",
+    | "closePool:return"
+    | "closeLogger:start"
+    | "closeLogger:return",
   resourceTypes?: string[]
 ) {
   // Direct stderr preserves phase evidence independently of logger cleanup.
@@ -31,7 +34,13 @@ try {
   await processPrivacyRequests();
   markPhase("processPrivacyRequests:return");
 } finally {
-  markPhase("closePool:start");
-  await closePool();
-  markPhase("closePool:return", process.getActiveResourcesInfo());
+  try {
+    markPhase("closePool:start");
+    await closePool();
+    markPhase("closePool:return", process.getActiveResourcesInfo());
+  } finally {
+    markPhase("closeLogger:start");
+    await closeLogger();
+    markPhase("closeLogger:return", process.getActiveResourcesInfo());
+  }
 }

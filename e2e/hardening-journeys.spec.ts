@@ -1086,6 +1086,8 @@ test.describe("Funded journeys and truthful operational reads", () => {
         "processPrivacyRequests:return",
         "closePool:start",
         "closePool:return",
+        "closeLogger:start",
+        "closeLogger:return",
       ]);
       const resourceTypes = new Set([
         "PipeWrap",
@@ -1127,7 +1129,8 @@ test.describe("Funded journeys and truthful operational reads", () => {
                   {
                     phase: phase.phase,
                     elapsedMs: phase.elapsedMs,
-                    ...(phase.phase === "closePool:return" &&
+                    ...((phase.phase === "closePool:return" ||
+                      phase.phase === "closeLogger:return") &&
                       Array.isArray(phase.resourceTypes) && {
                         resourceTypes: [
                           ...new Set(

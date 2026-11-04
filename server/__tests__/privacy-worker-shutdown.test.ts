@@ -1,7 +1,8 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
 import type { AddressInfo, Server, Socket } from "node:net";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import mysql from "mysql2";
 import { describe, expect, it } from "vitest";
 
@@ -247,6 +248,7 @@ describe("privacy worker database shutdown", () => {
         '"phase":"processPrivacyRequests:return"'
       );
       expect(result.stderr).toContain('"phase":"closePool:return"');
+      expect(result.stderr).toContain('"phase":"closeLogger:return"');
       expect(result.stdout).toContain("Database connection pool closed");
     },
     12000
@@ -265,6 +267,7 @@ describe("privacy worker database shutdown", () => {
     });
     expect(result.stderr).toContain("Synthetic privacy fixture query failure");
     expect(result.stderr).toContain('"phase":"closePool:return"');
+    expect(result.stderr).toContain('"phase":"closeLogger:return"');
     expect(result.stderr).not.toContain(
       '"phase":"processPrivacyRequests:return"'
     );
@@ -284,5 +287,79 @@ describe("privacy worker database shutdown", () => {
       warnings: [],
     });
     expect(result.stdout).toContain("[privacy-drain] complete");
+  }, 12000);
+
+  it.each(["pretty", "json"])(
+    "flushes final %s logs and closes the worker for concurrent callers",
+    async format => {
+      const program = `
+        import pino from 'pino';
+        import { createServiceLogger, closeLogger, pinoLogger } from './server/_core/logger.ts';
+        const transport = pinoLogger[pino.symbols.streamSym];
+        const log = createServiceLogger('shutdown-fixture');
+        for (let i = 0; i < 10; i++)
+          log.info({ email: 'private-fixture@example.test' }, 'FINAL_LOG_' + i);
+        await Promise.all([closeLogger(), closeLogger()]);
+        if (!transport.closed) throw new Error('Logger returned before worker closure');
+        await closeLogger();
+        process.stdout.write('[logger-close] complete\\n');
+      `;
+      // execFile uses the same default piped stdio as the browser test.
+      const { stdout } = await promisify(execFile)(
+        process.execPath,
+        ["--import", "tsx", "--input-type=module", "--eval", program],
+        {
+          cwd: root,
+          timeout: 8000,
+          env: { PATH: process.env.PATH, NODE_ENV: "test", LOG_FORMAT: format },
+        }
+      );
+      for (let i = 0; i < 10; i++)
+        expect(stdout.match(new RegExp(`FINAL_LOG_${i}\\b`, "g"))).toHaveLength(
+          1
+        );
+      expect(stdout).toContain("[logger-close] complete");
+      expect(stdout).not.toContain("private-fixture@example.test");
+    },
+    12000
+  );
+
+  it("reports flush rejection without an unhandled delayed transport error", async () => {
+    const program = `
+      import { once } from 'node:events';
+      import pino from 'pino';
+      import { closeLogger, pinoLogger } from './server/_core/logger.ts';
+      const transport = pinoLogger[pino.symbols.streamSym];
+      if (!transport.ready) await once(transport, 'ready');
+      // Observe the delayed failure and closure even after shutdown rejects.
+      transport.ref();
+      // thread-stream rejects flush callbacks before emitting its error event.
+      transport.flush = callback => {
+        const error = new Error('fixture_flush_failure');
+        process.nextTick(() => callback(error));
+        setImmediate(() => transport.emit('error', error));
+        setImmediate(() => transport.end());
+      };
+      let rejected = false;
+      try { await closeLogger(); }
+      catch (error) {
+        if (error.message !== 'fixture_flush_failure') throw error;
+        rejected = true;
+      }
+      if (!rejected) throw new Error('Flush failure was reported as success');
+      if (!transport.closed)
+        await new Promise(resolve => transport.once('close', resolve));
+      process.stdout.write('[logger-error] observed\\n');
+    `;
+    const { stdout } = await promisify(execFile)(
+      process.execPath,
+      ["--import", "tsx", "--input-type=module", "--eval", program],
+      {
+        cwd: root,
+        timeout: 8000,
+        env: { PATH: process.env.PATH, NODE_ENV: "test", LOG_FORMAT: "json" },
+      }
+    );
+    expect(stdout).toContain("[logger-error] observed");
   }, 12000);
 });

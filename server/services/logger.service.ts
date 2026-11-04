@@ -1,5 +1,6 @@
 import pino, { Logger, LoggerOptions, TransportTargetOptions } from "pino";
 import { AsyncLocalStorage } from "async_hooks";
+import { once } from "node:events";
 import type { Request, Response, NextFunction } from "express";
 
 // ============================================================================
@@ -375,6 +376,65 @@ function buildLoggerOptions(): LoggerOptions {
 
 // Create the base logger instance
 const baseLogger: Logger = pino(buildLoggerOptions());
+
+// Keep the existing Pino construction and transport options. Its exported
+// stream symbol identifies only this logger's owned transport.
+const loggerTransport = (
+  baseLogger as unknown as Record<symbol, ReturnType<typeof pino.transport>>
+)[pino.symbols.streamSym];
+let loggerTransportReady = false;
+let loggerTransportClosed = false;
+let loggerClosing: Promise<void> | undefined;
+loggerTransport.once("ready", () => {
+  loggerTransportReady = true;
+});
+loggerTransport.once("close", () => {
+  loggerTransportClosed = true;
+});
+
+/** Finish a one-shot process's logs before allowing natural process exit. */
+export function closeLogger(): Promise<void> {
+  if (loggerClosing) return loggerClosing;
+  loggerClosing = (async () => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let onError: (error: Error) => void;
+    const failed = new Promise<never>((_, reject) => {
+      onError = reject;
+      loggerTransport.on("error", onError);
+    });
+    // Keep the event loop alive while the worker starts and acknowledges its
+    // output. Failure stays a failure; this never forces a successful exit.
+    // This bounds asynchronous waits; thread-stream's end handshake also has
+    // its own synchronous timeout and cannot be preempted by a JS timer.
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(
+        () => reject(new Error("Logger shutdown timed out")),
+        5000
+      );
+    });
+    const finish = async () => {
+      if (loggerTransportClosed) return;
+      if (!loggerTransportReady) await once(loggerTransport, "ready");
+      await new Promise<void>((resolve, reject) => {
+        loggerTransport.flush(error => (error ? reject(error) : resolve()));
+      });
+      const closed = once(loggerTransport, "close");
+      loggerTransport.end();
+      await closed;
+    };
+    try {
+      await Promise.race([finish(), deadline, failed]);
+    } finally {
+      clearTimeout(timeout);
+      const removeErrorListener = () => loggerTransport.off("error", onError);
+      // A failed flush can reject its callback before emitting its error.
+      // Observe that error until the owned transport actually closes.
+      if (loggerTransportClosed) removeErrorListener();
+      else loggerTransport.once("close", removeErrorListener);
+    }
+  })();
+  return loggerClosing;
+}
 
 // ============================================================================
 // Logger Class with Context Support
