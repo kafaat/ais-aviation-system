@@ -11,6 +11,10 @@ import {
 import { join, relative, resolve } from "node:path";
 import { constants } from "node:os";
 import { pathToFileURL } from "node:url";
+import {
+  COVERAGE_PARTITION_FILES,
+  writeCoveragePartitions,
+} from "./coverage-partitions.mjs";
 
 const hash = value => createHash("sha256").update(value).digest("hex");
 const readJson = path => JSON.parse(readFileSync(path, "utf8"));
@@ -177,6 +181,26 @@ export async function runCoverage({
     }
   }
   const signal = interrupted ?? result.signal;
+  if (
+    result.exitCode === 0 &&
+    !startupError &&
+    !signal &&
+    !evidenceErrors.length
+  ) {
+    try {
+      writeCoveragePartitions(directory);
+      for (const name of COVERAGE_PARTITION_FILES) {
+        const content = readFileSync(path(name));
+        manifest.artifacts.push({
+          path: name,
+          bytes: content.length,
+          sha256: hash(content),
+        });
+      }
+    } catch (error) {
+      evidenceErrors.push(error.code ?? "COVERAGE_PARTITION_FAILED");
+    }
+  }
   const exitCode = signal
     ? 128 + (constants.signals[signal] ?? 1)
     : result.exitCode || (startupError || evidenceErrors.length ? 1 : 0);

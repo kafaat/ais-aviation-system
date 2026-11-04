@@ -1,5 +1,5 @@
 import { hasValidOptionalPassport } from "@shared/passport";
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -69,6 +69,22 @@ interface FormErrors {
   nationality?: string;
 }
 
+interface PreferenceFields {
+  preferredSeatType: SeatType;
+  preferredCabinClass: CabinClass;
+  mealPreference: MealPreference;
+  wheelchairAssistance: boolean;
+  extraLegroom: boolean;
+  passportNumber: string;
+  passportExpiry: Date | undefined;
+  nationality: string;
+  phoneNumber: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+}
+
 export default function Profile() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
@@ -77,26 +93,60 @@ export default function Profile() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [activeTab, setActiveTab] = useState("travel");
+  const [draft, setDraft] = useState<{
+    userId: number | undefined;
+    fields: Partial<PreferenceFields>;
+  }>({ userId: user?.id, fields: {} });
+  const edits = draft.userId === user?.id ? draft.fields : {};
 
-  const { data: preferences, isLoading } =
-    trpc.userPreferences.getMyPreferences.useQuery();
+  const {
+    data: preferences,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = trpc.userPreferences.getMyPreferences.useQuery();
 
   const updatePreferences =
     trpc.userPreferences.updateMyPreferences.useMutation({
-      onSuccess: () => {
+      onMutate: () => ({ userId: user?.id }),
+      onSuccess: (savedPreferences, submitted, owner) => {
+        // Logout clears private queries. A late response must not recreate them
+        // or replace another signed-in account's preference cache and draft.
+        if (!owner?.userId || utils.auth.me.getData()?.id !== owner.userId)
+          return;
+        utils.userPreferences.getMyPreferences.setData(
+          undefined,
+          savedPreferences
+        );
+        // A slow save must not discard edits made after it was submitted.
+        setDraft(current => {
+          if (current.userId !== owner.userId) return current;
+          const remaining = { ...current.fields };
+          for (const key of Object.keys(
+            remaining
+          ) as (keyof PreferenceFields)[]) {
+            if (Object.is(remaining[key], submitted[key]))
+              delete remaining[key];
+          }
+          return { ...current, fields: remaining };
+        });
         utils.userPreferences.getMyPreferences.invalidate();
         toast.success(t("profile.updateSuccess"), {
           icon: <CheckCircle2 className="h-4 w-4 text-green-500" />,
         });
       },
-      onError: error => {
+      onError: (error, _submitted, owner) => {
+        if (!owner?.userId || utils.auth.me.getData()?.id !== owner.userId)
+          return;
         toast.error(t("profile.updateError") + ": " + error.message, {
           icon: <AlertCircle className="h-4 w-4 text-red-500" />,
         });
       },
     });
 
-  const [formData, setFormData] = useState({
+  // Refreshed server values update untouched fields; local edits retain priority.
+  const formData: PreferenceFields = {
     preferredSeatType: preferences?.preferredSeatType || "window",
     preferredCabinClass: preferences?.preferredCabinClass || "economy",
     mealPreference: preferences?.mealPreference || "regular",
@@ -110,28 +160,18 @@ export default function Profile() {
     emergencyPhone: preferences?.emergencyPhone || "",
     emailNotifications: preferences?.emailNotifications ?? true,
     smsNotifications: preferences?.smsNotifications ?? false,
-  });
+    ...edits,
+  };
 
-  // Update formData when preferences load
-  useEffect(() => {
-    if (preferences) {
-      setFormData({
-        preferredSeatType: preferences.preferredSeatType || "window",
-        preferredCabinClass: preferences.preferredCabinClass || "economy",
-        mealPreference: preferences.mealPreference || "regular",
-        wheelchairAssistance: preferences.wheelchairAssistance || false,
-        extraLegroom: preferences.extraLegroom || false,
-        passportNumber: preferences.passportNumber || "",
-        passportExpiry: preferences.passportExpiry || undefined,
-        nationality: preferences.nationality || "",
-        phoneNumber: preferences.phoneNumber || "",
-        emergencyContact: preferences.emergencyContact || "",
-        emergencyPhone: preferences.emergencyPhone || "",
-        emailNotifications: preferences.emailNotifications ?? true,
-        smsNotifications: preferences.smsNotifications ?? false,
-      });
-    }
-  }, [preferences]);
+  const editPreferences = (patch: Partial<PreferenceFields>) => {
+    setDraft(current => ({
+      userId: user?.id,
+      fields: {
+        ...(current.userId === user?.id ? current.fields : {}),
+        ...patch,
+      },
+    }));
+  };
 
   // Validation function
   const validateForm = (): boolean => {
@@ -207,6 +247,19 @@ export default function Profile() {
   // Loading skeleton
   if (isLoading) {
     return <ProfileSkeleton />;
+  }
+
+  if (isError) {
+    return (
+      <div className="container py-8">
+        <Card role="alert" className="p-6 space-y-4">
+          <p>{t("profile.loadError")}</p>
+          <Button onClick={() => refetch()} disabled={isFetching}>
+            {t("common.retry")}
+          </Button>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -345,8 +398,7 @@ export default function Profile() {
                   <Select
                     value={formData.preferredSeatType}
                     onValueChange={(value: string) =>
-                      setFormData({
-                        ...formData,
+                      editPreferences({
                         preferredSeatType: value as SeatType,
                       })
                     }
@@ -376,8 +428,7 @@ export default function Profile() {
                   <Select
                     value={formData.preferredCabinClass}
                     onValueChange={(value: string) =>
-                      setFormData({
-                        ...formData,
+                      editPreferences({
                         preferredCabinClass: value as CabinClass,
                       })
                     }
@@ -407,8 +458,7 @@ export default function Profile() {
                   <Select
                     value={formData.mealPreference}
                     onValueChange={(value: string) =>
-                      setFormData({
-                        ...formData,
+                      editPreferences({
                         mealPreference: value as MealPreference,
                       })
                     }
@@ -454,10 +504,10 @@ export default function Profile() {
                       </span>
                     </div>
                     <Switch
+                      aria-label={t("profile.travel.wheelchair")}
                       checked={formData.wheelchairAssistance}
                       onCheckedChange={checked =>
-                        setFormData({
-                          ...formData,
+                        editPreferences({
                           wheelchairAssistance: checked,
                         })
                       }
@@ -473,9 +523,10 @@ export default function Profile() {
                       </span>
                     </div>
                     <Switch
+                      aria-label={t("profile.travel.extraLegroom")}
                       checked={formData.extraLegroom}
                       onCheckedChange={checked =>
-                        setFormData({ ...formData, extraLegroom: checked })
+                        editPreferences({ extraLegroom: checked })
                       }
                     />
                   </div>
@@ -519,8 +570,7 @@ export default function Profile() {
                         id="passportNumber"
                         value={formData.passportNumber}
                         onChange={e =>
-                          setFormData({
-                            ...formData,
+                          editPreferences({
                             passportNumber: e.target.value.toUpperCase(),
                           })
                         }
@@ -572,7 +622,7 @@ export default function Profile() {
                           mode="single"
                           selected={formData.passportExpiry}
                           onSelect={date =>
-                            setFormData({ ...formData, passportExpiry: date })
+                            editPreferences({ passportExpiry: date })
                           }
                         />
                       </PopoverContent>
@@ -587,8 +637,7 @@ export default function Profile() {
                       id="nationality"
                       value={formData.nationality}
                       onChange={e =>
-                        setFormData({
-                          ...formData,
+                        editPreferences({
                           nationality: e.target.value,
                         })
                       }
@@ -616,8 +665,7 @@ export default function Profile() {
                         id="phoneNumber"
                         value={formData.phoneNumber}
                         onChange={e =>
-                          setFormData({
-                            ...formData,
+                          editPreferences({
                             phoneNumber: e.target.value,
                           })
                         }
@@ -655,8 +703,7 @@ export default function Profile() {
                       id="emergencyContact"
                       value={formData.emergencyContact}
                       onChange={e =>
-                        setFormData({
-                          ...formData,
+                        editPreferences({
                           emergencyContact: e.target.value,
                         })
                       }
@@ -676,8 +723,7 @@ export default function Profile() {
                         id="emergencyPhone"
                         value={formData.emergencyPhone}
                         onChange={e =>
-                          setFormData({
-                            ...formData,
+                          editPreferences({
                             emergencyPhone: e.target.value,
                           })
                         }
@@ -743,9 +789,10 @@ export default function Profile() {
                     </div>
                   </div>
                   <Switch
+                    aria-label={t("profile.notifications.email")}
                     checked={formData.emailNotifications}
                     onCheckedChange={checked =>
-                      setFormData({ ...formData, emailNotifications: checked })
+                      editPreferences({ emailNotifications: checked })
                     }
                   />
                 </div>
@@ -765,9 +812,10 @@ export default function Profile() {
                     </div>
                   </div>
                   <Switch
+                    aria-label={t("profile.notifications.sms")}
                     checked={formData.smsNotifications}
                     onCheckedChange={checked =>
-                      setFormData({ ...formData, smsNotifications: checked })
+                      editPreferences({ smsNotifications: checked })
                     }
                   />
                 </div>
