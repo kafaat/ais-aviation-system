@@ -26,14 +26,6 @@ coverage:
           - "server/**"
           - "client/src/**"
           - "shared/**"
-        # Exclude these paths
-        exclude:
-          - "**/*.test.ts"
-          - "**/*.test.tsx"
-          - "**/*.spec.ts"
-          - "**/node_modules/**"
-          - "**/dist/**"
-          - "**/drizzle/migrations/**"
 
       # Separate status for server code
       server:
@@ -80,6 +72,11 @@ flags:
       - client/src/
     carryforward: true
 
+  shared:
+    paths:
+      - shared/
+    carryforward: true
+
 # Comment configuration for PRs
 comment:
   # Layout of the comment
@@ -92,8 +89,8 @@ comment:
   require_base: false
   # Require head coverage for comparison
   require_head: true
-  # Show project coverage
-  show_project_coverage: true
+  # Include project coverage in the existing comment layout
+  hide_project_coverage: false
 
 # Ignore certain paths from coverage
 ignore:
