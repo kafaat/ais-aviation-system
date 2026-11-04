@@ -10,3 +10,9 @@ f247762a582e88b31b4461e89da0640323176067:server/__tests__/baggage-registration-a
 # Historical synthetic UUID used only as the payment router test's idempotency nonce.
 # The current fixture generates it at runtime; exempt only this published finding.
 91eba4bae9cc7d9208c37d9d283f4624b0408ca6:server/__tests__/payment-router-authority.test.ts:generic-api-key:46
+
+# Public Python release-signing fingerprint copied from the official base image.
+# See docs/audits/security-remediation-20261104/auth-image-review.md for provenance.
+# Current report metadata is sanitized; exempt only these two immutable findings.
+1176fa7bb2cb37db3917395b79eaebff33d0a4e6:docs/audits/security-remediation-20261104/auth-base-trivy.json:generic-api-key:62
+1176fa7bb2cb37db3917395b79eaebff33d0a4e6:docs/audits/security-remediation-20261104/auth-base-trivy.json:generic-api-key:110

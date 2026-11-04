@@ -70,8 +70,48 @@ secret scan. Trivy reported a missing Alpine 3.24 EOL-list entry while completin
 vulnerability detection against the Alpine 3.24 repository.
 
 The [Alpine JSON report](auth-base-trivy.json) preserves the parsed scan output
-with repository formatting only. The original scan JSON has SHA256
+with repository formatting and the two public-key metadata substitutions described
+below. The original, unsanitized scan JSON has SHA256
 `ba1e833646c259772beb9269566db3a88bbbf45b10b047cd1542b038a16effb5`.
+
+## Public signing fingerprint classification
+
+Gitleaks alerts [151](https://github.com/kafaat/ais-aviation-system/security/code-scanning/151)
+and [152](https://github.com/kafaat/ais-aviation-system/security/code-scanning/152)
+matched the official Python release-signing **public fingerprint** copied into
+the image history and environment. The immutable
+[upstream Dockerfile](https://github.com/docker-library/python/blob/3d7e95597e56a415d9e4abc0f15877e005d2cb2e/3.12/alpine3.24/Dockerfile)
+declares this value as `GPG_KEY`, retrieves its public key, and uses it to verify
+the Python source archive. It is not an application credential or private key.
+
+Only the fingerprint values at these two JSON paths are replaced with `<public>`:
+
+- `Metadata.ImageConfig.history[5].created_by`
+- `Metadata.ImageConfig.config.Env[2]`
+
+Package inventories, vulnerability findings, image digests, and scan metadata are
+unchanged. This prevents the copied public value from generating a new finding
+when the PR is squash-merged. The original report remains recoverable from
+commit `1176fa7bb2cb37db3917395b79eaebff33d0a4e6` and the upstream image digest.
+
+CI also scans the PR's commit history, so sanitizing the current file alone does
+not remove the two historical findings. `.gitleaksignore` therefore records only
+their exact commit, path, rule, and line identities (62 and 110). No detector,
+file, directory, or credential pattern is exempted. `.gitleaks.toml`, the scanned
+commit range, and the nonzero leak exit code remain unchanged.
+
+Independent verification used the same Gitleaks **8.24.3** binary as CI, with
+archive SHA256 `9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c`.
+Tests ran in an isolated Git clone with generated, nonfunctional controls and
+zero provider calls:
+
+| Case                                                                                  | Expected and observed result                    |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Published PR history before the correction                                            | Exit 2; exactly two public-fingerprint findings |
+| Entire PR history with the correction                                                 | Exit 0; zero findings                           |
+| Corrected tree under a new squash-like commit identity                                | Exit 0; zero findings                           |
+| New synthetic credentials at the same report path and lines 62/110, plus another path | Exit 2; all three detected                      |
+| Existing `probe-gitleaks-policy.py`                                                   | 8/8 passed; all six positive controls detected  |
 
 ## Native dependency compatibility
 
