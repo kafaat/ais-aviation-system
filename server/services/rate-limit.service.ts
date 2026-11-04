@@ -179,12 +179,19 @@ export interface RateLimitResult {
 }
 
 /**
- * In-memory storage for rate limits (fallback when Redis is unavailable)
+ * Per-process quota shadow, retained across Redis failures and recovery.
+ * It cannot provide a globally shared quota while Redis is unavailable.
  */
 interface InMemoryRateLimitEntry {
   count: number;
-  windowStart: number;
   expiresAt: number;
+  sequence: number;
+  windowSequence: number;
+  acknowledgedSequence: number;
+  acknowledgedCount: number;
+  redisExpiresNotBefore: number | null;
+  redisExpiresNotAfter: number | null;
+  fallback: boolean;
 }
 
 const inMemoryStore = new Map<string, InMemoryRateLimitEntry>();
@@ -276,11 +283,12 @@ class RateLimitService {
     windowMs: number
   ): Promise<{
     count: number;
-    windowStart: number;
-    ttl: number;
+    startedAt: number;
+    expiresNotBefore: number;
+    expiresAt: number;
   }> {
     try {
-      const now = Date.now();
+      const startedAt = Date.now();
       const windowSeconds = Math.ceil(windowMs / 1000);
 
       const strippedKey = key.startsWith(`${RATE_LIMIT_PREFIX}:ratelimit:`)
@@ -294,11 +302,16 @@ class RateLimitService {
       );
 
       const count = result.allowed ? limit - result.remaining : limit + 1;
+      const ttl = result.ttlMs ?? windowMs;
 
       return {
         count,
-        windowStart: now,
-        ttl: windowMs,
+        startedAt,
+        // Redis executes between send and reply receipt. These bounds let us
+        // recognize a new server window without relying on equal client/server
+        // clocks or sliding an old expiry forward by every round trip.
+        expiresNotBefore: startedAt + ttl,
+        expiresAt: Date.now() + ttl,
       };
     } catch (error) {
       logger.error({ key, error }, "Redis rate limit check failed");
@@ -311,13 +324,8 @@ class RateLimitService {
    */
   private checkRateLimitInMemory(
     key: string,
-    limit: number,
     windowMs: number
-  ): {
-    count: number;
-    windowStart: number;
-    ttl: number;
-  } {
+  ): InMemoryRateLimitEntry {
     const now = Date.now();
     const entry = inMemoryStore.get(key);
 
@@ -325,20 +333,23 @@ class RateLimitService {
       // First request or window expired
       const newEntry: InMemoryRateLimitEntry = {
         count: 1,
-        windowStart: now,
         expiresAt: now + windowMs,
+        sequence: 1,
+        windowSequence: 0,
+        acknowledgedSequence: 0,
+        acknowledgedCount: 0,
+        redisExpiresNotBefore: null,
+        redisExpiresNotAfter: null,
+        fallback: false,
       };
       inMemoryStore.set(key, newEntry);
-      return { count: 1, windowStart: now, ttl: windowMs };
+      return newEntry;
     }
 
     // Increment count
     entry.count++;
-    return {
-      count: entry.count,
-      windowStart: entry.windowStart,
-      ttl: entry.expiresAt - now,
-    };
+    entry.sequence++;
+    return entry;
   }
 
   /**
@@ -352,11 +363,27 @@ class RateLimitService {
     const key = this.getKey(identifier, scope);
     const { requestsPerWindow, windowMs, name } = tier;
 
-    let count: number;
-    let windowStart: number;
-    let ttl: number;
+    // Reserve synchronously before awaiting Redis. Concurrent failures cannot
+    // each see an empty fallback bucket. Once used, the fallback ceiling keeps
+    // its fixed expiry; successful recovery must not slide an exhausted window.
+    const local = this.checkRateLimitInMemory(key, windowMs);
+    const sequence = local.sequence;
+    const windowSequence = local.windowSequence;
+    const reservedCount = local.count;
+    let count = reservedCount;
+    let expiresAt = local.expiresAt;
+    const projectReservation = () => {
+      const observedCount =
+        local.acknowledgedCount +
+        Math.max(0, sequence - local.acknowledgedSequence);
+      // An earlier response may have advanced all concurrent reservations into
+      // a fresh Redis window. Their old-window snapshots must not follow them.
+      return local.windowSequence !== windowSequence &&
+        sequence >= local.windowSequence
+        ? observedCount
+        : Math.max(reservedCount, observedCount);
+    };
 
-    // Try Redis first, fall back to in-memory
     if (cacheService.isConnected()) {
       try {
         const result = await this.checkRateLimitRedis(
@@ -364,34 +391,76 @@ class RateLimitService {
           requestsPerWindow,
           windowMs
         );
-        count = result.count;
-        windowStart = result.windowStart;
-        ttl = result.ttl;
+        const startsNewWindow =
+          local.redisExpiresNotBefore !== null &&
+          local.redisExpiresNotAfter !== null &&
+          result.startedAt >= local.redisExpiresNotBefore &&
+          result.expiresNotBefore > local.redisExpiresNotAfter;
+        // A proven fresh server window may replace a healthy shadow despite
+        // reply-latency overlap. A counter reset before the known old window
+        // could expire must not erase consumption; active fallback also keeps
+        // its own finite ceiling through recovery.
+        count =
+          !local.fallback && startsNewWindow
+            ? result.count
+            : Math.max(projectReservation(), result.count);
+        expiresAt =
+          !local.fallback && startsNewWindow
+            ? result.expiresAt
+            : Math.max(expiresAt, result.expiresAt);
+        // A healthy reply rebases the shadow to this acknowledged count plus
+        // subsequent reservations. Older replies cannot erase later evidence,
+        // a new local window, or an admin reset.
+        if (inMemoryStore.get(key) === local) {
+          if (sequence > local.acknowledgedSequence) {
+            local.acknowledgedSequence = sequence;
+            local.acknowledgedCount = result.count;
+            const reservedCount = result.count + local.sequence - sequence;
+            local.count =
+              !local.fallback && startsNewWindow
+                ? reservedCount
+                : Math.max(local.count, reservedCount);
+            if (!local.fallback) {
+              if (local.redisExpiresNotAfter === null || startsNewWindow) {
+                local.windowSequence = sequence;
+                local.redisExpiresNotBefore = result.expiresNotBefore;
+                local.redisExpiresNotAfter = result.expiresAt;
+                local.expiresAt = result.expiresAt;
+              } else if (
+                local.redisExpiresNotBefore !== null &&
+                result.expiresNotBefore <= local.redisExpiresNotAfter &&
+                result.expiresAt >= local.redisExpiresNotBefore
+              ) {
+                // Intersect observations of this same window. Its deadline
+                // can become more precise but can never move farther away.
+                local.redisExpiresNotBefore = Math.max(
+                  local.redisExpiresNotBefore,
+                  result.expiresNotBefore
+                );
+                local.redisExpiresNotAfter = Math.min(
+                  local.redisExpiresNotAfter,
+                  result.expiresAt
+                );
+                local.expiresAt = local.redisExpiresNotAfter;
+              }
+            }
+          }
+        }
       } catch {
-        // Fall back to in-memory
-        const result = this.checkRateLimitInMemory(
-          key,
-          requestsPerWindow,
-          windowMs
-        );
-        count = result.count;
-        windowStart = result.windowStart;
-        ttl = result.ttl;
+        // An earlier in-flight acknowledgement may have revealed additional
+        // shared consumption after this request reserved its local slot.
+        count = projectReservation();
+        local.fallback = true;
+        local.count = Math.max(local.count, count);
+        expiresAt = local.expiresAt;
       }
     } else {
-      const result = this.checkRateLimitInMemory(
-        key,
-        requestsPerWindow,
-        windowMs
-      );
-      count = result.count;
-      windowStart = result.windowStart;
-      ttl = result.ttl;
+      local.fallback = true;
     }
 
     const allowed = count <= requestsPerWindow;
     const remaining = Math.max(0, requestsPerWindow - count);
-    const resetAt = new Date(windowStart + windowMs);
+    const resetAt = new Date(expiresAt);
 
     const result: RateLimitResult = {
       allowed,
@@ -402,7 +471,10 @@ class RateLimitService {
     };
 
     if (!allowed) {
-      result.retryAfterSeconds = Math.ceil(ttl / 1000);
+      result.retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((expiresAt - Date.now()) / 1000)
+      );
     }
 
     return result;
@@ -451,8 +523,11 @@ class RateLimitService {
     const identifier = user ? `user:${user.id}` : `ip:${ip}`;
     const key = this.getKey(identifier, scope);
 
-    let count = 0;
-    let windowStart = Date.now();
+    const now = Date.now();
+    const local = inMemoryStore.get(key);
+    const activeLocal = local && local.expiresAt > now ? local : undefined;
+    let count = activeLocal?.count ?? 0;
+    let expiresAt = activeLocal?.expiresAt ?? now + tier.windowMs;
 
     // Try to get current count without incrementing
     if (cacheService.isConnected()) {
@@ -461,26 +536,20 @@ class RateLimitService {
         const currentWindowStart = await cacheService.get<number>(
           `${key}:window`
         );
-        if (currentCount !== null) count = currentCount;
-        if (currentWindowStart !== null) windowStart = currentWindowStart;
-      } catch {
-        // Use in-memory fallback
-        const entry = inMemoryStore.get(key);
-        if (entry) {
-          count = entry.count;
-          windowStart = entry.windowStart;
+        if (currentCount !== null && currentCount > count) {
+          count = currentCount;
+          expiresAt = Math.max(
+            expiresAt,
+            (currentWindowStart ?? Date.now()) + tier.windowMs
+          );
         }
-      }
-    } else {
-      const entry = inMemoryStore.get(key);
-      if (entry) {
-        count = entry.count;
-        windowStart = entry.windowStart;
+      } catch {
+        // The active local ceiling still governs while Redis is unavailable.
       }
     }
 
     const remaining = Math.max(0, tier.requestsPerWindow - count);
-    const resetAt = new Date(windowStart + tier.windowMs);
+    const resetAt = new Date(expiresAt);
 
     return {
       allowed: count < tier.requestsPerWindow,

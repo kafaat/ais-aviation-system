@@ -15,6 +15,10 @@
 import crypto from "crypto";
 import Redis from "ioredis";
 import { logger } from "../_core/logger";
+import {
+  advanceCacheGeneration,
+  readCacheGeneration,
+} from "./cache-generation-authority";
 
 // ============================================================================
 // CONFIGURATION
@@ -71,6 +75,8 @@ interface CacheEntry<T> {
 
 /** Reuse one generation across a cache read and its asynchronous source fill. */
 export interface CacheGeneration {
+  readonly namespace: string;
+  readonly durable: string | null;
   readonly version: number;
   readonly epoch: number;
 }
@@ -145,14 +151,11 @@ class LRUMemoryCache {
     return this.cache.delete(key);
   }
 
-  deletePattern(pattern: string): number {
-    const regex = new RegExp(
-      "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
-    );
+  deletePrefix(prefix: string): number {
     let count = 0;
 
     for (const key of this.cache.keys()) {
-      if (regex.test(key)) {
+      if (key.startsWith(prefix)) {
         this.cache.delete(key);
         count++;
       }
@@ -232,6 +235,8 @@ class RedisCacheService {
     try {
       this.redisClient = new Redis(REDIS_URL, {
         maxRetriesPerRequest: 3,
+        commandTimeout: 1000,
+        enableOfflineQueue: false,
         enableReadyCheck: true,
         lazyConnect: true,
         retryStrategy: (times: number) => {
@@ -378,10 +383,10 @@ class RedisCacheService {
    */
   private generateKey(
     namespace: string,
-    version: number,
+    generation: CacheGeneration,
     identifier: string
   ): string {
-    return `${CACHE_PREFIX}:${namespace}:v${version}:${identifier}`;
+    return `${CACHE_PREFIX}:${namespace}:v${generation.version}:g${generation.durable}:${identifier}`;
   }
 
   /**
@@ -413,10 +418,15 @@ class RedisCacheService {
       if (!client) return 1;
       const versionKey = `${CACHE_PREFIX}:version:${namespace}`;
       const version = await client.get(versionKey);
-      return version ? parseInt(version, 10) : 1;
+      if (version === null) return 1;
+      const parsed = Number(version);
+      if (!Number.isSafeInteger(parsed) || parsed < 1) {
+        throw new Error("Invalid Redis cache namespace version");
+      }
+      return parsed;
     } catch (error) {
       logger.error({ namespace, error }, "Failed to get namespace version");
-      return 1;
+      throw error;
     }
   }
 
@@ -424,19 +434,39 @@ class RedisCacheService {
     // Capture before awaiting Redis: a connection change during this lookup
     // makes the token stale and prevents read-through or source publication.
     const epoch = this.generationEpoch;
-    return { version: await this.getNamespaceVersion(namespace), epoch };
+    try {
+      const [durable, version] = await Promise.all([
+        readCacheGeneration(CACHE_PREFIX, namespace),
+        this.getNamespaceVersion(namespace),
+      ]);
+      return { namespace, durable, version, epoch };
+    } catch (error) {
+      this.stats.errors++;
+      logger.warn(
+        { namespace, error },
+        "Cache generation unavailable; bypassing cache"
+      );
+      return { namespace, durable: null, version: 0, epoch };
+    }
   }
 
   /**
-   * Invalidate namespace by incrementing version (O(1) operation)
+   * Durably invalidate a namespace, including while Redis is unavailable.
    */
   async invalidateNamespace(namespace: string): Promise<void> {
     // Fence pending fills even while using memory fallback, where there is no
     // Redis counter to advance. An unrelated fill may be skipped safely too.
     this.generationEpoch++;
-    this.memoryCache.deletePattern(`${CACHE_PREFIX}:${namespace}:*`);
+    this.memoryCache.deletePrefix(`${CACHE_PREFIX}:${namespace}:`);
+    // Commit the shared authority first. Reconnection and even invalidator
+    // process death cannot make an older Redis generation reachable afterward.
+    // Failed authority writes propagate: an admin request cannot claim success.
+    await advanceCacheGeneration(CACHE_PREFIX, namespace);
     if (!this.isConnected()) {
-      logger.info({ namespace }, "Invalidated namespace in memory cache");
+      logger.info(
+        { namespace },
+        "Durably invalidated namespace while Redis is offline"
+      );
       return;
     }
 
@@ -450,7 +480,10 @@ class RedisCacheService {
       await client.incr(versionKey);
       logger.info({ namespace }, "Invalidated namespace");
     } catch (error) {
-      logger.error({ namespace, error }, "Failed to invalidate namespace");
+      logger.warn(
+        { namespace, error },
+        "Namespace durably invalidated; Redis counter update was not confirmed"
+      );
     }
   }
 
@@ -464,11 +497,15 @@ class RedisCacheService {
   ): Promise<T | null> {
     const hash = this.hashParams(params);
     const captured = generation ?? (await this.captureGeneration(namespace));
-    if (captured.epoch !== this.generationEpoch) {
+    if (
+      captured.durable === null ||
+      captured.namespace !== namespace ||
+      captured.epoch !== this.generationEpoch
+    ) {
       this.stats.misses++;
       return null;
     }
-    const key = this.generateKey(namespace, captured.version, hash);
+    const key = this.generateKey(namespace, captured, hash);
 
     // Try Redis first
     if (this.isConnected()) {
@@ -525,8 +562,13 @@ class RedisCacheService {
   ): Promise<void> {
     const hash = this.hashParams(params);
     const captured = generation ?? (await this.captureGeneration(namespace));
-    if (captured.epoch !== this.generationEpoch) return;
-    const key = this.generateKey(namespace, captured.version, hash);
+    if (
+      captured.durable === null ||
+      captured.namespace !== namespace ||
+      captured.epoch !== this.generationEpoch
+    )
+      return;
+    const key = this.generateKey(namespace, captured, hash);
     const serialized = JSON.stringify(value);
 
     this.stats.sets++;
@@ -551,30 +593,12 @@ class RedisCacheService {
   }
 
   /**
-   * Delete a specific cache entry
+   * Invalidate the containing namespace conservatively. A Redis DEL alone is
+   * neither durable while offline nor a fence against a pending source fill.
    */
-  async delete(namespace: string, params: unknown): Promise<void> {
-    const hash = this.hashParams(params);
-    const version = await this.getNamespaceVersion(namespace);
-    const key = this.generateKey(namespace, version, hash);
-
+  async delete(namespace: string, _params: unknown): Promise<void> {
     this.stats.deletes++;
-
-    // Delete from memory
-    this.memoryCache.delete(key);
-
-    // Delete from Redis
-    if (this.isConnected()) {
-      try {
-        const client = this.redisClient;
-        if (client) {
-          await client.del(key);
-        }
-      } catch (error) {
-        this.stats.errors++;
-        logger.error({ key, error }, "Redis delete error");
-      }
-    }
+    await this.invalidateNamespace(namespace);
   }
 
   /**
@@ -719,16 +743,26 @@ class RedisCacheService {
   async cacheFlightDetails(
     flightId: number,
     details: unknown,
-    ttlSeconds: number = CacheTTL.FLIGHT_DETAILS
+    ttlSeconds: number = CacheTTL.FLIGHT_DETAILS,
+    generation?: CacheGeneration
   ): Promise<void> {
-    await this.set(CacheNamespace.FLIGHT, { flightId }, details, ttlSeconds);
+    await this.set(
+      CacheNamespace.FLIGHT,
+      { flightId },
+      details,
+      ttlSeconds,
+      generation
+    );
   }
 
   /**
    * Get cached flight details
    */
-  getCachedFlightDetails(flightId: number): Promise<unknown | null> {
-    return this.get(CacheNamespace.FLIGHT, { flightId });
+  getCachedFlightDetails(
+    flightId: number,
+    generation?: CacheGeneration
+  ): Promise<unknown | null> {
+    return this.get(CacheNamespace.FLIGHT, { flightId }, generation);
   }
 
   /**
@@ -751,21 +785,23 @@ class RedisCacheService {
    */
   async cacheAirports(
     airports: unknown,
-    ttlSeconds: number = CacheTTL.AIRPORTS
+    ttlSeconds: number = CacheTTL.AIRPORTS,
+    generation?: CacheGeneration
   ): Promise<void> {
     await this.set(
       CacheNamespace.AIRPORTS,
       { key: "all" },
       airports,
-      ttlSeconds
+      ttlSeconds,
+      generation
     );
   }
 
   /**
    * Get cached airports
    */
-  getCachedAirports(): Promise<unknown | null> {
-    return this.get(CacheNamespace.AIRPORTS, { key: "all" });
+  getCachedAirports(generation?: CacheGeneration): Promise<unknown | null> {
+    return this.get(CacheNamespace.AIRPORTS, { key: "all" }, generation);
   }
 
   /**
@@ -773,21 +809,23 @@ class RedisCacheService {
    */
   async cacheAirlines(
     airlines: unknown,
-    ttlSeconds: number = CacheTTL.AIRLINES
+    ttlSeconds: number = CacheTTL.AIRLINES,
+    generation?: CacheGeneration
   ): Promise<void> {
     await this.set(
       CacheNamespace.AIRLINES,
       { key: "all" },
       airlines,
-      ttlSeconds
+      ttlSeconds,
+      generation
     );
   }
 
   /**
    * Get cached airlines
    */
-  getCachedAirlines(): Promise<unknown | null> {
-    return this.get(CacheNamespace.AIRLINES, { key: "all" });
+  getCachedAirlines(generation?: CacheGeneration): Promise<unknown | null> {
+    return this.get(CacheNamespace.AIRLINES, { key: "all" }, generation);
   }
 
   /**
@@ -869,21 +907,25 @@ class RedisCacheService {
    */
   async cachePopularRoutes(
     routes: unknown,
-    ttlSeconds: number = CacheTTL.POPULAR_ROUTES
+    ttlSeconds: number = CacheTTL.POPULAR_ROUTES,
+    generation?: CacheGeneration
   ): Promise<void> {
     await this.set(
       CacheNamespace.ROUTES,
       { key: "popular" },
       routes,
-      ttlSeconds
+      ttlSeconds,
+      generation
     );
   }
 
   /**
    * Get cached popular routes
    */
-  getCachedPopularRoutes(): Promise<unknown | null> {
-    return this.get(CacheNamespace.ROUTES, { key: "popular" });
+  getCachedPopularRoutes(
+    generation?: CacheGeneration
+  ): Promise<unknown | null> {
+    return this.get(CacheNamespace.ROUTES, { key: "popular" }, generation);
   }
 
   /**
@@ -893,13 +935,15 @@ class RedisCacheService {
     originId: number,
     destinationId: number,
     data: unknown,
-    ttlSeconds: number = CacheTTL.POPULAR_ROUTES
+    ttlSeconds: number = CacheTTL.POPULAR_ROUTES,
+    generation?: CacheGeneration
   ): Promise<void> {
     await this.set(
       CacheNamespace.ROUTES,
       { originId, destinationId },
       data,
-      ttlSeconds
+      ttlSeconds,
+      generation
     );
   }
 
@@ -908,9 +952,14 @@ class RedisCacheService {
    */
   getCachedRoute(
     originId: number,
-    destinationId: number
+    destinationId: number,
+    generation?: CacheGeneration
   ): Promise<unknown | null> {
-    return this.get(CacheNamespace.ROUTES, { originId, destinationId });
+    return this.get(
+      CacheNamespace.ROUTES,
+      { originId, destinationId },
+      generation
+    );
   }
 
   /**
@@ -956,17 +1005,8 @@ class RedisCacheService {
    */
   async invalidatePricingCache(flightId?: number): Promise<void> {
     if (flightId) {
-      // Invalidate both economy and business pricing
-      await Promise.all([
-        this.delete(CacheNamespace.PRICING, {
-          flightId,
-          cabinClass: "economy",
-        }),
-        this.delete(CacheNamespace.PRICING, {
-          flightId,
-          cabinClass: "business",
-        }),
-      ]);
+      // One durable namespace advance covers every cabin and pending fill.
+      await this.delete(CacheNamespace.PRICING, { flightId });
     } else {
       await this.invalidateNamespace(CacheNamespace.PRICING);
     }
@@ -1217,38 +1257,52 @@ class RedisCacheService {
   }
 
   /**
-   * Clear all caches
+   * Durably invalidate all versioned caches and confirm raw Redis cleanup.
+   * A partial-cleanup error is retryable; the global generation remains advanced.
    */
   async clearAll(): Promise<void> {
     this.generationEpoch++;
     this.memoryCache.clear();
+    await advanceCacheGeneration(CACHE_PREFIX, null);
 
-    if (this.isConnected()) {
-      try {
-        const client = this.redisClient;
-        if (!client) return;
-        // Use SCAN to safely delete all keys with our prefix
-        let cursor = "0";
-        do {
-          const [newCursor, keys] = await client.scan(
-            cursor,
-            "MATCH",
-            `${CACHE_PREFIX}:*`,
-            "COUNT",
-            "100"
-          );
-          cursor = newCursor;
+    const client = this.redisClient;
+    if (!this.isConnected() || !client) {
+      throw new Error(
+        "Versioned caches invalidated; raw Redis cleanup is unconfirmed because Redis is offline"
+      );
+    }
+    try {
+      // Use SCAN to safely delete all keys with our prefix
+      let cursor = "0";
+      do {
+        const [newCursor, keys] = await client.scan(
+          cursor,
+          "MATCH",
+          `${CACHE_PREFIX.replace(/[\\*?\[\]]/g, "\\$&")}:*`,
+          "COUNT",
+          "100"
+        );
+        cursor = newCursor;
 
-          if (keys.length > 0) {
-            await client.del(...keys);
-          }
-        } while (cursor !== "0");
-      } catch (error) {
-        logger.error({ error }, "Failed to clear Redis cache");
-      }
+        if (keys.length > 0) {
+          await client.del(...keys);
+        }
+      } while (cursor !== "0");
+    } catch (error) {
+      logger.error(
+        { error },
+        "Versioned caches invalidated; raw Redis cleanup is unconfirmed"
+      );
+      throw new Error(
+        "Versioned caches invalidated; raw Redis cleanup is unconfirmed",
+        { cause: error }
+      );
     }
 
-    logger.info({}, "All caches cleared");
+    logger.info(
+      {},
+      "Versioned caches invalidated; raw Redis cleanup confirmed"
+    );
   }
 }
 

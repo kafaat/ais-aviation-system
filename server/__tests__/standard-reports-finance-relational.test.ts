@@ -367,6 +367,101 @@ describe("standard finance reports over actual relational SQL", () => {
     });
   });
 
+  it.each([
+    ["tenant", financeScope],
+    ["global", { userId: financeScope.userId }],
+  ] as const)(
+    "rejects foreign and missing passenger attribution from component values in %s scope",
+    async (_label, scope) => {
+      insert(passengers, {
+        id: 4,
+        tenantId: 202,
+        bookingId: 1,
+        firstName: "Foreign",
+        lastName: "Tenant mismatch",
+      });
+      insert(passengers, {
+        id: 5,
+        tenantId: null,
+        bookingId: 1,
+        firstName: "Legacy",
+        lastName: "Owned passenger",
+      });
+      insert(passengers, {
+        id: 6,
+        tenantId: 101,
+        bookingId: 2,
+        firstName: "Different",
+        lastName: "Booking",
+      });
+      for (const [id, passengerId] of [
+        [50, 3],
+        [51, 4],
+        [52, 999],
+        [53, 5],
+        [54, 6],
+      ])
+        insert(
+          bookingFareComponents,
+          component(id, { passengerId, amount: 100 })
+        );
+
+      const details = await getFinanceStandardReport(79, october, scope);
+      expect(
+        details!.rows
+          .filter(row => row.bookingReference === "REF001")
+          .map(row => row.componentId)
+      ).toEqual([1, 2, 3, 4, 53]);
+      const aggregate = await getFinanceStandardReport(
+        76,
+        { ...october, flightId: 1 },
+        scope
+      );
+      expect(aggregate!.rows.find(row => row.basis === "booked")).toMatchObject(
+        { amountMinor: 19100, sourceLines: 4 }
+      );
+      expect(
+        aggregate!.rows.every(row => row.recognizedRevenueMinor === null)
+      ).toBe(true);
+    }
+  );
+
+  it("filters conflicting passenger components before the source cap and aggregate", async () => {
+    database.exec("BEGIN");
+    for (let id = 100; id < 10105; id++)
+      insert(
+        bookingFareComponents,
+        component(id, { passengerId: 3, amount: 99000 })
+      );
+    insert(
+      bookingFareComponents,
+      component(10105, { componentType: "booking_fee", amount: 125 })
+    );
+    database.exec("COMMIT");
+
+    const details = await getFinanceStandardReport(
+      79,
+      { ...october, flightId: 1 },
+      financeScope
+    );
+    expect(details!.rows.map(row => row.componentId)).toEqual([1, 2, 4, 10105]);
+    const aggregate = await getFinanceStandardReport(
+      76,
+      { ...october, flightId: 1 },
+      financeScope
+    );
+    expect(aggregate!.rows.find(row => row.basis === "booked")).toMatchObject({
+      amountMinor: 19125,
+      sourceLines: 4,
+    });
+    expect(
+      aggregate!.rows.find(row => row.basis === "local_document")
+    ).toMatchObject({ amountMinor: 19125, sourceLines: 4 });
+    expect(
+      aggregate!.rows.find(row => row.basis === "recorded_uplift")
+    ).toMatchObject({ amountMinor: 11125, sourceLines: 3 });
+  });
+
   it("marks coupon totals unknown when a sector discount has no passenger allocation", async () => {
     insert(
       bookingFareComponents,

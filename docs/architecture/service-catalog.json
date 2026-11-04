@@ -1218,6 +1218,23 @@
       "replacement": null
     },
     {
+      "file": "server/services/cache-generation-authority.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/cache-generation-authority.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/redis-cache.service.ts"],
+      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "tableExpressions": {
+        "reads": ["cacheNamespaceGenerations"],
+        "writes": ["cacheNamespaceGenerations"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/cache-v2.service.ts",
       "lifecycle": "retired",
       "technicalOwner": "server/services/cache-v2.service.ts",
@@ -5597,6 +5614,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/__tests__/helpers/cache-process-worker.ts",
         "server/routers/cache.ts",
         "server/routers/reference.ts",
         "server/services/flights.service.ts",
@@ -5604,7 +5622,10 @@
         "server/services/popular-routes.service.ts",
         "server/services/price-calendar.service.ts"
       ],
-      "dependencies": ["server/_core/logger.ts"],
+      "dependencies": [
+        "server/_core/logger.ts",
+        "server/services/cache-generation-authority.ts"
+      ],
       "tableExpressions": {
         "reads": [],
         "writes": [
@@ -6173,7 +6194,13 @@
       "consumers": ["server/routers/soft-delete.ts"],
       "dependencies": ["drizzle/schema.ts", "server/db.ts", "shared/const.ts"],
       "tableExpressions": {
-        "reads": ["airports", "bookings", "flights"],
+        "reads": [
+          "airports",
+          "bookings",
+          "flights",
+          "passengers",
+          "reference.table"
+        ],
         "writes": ["bookings", "passengers"]
       },
       "replacement": null

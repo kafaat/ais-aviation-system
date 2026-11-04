@@ -10,7 +10,8 @@
  * @version 1.0.0
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { cacheService } from "./cache.service";
 import {
   rateLimitService,
   RATE_LIMIT_TIERS,
@@ -22,6 +23,7 @@ import type { User } from "../../drizzle/schema";
 vi.mock("./cache.service", () => ({
   cacheService: {
     isConnected: vi.fn(() => false), // Default to in-memory mode
+    checkRateLimit: vi.fn(),
     get: vi.fn(),
     set: vi.fn(),
     del: vi.fn(),
@@ -46,6 +48,293 @@ vi.mock("../_core/logger", () => ({
 describe("Rate Limit Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(cacheService.isConnected).mockReturnValue(false);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  describe("Redis outage quota continuity", () => {
+    it("accepts a fresh allowance in each healthy Redis window despite reply-latency overlap", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = new Date("2026-11-04T01:00:00Z").getTime();
+      vi.setSystemTime(start);
+      const tier = {
+        name: "healthy-overlap",
+        requestsPerWindow: 1,
+        windowMs: 1000,
+      };
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      vi.mocked(cacheService.checkRateLimit).mockImplementation(async () => {
+        // Redis starts each window at execution. Its reply reaches this
+        // process 10ms later, leaving an overlap with the previous shadow.
+        vi.setSystemTime(Date.now() + 10);
+        return { allowed: true, remaining: 0, ttlMs: 1000 };
+      });
+      for (let window = 0; window < 5; window++) {
+        vi.setSystemTime(start + window * 1000);
+        expect(
+          await rateLimitService.checkRateLimit("healthy-overlap", tier)
+        ).toMatchObject({ allowed: true, remaining: 0 });
+      }
+    });
+
+    it("restores the full quota for concurrent requests crossing healthy window boundaries", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = new Date("2026-11-04T01:30:00Z").getTime();
+      vi.setSystemTime(start);
+      const tier = {
+        name: "concurrent-overlap",
+        requestsPerWindow: 3,
+        windowMs: 1000,
+      };
+      let serverWindow = -1;
+      let serverCount = 0;
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      vi.mocked(cacheService.checkRateLimit).mockImplementation(async () => {
+        const window = Math.floor((Date.now() - start) / 1000);
+        if (window !== serverWindow) {
+          serverWindow = window;
+          serverCount = 0;
+        }
+        serverCount++;
+        return {
+          allowed: serverCount <= 3,
+          remaining: Math.max(0, 3 - serverCount),
+          ttlMs: 1000,
+        };
+      });
+      for (let window = 0; window < 4; window++) {
+        vi.setSystemTime(start + window * 1000);
+        const pending = Promise.all(
+          Array.from({ length: 3 }, () =>
+            rateLimitService.checkRateLimit("concurrent-overlap", tier)
+          )
+        );
+        vi.setSystemTime(start + window * 1000 + 10);
+        const results = await pending;
+        expect(results.filter(result => result.allowed)).toHaveLength(3);
+        expect(results.map(result => result.remaining)).toEqual([2, 1, 0]);
+      }
+    });
+
+    it("retains fallback spending only for its finite window across repeated Redis renewals", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = new Date("2026-11-04T02:00:00Z").getTime();
+      vi.setSystemTime(start);
+      const tier = {
+        name: "recovery-overlap",
+        requestsPerWindow: 1,
+        windowMs: 1000,
+      };
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      vi.mocked(cacheService.checkRateLimit).mockImplementation(async () => {
+        vi.setSystemTime(Date.now() + 10);
+        return { allowed: true, remaining: 0, ttlMs: 1000 };
+      });
+      expect(
+        await rateLimitService.checkRateLimit("recovery-overlap", tier)
+      ).toMatchObject({ allowed: true });
+      vi.setSystemTime(start + 900);
+      vi.mocked(cacheService.isConnected).mockReturnValue(false);
+      expect(
+        await rateLimitService.checkRateLimit("recovery-overlap", tier)
+      ).toMatchObject({ allowed: false });
+
+      // Recovery occurs before the conservative old expiry. It must not
+      // erase fallback consumption or extend that old ceiling by a full window.
+      vi.setSystemTime(start + 1000);
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      expect(
+        await rateLimitService.checkRateLimit("recovery-overlap", tier)
+      ).toMatchObject({ allowed: false });
+      for (let window = 2; window < 6; window++) {
+        vi.setSystemTime(start + window * 1000);
+        expect(
+          await rateLimitService.checkRateLimit("recovery-overlap", tier)
+        ).toMatchObject({ allowed: true, remaining: 0 });
+      }
+    });
+
+    it("does not treat a prematurely reset Redis counter as expiry of a spent window", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = new Date("2026-11-04T03:00:00Z").getTime();
+      vi.setSystemTime(start);
+      const tier = {
+        name: "early-counter-reset",
+        requestsPerWindow: 1,
+        windowMs: 1000,
+      };
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      vi.mocked(cacheService.checkRateLimit).mockResolvedValue({
+        allowed: true,
+        remaining: 0,
+        ttlMs: 1000,
+      });
+      expect(
+        await rateLimitService.checkRateLimit("early-counter-reset", tier)
+      ).toMatchObject({ allowed: true });
+      vi.setSystemTime(start + 100);
+      expect(
+        await rateLimitService.checkRateLimit("early-counter-reset", tier)
+      ).toMatchObject({ allowed: false });
+      vi.mocked(cacheService.isConnected).mockReturnValue(false);
+      expect(
+        await rateLimitService.checkRateLimit("early-counter-reset", tier)
+      ).toMatchObject({ allowed: false });
+    });
+
+    it("retains Redis consumption observed from other instances during an outage", async () => {
+      const tier = { name: "observed", requestsPerWindow: 5, windowMs: 60_000 };
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      vi.mocked(cacheService.checkRateLimit).mockResolvedValue({
+        allowed: true,
+        remaining: 1,
+        ttlMs: 20_000,
+      });
+      expect(
+        await rateLimitService.checkRateLimit("observed", tier)
+      ).toMatchObject({
+        allowed: true,
+        remaining: 1,
+      });
+      vi.mocked(cacheService.isConnected).mockReturnValue(false);
+      expect(
+        await rateLimitService.checkRateLimit("observed", tier)
+      ).toMatchObject({
+        allowed: true,
+        remaining: 0,
+      });
+      expect(
+        await rateLimitService.checkRateLimit("observed", tier)
+      ).toMatchObject({
+        allowed: false,
+        remaining: 0,
+      });
+    });
+
+    it("keeps the fallback ceiling and status when Redis recovers with a smaller count", async () => {
+      const identifier = "ip:198.51.100.25";
+      const tier = RATE_LIMIT_TIERS.anonymous;
+      for (let index = 0; index < tier.requestsPerWindow; index++)
+        await rateLimitService.checkRateLimit(identifier, tier);
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      vi.mocked(cacheService.checkRateLimit).mockResolvedValue({
+        allowed: true,
+        remaining: tier.requestsPerWindow - 1,
+        ttlMs: tier.windowMs,
+      });
+      expect(
+        await rateLimitService.checkRateLimit(identifier, tier)
+      ).toMatchObject({
+        allowed: false,
+        remaining: 0,
+      });
+      vi.mocked(cacheService.get).mockResolvedValue(0);
+      expect(
+        await rateLimitService.getRateLimitStatus(null, "198.51.100.25")
+      ).toMatchObject({ allowed: false, remaining: 0 });
+    });
+
+    it("reserves concurrent failed commands exactly once against the local quota", async () => {
+      const tier = {
+        name: "concurrent-failure",
+        requestsPerWindow: 3,
+        windowMs: 60_000,
+      };
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      vi.mocked(cacheService.checkRateLimit).mockRejectedValue(
+        new Error("Connection closed")
+      );
+      const results = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          rateLimitService.checkRateLimit("concurrent-failure", tier)
+        )
+      );
+      expect(results.filter(result => result.allowed)).toHaveLength(3);
+      expect(results.map(result => result.remaining)).toEqual([
+        2, 1, 0, 0, 0, 0, 0, 0,
+      ]);
+    });
+
+    it("keeps subsequent reservations when an acknowledgement reveals shared consumption", async () => {
+      const tier = {
+        name: "pending-observation",
+        requestsPerWindow: 3,
+        windowMs: 60_000,
+      };
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      let acknowledge!: (
+        value: Awaited<ReturnType<typeof cacheService.checkRateLimit>>
+      ) => void;
+      let fail!: (error: Error) => void;
+      vi.mocked(cacheService.checkRateLimit)
+        .mockImplementationOnce(
+          () =>
+            new Promise(resolve => {
+              acknowledge = resolve;
+            })
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              fail = reject;
+            })
+        );
+      const first = rateLimitService.checkRateLimit(
+        "pending-observation",
+        tier
+      );
+      const second = rateLimitService.checkRateLimit(
+        "pending-observation",
+        tier
+      );
+      acknowledge({ allowed: true, remaining: 1, ttlMs: 60_000 });
+      expect(await first).toMatchObject({ allowed: true, remaining: 1 });
+      fail(new Error("Connection closed"));
+      expect(await second).toMatchObject({ allowed: true, remaining: 0 });
+      vi.mocked(cacheService.isConnected).mockReturnValue(false);
+      expect(
+        await rateLimitService.checkRateLimit("pending-observation", tier)
+      ).toMatchObject({ allowed: false, remaining: 0 });
+    });
+
+    it("does not copy a late response into a newer local window", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-04T00:00:00Z"));
+      const tier = {
+        name: "late-window",
+        requestsPerWindow: 2,
+        windowMs: 1000,
+      };
+      vi.mocked(cacheService.isConnected).mockReturnValue(true);
+      let acknowledge!: (
+        value: Awaited<ReturnType<typeof cacheService.checkRateLimit>>
+      ) => void;
+      vi.mocked(cacheService.checkRateLimit)
+        .mockImplementationOnce(
+          () =>
+            new Promise(resolve => {
+              acknowledge = resolve;
+            })
+        )
+        .mockResolvedValue({ allowed: true, remaining: 1, ttlMs: 1000 });
+      const old = rateLimitService.checkRateLimit("late-window", tier);
+      vi.setSystemTime(Date.now() + 1001);
+      expect(
+        await rateLimitService.checkRateLimit("late-window", tier)
+      ).toMatchObject({
+        allowed: true,
+        remaining: 1,
+      });
+      acknowledge({ allowed: false, remaining: 0, ttlMs: 1000 });
+      await old;
+      vi.mocked(cacheService.isConnected).mockReturnValue(false);
+      expect(
+        await rateLimitService.checkRateLimit("late-window", tier)
+      ).toMatchObject({
+        allowed: true,
+        remaining: 0,
+      });
+    });
   });
 
   describe("RATE_LIMIT_TIERS", () => {

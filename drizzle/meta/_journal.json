@@ -470,6 +470,13 @@
       "when": 1793789655888,
       "tag": "0066_standard_reporting",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "5",
+      "when": 1793815174581,
+      "tag": "0067_cache_namespace_generations",
+      "breakpoints": true
     }
   ]
 }

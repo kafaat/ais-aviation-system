@@ -11,6 +11,22 @@ const redis = vi.hoisted(() => ({
   ttl: undefined as (() => Promise<number>) | undefined,
 }));
 
+const authority = vi.hoisted(() => ({
+  generations: new Map<string, number>(),
+  unavailable: false,
+}));
+vi.mock("./cache-generation-authority", () => ({
+  readCacheGeneration: async (prefix: string, namespace: string) => {
+    if (authority.unavailable) throw new Error("authority unavailable");
+    return `${authority.generations.get(`${prefix}:global`) ?? 0}.${authority.generations.get(`${prefix}:${namespace}`) ?? 0}`;
+  },
+  advanceCacheGeneration: async (prefix: string, namespace: string | null) => {
+    if (authority.unavailable) throw new Error("authority unavailable");
+    const key = `${prefix}:${namespace ?? "global"}`;
+    authority.generations.set(key, (authority.generations.get(key) ?? 0) + 1);
+  },
+}));
+
 vi.mock("ioredis", () => ({
   default: class {
     on(event: string, listener: () => void) {
@@ -117,6 +133,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   redis.entries.clear();
   redis.ttl = undefined;
+  authority.unavailable = false;
   emit("ready");
   // Distinct cache identity avoids relying on a reset of the real memory cache.
   input = {
@@ -257,6 +274,76 @@ describe("flight search cache generations", () => {
     emit("close");
 
     expect(await redisCacheService.get(namespace, params)).toBeNull();
+  });
+
+  it("does not revive a pre-outage Redis entry after an offline invalidation", async () => {
+    const namespace = "durable-offline-invalidation";
+    const params = { id: 1 };
+    await redisCacheService.set(namespace, params, "stale Redis record", 120);
+    expect(await redisCacheService.get(namespace, params)).toBe(
+      "stale Redis record"
+    );
+
+    emit("close");
+    await redisCacheService.invalidateNamespace(namespace);
+    emit("ready");
+
+    expect(await redisCacheService.get(namespace, params)).toBeNull();
+  });
+
+  it("uses the shared durable generation on a replica that remains connected", async () => {
+    const source = pauseOldRead();
+    const oldRequest = searchFlights(input);
+    await source.started;
+    // An offline writer committed the SQL generation without updating Redis.
+    const key = "ais:search";
+    authority.generations.set(key, (authority.generations.get(key) ?? 0) + 1);
+    const fresh = await searchFlights(input);
+    source.complete();
+    await oldRequest;
+    expect((await searchFlights(input)).map(row => row.id)).toEqual([701, 702]);
+    expect(fresh.map(row => row.id)).toEqual([701, 702]);
+    expect(db.searchFlights).toHaveBeenCalledTimes(2);
+  });
+
+  it("bypasses a warm cache and refuses new publication when the authority is unavailable", async () => {
+    const namespace = "authority-unavailable";
+    await redisCacheService.set(namespace, { id: 1 }, "old", 300);
+    authority.unavailable = true;
+    expect(await redisCacheService.get(namespace, { id: 1 })).toBeNull();
+    await redisCacheService.set(namespace, { id: 1 }, "unverified", 300);
+    await expect(
+      redisCacheService.invalidateNamespace(namespace)
+    ).rejects.toThrow("authority unavailable");
+    authority.unavailable = false;
+    expect(await redisCacheService.get(namespace, { id: 1 })).toBe("old");
+  });
+
+  it("fences targeted detail invalidation and reports unconfirmed raw cleanup after a global invalidation", async () => {
+    await redisCacheService.cacheFlightDetails(501, "old details");
+    const generation = await redisCacheService.captureGeneration("flight");
+    emit("close");
+    await redisCacheService.invalidateFlightDetailsCache(501);
+    emit("ready");
+    await redisCacheService.cacheFlightDetails(
+      501,
+      "stale late fill",
+      300,
+      generation
+    );
+    expect(await redisCacheService.getCachedFlightDetails(501)).toBeNull();
+    await redisCacheService.set(
+      "global-scope",
+      { id: 1 },
+      "old global entry",
+      300
+    );
+    emit("close");
+    await expect(redisCacheService.clearAll()).rejects.toThrow(
+      "raw Redis cleanup is unconfirmed"
+    );
+    emit("ready");
+    expect(await redisCacheService.get("global-scope", { id: 1 })).toBeNull();
   });
 
   it("retains a normal Redis cache hit and restores both date values", async () => {

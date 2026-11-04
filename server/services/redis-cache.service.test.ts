@@ -5,6 +5,23 @@ import {
   CacheTTL,
 } from "./redis-cache.service";
 
+// The durable authority remains available during the Redis outage exercised
+// here. Native SQL and multiple-process behavior have a separate acceptance.
+vi.mock("./cache-generation-authority", () => {
+  const generations = new Map<string, number>();
+  return {
+    readCacheGeneration: async (prefix: string, namespace: string) =>
+      `${generations.get(`${prefix}:global`) ?? 0}.${generations.get(`${prefix}:${namespace}`) ?? 0}`,
+    advanceCacheGeneration: async (
+      prefix: string,
+      namespace: string | null
+    ) => {
+      const key = `${prefix}:${namespace ?? "global"}`;
+      generations.set(key, (generations.get(key) ?? 0) + 1);
+    },
+  };
+});
+
 // Mock ioredis
 vi.mock("ioredis", () => {
   const mockClient = {

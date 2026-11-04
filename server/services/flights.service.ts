@@ -207,7 +207,13 @@ export async function getFlightById(
 ): Promise<Awaited<ReturnType<typeof db.getFlightById>>> {
   try {
     // Try to get from cache
-    const cached = await redisCacheService.getCachedFlightDetails(input.id);
+    const generation = await redisCacheService.captureGeneration(
+      CacheNamespace.FLIGHT
+    );
+    const cached = await redisCacheService.getCachedFlightDetails(
+      input.id,
+      generation
+    );
     const parsed = cachedDetail.safeParse(cached);
     if (parsed.success && parsed.data.id === input.id) {
       const [fresh] = await overlayLiveState([parsed.data], {
@@ -230,7 +236,8 @@ export async function getFlightById(
     await redisCacheService.cacheFlightDetails(
       input.id,
       flight,
-      CacheTTL.FLIGHT_DETAILS
+      CacheTTL.FLIGHT_DETAILS,
+      generation
     );
 
     return flight;
