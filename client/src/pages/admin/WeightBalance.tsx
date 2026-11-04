@@ -284,6 +284,11 @@ const wbTrpc = trpc.weightBalance as {
 
 type Tab = "calculate" | "current" | "limits" | "loadsheet" | "history";
 
+function positiveId(value: string) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
 export default function WeightBalance() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>("calculate");
@@ -385,11 +390,35 @@ function CalculateTab() {
     Array<{ zone: string; weight: string }>
   >([]);
 
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
+  const parsedFlightId = positiveId(flightId);
   const { data: aircraftList } = trpc.dcs.getAircraftTypes.useQuery();
 
-  const calculateMutation = wbTrpc.calculate.useMutation({
-    onSuccess: () => {
+  const input = {
+    flightId: parsedFlightId,
+    aircraftTypeId: positiveId(aircraftTypeId),
+    fuelWeight: Number(fuelWeight),
+    cargoDistribution: cargoZones.length
+      ? cargoZones.map(c => ({ zone: c.zone.trim(), weight: Number(c.weight) }))
+      : undefined,
+  };
+  const validInput = Boolean(
+    input.flightId &&
+    input.aircraftTypeId &&
+    fuelWeight.trim() &&
+    Number.isFinite(input.fuelWeight) &&
+    input.fuelWeight >= 0 &&
+    cargoZones.every(
+      c =>
+        c.zone.trim() &&
+        c.weight.trim() &&
+        Number.isFinite(Number(c.weight)) &&
+        Number(c.weight) >= 0
+    )
+  );
+  const inputFingerprint = JSON.stringify(input);
+  const calculateMutation = trpc.weightBalance.calculate.useMutation({
+    onSuccess: (_result, variables) => {
+      if (JSON.stringify(variables) !== inputFingerprint) return;
       toast.success(
         t("wb.calculated", "Weight & Balance calculated successfully")
       );
@@ -397,7 +426,13 @@ function CalculateTab() {
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const wb = calculateMutation.data;
+  // A previous or late response describes the submitted inputs, not edits made
+  // while the calculation was running or after it completed.
+  const wb =
+    validInput &&
+    JSON.stringify(calculateMutation.variables) === inputFingerprint
+      ? calculateMutation.data
+      : undefined;
 
   const addCargoZone = () => {
     setCargoZones([...cargoZones, { zone: "", weight: "" }]);
@@ -418,16 +453,8 @@ function CalculateTab() {
   };
 
   const handleCalculate = () => {
-    const cargo = cargoZones
-      .filter(c => c.zone && c.weight)
-      .map(c => ({ zone: c.zone, weight: parseInt(c.weight) || 0 }));
-
-    calculateMutation.mutate({
-      flightId: parsedFlightId,
-      aircraftTypeId: parseInt(aircraftTypeId),
-      fuelWeight: parseInt(fuelWeight) || 0,
-      cargoDistribution: cargo.length > 0 ? cargo : undefined,
-    });
+    if (!validInput || calculateMutation.isPending) return;
+    calculateMutation.mutate(input);
   };
 
   return (
@@ -439,10 +466,16 @@ function CalculateTab() {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label>{t("wb.calc.flightId", "Flight ID")}</Label>
+            <Label htmlFor="wb-flight-id">
+              {t("wb.calc.flightId", "Flight ID")}
+            </Label>
             <Input
+              id="wb-flight-id"
               type="number"
+              min={1}
+              step={1}
               value={flightId}
+              aria-invalid={Boolean(flightId) && !parsedFlightId}
               onChange={e => setFlightId(e.target.value)}
               placeholder={t("wb.calc.enterFlightId", "Enter flight ID")}
             />
@@ -465,9 +498,14 @@ function CalculateTab() {
             </Select>
           </div>
           <div>
-            <Label>{t("wb.calc.fuelWeight", "Fuel Weight (kg)")}</Label>
+            <Label htmlFor="wb-fuel-weight">
+              {t("wb.calc.fuelWeight", "Fuel Weight (kg)")}
+            </Label>
             <Input
+              id="wb-fuel-weight"
               type="number"
+              min={0}
+              step="any"
               value={fuelWeight}
               onChange={e => setFuelWeight(e.target.value)}
               placeholder="e.g. 15000"
@@ -495,6 +533,8 @@ function CalculateTab() {
               <div className="flex-1">
                 <Input
                   type="number"
+                  min={0}
+                  step="any"
                   value={zone.weight}
                   onChange={e => updateCargoZone(idx, "weight", e.target.value)}
                   placeholder={t("wb.calc.zoneWeight", "Weight (kg)")}
@@ -513,12 +553,7 @@ function CalculateTab() {
 
         <Button
           className="mt-4 gap-2"
-          disabled={
-            !parsedFlightId ||
-            !aircraftTypeId ||
-            !fuelWeight ||
-            calculateMutation.isPending
-          }
+          disabled={!validInput || calculateMutation.isPending}
           onClick={handleCalculate}
         >
           <Calculator className="h-4 w-4" />
@@ -756,7 +791,7 @@ function CalculateTab() {
 function CurrentWBTab() {
   const { t } = useTranslation();
   const [flightId, setFlightId] = useState("");
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
+  const parsedFlightId = positiveId(flightId);
 
   const { data: wb, isLoading } = wbTrpc.getFlightWB.useQuery(
     { flightId: parsedFlightId },
@@ -927,7 +962,7 @@ function CurrentWBTab() {
 function CheckLimitsTab() {
   const { t } = useTranslation();
   const [flightId, setFlightId] = useState("");
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
+  const parsedFlightId = positiveId(flightId);
 
   const {
     data: limitsData,
@@ -1106,15 +1141,20 @@ function CheckLimitsTab() {
 function LoadSheetTab() {
   const { t } = useTranslation();
   const [flightId, setFlightId] = useState("");
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
+  const parsedFlightId = positiveId(flightId);
 
-  const generateMutation = wbTrpc.generateLoadSheet.useMutation({
-    onSuccess: () =>
-      toast.success(t("wb.loadsheet.generated", "Load sheet generated")),
+  const generateMutation = trpc.weightBalance.generateLoadSheet.useMutation({
+    onSuccess: (_result, variables) => {
+      if (variables.flightId !== parsedFlightId) return;
+      toast.success(t("wb.loadsheet.generated", "Load sheet generated"));
+    },
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const loadSheet = generateMutation.data;
+  const loadSheet =
+    generateMutation.variables?.flightId === parsedFlightId
+      ? generateMutation.data
+      : undefined;
 
   return (
     <div className="space-y-6">
@@ -1472,7 +1512,7 @@ function LoadSheetTab() {
 function HistoryTab() {
   const { t } = useTranslation();
   const [flightId, setFlightId] = useState("");
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
+  const parsedFlightId = positiveId(flightId);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const { data: history, isLoading } = wbTrpc.getHistory.useQuery(

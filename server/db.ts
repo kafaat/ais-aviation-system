@@ -197,9 +197,6 @@ export function getDb(): MySql2Database<typeof schema> | null {
       const pool = getPool();
       if (pool) {
         _db = drizzle(pool, { schema, mode: "default" });
-      } else {
-        // Fallback to direct connection if pool fails
-        _db = drizzle(process.env.DATABASE_URL, { schema, mode: "default" });
       }
     } catch (error) {
       log.warn(
@@ -221,49 +218,52 @@ export function closePool(): Promise<void> {
   const pool = _pool;
   if (!pool) return Promise.resolve();
 
-  _poolClosing = (async () => {
-    // mysql2's end callback acknowledges queued COM_QUIT, not TCP closure.
-    // Snapshot this pool's connections before ending it, including connections
-    // still handshaking. This is the same pinned internal queue used by stats;
-    // the subprocess regression guards its shape on dependency upgrades.
-    const poolInternal = pool.pool as unknown as {
-      _allConnections: {
-        length: number;
-        get(index: number): { stream: Socket };
+  // Share an in-flight close across signal handlers and other cleanup callers.
+  // Defer cleanup so synchronous driver errors follow the same rejection path.
+  _poolClosing = Promise.resolve()
+    .then(async () => {
+      // mysql2's end callback acknowledges queued COM_QUIT, not TCP closure.
+      // Snapshot this pool's connections before ending it, including connections
+      // still handshaking. This is the same pinned internal queue used by stats;
+      // the subprocess regression guards its shape on dependency upgrades.
+      const poolInternal = pool.pool as unknown as {
+        _allConnections: {
+          length: number;
+          get(index: number): { stream: Socket };
+        };
       };
-    };
-    const connections = Array.from(
-      { length: poolInternal._allConnections.length },
-      (_, index) => poolInternal._allConnections.get(index)
-    );
-    let endFailed = false;
-    let endError: unknown;
-    try {
-      await pool.end();
-    } catch (error) {
-      endFailed = true;
-      endError = error;
-    }
-
-    // Read the stream after end(): a handshake can replace TCP with TLS.
-    // destroySoon drains COM_QUIT before closing the owned socket locally;
-    // a peer that never sends FIN must not keep a completed worker alive.
-    const transports = new Set(
-      connections.map(connection => connection.stream)
-    );
-    const results = await Promise.allSettled(
-      [...transports].map(socket => closePoolTransport(socket, endFailed))
-    );
-    if (endFailed) throw endError;
-    const failures = results.filter(result => result.status === "rejected");
-    if (failures.length > 0) {
-      throw new AggregateError(
-        failures.map(result => result.reason),
-        "Database connection transport cleanup failed"
+      const connections = Array.from(
+        { length: poolInternal._allConnections.length },
+        (_, index) => poolInternal._allConnections.get(index)
       );
-    }
-    log.info({ event: "pool_closed" }, "Database connection pool closed");
-  })()
+      let endFailed = false;
+      let endError: unknown;
+      try {
+        await pool.end();
+      } catch (error) {
+        endFailed = true;
+        endError = error;
+      }
+
+      // Read the stream after end(): a handshake can replace TCP with TLS.
+      // destroySoon drains COM_QUIT before closing the owned socket locally;
+      // a peer that never sends FIN must not keep a completed worker alive.
+      const transports = new Set(
+        connections.map(connection => connection.stream)
+      );
+      const results = await Promise.allSettled(
+        [...transports].map(socket => closePoolTransport(socket, endFailed))
+      );
+      if (endFailed) throw endError;
+      const failures = results.filter(result => result.status === "rejected");
+      if (failures.length > 0) {
+        throw new AggregateError(
+          failures.map(result => result.reason),
+          "Database connection transport cleanup failed"
+        );
+      }
+      log.info({ event: "pool_closed" }, "Database connection pool closed");
+    })
     .catch(error => {
       log.error(
         { event: "pool_close_failed", error },

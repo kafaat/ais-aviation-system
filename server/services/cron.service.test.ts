@@ -20,6 +20,67 @@ const auditJobs = vi.hoisted(() => ({
   weather: vi.fn(),
   privacy: vi.fn(),
   checkIn: vi.fn(),
+  hotel: vi.fn(),
+  observations: vi.fn(),
+  onCall: vi.fn(),
+  cancellations: vi.fn(),
+  waitlist: vi.fn(),
+  groups: vi.fn(),
+  splitRefunds: vi.fn(),
+  bagDrop: vi.fn(),
+  cleanup: vi.fn(),
+  reminders: vi.fn(),
+  loyalty: vi.fn(),
+  priceAlerts: vi.fn(),
+  warehouse: vi.fn(),
+  reports: vi.fn(),
+  error: vi.fn(),
+}));
+vi.mock("./hotel-fulfillment.service", () => ({
+  processHotelFulfillment: auditJobs.hotel,
+}));
+vi.mock("./operational-observations.service", () => ({
+  refreshOperationalAlerts: auditJobs.observations,
+}));
+vi.mock("./on-call.service", () => ({
+  processOnCallDeliveries: auditJobs.onCall,
+}));
+vi.mock("./flight-cancellation.service", () => ({
+  processFlightCancellations: auditJobs.cancellations,
+}));
+vi.mock("./waitlist.service", () => ({
+  processExpiredOffers: auditJobs.waitlist,
+}));
+vi.mock("./group-booking.service", () => ({
+  expireGroupAllocations: auditJobs.groups,
+}));
+vi.mock("./split-refund.service", () => ({
+  processPendingSplitRefunds: auditJobs.splitRefunds,
+}));
+vi.mock("./bag-drop.service", () => ({
+  expireBagDropSessions: auditJobs.bagDrop,
+}));
+vi.mock("./inventory-lock.service", () => ({
+  releaseExpiredLocks: auditJobs.cleanup,
+}));
+vi.mock("../jobs/check-in-reminder.job", () => ({
+  runCheckInReminderJob: auditJobs.reminders,
+}));
+vi.mock("../jobs/loyalty-cleanup.job", () => ({
+  runMilesExpirationJob: auditJobs.loyalty,
+}));
+vi.mock("./price-alerts.service", () => ({
+  checkAlerts: auditJobs.priceAlerts,
+}));
+vi.mock("./data-warehouse.service", () => ({
+  processScheduledExports: auditJobs.warehouse,
+}));
+vi.mock("./standard-report-schedules.service", () => ({
+  processStandardReportSchedules: auditJobs.reports,
+}));
+vi.mock("../_core/logger", async importOriginal => ({
+  ...(await importOriginal<typeof import("../_core/logger")>()),
+  logError: auditJobs.error,
 }));
 vi.mock("./weather-operations.service", () => ({
   refreshWeatherOperations: auditJobs.weather,
@@ -51,10 +112,13 @@ import {
 } from "./cron.service";
 import { processPendingOrderRefunds } from "./order-refunds.service";
 import { runOutboxRelay } from "./outbox.service";
+import { runScheduledTask } from "./scheduled-task.service";
 
 beforeEach(() => {
   scheduled.length = 0;
   vi.clearAllMocks();
+  auditJobs.reminders.mockResolvedValue({ errors: [] });
+  auditJobs.loyalty.mockResolvedValue({ success: true });
 });
 
 afterEach(async () => {
@@ -154,5 +218,122 @@ describe("cron.service scheduler", () => {
     await first;
     await relayTask.fn(); // after completion → runs again
     expect(runOutboxRelay).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["hotelFulfillment", auditJobs.hotel],
+    ["operationalAlerts", auditJobs.observations],
+    ["onCallDelivery", auditJobs.onCall],
+    ["flightCancellationRefunds", auditJobs.cancellations],
+    ["channelAllocationExpiry", auditJobs.waitlist],
+    ["splitRefunds", auditJobs.splitRefunds],
+    ["bagDropExpiry", auditJobs.bagDrop],
+    ["cleanupExpiredLocks", auditJobs.cleanup],
+    ["checkInReminders", auditJobs.reminders],
+    ["loyaltyExpiry", auditJobs.loyalty],
+    ["priceAlerts", auditJobs.priceAlerts],
+    ["warehouseExports", auditJobs.warehouse],
+    ["standardReports", auditJobs.reports],
+  ] as const)(
+    "executes the %s callback through the registered durable tick",
+    async (name, run) => {
+      startCronJobs();
+      await scheduled[
+        PERIODIC_JOB_CATALOG.findIndex(job => job.name === name)
+      ].fn();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(runScheduledTask).toHaveBeenCalledWith(
+        name,
+        expect.any(String),
+        expect.any(Function)
+      );
+      expect(auditJobs.error).not.toHaveBeenCalled();
+      if (name === "channelAllocationExpiry")
+        expect(auditJobs.groups).toHaveBeenCalledOnce();
+    }
+  );
+
+  it("waits for the durable tick's final receipt before resolving shutdown", async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const finishedWork = new Promise<void>(resolve => {
+      entered = resolve;
+    });
+    vi.mocked(runScheduledTask).mockImplementationOnce(
+      async (_name, _tick, run) => {
+        await run();
+        entered();
+        await new Promise<void>(resolve => {
+          release = resolve;
+        });
+        return true;
+      }
+    );
+    startCronJobs();
+    const pending =
+      scheduled[
+        PERIODIC_JOB_CATALOG.findIndex(job => job.name === "relayOutboxEvents")
+      ].fn();
+    await finishedWork;
+    let stopped = false;
+    const stop = stopCronJobs().then(() => {
+      stopped = true;
+    });
+    await vi.waitFor(() =>
+      expect(scheduled.every(task => task.stop.mock.calls.length === 1)).toBe(
+        true
+      )
+    );
+    expect(stopped).toBe(false);
+    release();
+    await Promise.all([pending, stop]);
+    expect(stopped).toBe(true);
+  });
+
+  it.each(["loyaltyExpiry", "checkInReminders", "relayOutboxEvents"] as const)(
+    "records %s failure while allowing another scheduled job to execute",
+    async name => {
+      if (name === "loyaltyExpiry")
+        auditJobs.loyalty.mockResolvedValueOnce({
+          success: false,
+          error: "expiry failed",
+        });
+      if (name === "checkInReminders")
+        auditJobs.reminders.mockResolvedValueOnce({
+          errors: ["reminder failed"],
+        });
+      if (name === "relayOutboxEvents")
+        vi.mocked(runOutboxRelay).mockResolvedValueOnce({
+          published: 0,
+          failed: 1,
+        });
+      startCronJobs();
+      await scheduled[
+        PERIODIC_JOB_CATALOG.findIndex(job => job.name === name)
+      ].fn();
+      expect(auditJobs.error).toHaveBeenCalledWith(expect.any(Error), {
+        operation: name,
+      });
+      await scheduled[
+        PERIODIC_JOB_CATALOG.findIndex(job => job.name === "standardReports")
+      ].fn();
+      expect(auditJobs.reports).toHaveBeenCalledOnce();
+    }
+  );
+
+  it("attempts both allocation expiry operations and exposes either failure", async () => {
+    const failure = new Error("waitlist expiry failed");
+    auditJobs.waitlist.mockRejectedValueOnce(failure);
+    startCronJobs();
+    await scheduled[
+      PERIODIC_JOB_CATALOG.findIndex(
+        job => job.name === "channelAllocationExpiry"
+      )
+    ].fn();
+    expect(auditJobs.groups).toHaveBeenCalledOnce();
+    expect(auditJobs.error).toHaveBeenCalledWith(
+      expect.objectContaining({ errors: [failure] }),
+      { operation: "channelAllocationExpiry" }
+    );
   });
 });

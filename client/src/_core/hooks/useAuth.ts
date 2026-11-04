@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
@@ -44,7 +45,16 @@ export function useAuth(options?: UseAuthOptions) {
       throw error;
     } finally {
       await queryClient.cancelQueries();
-      queryClient.clear();
+      // Preserve the observed identity query so every mounted useAuth receives
+      // the null update. Clearing it first leaves observers on the old user.
+      const identityQuery = queryClient.getQueryCache().find({
+        queryKey: getQueryKey(trpc.auth.me, undefined, "query"),
+        exact: true,
+      });
+      queryClient.removeQueries({
+        predicate: query => query !== identityQuery,
+      });
+      queryClient.getMutationCache().clear();
       localStorage.removeItem("manus-runtime-user-info");
       navigator.serviceWorker?.controller?.postMessage({
         type: "CLEAR_PRIVATE_DATA",

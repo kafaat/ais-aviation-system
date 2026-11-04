@@ -163,6 +163,7 @@ jobs:
           pnpm run db:verify-catalog
 
       - name: Run tests with coverage
+        id: coverage
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
           REDIS_URL: redis://127.0.0.1:6379
@@ -172,14 +173,14 @@ jobs:
           JWT_SECRET: test-secret-key-for-ci
           STRIPE_SECRET_KEY: sk_test_mock_key
           STRIPE_WEBHOOK_SECRET: whsec_mock_secret
-        run: pnpm run test:coverage
+        run: node scripts/ci/run-coverage-evidence.mjs
 
       - name: Upload test coverage
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-coverage
-          path: coverage/
+          path: test-results/coverage-evidence/
           retention-days: 7
 
       - name: Upload coverage to Codecov
@@ -187,21 +188,23 @@ jobs:
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
+          files: ${{ steps.coverage.outputs.evidence-dir }}/coverage/lcov.info
           fail_ci_if_error: false
 
       - name: Coverage summary
         if: always()
+        env:
+          COVERAGE_DIR: ${{ steps.coverage.outputs.evidence-dir }}/coverage
         run: |
           echo "## Coverage Report Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f coverage/coverage-summary.json ]; then
+          if [ -f "$COVERAGE_DIR/coverage-summary.json" ]; then
             echo "| Metric | Coverage |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|----------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Lines | $(cat coverage/coverage-summary.json | jq -r '.total.lines.pct')% |" >> $GITHUB_STEP_SUMMARY
-            echo "| Statements | $(cat coverage/coverage-summary.json | jq -r '.total.statements.pct')% |" >> $GITHUB_STEP_SUMMARY
-            echo "| Functions | $(cat coverage/coverage-summary.json | jq -r '.total.functions.pct')% |" >> $GITHUB_STEP_SUMMARY
-            echo "| Branches | $(cat coverage/coverage-summary.json | jq -r '.total.branches.pct')% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Lines | $(jq -r '.total.lines.pct' "$COVERAGE_DIR/coverage-summary.json")% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Statements | $(jq -r '.total.statements.pct' "$COVERAGE_DIR/coverage-summary.json")% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Functions | $(jq -r '.total.functions.pct' "$COVERAGE_DIR/coverage-summary.json")% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Branches | $(jq -r '.total.branches.pct' "$COVERAGE_DIR/coverage-summary.json")% |" >> $GITHUB_STEP_SUMMARY
           else
             echo "Coverage report not available" >> $GITHUB_STEP_SUMMARY
           fi

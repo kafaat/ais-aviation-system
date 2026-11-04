@@ -6,3 +6,7 @@
 f247762a582e88b31b4461e89da0640323176067:server/__tests__/baggage-registration-authority.test.ts:generic-api-key:580
 f247762a582e88b31b4461e89da0640323176067:server/__tests__/baggage-registration-authority.test.ts:generic-api-key:592
 f247762a582e88b31b4461e89da0640323176067:server/__tests__/baggage-registration-authority.test.ts:generic-api-key:606
+
+# Historical synthetic UUID used only as the payment router test's idempotency nonce.
+# The current fixture generates it at runtime; exempt only this published finding.
+91eba4bae9cc7d9208c37d9d283f4624b0408ca6:server/__tests__/payment-router-authority.test.ts:generic-api-key:46

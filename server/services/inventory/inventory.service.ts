@@ -1,4 +1,5 @@
 import { createInventoryLock } from "../inventory-lock.service";
+import type { SettlementTx } from "../booking-settlement.service";
 import {
   countActiveHolds,
   withInventoryTransaction,
@@ -223,31 +224,38 @@ export async function allocateSeats(
 
   if (inventory.effectiveAvailable > 0) {
     const availableSeats = inventory.effectiveAvailable;
-    const hold = await createSeatHold(
-      flightId,
-      cabinClass,
-      availableSeats,
-      userId,
-      sessionId
-    );
+    const database = await getDb();
+    if (!database) throw new Error("Database connection not available");
+    // The partial hold and queued remainder are one allocation. If the queue
+    // write fails, a rejected request must not leave seats held invisibly.
+    return withInventoryTransaction(database, async tx => {
+      const hold = await createSeatHold(
+        flightId,
+        cabinClass,
+        availableSeats,
+        userId,
+        sessionId,
+        tx
+      );
+      const remainingSeats = seats - availableSeats;
+      const waitlistEntry = await addToWaitlist(
+        flightId,
+        cabinClass,
+        remainingSeats,
+        userId,
+        tx
+      );
 
-    const remainingSeats = seats - availableSeats;
-    const waitlistEntry = await addToWaitlist(
-      flightId,
-      cabinClass,
-      remainingSeats,
-      userId
-    );
-
-    return {
-      success: true,
-      holdId: hold.id,
-      lockId: hold.lockId,
-      seatsAllocated: availableSeats,
-      expiresAt: hold.expiresAt,
-      waitlistPosition: waitlistEntry.priority,
-      message: `${availableSeats} seat(s) held, ${remainingSeats} added to waitlist (position ${waitlistEntry.priority})`,
-    };
+      return {
+        success: true,
+        holdId: hold.id,
+        lockId: hold.lockId,
+        seatsAllocated: availableSeats,
+        expiresAt: hold.expiresAt,
+        waitlistPosition: waitlistEntry.priority,
+        message: `${availableSeats} seat(s) held, ${remainingSeats} added to waitlist (position ${waitlistEntry.priority})`,
+      };
+    });
   }
 
   if (inventory.status !== "closed") {
@@ -281,14 +289,15 @@ async function createSeatHold(
   cabinClass: "economy" | "business",
   seats: number,
   userId: number,
-  sessionId: string
+  sessionId: string,
+  transaction?: SettlementTx
 ): Promise<SeatHoldData> {
-  const database = await getDb();
+  const database = transaction ?? (await getDb());
   if (!database) {
     throw new Error("Database connection not available");
   }
 
-  return withInventoryTransaction(database, async tx => {
+  const create = async (tx: SettlementTx) => {
     const { lockId, expiresAt } = await createInventoryLock(
       flightId,
       seats,
@@ -318,7 +327,10 @@ async function createSeatHold(
       expiresAt,
       status: "active" as const,
     };
-  });
+  };
+  return transaction
+    ? create(transaction)
+    : withInventoryTransaction(database, create);
 }
 
 /**
@@ -432,9 +444,10 @@ export async function addToWaitlist(
   flightId: number,
   cabinClass: "economy" | "business",
   seats: number,
-  userId: number
+  userId: number,
+  transaction?: SettlementTx
 ): Promise<WaitlistEntry> {
-  const database = await getDb();
+  const database = transaction ?? (await getDb());
   if (!database) {
     throw new Error("Database connection not available");
   }
