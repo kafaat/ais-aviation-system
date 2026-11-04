@@ -71,10 +71,12 @@ function csvRows(content: string): string[][] {
   let row: string[] = [];
   let value = "";
   let quoted = false;
+  let fieldPresent = false;
   const text = content.replace(/^\uFEFF/, "");
   for (let index = 0; index < text.length; index++) {
     const character = text[index];
     if (character === '"') {
+      fieldPresent = true;
       if (quoted && text[index + 1] === '"') {
         value += '"';
         index++;
@@ -82,17 +84,22 @@ function csvRows(content: string): string[][] {
     } else if (character === "," && !quoted) {
       row.push(value);
       value = "";
+      fieldPresent = false;
     } else if ((character === "\r" || character === "\n") && !quoted) {
       if (character === "\r" && text[index + 1] === "\n") index++;
       row.push(value);
       rows.push(row);
       row = [];
       value = "";
-    } else value += character;
+      fieldPresent = false;
+    } else {
+      value += character;
+      fieldPresent = true;
+    }
   }
   if (quoted)
     throw new Error("Downloaded CSV contains an unterminated quoted field");
-  if (value || row.length) {
+  if (fieldPresent || row.length) {
     row.push(value);
     rows.push(row);
   }
@@ -194,7 +201,9 @@ async function expectThreeFormats(
           row.map(value => {
             if (value === null) return "";
             const text = String(value);
-            return /^[=+@-]/.test(text) ? "'" + text : text;
+            return typeof value === "string" && /^[=+@-]/.test(value)
+              ? "'" + text
+              : text;
           })
         ),
       ]);
@@ -217,7 +226,7 @@ async function expectThreeFormats(
   }
 }
 
-test("standard financial reports preserve tenant scope, UTC boundaries, unknowns and escaped values in three browser downloads", async ({
+test("standard financial reports preserve tenant scope, UTC boundaries, unknowns and escaped values in three export formats", async ({
   page,
 }) => {
   const day = "2035-06-17";
@@ -247,6 +256,24 @@ test("standard financial reports preserve tenant scope, UTC boundaries, unknowns
         financialLabels,
         rows,
         [other.reference, "outside-before-", "outside-after-"]
+      );
+      // A one-column null projection must retain every payment, including the
+      // final quoted empty field at EOF, instead of disappearing as a blank row.
+      await selectColumns(page, ["officeId"]);
+      await expectPreview(
+        page,
+        ["Sales office (unknown)"],
+        owner.payments.map(() => [null])
+      );
+      const unknownOffices = await browserDownload(page, "Download CSV");
+      expect(unknownOffices.filename).toMatch(/^report-55-[0-9-]+\.csv$/);
+      expect(csvRows(unknownOffices.content)).toEqual([
+        ["Sales office (unknown)"],
+        ...owner.payments.map(() => [""]),
+      ]);
+      expect(unknownOffices.content).not.toContain(other.reference);
+      expect(unknownOffices.content).not.toContain(
+        STANDARD_REPORT_PRIVATE_VALUE
       );
       const result = await rpc(page).standardReports.run.mutate({
         reportId: 55,

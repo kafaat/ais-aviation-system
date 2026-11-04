@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { escapeCSV } from "../../shared/csv";
 import type {
+  ReportCell,
   StandardReportCategory,
   StandardReportDefinition,
   StandardReportFilters,
@@ -230,6 +231,15 @@ function escapeMarkup(value: unknown) {
     );
 }
 
+function serializeReportCSVCell(value: ReportCell) {
+  // reportTable normalizes cells before export. A real finite number is safe
+  // numeric data; numeric-looking text must still receive formula protection.
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  // A quoted empty field is a record even when it is the only column at EOF.
+  if (value === null || value === "") return '""';
+  return escapeCSV(String(value));
+}
+
 export function renderStandardReport(
   result: StandardReportResult,
   format: StandardReportFormat
@@ -241,16 +251,14 @@ export function renderStandardReport(
     xml: "application/xml;charset=utf-8",
   };
   if (format === "csv") {
-    // Empty cells mean unknown or not recorded. Financial zero remains numeric zero.
+    // Unknown cells stay empty but retain their record; signed amounts and zero stay numeric.
     content =
       "\uFEFF" +
       [
         result.columns.map(column => escapeCSV(column.label)).join(","),
         ...result.rows.map(row =>
           result.columns
-            .map(column =>
-              escapeCSV(row[column.key] === null ? "" : String(row[column.key]))
-            )
+            .map(column => serializeReportCSVCell(row[column.key]))
             .join(",")
         ),
       ].join("\r\n");

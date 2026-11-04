@@ -23104,6 +23104,11 @@
           "name": "standard_report_run_template",
           "columns": ["templateId", "id"],
           "isUnique": false
+        },
+        "standard_report_run_recovery": {
+          "name": "standard_report_run_recovery",
+          "columns": ["status", "deliveryStatus", "id"],
+          "isUnique": false
         }
       },
       "foreignKeys": {},

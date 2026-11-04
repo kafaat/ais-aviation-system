@@ -161,6 +161,99 @@ nativeDescribe("native report templates, leases and delivery receipts", () => {
     }
   });
 
+  it("uses the recovery index for sparse pending reads and stale sending updates", async () => {
+    const indexName = "standard_report_run_recovery";
+    const [indexRows] = await pool.query<mysql.RowDataPacket[]>(
+      "SHOW INDEX FROM standard_report_runs WHERE Key_name = ?",
+      [indexName]
+    );
+    expect(
+      indexRows
+        .sort((left, right) => left.Seq_in_index - right.Seq_in_index)
+        .map(row => ({ column: row.Column_name, nonUnique: row.Non_unique }))
+    ).toEqual([
+      { column: "status", nonUnique: 1 },
+      { column: "deliveryStatus", nonUnique: 1 },
+      { column: "id", nonUnique: 1 },
+    ]);
+
+    // Put a small recovery backlog after substantial completed history so the
+    // optimizer has representative selectivity and cannot satisfy LIMIT early
+    // by scanning the beginning of the primary key. No index hints are used.
+    const historyCount = 5000;
+    for (let offset = 0; offset < historyCount; offset += 500) {
+      const rows = Array.from({ length: 500 }, (_, position) => {
+        const id = offset + position + 1;
+        return [id, 11, 101, 5, "Archived report", `history-${id}`, "hash"];
+      });
+      await pool.query(
+        "INSERT INTO standard_report_runs (id,createdBy,tenantId,reportId,name,requestKey,definitionHash,filters,format,status,deliveryStatus) VALUES " +
+          rows
+            .map(() => "(?,?,?,?,?,?,?,'{}','csv','ready','accepted')")
+            .join(","),
+        rows.flat()
+      );
+    }
+    const recoveryRows = [
+      [5001, "ready", "pending", null],
+      [5002, "ready", "pending", null],
+      [5003, "failed", "pending", null],
+      [5004, "generating", "pending", null],
+      [5005, "ready", "sending", "2030-01-02 11:59:59"],
+      [5006, "ready", "sending", null],
+      [5007, "ready", "sending", "2030-01-02 12:01:00"],
+      [5008, "failed", "sending", "2030-01-02 11:59:59"],
+      [5009, "generating", "sending", null],
+    ];
+    await pool.query(
+      "INSERT INTO standard_report_runs (id,createdBy,tenantId,reportId,name,requestKey,definitionHash,filters,format,status,deliveryStatus,deliveryStartedAt) VALUES " +
+        recoveryRows
+          .map(() => "(?,11,101,5,'Recovery report',?,'hash','{}','csv',?,?,?)")
+          .join(","),
+      recoveryRows.flatMap(([id, status, deliveryStatus, startedAt]) => [
+        id,
+        `recovery-${id}`,
+        status,
+        deliveryStatus,
+        startedAt,
+      ])
+    );
+    await pool.query("ANALYZE TABLE standard_report_runs");
+
+    // These are the two recovery query shapes. Existing tests cover the full
+    // delivery state machine; here both native plans must avoid history scans.
+    const pendingSql =
+      "SELECT id,createdBy,tenantId,reportId FROM standard_report_runs WHERE status='ready' AND deliveryStatus='pending' ORDER BY id LIMIT 100";
+    const staleSql =
+      "UPDATE standard_report_runs SET deliveryStatus='unknown',errorMessage=? WHERE status='ready' AND deliveryStatus='sending' AND (deliveryStartedAt IS NULL OR deliveryStartedAt<=?)";
+    const staleParams = ["Interrupted attempt", "2030-01-02 12:00:00"];
+    for (const [query, params] of [
+      [pendingSql, []],
+      [staleSql, staleParams],
+    ] as const) {
+      const [plan] = await pool.query<mysql.RowDataPacket[]>(
+        `EXPLAIN FORMAT=TRADITIONAL ${query}`,
+        params
+      );
+      expect(plan).toHaveLength(1);
+      expect(plan[0].key).toBe(indexName);
+      expect(["ref", "range"]).toContain(plan[0].type);
+      expect(Number(plan[0].rows)).toBeLessThan(historyCount / 10);
+      expect(plan[0].Extra ?? "").not.toContain("filesort");
+    }
+    const [pending] = await pool.query<mysql.RowDataPacket[]>(pendingSql);
+    expect(pending.map(row => row.id)).toEqual([5001, 5002]);
+    const [updated] = await pool.execute<mysql.ResultSetHeader>(
+      staleSql,
+      staleParams
+    );
+    expect(updated.affectedRows).toBe(2);
+    const [changed] = await pool.query<mysql.RowDataPacket[]>(
+      "SELECT id FROM standard_report_runs WHERE deliveryStatus='unknown' ORDER BY id"
+    );
+    expect(changed.map(row => row.id)).toEqual([5005, 5006]);
+  });
+
   it("persists a real selected-column template and denies other owners and scopes", async () => {
     const saved = await saveStandardReportTemplate(owner, 101, input());
     expect(saved.columns).toEqual(["record", "quantity"]);

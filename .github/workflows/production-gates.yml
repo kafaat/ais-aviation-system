@@ -84,6 +84,18 @@ jobs:
         run: node --import tsx scripts/generate-event-contracts.ts --check
       - name: Verify service producers, consumers and retired modules
         run: node --import tsx scripts/generate-service-catalog.ts --check
+      - name: Verify native reporting readers and recovery access paths
+        env:
+          NODE_ENV: test
+          AIS_DISPOSABLE_DATABASE: "true"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
+          REDIS_URL: redis://127.0.0.1:6379/3
+          JWT_SECRET: acceptance-only-signing-key-not-for-production
+        run: >-
+          pnpm exec vitest run
+          server/__tests__/standard-reports-ops-mysql.test.ts
+          server/__tests__/standard-reports-finance-mysql.test.ts
+          server/__tests__/standard-report-schedules-mysql.test.ts
       - name: Verify backup failure boundaries and worker liveness
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
       - name: Verify baggage entitlement mutation sensitivity

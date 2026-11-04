@@ -52,5 +52,6 @@ CREATE TABLE `standard_report_templates` (
 --> statement-breakpoint
 CREATE INDEX `standard_report_run_owner` ON `standard_report_runs` (`createdBy`,`id`);--> statement-breakpoint
 CREATE INDEX `standard_report_run_template` ON `standard_report_runs` (`templateId`,`id`);--> statement-breakpoint
+CREATE INDEX `standard_report_run_recovery` ON `standard_report_runs` (`status`,`deliveryStatus`,`id`);--> statement-breakpoint
 CREATE INDEX `standard_report_template_owner` ON `standard_report_templates` (`createdBy`,`id`);--> statement-breakpoint
 CREATE INDEX `standard_report_template_due` ON `standard_report_templates` (`enabled`,`nextRunAt`);

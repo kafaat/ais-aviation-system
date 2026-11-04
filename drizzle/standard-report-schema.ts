@@ -98,5 +98,10 @@ export const standardReportRuns = mysqlTable(
       table.templateId,
       table.id
     ),
+    recovery: index("standard_report_run_recovery").on(
+      table.status,
+      table.deliveryStatus,
+      table.id
+    ),
   })
 );

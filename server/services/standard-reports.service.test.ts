@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
+import ExcelJS from "exceljs";
 import { JSDOM } from "jsdom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -191,6 +194,128 @@ describe("standard report documents", () => {
     expect(csv.content).not.toContain("DO-NOT-EXPOSE");
     expect(csv.checksum).toMatch(/^[a-f0-9]{64}$/);
     expect(csv.recordCount).toBe(1);
+  });
+  it("imports signed numeric amounts and zero as numbers while preserving negative-leading strings as protected text", async () => {
+    readers.finance.mockResolvedValue({
+      columns: [
+        // Serialization must follow the actual cell primitive, not the label
+        // or a column's display type.
+        { key: "amount", label: "Signed amount", type: "text" },
+        { key: "reference", label: "Reference", type: "number" },
+      ],
+      rows: [
+        { amount: -2345, reference: "-2345" },
+        { amount: 0, reference: "-2+3" },
+        { amount: 123, reference: "=SUM(1,2)" },
+      ],
+      notes: [],
+    });
+    const result = await runStandardReport(
+      { reportId: 55, filters: {} },
+      scope
+    );
+    const csv = renderStandardReport(result, "csv");
+    // ExcelJS is an existing direct dependency. Its CSV reader independently
+    // exercises the exported bytes and its normal numeric import behavior.
+    const sheet = await new ExcelJS.Workbook().csv.read(
+      Readable.from([csv.content])
+    );
+    expect([
+      sheet.getCell("A2").value,
+      sheet.getCell("A3").value,
+      sheet.getCell("A4").value,
+    ]).toEqual([-2345, 0, 123]);
+    expect([
+      sheet.getCell("B2").value,
+      sheet.getCell("B3").value,
+      sheet.getCell("B4").value,
+    ]).toEqual(["'-2345", "'-2+3", "'=SUM(1,2)"]);
+    expect(csv.content).toContain("\r\n-2345,'-2345\r\n0,'-2+3\r\n123,");
+  });
+  it.each([
+    ["null", null],
+    ["empty text", ""],
+  ] as const)(
+    "preserves a single-column %s record at EOF",
+    async (_name, value) => {
+      readers.ops.mockResolvedValue({
+        columns: [{ key: "value", label: "Value", type: "text" }],
+        rows: [{ value }],
+        notes: [],
+      });
+      const result = await runStandardReport(
+        { reportId: 5, filters: {} },
+        scope
+      );
+      const csv = renderStandardReport(result, "csv");
+      expect(csv.content).toBe('\uFEFFValue\r\n""');
+      const sheet = await new ExcelJS.Workbook().csv.read(
+        Readable.from([csv.content])
+      );
+      expect(sheet.rowCount).toBe(2);
+      expect(sheet.getCell("A2").value).toBeNull();
+      expect(csv.recordCount).toBe(sheet.rowCount - 1);
+      expect(csv.checksum).toBe(
+        createHash("sha256").update(csv.content, "utf8").digest("hex")
+      );
+    }
+  );
+  it("retains consecutive and trailing empty records alongside numeric zero", async () => {
+    readers.ops.mockResolvedValue({
+      columns: [{ key: "value", label: "Value", type: "number" }],
+      rows: [
+        { value: null },
+        { value: "" },
+        { value: 0 },
+        { value: null },
+        { value: "" },
+      ],
+      notes: [],
+    });
+    const result = await runStandardReport(
+      { reportId: 5, filters: {}, columns: ["value"] },
+      scope
+    );
+    const csv = renderStandardReport(result, "csv");
+    expect(csv.content).toBe('\uFEFFValue\r\n""\r\n""\r\n0\r\n""\r\n""');
+    const sheet = await new ExcelJS.Workbook().csv.read(
+      Readable.from([csv.content])
+    );
+    expect(sheet.rowCount).toBe(6);
+    expect(
+      Array.from({ length: 5 }, (_, index) => sheet.getCell(index + 2, 1).value)
+    ).toEqual([null, null, 0, null, null]);
+    expect(csv.recordCount).toBe(sheet.rowCount - 1);
+    expect(csv.checksum).toBe(
+      createHash("sha256").update(csv.content, "utf8").digest("hex")
+    );
+  });
+  it("keeps formula-leading headers and text neutralized while quoting embedded delimiters", async () => {
+    readers.ops.mockResolvedValue({
+      columns: [{ key: "value", label: "=SUM(1,2)", type: "text" }],
+      rows: [
+        { value: "+1+2" },
+        { value: "@SUM(A1:A2)" },
+        { value: "\t=SUM(1,2)" },
+        { value: 'ordinary,"quoted"\ntext' },
+      ],
+      notes: [],
+    });
+    const result = await runStandardReport({ reportId: 5, filters: {} }, scope);
+    const csv = renderStandardReport(result, "csv");
+    const sheet = await new ExcelJS.Workbook().csv.read(
+      Readable.from([csv.content])
+    );
+    expect(
+      Array.from({ length: 5 }, (_, index) => sheet.getCell(index + 1, 1).value)
+    ).toEqual([
+      "'=SUM(1,2)",
+      "'+1+2",
+      "'@SUM(A1:A2)",
+      "'\t=SUM(1,2)",
+      'ordinary,"quoted"\ntext',
+    ]);
+    expect(csv.recordCount).toBe(sheet.rowCount - 1);
   });
   it("escapes HTML and XML including labels, notes and data and produces parseable XML", async () => {
     readers.ops.mockResolvedValue({
