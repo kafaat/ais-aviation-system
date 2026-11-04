@@ -1,0 +1,724 @@
+{
+  "schema_version": "1.0",
+  "reviewed_base_sha": "76e03ba89dfc354bbc62736dd45548e52c0e557f",
+  "scope_note": "فحص ثابت لثمانية وعشرين مثالاً من قائمة Videcom العامة، مع تتبع مصدر البيانات والخدمة وتسجيل API ومسارات الواجهة. حالة الصفوف تشمل إصلاحات commit 99d543b المرافقة ولا تُنسب إلى قاعدة المراجعة وحدها. أسماء الاختبارات في الصفوف تحدد أدلة أو حدود المكونات ذات الصلة، وليست ادعاء تشغيل E2E لكل تقرير. التنفيذ complete يصف المعنى والحقول الأساسية عبر القراءة الموجودة؛ api_only يبقي غياب واجهة التقرير ظاهراً. لا تُحتسب المحاكاة أو رسائل GDS التقنية أو الوكالات كمبيعات خارجية أو مكاتب بيع.",
+  "source_url": "https://www.videcom.com/airline-system-reporting.aspx",
+  "rows": [
+    {
+      "id": 1,
+      "title": "Agent Details",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/rbac.service.ts",
+        "server/routers/corporate.ts",
+        "server/services/travel-agent.service.ts",
+        "server/routers/travel-agent.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/TravelAgentManagement.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "يوجد جدول users وهوية ودور للمستخدم، وقواعد صلاحيات RBAC، وقائمة مستقلة لوكالات السفر. لم يُعثر على تقرير يجمع جميع مستخدمي النظام ومكتب البيع ومستوى الأمان والصلاحيات الفعلية.",
+      "gap_ar": "لا يوجد ربط موحد للمستخدم بمكتب بيع، ولا API أو شاشة لتقرير جميع المستخدمين بهذه الحقول. قائمة travelAgent.list تخص الوكالات؛ corporate.getUsers يخص شركة معينة، فلا يحقق أي منهما التقرير.",
+      "acceptance_ar": "تعريف مكاتب البيع وربط المستخدمين بها وفق نموذج معتمد، ثم قراءة إدارية قابلة للتصفح والتصدير تعرض الهوية والمكتب والصلاحيات الفعلية وتختبر شمول جميع المستخدمين دون تسريب بيانات اعتماد."
+    },
+    {
+      "id": 4,
+      "title": "Currencies",
+      "implementation_status": "partial",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/currency/currency.service.ts",
+        "server/routers/pricing.router.ts",
+        "server/routers/ibe-public.ts",
+        "client/src/components/DisplayCurrencyEstimate.tsx",
+        "server/routers.ts"
+      ],
+      "apis": [
+        "pricing.getSupportedCurrencies",
+        "pricing.getExchangeRate",
+        "ibePublic.displayRate"
+      ],
+      "ui_routes": [],
+      "tests": [
+        "server/__tests__/new-features/currency.test.ts",
+        "client/src/lib/ibe-search.test.ts"
+      ],
+      "finding_ar": "توجد قائمة عملات مدعومة برمجياً، وأسعار صرف محفوظة في exchangeRates، وقراءة سعر بين عملتين. مكون عرض السعر يستعمل سعر عرض موثق الصلاحية عند توفره.",
+      "gap_ar": "لا توجد قائمة تقرير لجميع العملات المضبوطة مع أسعارها ومصدرها وتاريخ السريان. getSupportedCurrencies قائمة ثابتة، وgetExchangeRate قد يستعمل سعراً احتياطياً؛ لا يجوز مساواته بسجل أسعار الصرف المعتمد.",
+      "acceptance_ar": "إخراج قائمة مضبوطة من البيانات الفعلية تضم العملة والعملة الأساس والسعر والمصدر وفترة الصلاحية، وتوضيح غياب السعر، وربطها بشاشة وتصدير واختبار أسعار سارية ومنتهية ومفقودة."
+    },
+    {
+      "id": 11,
+      "title": "Fares Departing City",
+      "implementation_status": "partial",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/fare-rules.service.ts",
+        "server/routers/fare-rules.ts",
+        "server/routers.ts"
+      ],
+      "apis": [
+        "fareRules.listFareClasses",
+        "fareRules.listFareRules",
+        "fareRules.getFareClassAvailability",
+        "fareRules.calculateFare"
+      ],
+      "ui_routes": [],
+      "tests": ["server/__tests__/sale-fare-rules.test.ts"],
+      "finding_ar": "توجد fareClasses وfareRules وflightFareClasses، وتقرأ الخدمات قواعد وفئات الأسعار وتحسب عرضاً مرتبطاً برحلة. تحفظ بعض القواعد مطار المنشأ.",
+      "gap_ar": "listFareRules لا يقبل مدينة مغادرة ولا يقدم قائمة جميع الأسعار المودعة منها؛ حساب سعر رحلة واحدة لا يحقق سجل الأسعار بالمدينة. لم توجد شاشة تقرير مرتبطة بهذا الغرض.",
+      "acceptance_ar": "قراءة إدارية تسرد جميع الأسعار المطبقة على مدينة المغادرة المحددة، مع فئة السعر والوجهة والعملة والسريان، وتحترم القواعد العامة والخاصة وتختبر حدود المدينة والتواريخ."
+    },
+    {
+      "id": 12,
+      "title": "Fares City Pair",
+      "implementation_status": "partial",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/fare-rules.service.ts",
+        "server/routers/fare-rules.ts",
+        "server/routers.ts"
+      ],
+      "apis": [
+        "fareRules.listFareRules",
+        "fareRules.getFareClassAvailability",
+        "fareRules.calculateFare"
+      ],
+      "ui_routes": [],
+      "tests": ["server/__tests__/sale-fare-rules.test.ts"],
+      "finding_ar": "تدعم قواعد الأسعار مطاري المنشأ والوجهة، ويحسب محرك التسعير نتيجة لمدخلات رحلة ومسار.",
+      "gap_ar": "لا يتوفر استعلام تقرير لجميع الأسعار المودعة بين رمزي مدينتين؛ قائمة القواعد الإدارية لا ترشح بالمطارين، ولا توجد شاشة أو تصدير لهذا التقرير.",
+      "acceptance_ar": "استعلام واضح للمسار المطلوب يسرد جميع فئات وأسعار وقواعد السريان المناسبة دون خلط اتجاه الرحلة العكسي، مع شاشة وتصدير واختبار زوج مدن مطابق وغير مطابق."
+    },
+    {
+      "id": 29,
+      "title": "Frequent Flyer Activity",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/loyalty.service.ts",
+        "server/routers/loyalty.ts",
+        "server/contracts/loyalty.ts",
+        "server/routers.ts",
+        "client/src/pages/LoyaltyDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["loyalty.myTransactions", "loyalty.getUserTransactions"],
+      "ui_routes": ["/loyalty"],
+      "tests": [
+        "server/services/distribution-reporting.test.ts",
+        "server/services/loyalty.service.test.ts",
+        "client/src/pages/__tests__/LoyaltyDashboard.test.tsx",
+        "client/src/pages/__tests__/service-routes.test.tsx"
+      ],
+      "finding_ar": "تسجل milesTransactions عمليات الكسب والاستبدال والانتهاء والتعديل، وتقرأ الواجهة عمليات العضو الحالي. أضيف تصفح آمن بالصفحات للقراءة الحالية وقراءة العضو المحدد إدارياً. رُبط عرض جميع العمليات في /loyalty بصفحات فعلية، وأصبحت إحصاءات العينة الأخيرة موسومة بأنها أحدث 50 عملية كحد أقصى مع حالات خطأ مستقلة.",
+      "gap_ar": "لا يوجد تقرير فترة زمنية يجمع نشاط أعضاء البرنامج أو مدخل startDate/endDate للعمليات. إحصاءات الشاشة والرسم محسوبة من أحدث 50 معاملة كحد أقصى بنطاق معلن؛ التصفح الشخصي لا ينشئ تقرير نشاط كامل لكل الأعضاء.",
+      "acceptance_ar": "قراءة نشاط بنطاق تاريخ محدد تغطي جميع العمليات المطابقة مع العضو والنوع والمبلغ والتوقيت، وتختبر حدود الأيام وتطابق الإجمالي مع البيانات بدلاً من تجميع صفحة جزئية."
+    },
+    {
+      "id": 30,
+      "title": "Frequent Flyer Membership",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/loyalty.service.ts",
+        "server/routers/loyalty.ts",
+        "server/contracts/loyalty.ts",
+        "server/routers.ts",
+        "client/src/pages/LoyaltyDashboard.tsx"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "يحفظ loyaltyAccounts تاريخ memberSince، وتعرض قراءة الحساب معلومات عضوية عضو واحد.",
+      "gap_ar": "لا يوجد استعلام للأعضاء المنضمين بين تاريخين أو قائمة إدارية أو تصدير؛ وجود تاريخ الانضمام في الجدول لا يحقق التقرير.",
+      "acceptance_ar": "قائمة عضويات جديدة بفترة انضمام محددة مع هوية العضو وتاريخ العضوية والمستوى، واختبار الحدود والتصفح وإظهار الفترة الخالية بصورة صريحة."
+    },
+    {
+      "id": 31,
+      "title": "Frequent Flyer Transactions",
+      "implementation_status": "complete",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/loyalty.service.ts",
+        "server/routers/loyalty.ts",
+        "server/contracts/loyalty.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["loyalty.getUserTransactions", "loyalty.myTransactions"],
+      "ui_routes": [],
+      "tests": [
+        "server/services/distribution-reporting.test.ts",
+        "server/services/loyalty.service.test.ts"
+      ],
+      "finding_ar": "بعد الإصلاح تقرأ loyalty.getUserTransactions العمليات الفعلية لعضو محدد بصلاحية admin، مع النوع والمبلغ والرصيد بعد العملية والمراجع والتاريخ. تدعم الصفحات limit من 1 إلى 100 وoffset من 0 إلى 1,000,000، بترتيب createdAt ثم id تنازلياً؛ بقيت استجابة المصفوفة متوافقة.",
+      "gap_ar": "اكتمل معنى قراءة عمليات العضو المحدد في API. لا توجد شاشة إدارية لاختيار العضو وتصدير سجله؛ /loyalty يخص العضو الحالي ولا يمثل اختيار أي عضو إدارياً. الاختبار المحلي لا يثبت تشغيل واجهة الإنتاج.",
+      "acceptance_ar": "نجح اختبار 105 عمليات لعضو عبر ثلاث صفحات دون تكرار أو ضياع في بيانات ثابتة، مع عزل عضو آخر ورفض غير الإداري. لاكتمال الربط بالواجهة يلزم اختيار عضو وتصفح وتصدير يستعمل نفس API ويُختبر من المتصفح."
+    },
+    {
+      "id": 32,
+      "title": "GDS Bookings",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/gds.service.ts",
+        "server/services/demo-capability.ts",
+        "server/routers/gds.ts",
+        "server/contracts/gds.ts",
+        "server/routers.ts"
+      ],
+      "apis": [
+        "gds.createGdsBooking",
+        "gds.getMessageLog",
+        "gds.getStatistics"
+      ],
+      "ui_routes": [],
+      "tests": ["server/services/distribution-reporting.test.ts"],
+      "finding_ar": "توجد اتصالات GDS وسجل رسائل وإحصاءات تقنية. إنشاء حجز GDS يخضع requireDemoCapability(\"GDS simulation\")؛ لا يسمح المسار بتقديم المحاكاة كتكامل إنتاجي.",
+      "gap_ar": "لا يوجد سجل حجوزات GDS مقبولة من مزود فعلي يثبت مصدر الحجز وإيصاله الخارجي وفلترة فترة الحجز. الرسالة booking_response قد تكون محاولة تقنية أو محاكاة وليست عملية بيع مثبتة.",
+      "acceptance_ar": "ربط مزود GDS فعلي وحفظ إقرار الحجز ومعرّف المزود ووقت الإنشاء وربطها بحجز AIS، ثم تقرير للفترة واختبار قبول خارجي يمنع عد المحاولات وإعادة الإرسال كحجوزات."
+    },
+    {
+      "id": 33,
+      "title": "GDS Etickets",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/gds.service.ts",
+        "server/services/demo-capability.ts",
+        "server/routers/gds.ts",
+        "server/contracts/gds.ts",
+        "server/routers.ts",
+        "server/services/bsp-reporting.service.ts",
+        "server/routers/bsp-reporting.ts"
+      ],
+      "apis": [
+        "gds.createGdsBooking",
+        "bspReporting.generateReport",
+        "bspReporting.ledgerDraft"
+      ],
+      "ui_routes": [],
+      "tests": ["server/__tests__/financial-reporting.test.ts"],
+      "finding_ar": "مسار GDS محاكاة مقفلة خارج بيئة العرض، وخدمة BSP تصرح بغياب مرجع تذاكر وضرائب وإيصالات مقبول. مسودة دفتر القيود الداخلي لا تثبت إصدار تذاكر BSP.",
+      "gap_ar": "لا يوجد وصل مثبت بين حجز GDS وتذكرة IATA BSP مقبولة وقسائمها. صفحة BSP الداخلية لا توفر قائمة التذاكر الخارجية المطلوبة.",
+      "acceptance_ar": "إثبات إصدار وقبول التذكرة من الجهة المخولة وربط رقمها وقسائمها بحجز ومزود GDS، ثم قراءة قابلة للتصفية والتصدير واختبارات قبول تمنع تحويل مبالغ الحجوزات المحلية إلى وثائق BSP."
+    },
+    {
+      "id": 34,
+      "title": "GDS ID",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/gds.service.ts",
+        "server/services/demo-capability.ts",
+        "server/routers/gds.ts",
+        "server/contracts/gds.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["gds.getMessageLog", "gds.getStatistics"],
+      "ui_routes": [],
+      "tests": ["server/services/distribution-reporting.test.ts"],
+      "finding_ar": "يمكن ترشيح الرسائل التقنية بالاتصال، وتدعم إحصاءات الاتصال فترة تاريخية. نجحت اختبارات توافق الفترة مع العد والفصل عن صحة الاتصال خلال آخر 24 ساعة.",
+      "gap_ar": "الاتصال ومزوده لا يشكلان سجل حجوزات فعلية لمزود GDS. لا توجد قائمة حجوزات مقبولة مرتبطة بمعرّف المزود ومقيدة بتاريخ الحجز.",
+      "acceptance_ar": "حفظ مصدر GDS وإقرار الحجز ثم استعلام حجوزات بالمزود والفترة؛ اختبار أكثر من مزود وحدود التاريخ واستبعاد المحاولات غير المقبولة."
+    },
+    {
+      "id": 35,
+      "title": "GDS PNR Quantity",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/gds.service.ts",
+        "server/services/demo-capability.ts",
+        "server/routers/gds.ts",
+        "server/contracts/gds.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["gds.getStatistics"],
+      "ui_routes": [],
+      "tests": ["server/services/distribution-reporting.test.ts"],
+      "finding_ar": "إحصاءات GDS الحالية تعد الرسائل وتوزعها حسب النوع وحالة النقل، وتعرض زمن الاستجابة؛ مصدرها gdsMessages.",
+      "gap_ar": "لا تعد هذه الإحصاءات PNRs مميزة ومقبولة لكل مزود. تحويل عدد booking_request أو booking_response إلى عدد حجوزات يضاعف المحاولات ولا يثبت نجاح البيع.",
+      "acceptance_ar": "بعد توفير مصدر حجوزات GDS المقبولة، عدّ معرّفات الحجز الفريدة لكل مزود بسياسة واضحة للإلغاء والفترة، واختبار إعادة المحاولة وتعدد رسائل الحجز نفسه."
+    },
+    {
+      "id": 36,
+      "title": "GDS Segments",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/gds.service.ts",
+        "server/services/demo-capability.ts",
+        "server/routers/gds.ts",
+        "server/contracts/gds.ts",
+        "server/routers.ts",
+        "server/services/travel-agent.service.ts"
+      ],
+      "apis": ["gds.createGdsBooking", "gds.getMessageLog"],
+      "ui_routes": [],
+      "tests": ["server/services/distribution-reporting.test.ts"],
+      "finding_ar": "توجد قطاعات حجز محلية وطلبات ورسائل GDS تقنية، لكن تنفيذ GDS الفعلي غير مقبول خارج المحاكاة.",
+      "gap_ar": "لا يثبت النظام نسبة القطاعات المباعة إلى GDS محدد ولا يحفظ سجل قبول خارجي يسمح بعد القطاعات خلال الفترة. flight segments المحلية وحدها غير كافية.",
+      "acceptance_ar": "حفظ علاقة الحجز والقطاع ومصدر GDS وإقرار الحجز، وتقرير يعد القطاعات المطابقة للفترة مرة واحدة، مع اختبار رحلة متعددة القطاعات وإلغاء وتكرار الرسائل."
+    },
+    {
+      "id": 37,
+      "title": "GDS Travel Agent ID",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/gds.service.ts",
+        "server/services/demo-capability.ts",
+        "server/routers/gds.ts",
+        "server/contracts/gds.ts",
+        "server/routers.ts",
+        "server/services/travel-agent.service.ts",
+        "server/routers/travel-agent.ts",
+        "server/routers/agent-portal.ts",
+        "client/src/pages/AgentPortal.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["travelAgent.getBookings", "agentPortal.dashboard"],
+      "ui_routes": [],
+      "tests": [
+        "server/services/distribution-reporting.test.ts",
+        "server/services/travel-agent.service.test.ts",
+        "server/services/travel-agent.owner.test.ts"
+      ],
+      "finding_ar": "تسجل travelAgents رقم IATA وتربط agentBookings حجوزات الوكالة المحلية، ويطبق getAgentBookings التصفية قبل العد والتصفح. بوابة /agent تعرض حجوزات الوكالة المصرح بها.",
+      "gap_ar": "الموجود قناة وكالات AIS المحلية؛ لا يثبت أنها حجوزات واردة من GDS برقم وكيل IATA. لا يوجد تقرير يقبل رقم الوكيل الخارجي ويقرأ حجوزاته المقبولة من GDS.",
+      "acceptance_ar": "ربط رقم وكيل IATA بمصدر GDS وسجل الحجوزات المقبولة، ثم ترشيح التقرير بالمعرف والفترة والتحقق من الصلاحية وعزل الوكالات؛ تبقى حجوزات الوكالة المحلية مميزة عن GDS."
+    },
+    {
+      "id": 41,
+      "title": "Issues Offices",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/travel-agent.service.ts",
+        "server/routers/travel-agent.ts",
+        "server/routers.ts",
+        "server/services/gds.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "قائمة وكالات السفر موجودة، كما يحفظ اتصال GDS قيمة officeId تخص المزود.",
+      "gap_ar": "لم يوجد كيان مكاتب إصدار داخلي أو علاقة تربط عملية إصدار بمكتب محدد. الوكالة وofficeId الخارجي ليسا قائمة مكاتب الإصدار المطلوبة.",
+      "acceptance_ar": "تحديد كيان مكاتب الإصدار المعتمد وربطه بسجلات الإصدار، ثم قائمة إدارية لجميع المكاتب مع معرّفاتها وحالتها واختبار الشمول والربط."
+    },
+    {
+      "id": 42,
+      "title": "Last Record Locator",
+      "implementation_status": "partial",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/routers/admin.ts",
+        "server/contracts/admin.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["admin.getAllBookings"],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "تعيد القراءة الإدارية bookingReference وpnr وcreatedAt مرتبة بتاريخ الإنشاء تنازلياً.",
+      "gap_ar": "لا توجد قراءة مخصصة لآخر مرجع حجز. الاستعلام يعيد جميع الصفوف ويرتب بالتاريخ وحده، ولا يحسم تعادل التوقيت أو تعريف احتساب الحجوزات المحذوفة. لم توجد واجهة تستدعيه لهذا التقرير.",
+      "acceptance_ar": "قراءة آخر حجز بمعيار متفق عليه وترتيب حاسم createdAt ثم id، مع حد صف واحد واختبارات لقاعدة خالية وتعادل التوقيت ونطاق الشركة."
+    },
+    {
+      "id": 46,
+      "title": "Message Table",
+      "implementation_status": "partial",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "server/services/sms.service.ts",
+        "server/routers/sms.ts",
+        "drizzle/operations-schema.ts",
+        "server/services/aviation-message-transmission.service.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["sms.getTemplates"],
+      "ui_routes": [],
+      "tests": ["server/services/sms.production-boundary.test.ts"],
+      "finding_ar": "تعيد sms.getTemplates قوالب SMS المعرّفة في الشيفرة، ويوجد نموذج مستقل لمسارات الرسائل التشغيلية.",
+      "gap_ar": "قوالب SMS ليست فهرس جميع مجموعات رسائل النظام المضبوطة. لا توجد قراءة موحدة لرسائل TTY والبريد والقوالب والمسارات ولا شاشة لهذا التقرير.",
+      "acceptance_ar": "تحديد أنواع مجموعات الرسائل التي يدعمها النظام فعلياً وإظهار إعداداتها المعتمدة ومصدرها وحالتها، وربط القراءة بالشاشة والتصدير واختبار تغطية جميع المجموعات."
+    },
+    {
+      "id": 47,
+      "title": "Migration Report",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "scripts/ci/forensic-data-audit.ts",
+        "scripts/ci/production-db-preflight.ts",
+        "drizzle/schema.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": ["server/__tests__/scripts/forensic-data-audit.test.ts"],
+      "finding_ar": "توجد أدوات فحص سلامة بيانات وفحص ترحيلات مخطط قاعدة البيانات.",
+      "gap_ar": "لا توجد دفعة استيراد حجوزات مع سجل أخطاء على مستوى الحجز أو تقرير مرتبط بها. فحص مخطط Drizzle أو اكتشاف عدم اتساق البيانات لا يمثل أخطاء استيراد حجوزات تاريخية.",
+      "acceptance_ar": "تسجيل دفعة الاستيراد ومعرّف سجل المصدر والحجز وسبب الخطأ وحالة المعالجة ثم تقرير للدفعة؛ اختباره بسجلات صحيحة وفاشلة وإعادة محاولة دون تكرار."
+    },
+    {
+      "id": 51,
+      "title": "Sales Offices",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/travel-agent.service.ts",
+        "server/routers/travel-agent.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/TravelAgentManagement.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "تعرض /admin/travel-agents وكالات السفر الفعلية المسجلة وتفاصيلها.",
+      "gap_ar": "لا يوجد كيان وقائمة مكاتب بيع داخلية يحققان هذا التقرير؛ لا يجوز إعادة تسمية قائمة الوكالات على أنها قائمة مكاتب البيع.",
+      "acceptance_ar": "تعريف مكاتب البيع ومعرّفاتها وعلاقاتها التشغيلية ثم قائمة كاملة من البيانات الفعلية مع شاشة وتصدير واختبارات الشمول والحالة."
+    },
+    {
+      "id": 52,
+      "title": "Sales Office Credit Limits",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/agency-credit.service.ts",
+        "server/routers/travel-agent.ts",
+        "server/routers/corporate.ts",
+        "server/routers.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "توجد شروط ائتمان وكالة في agencyCreditTerms وقراءة travelAgent.creditBalance، وكذلك حد ائتمان للحسابات المؤسسية.",
+      "gap_ar": "لم يوجد ربط حد ائتمان بمكتب بيع داخلي أو قائمة جميع المكاتب وحدودها. ائتمان الوكالات أو الشركات لا يحقق معنى ائتمان مكتب البيع.",
+      "acceptance_ar": "اعتماد علاقة مكاتب البيع بحسابات وحدود الائتمان، ثم قراءة جميع المكاتب بعملة الحد وتاريخ سريانه وإظهار غير المضبوط صراحة، واختبار الفصل عن ائتمان الوكالات والشركات."
+    },
+    {
+      "id": 58,
+      "title": "PNR 50",
+      "implementation_status": "partial",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/routers/admin.ts",
+        "server/contracts/admin.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["admin.getAllBookings"],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "يمكن للقراءة الإدارية إعادة مراجع الحجوزات مرتبة حسب الإنشاء؛ لا توجد نقطة قراءة مخصصة لأحدث 50 حجزاً.",
+      "gap_ar": "تُجلب جميع الحجوزات بلا limit 50 وبترتيب لا يحسم تعادل createdAt. لم توجد شاشة أو عملية تصدير تحقق هذا العدد والمعيار.",
+      "acceptance_ar": "استعلام لأحدث 50 PNR بترتيب ثابت ونطاق وصول صحيح، مع اختبارات 0 و49 و50 و51 حجزاً وتعادل توقيت الإنشاء، ثم ربطه بواجهة وتصدير."
+    },
+    {
+      "id": 59,
+      "title": "PNR Full (Passenger Name Record)",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/bookings.service.ts",
+        "server/routers/bookings.ts",
+        "server/routers.ts",
+        "server/routers/manage-booking.ts",
+        "server/services/manage-booking.service.ts",
+        "client/src/pages/MyBookings.tsx",
+        "client/src/pages/ManageBooking.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "bookings.getByPNR",
+        "bookings.myBookings",
+        "bookings.getPassengers",
+        "manageBooking.lookup"
+      ],
+      "ui_routes": ["/my-bookings", "/manage-booking"],
+      "tests": [
+        "server/routers/manage-booking.security.test.ts",
+        "server/services/bookings.tenant-scope.test.ts"
+      ],
+      "finding_ar": "تقرأ getByPNR سجل الحجز، وتضم myBookings الرحلة والركاب، وتعرض الصفحات حجوزات المستخدم أو ملخص الرحلة المسموح بمرجع الحجز واسم العائلة.",
+      "gap_ar": "لا يجمع ذلك جميع بيانات PNR في تقرير واحد: القطاعات والمدفوعات والقسائم والإضافات وسجل التغييرات موزعة. واجهة lookup العامة محدودة عمداً ولا تصلح لإخراج PNR كامل.",
+      "acceptance_ar": "قراءة إدارية أو مملوكة موحدة للحجز تشمل الكيانات المطلوبة بتعريف حقول صريح، ثم شاشة وتصدير واختبارات مطابقة الحقول والعلاقات ونطاق الوصول؛ تبقى القراءة العامة محدودة."
+    },
+    {
+      "id": 60,
+      "title": "PNR History",
+      "implementation_status": "partial",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/audit.service.ts",
+        "server/services/booking-state-machine.service.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/routers/admin.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["admin.getAuditLogs", "admin.getAuditLogsForResource"],
+      "ui_routes": [],
+      "tests": [
+        "server/services/audit.service.test.ts",
+        "server/services/booking-state-machine.service.test.ts"
+      ],
+      "finding_ar": "توجد auditLogs وbookingStatusHistory وسجلات أوامر وتسوية. تسمح القراءة الإدارية بترشيح الأثر التدقيقي بنوع المورد ومعرّفه والفترة.",
+      "gap_ar": "لا توجد شاشة تاريخ PNR موحدة ولا إثبات أن كل معاملة على الحجز تنتج حدثاً داخل هذا الاستعلام؛ بعض الحالات محفوظة في جداول أخرى. ربط resourceId وحده ليس تغطية لجميع العمليات.",
+      "acceptance_ar": "توحيد خط زمني للحجز به وقت العملية ونوعها ومصدرها وفاعلها ومراجعها، مع اختبار دورة حجز وتعديل ودفع واسترداد وإلغاء والتحقق من عدم إسقاط أي حدث مطلوب."
+    },
+    {
+      "id": 61,
+      "title": "PNR from Credit Card Authorization",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/routers/payments.ts",
+        "server/services/payment-history.service.ts",
+        "server/routers.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "توجد حجوزات ومدفوعات وإيصالات وسجل دفع، لكن لم يُعثر على حقل معتمد أو استعلام يربط رمز تفويض البطاقة بمرجع الحجز.",
+      "gap_ar": "معرف Stripe أو معرف الدفعة ليس تلقائياً رمز تفويض بطاقة؛ لا توجد API أو شاشة بهذا المدخل.",
+      "acceptance_ar": "استلام رمز التفويض الفعلي من مزود الدفع وحفظ العلاقة المرجعية المسموح بها، ثم بحث مقيد بالصلاحية يعيد PNR الصحيح واختبارات التطابق والتعدد وعدم العثور دون تخزين بيانات بطاقة حساسة."
+    },
+    {
+      "id": 62,
+      "title": "PNR Table",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/bookings.service.ts",
+        "server/routers/bookings.ts",
+        "server/routers.ts",
+        "server/services/dcs.service.ts",
+        "server/services/flight-state.service.ts",
+        "server/routers/dcs.ts",
+        "client/src/pages/admin/DcsDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "dcs.getFlightManifest",
+        "bookings.getByPNR",
+        "bookings.getPassengers"
+      ],
+      "ui_routes": ["/admin/dcs"],
+      "tests": ["client/src/pages/admin/__tests__/DcsManifestExport.test.tsx"],
+      "finding_ar": "يقرأ بيان DCS أعضاء الرحلة من الحجوزات والقطاعات الفعلية ويعرض مرجع الحجز وPNR والاسم والنوع والدرجة والمقعد، مع تصدير بيان الركاب.",
+      "gap_ar": "بيان الركاب لا يعرض جميع بيانات جميع حجوزات الرحلة، مثل تفاصيل الدفع والقسائم والإضافات وسجل الحجز. وجود مرجع PNR في البيان لا يجعله PNR Table كاملاً.",
+      "acceptance_ar": "تقرير حجوزات بمدخل flightId ونطاق عضوية صحيح للقطاعات المتعددة يجمع حقول PNR المتفق عليها، مع تصدير واختبار رحلة متعددة القطاعات واستبعاد حجوزات غير الأعضاء."
+    },
+    {
+      "id": 63,
+      "title": "Product Sales",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/analytics.service.ts",
+        "server/routers/analytics.ts",
+        "server/services/ancillary-services.service.ts",
+        "client/src/pages/AnalyticsDashboard.tsx",
+        "server/routers.ts",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "analytics.getAncillaryMetrics",
+        "analytics.getAncillaryRevenueByCategory",
+        "analytics.getPopularAncillaries",
+        "ancillary.getBookingAncillaries"
+      ],
+      "ui_routes": ["/analytics"],
+      "tests": [
+        "server/__tests__/analytics-reporting.test.ts",
+        "server/__tests__/analytics-period-router.test.ts",
+        "server/services/ancillary-services.service.test.ts"
+      ],
+      "finding_ar": "ترتبط تحليلات المنتجات الإضافية بbookingAncillaries وbookings وancillaryServices؛ تعرض /analytics الكميات والقيم المحجوزة الممولة حسب الفئة وأفضل 5 منتجات ضمن الفترة المحددة.",
+      "gap_ar": "هذا تجميع وترتيب لأشهر المنتجات، وليس قائمة كل عملية بيع في الفترة. الأساس تاريخ الحجز وقيم إضافاته الممولة، وليس بالضرورة تاريخ كل بيع منتج أو صافي دفتر تحصيل مستقل؛ لا توجد قائمة معاملات منتجات كاملة.",
+      "acceptance_ar": "تعريف تاريخ عملية بيع المنتج ومقياس المبلغ، ثم قائمة جميع العمليات بمنتجها وحجزها وكميتها وعملتها وحالة الإلغاء أو الاسترداد، مع تصفح وتصدير واختبار منتج خارج أفضل خمسة وحدود الفترة."
+    },
+    {
+      "id": 64,
+      "title": "Passport Data",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/apis.service.ts",
+        "server/services/apis-paxlst.ts",
+        "server/services/apis-pnrgov.ts",
+        "server/routers/apis.ts",
+        "client/src/pages/admin/APISManagement.tsx",
+        "server/routers.ts",
+        "client/src/App.tsx"
+      ],
+      "apis": ["apis.getFlightStatus", "apis.generateMessage"],
+      "ui_routes": ["/admin/apis"],
+      "tests": [
+        "server/__tests__/apis-paxlst.test.ts",
+        "server/__tests__/apis-pnrgov.test.ts"
+      ],
+      "finding_ar": "توجد بيانات APIS ووثائق الركاب، وتتيح /admin/apis فحص حالة رحلة وإنشاء وتنزيل مسودة رسالة تحتوي بيانات الوثائق وفق التنسيق المصرح به.",
+      "gap_ar": "الفلاتر الحالية flightId؛ لا توجد قراءة جميع بيانات الجواز والوثائق لمدينة محددة. getFlightStatus يعرض الأسماء وحالة اكتمال البيانات ولا يعيد حقول الجواز نفسها.",
+      "acceptance_ar": "تحديد معنى المدينة ونطاق الرحلات، ثم قراءة وثائق مخولة مبنية على عضوية الرحلة والبيانات الفعلية مع شاشة وتصدير واختبار حدود المدينة وعدم إضافة ركاب خارج الرحلات المحددة."
+    },
+    {
+      "id": 65,
+      "title": "PNR's on Queues",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/queue.service.ts",
+        "server/services/queue-v2.service.ts",
+        "server/routers.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "توجد صفوف مهام خلفية للبريد وإعادة Webhooks والتسوية والتنظيف باستخدام BullMQ.",
+      "gap_ar": "لا يوجد نموذج صفوف عمل حجوزات أو عضوية PNR في صف محدد أو API لهذا التقرير. صف مهمة تقنية لا يمثل صف حجز تشغيلي.",
+      "acceptance_ar": "تعريف صفوف الحجوزات وعضوية الحجز وأحداث الإضافة والإزالة ثم قائمة بمدخل queueId أو رقم الصف مع تصفح واختبارات انتقال الحجز بين الصفوف وعدم التكرار."
+    },
+    {
+      "id": 97,
+      "title": "VRS Messages",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/chat-schema.ts",
+        "drizzle/operations-schema.ts",
+        "server/services/email.service.ts",
+        "server/services/sms.service.ts",
+        "server/services/notification.service.ts",
+        "server/services/aviation-message-transmission.service.ts",
+        "server/routers/sms.ts",
+        "server/routers/notifications.ts",
+        "server/routers.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [
+        "server/services/sms.production-boundary.test.ts",
+        "server/services/notification.service.test.ts"
+      ],
+      "finding_ar": "توجد خدمات إرسال بريد، وسجل SMS، وإشعارات داخلية، ونموذج transmissions للرسائل التشغيلية. الاستخدام الموجود لnotificationHistory في الخدمات يكتب SMS؛ تعريف قناة email في المخطط وحده لا يثبت تسجيل البريد.",
+      "gap_ar": "لا يوجد تقرير مسجل يجمع جميع رسائل TTY والبريد المولدة خلال فترة. sms.listLogs لا يحقق هاتين القناتين، والإشعار الداخلي لا يثبت أن رسالة بريد أُنشئت أو أُرسلت.",
+      "acceptance_ar": "تسجيل إنشاء الرسالة وقناتها ومرجعها ووقت إنشائها وحالات إرسالها بصورة منفصلة، ثم قراءة فترة موحدة للبريد وTTY مع اختبارات تغطي الإنشاء دون إرسال والفشل والقبول وعدم الخلط بينها."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "distribution-gds-status-pagination",
+      "commit": "99d543b",
+      "summary_ar": "مواءمة فلتر حالة رسائل GDS مع enum قاعدة البيانات success/error/timeout/pending، ورفض sent/received غير المحفوظتين؛ تثبيت ترتيب الصفحات بالتاريخ ثم id.",
+      "source_paths": [
+        "server/routers/gds.ts",
+        "server/services/gds.service.ts",
+        "server/services/distribution-reporting.test.ts"
+      ],
+      "before": {
+        "passed": 11,
+        "failed": 4,
+        "total": 15
+      },
+      "after": {
+        "distribution_file_passed": 23,
+        "distribution_file_failed": 0
+      },
+      "boundary_ar": "تنفيذ استعلامات Drizzle الفعلية بلهجة MySQL على بيانات SQLite علائقية؛ اختبار API المحلي والعزل والعد والتصفح، دون اتصال بمزود GDS ودون إثبات قبول خارجي."
+    },
+    {
+      "id": "distribution-loyalty-history-pagination",
+      "commit": "99d543b",
+      "summary_ar": "إضافة offset اختياري محدود إلى myTransactions وgetUserTransactions، وفرض حدود صحيحة العدد وترتيب createdAt ثم id دون تغيير أسماء RPC أو استجابة المصفوفة.",
+      "source_paths": [
+        "server/routers/loyalty.ts",
+        "server/services/loyalty.service.ts",
+        "server/services/distribution-reporting.test.ts"
+      ],
+      "input_contract": {
+        "limit": {
+          "integer": true,
+          "min": 1,
+          "max": 100,
+          "default": 50
+        },
+        "offset": {
+          "integer": true,
+          "min": 0,
+          "max": 1000000,
+          "default": 0
+        }
+      },
+      "before": {
+        "passed": 17,
+        "failed": 6,
+        "total": 23
+      },
+      "after": {
+        "passed": 78,
+        "failed": 0,
+        "skipped": 0,
+        "files": 5
+      },
+      "test_files": [
+        "server/services/distribution-reporting.test.ts",
+        "server/services/loyalty.service.test.ts",
+        "server/services/travel-agent.service.test.ts",
+        "server/services/travel-agent.owner.test.ts",
+        "server/services/travel-agent.commission.test.ts"
+      ],
+      "boundary_ar": "اختبار 105 عمليات لعضو وعضو آخر والتصفح الافتراضي وما بعد 100 عملية والصفحة الخالية ومنع الوصول الإداري لغير admin ورفض المدخلات غير الصحيحة. ثبات ترتيب الصفحات مثبت لبيانات ثابتة؛ offset ليس لقطة معزولة عند إدراج عمليات جديدة بالتزامن."
+    },
+    {
+      "id": "distribution-verification",
+      "commit": "99d543b",
+      "typecheck": {
+        "command": "NODE_OPTIONS=--max-old-space-size=4096 pnpm check --incremental false",
+        "exit_code": 0,
+        "initial_attempt_note_ar": "انتهت المحاولة الأولى بحد heap الافتراضي 2GB بالرمز 134 لنفاد الذاكرة؛ نجحت إعادة التحقق بحد 4GB دون أخطاء أنواع."
+      },
+      "lint": {
+        "files": 5,
+        "exit_code": 0
+      },
+      "format": {
+        "prettier": true,
+        "diff_check": true
+      },
+      "test_command": "pnpm test server/services/distribution-reporting.test.ts server/services/loyalty.service.test.ts server/services/travel-agent.service.test.ts server/services/travel-agent.owner.test.ts server/services/travel-agent.commission.test.ts",
+      "note_ar": "استُخدمت نسخة pnpm المثبتة ذات lockfile المطابق. لم تُشغل اختبارات متصفح جديدة في نطاق هذا الوكيل ولم تُرسل طلبات إلى الإنتاج."
+    }
+  ]
+}

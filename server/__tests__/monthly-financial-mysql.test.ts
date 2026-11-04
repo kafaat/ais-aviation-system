@@ -56,7 +56,7 @@ nativeDescribe(
         "CREATE TABLE bookings (id INT PRIMARY KEY, tenantId INT, flightId INT NOT NULL DEFAULT 1, status VARCHAR(20) NOT NULL DEFAULT 'confirmed', bookingReference VARCHAR(6) NOT NULL DEFAULT 'TEST', cabinClass VARCHAR(20) NOT NULL DEFAULT 'economy', numberOfPassengers INT NOT NULL DEFAULT 1, createdAt TIMESTAMP NOT NULL, totalAmount INT NOT NULL, paymentStatus VARCHAR(20) NOT NULL)"
       );
       await connection.query(
-        "CREATE TABLE financial_ledger (id INT AUTO_INCREMENT PRIMARY KEY, bookingId INT, type VARCHAR(30) NOT NULL, amount DECIMAL(10,2) NOT NULL, currency VARCHAR(3) NOT NULL, metadata TEXT, transactionDate TIMESTAMP NOT NULL)"
+        "CREATE TABLE financial_ledger (id INT AUTO_INCREMENT PRIMARY KEY, bookingId INT, type VARCHAR(30) NOT NULL, amount DECIMAL(10,2) NOT NULL, currency VARCHAR(3) NOT NULL, metadata TEXT, transactionDate TIMESTAMP NOT NULL) AUTO_INCREMENT=1001"
       );
       await connection.execute(
         "INSERT INTO bookings (id,tenantId,createdAt,totalAmount,paymentStatus) VALUES (1,101,'2026-09-30 12:00:00',10000,'paid'),(2,101,'2026-10-10 12:00:00',10000,'paid')"
@@ -114,8 +114,12 @@ nativeDescribe(
       await connection.query(
         "INSERT INTO booking_ancillaries VALUES (1,1200,1,'active'),(2,350,2,'active'),(2,450,1,'refunded')"
       );
-      await connection.query("CREATE TABLE corporate_bookings (bookingId INT)");
-      await connection.query("CREATE TABLE agent_bookings (bookingId INT)");
+      await connection.query(
+        "CREATE TABLE corporate_bookings (id INT PRIMARY KEY, bookingId INT NOT NULL UNIQUE)"
+      );
+      await connection.query(
+        "CREATE TABLE agent_bookings (id INT PRIMARY KEY, bookingId INT NOT NULL UNIQUE)"
+      );
       databaseState.db = drizzle(connection, { schema, mode: "default" });
     }, 30000);
 
@@ -189,6 +193,7 @@ nativeDescribe(
         nonCashRefundedAmount: 500,
         netCollectedAmount: 16000,
         persisted: false,
+        unreconciledBookings: 0,
         recognizedRevenue: null,
         deferredRevenue: null,
         ancillaryRevenue: null,
@@ -210,6 +215,67 @@ nativeDescribe(
       });
       const days = await getFinancialDays({ tenantId: 101 });
       expect(days).toHaveLength(5);
+      expect(days.every(day => day.unreconciledBookings === 0)).toBe(true);
+    });
+
+    it("counts overlapping agency and corporate links once in the native channel report", async () => {
+      await connection!.beginTransaction();
+      try {
+        // A link's primary key must never be mistaken for its booking foreign key.
+        await connection!.query(
+          "INSERT INTO agent_bookings VALUES (101, 1), (202, 2)"
+        );
+        await connection!.query(
+          "INSERT INTO corporate_bookings VALUES (303, 2)"
+        );
+
+        const channels = await getRevenueByChannel();
+        expect(
+          channels.map(row => [
+            row.channel,
+            row.totalRevenue,
+            row.bookingCount,
+            row.percentageOfTotal,
+          ])
+        ).toEqual([
+          ["direct", 0, 0, 0],
+          ["agent", 10000, 1, 50],
+          ["corporate", 10000, 1, 50],
+        ]);
+      } finally {
+        await connection!.rollback();
+      }
+    });
+
+    it("keeps a missing charge unreconciled despite foreign coincident ledger IDs", async () => {
+      try {
+        await connection!.query(
+          "INSERT INTO bookings (id,tenantId,createdAt,totalAmount,paymentStatus) VALUES (3,101,'2026-10-20 12:00:00',10000,'paid'),(4,202,'2026-10-20 12:00:00',20000,'paid'),(5,202,'2026-10-20 12:00:00',30000,'paid')"
+        );
+        await connection!.query(
+          "INSERT INTO financial_ledger (id,bookingId,type,amount,currency,metadata,transactionDate) VALUES (3,4,'charge','200.00','SAR','{}','2026-10-20 13:00:00'),(5,5,'charge','300.00','SAR','{}','2026-10-20 13:00:00')"
+        );
+
+        expect(
+          await getFinancialDays({
+            tenantId: 101,
+            startDate: new Date("2026-10-20T00:00:00Z"),
+            endDate: new Date("2026-10-20T23:59:59Z"),
+          })
+        ).toMatchObject([
+          {
+            date: "2026-10-20",
+            billedAmount: 10000,
+            collectedAmount: 0,
+            unreconciledBookings: 1,
+          },
+        ]);
+      } finally {
+        await connection!.query(
+          "DELETE FROM financial_ledger WHERE id IN (3,5)"
+        );
+        await connection!.query("DELETE FROM bookings WHERE id IN (3,4,5)");
+      }
     });
   }
 );

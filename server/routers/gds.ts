@@ -3,6 +3,7 @@ import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import * as gdsService from "../services/gds.service";
+import { gdsMessages } from "../../drizzle/schema";
 
 // ============================================================================
 // Input Schemas
@@ -169,7 +170,7 @@ const getMessageLogInput = z.object({
     .optional()
     .describe("Filter by message type (e.g., SEARCH, BOOK, CANCEL)"),
   status: z
-    .enum(["sent", "received", "error", "timeout"])
+    .enum(gdsMessages.status.enumValues)
     .optional()
     .describe("Filter by message status"),
   page: z.number().int().min(1).default(1).describe("Page number"),

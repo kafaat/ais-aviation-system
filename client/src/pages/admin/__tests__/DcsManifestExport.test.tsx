@@ -28,10 +28,11 @@ vi.mock("@/lib/trpc", () => ({
 }));
 afterEach(cleanup);
 
-it("exports the selected manifest with UTC times, escaped names and only allowlisted fields", () => {
+it("shows and exports passenger references and types with UTC times and only allowlisted fields", () => {
   const passenger = {
     id: 21,
     name: '=Ali, "نور"',
+    bookingRef: "REF456",
     pnr: "ABC123",
     type: "adult",
     cabinClass: "economy",
@@ -92,11 +93,21 @@ it("exports the selected manifest with UTC times, escaped names and only allowli
   );
   expect(screen.getByRole("alert")).toHaveTextContent("0000000002");
   expect(screen.getByText(passenger.name)).toBeInTheDocument();
+  expect(
+    screen.getByRole("columnheader", { name: "Booking reference" })
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("cell", { name: passenger.bookingRef })
+  ).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: passenger.pnr })).toBeInTheDocument();
+  expect(
+    screen.getByRole("cell", { name: passenger.type })
+  ).toBeInTheDocument();
   expect(screen.getByText(passenger.seat)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", exportButton));
   expect(downloadFile).toHaveBeenCalledExactlyOnceWith(
-    "\uFEFFFlight,Origin,Destination,Departure UTC,Manifest generated UTC,Name,PNR,Class,Seat\r\n" +
-      'ZZ7,JED,RUH,2026-11-03T09:00:00.000Z,2026-11-03T08:38:55.123Z,"\'=Ali, ""نور""",ABC123,economy,12A',
+    "\uFEFFFlight,Origin,Destination,Departure UTC,Manifest generated UTC,Name,Booking reference,PNR,Passenger type,Class,Seat\r\n" +
+      'ZZ7,JED,RUH,2026-11-03T09:00:00.000Z,2026-11-03T08:38:55.123Z,"\'=Ali, ""نور""",REF456,ABC123,adult,economy,12A',
     "manifest-42.csv",
     "text/csv;charset=utf-8"
   );

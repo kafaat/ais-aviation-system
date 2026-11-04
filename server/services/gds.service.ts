@@ -2017,7 +2017,7 @@ export async function getMessageLog(
     .select()
     .from(gdsMessages)
     .where(whereClause)
-    .orderBy(desc(gdsMessages.createdAt))
+    .orderBy(desc(gdsMessages.createdAt), desc(gdsMessages.id))
     .limit(limit)
     .offset(offset);
 

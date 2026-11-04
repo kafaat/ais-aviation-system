@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -142,22 +150,44 @@ export default function AnalyticsDashboard() {
   const [exporting, setExporting] = useState(false);
 
   const dateRange = useMemo(() => getDateRange(datePreset), [datePreset]);
+  const queryOptions = {
+    enabled:
+      isAuthenticated &&
+      (user?.role === "admin" || user?.role === "super_admin"),
+  };
 
-  const kpiQuery = trpc.analytics.getKPIs.useQuery(dateRange);
-  const revenueQuery = trpc.analytics.getRevenueOverTime.useQuery(dateRange);
-  const destinationsQuery = trpc.analytics.getPopularDestinations.useQuery({
-    ...dateRange,
-    limit: 5,
-  });
-  const trendsQuery = trpc.analytics.getBookingTrends.useQuery(dateRange);
-  const ancillaryQuery = trpc.analytics.getAncillaryMetrics.useQuery(dateRange);
-  const categoryQuery =
-    trpc.analytics.getAncillaryRevenueByCategory.useQuery(dateRange);
+  const kpiQuery = trpc.analytics.getKPIs.useQuery(dateRange, queryOptions);
+  const revenueQuery = trpc.analytics.getRevenueOverTime.useQuery(
+    dateRange,
+    queryOptions
+  );
+  const destinationsQuery = trpc.analytics.getPopularDestinations.useQuery(
+    { ...dateRange, limit: 5 },
+    queryOptions
+  );
+  const trendsQuery = trpc.analytics.getBookingTrends.useQuery(
+    dateRange,
+    queryOptions
+  );
+  const ancillaryQuery = trpc.analytics.getAncillaryMetrics.useQuery(
+    dateRange,
+    queryOptions
+  );
+  const categoryQuery = trpc.analytics.getAncillaryRevenueByCategory.useQuery(
+    dateRange,
+    queryOptions
+  );
   const popularAncillariesQuery = trpc.analytics.getPopularAncillaries.useQuery(
     {
       ...dateRange,
       limit: 5,
-    }
+    },
+    queryOptions
+  );
+  // This endpoint describes upcoming flights, independently of the period filter.
+  const occupancyQuery = trpc.analytics.getFlightOccupancy.useQuery(
+    undefined,
+    queryOptions
   );
   const { data: kpis, isLoading: loadingKPIs } = kpiQuery;
   const { data: revenueData, isLoading: loadingRevenue } = revenueQuery;
@@ -423,6 +453,68 @@ export default function AnalyticsDashboard() {
             )}
           </div>
         </div>
+
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-2">
+            {t("admin.analytics.flightOccupancy")}
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            {t("admin.analytics.upcomingOccupancyScope")}
+          </p>
+          {occupancyQuery.isError ? (
+            <div role="alert" className="space-y-3">
+              <p>{t("admin.analytics.occupancyLoadError")}</p>
+              <Button
+                variant="outline"
+                disabled={occupancyQuery.isFetching}
+                onClick={() => void occupancyQuery.refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : occupancyQuery.isLoading ? (
+            <Skeleton className="h-48" />
+          ) : !occupancyQuery.data?.length ? (
+            <p className="text-muted-foreground">
+              {t("admin.analytics.noUpcomingFlights")}
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("admin.analytics.flightNumber")}</TableHead>
+                  <TableHead>{t("admin.analytics.departureUTC")}</TableHead>
+                  <TableHead>{t("admin.analytics.bookedCapacity")}</TableHead>
+                  <TableHead>{t("admin.analytics.occupancy")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {occupancyQuery.data.map(flight => (
+                  <TableRow key={flight.flightId}>
+                    <TableCell className="font-medium">
+                      {flight.flightNumber}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(flight.departureTime)
+                        .toISOString()
+                        .slice(0, 16)
+                        .replace("T", " ")}{" "}
+                      UTC
+                    </TableCell>
+                    <TableCell>
+                      {flight.bookedSeats} / {flight.totalSeats}
+                    </TableCell>
+                    <TableCell>
+                      {flight.totalSeats > 0
+                        ? `${flight.occupancyRate}%`
+                        : t("admin.analytics.occupancyUnavailable")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
 
         {/* Ancillary KPIs */}
         <div>

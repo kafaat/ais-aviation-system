@@ -727,7 +727,17 @@
     "unlimitedBenefits": "All benefits unlocked",
     "earnedThisMonth": "Earned This Month",
     "redeemedThisMonth": "Redeemed This Month",
-    "viewAll": "View All"
+    "viewAll": "View All",
+    "accountUnavailable": "Your loyalty account could not be loaded.",
+    "transactionsUnavailable": "Transaction history could not be loaded.",
+    "earnedRecent": "Earned in latest transactions",
+    "redeemedRecent": "Redeemed in latest transactions",
+    "recentScope": "Up to {{count}} latest transactions",
+    "recentChartScope": "Monthly activity from up to {{count}} latest transactions within the last 6 months.",
+    "historyPagination": "Transaction history pages",
+    "historyPage": "Page {{page}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page"
   },
   "ancillary": {
     "title": "Additional Services",
@@ -2158,7 +2168,13 @@
       "sales": "Sales",
       "noData": "No data available",
       "unavailable": "Financial reporting is unavailable.",
-      "financialBasis": "Billed: {{billed}} · Collected: {{collected}} · Refunded: {{refunded}} SAR · Reconciliation gaps: {{gaps}}. Earned revenue is not measured."
+      "financialBasis": "Billed: {{billed}} · Collected: {{collected}} · Refunded: {{refunded}} SAR · Reconciliation gaps: {{gaps}}. Earned revenue is not measured.",
+      "upcomingOccupancyScope": "Up to 20 upcoming flights with the highest booking occupancy. This view uses upcoming departures independently of the date range above.",
+      "departureUTC": "Departure (UTC)",
+      "bookedCapacity": "Booked / capacity",
+      "occupancyUnavailable": "Unavailable (no capacity)",
+      "occupancyLoadError": "Upcoming flight occupancy could not be loaded.",
+      "noUpcomingFlights": "No upcoming flights found."
     },
     "aiPricing": {
       "title": "AI Dynamic Pricing",

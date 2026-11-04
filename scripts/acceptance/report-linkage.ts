@@ -135,15 +135,18 @@ export async function verifyReportLinkage(
         absent: "RP" + other + "901",
       },
     ];
-    assert.deepEqual(
-      reports[1].csv.content.split("\n")[1].split(",").slice(2, 6),
-      [
-        (fixture.amount / 100).toFixed(2),
-        (fixture.amount / 100).toFixed(2),
-        (fixture.refund / 100).toFixed(2),
-        ((fixture.amount - fixture.refund) / 100).toFixed(2),
-      ]
-    );
+    assert.deepEqual(reports[1].csv.content.split("\n")[1].split(","), [
+      period.startDate,
+      "1",
+      (fixture.amount / 100).toFixed(2),
+      (fixture.amount / 100).toFixed(2),
+      (fixture.refund / 100).toFixed(2),
+      ((fixture.amount - fixture.refund) / 100).toFixed(2),
+      "0.00",
+      "0.00",
+      "0",
+      "0",
+    ]);
     for (const report of reports) {
       assert(report.csv.content.includes(report.present));
       assert(!report.csv.content.includes(report.absent));
@@ -201,6 +204,7 @@ export async function verifyReportLinkage(
     tenants: 2,
     successfulFormatRequests: checkedFormats,
     csvAndExcelRowsTenantScoped: true,
+    reconciliationCountsVerified: true,
     pdfDocumentsGenerated: 8,
     roleAndTenantMismatchRejected: true,
     globalAdminIncludesBothTenants: true,
