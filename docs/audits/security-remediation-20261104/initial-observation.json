@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-04",
+  "baselineCommit": "e80d8790fba2a30e3164322e0fe40ed5a62bb553",
+  "baselineTree": "a527a9d0ecd23362b6f4ed66369bb4f4902bbefe",
+  "githubBefore": {
+    "dependabotOpen": [239, 242],
+    "codeScanningOpen": [141, 142],
+    "secretScanningOpen": 0,
+    "privateVulnerabilityReporting": "disabled"
+  },
+  "settingsVerified": {
+    "privateVulnerabilityReporting": "enabled",
+    "dependabotAlerts": true,
+    "dependabotSecurityUpdates": true,
+    "dependencyGraph": true,
+    "pushProtection": true,
+    "codeqlDefaultSetupConfigured": false
+  },
+  "localVerification": {
+    "pnpmVersion": "10.34.5",
+    "nodeVersion": "24.22.1",
+    "frozenInstall": "passed",
+    "pnpmAuditAllSeverities": "passed-zero",
+    "eslint": "passed",
+    "build": "passed",
+    "pwaTests": {
+      "passed": 3,
+      "files": 2
+    },
+    "bundleBudgets": {
+      "passed": 5
+    },
+    "typescript": "passed",
+    "authTests": {
+      "passed": 11,
+      "newHttpContracts": 8,
+      "publicRegistration": "passed",
+      "pipCheck": "passed"
+    },
+    "pipAudit": {
+      "version": "2.10.1",
+      "strict": true,
+      "packages": 33,
+      "findings": 0
+    }
+  },
+  "remoteVerification": "pending new PR; prior main push CI41875776559 completed success",
+  "limitations": [
+    "Audit records known vulnerabilities at the time, not a guarantee of absence.",
+    "The screenshot records reporting enablement before dependency remediation and still shows the original alerts.",
+    "CodeQL default setup is not configured; observed code-scanning findings come from Trivy."
+  ]
+}
