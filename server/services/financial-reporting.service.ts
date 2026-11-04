@@ -219,13 +219,16 @@ export async function getFinancialDays(
   try {
     return await db.transaction(
       async tx => {
+        // Drizzle removes column qualifiers from a single-table SELECT. Keep
+        // this outer key explicit so the subquery cannot bind it to ledger.id.
+        const outerBookingId = sql`${sql.identifier("bookings")}.${sql.identifier("id")}`;
         const invoices = await tx
           .select({
             day: sql<string>`FLOOR(UNIX_TIMESTAMP(${bookings.createdAt}) / 86400)`,
             amount: sql<string>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
             count: sql<string>`COUNT(*)`,
             unreconciled: sql<string>`SUM(CASE WHEN ${bookings.paymentStatus} IN ('paid','refunded') AND NOT EXISTS (
-          SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${bookings.id} AND l.type = 'charge' AND l.currency = 'SAR'
+          SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${outerBookingId} AND l.type = 'charge' AND l.currency = 'SAR'
         ) THEN 1 ELSE 0 END)`,
           })
           .from(bookings)

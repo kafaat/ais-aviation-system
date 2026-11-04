@@ -496,6 +496,7 @@ test("finance browser downloads isolate both tenants in CSV, Excel and PDF summa
         const amount = (tenant.amount / 100).toFixed(2);
         const refund = (tenant.refund / 100).toFixed(2);
         expect(rows).toHaveLength(1);
+        // Financial labels/units keep generated timestamps out of money checks.
         if (tab === "Bookings") {
           expect(rows[0].split(",")[0]).toBe(tenant.reference);
           expect(book.getWorksheet("Bookings")!.actualRowCount).toBe(2);
@@ -505,7 +506,11 @@ test("finance browser downloads isolate both tenants in CSV, Excel and PDF summa
           );
           expect(pdf).toContain("Total Bookings: 1 ");
           expect(pdf).toContain("Total Booking Amount (SAR): " + amount + " ");
-          expect(pdf).not.toContain((foreign.amount / 100).toFixed(2));
+          expect(pdf).not.toContain(
+            "Total Booking Amount (SAR): " +
+              (foreign.amount / 100).toFixed(2) +
+              " "
+          );
         } else if (tab === "Revenue") {
           const values = [
             day,
@@ -532,8 +537,12 @@ test("finance browser downloads isolate both tenants in CSV, Excel and PDF summa
             "Net cash collected (SAR): " +
               ((tenant.amount - tenant.refund) / 100).toFixed(2)
           );
-          expect(pdf).not.toContain((foreign.amount / 100).toFixed(2));
-          expect(pdf).not.toContain((foreign.refund / 100).toFixed(2));
+          expect(pdf).not.toContain(
+            "(SAR): " + (foreign.amount / 100).toFixed(2) + " "
+          );
+          expect(pdf).not.toContain(
+            "(SAR): " + (foreign.refund / 100).toFixed(2) + " "
+          );
         } else {
           const data = rows[0].split(",");
           expect([data[1], data[2], data[7], data[8]]).toEqual([
@@ -549,7 +558,9 @@ test("finance browser downloads isolate both tenants in CSV, Excel and PDF summa
           );
           expect(pdf).toContain("Settlement Entries: 1 ");
           expect(pdf).toContain("Total Refunded Amount: " + refund + " SAR");
-          expect(pdf).not.toContain((foreign.refund / 100).toFixed(2));
+          expect(pdf).not.toContain(
+            " " + (foreign.refund / 100).toFixed(2) + " SAR"
+          );
         }
         if (tab !== "Revenue") {
           expect(csv).toContain(tenant.reference);

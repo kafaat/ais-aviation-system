@@ -161,9 +161,12 @@
         "payments.getHistory"
       ],
       "ui_routes": ["/payment-history"],
-      "tests": ["server/__tests__/new-features/payment-history.test.ts"],
+      "tests": [
+        "server/__tests__/new-features/payment-history.test.ts",
+        "server/services/payment-history-reporting.test.ts"
+      ],
       "finding_ar": "قائمة payments مرتبطة بالحجز والرحلة وتدعم طريقة الدفع والحالة والفترة في API، وتعرض شاشة المستخدم سجله الشخصي عبر payments.getHistory.",
-      "gap_ar": "لا يوجد بُعد مكتب بيع أو مرشح مكتب، والشاشة الشخصية لا تمرر الفترة ولا تمثل سجل الإدارة الكامل. الاختبار الحالي للخدمة يفحص وجود الدوال أكثر من دقة الصفوف.",
+      "gap_ar": "لا يوجد بُعد مكتب بيع أو مرشح مكتب، والشاشة الشخصية لا تمرر الفترة ولا تمثل سجل الإدارة الكامل. تغطي الاختبارات العلائقية المضافة صفوف سجل المدفوعات وترتيبها وعزل مالكها، لكنها لا تنشئ بُعد المكتب المفقود.",
       "acceptance_ar": "تسجيل مكتب البيع الحقيقي للدفع ثم قائمة لكل مكتب/فترة/طريقة مع صفحات مستقرة وصلاحيات واختبار علائقي للمجاميع وحدود الفترة."
     },
     {
@@ -1126,7 +1129,7 @@
         "server/__tests__/monthly-financial-report-consistency.test.ts",
         "server/__tests__/monthly-financial-mysql.test.ts"
       ],
-      "validation_ar": "ثبت فشل اختبار التداخل على المصدر السابق ثم نجاح الاختبارات المالية المركزة 30/30 بعد الإصلاح. نجح TypeScript --incremental false وESLint للملفات المعدلة. أضيف اختبار مستقل إلى بوابة MySQL المعزولة؛ جرى تخطي اختبارات تلك البوابة الثلاثة محليًا لغياب قاعدة اختبار مصرح بها. تشغيلها الفعلي يحتاج AIS_DISPOSABLE_DATABASE=true وDATABASE_URL ولا يُدّعى هنا قبول MySQL أو مزود خارجي. كشف CI الأول على 016364e فشل حالتين من ثلاث في monthly-financial-mysql، بخطأ ER_WRONG_FIELD_WITH_GROUP مع ONLY_FULL_GROUP_BY؛ بلغ إجمالي الاختبارات 3766 ناجحًا واثنين فاشلين من 3768 دون تخطٍّ. أُصلح الاستعلام دون تغيير SQL mode، وقُويت جداول الاختبار بمعرف مستقل وقيد تفرد. كشفت الجداول المقواة خمس حالات فاشلة قبل إصلاح الخدمة، ونجحت الحالات العلائقية الـ15 بعده؛ بقيت اختبارات MySQL الثلاثة متخطاة محليًا لغياب قاعدة اختبار. نجح TypeScript وESLint. تحتاج النسخة المصححة إيصال CI جديدًا قبل الدمج."
+      "validation_ar": "ثبت فشل اختبار التداخل على المصدر السابق ثم نجاح الاختبارات المالية المركزة 30/30 بعد الإصلاح. نجح TypeScript --incremental false وESLint للملفات المعدلة. أضيف اختبار مستقل إلى بوابة MySQL المعزولة؛ جرى تخطي اختبارات تلك البوابة الثلاثة محليًا لغياب قاعدة اختبار مصرح بها. تشغيلها الفعلي يحتاج AIS_DISPOSABLE_DATABASE=true وDATABASE_URL ولا يُدّعى هنا قبول MySQL أو مزود خارجي. كشف CI الأول على 016364e فشل حالتين من ثلاث في monthly-financial-mysql، بخطأ ER_WRONG_FIELD_WITH_GROUP مع ONLY_FULL_GROUP_BY؛ بلغ إجمالي الاختبارات 3766 ناجحًا واثنين فاشلين من 3768 دون تخطٍّ. أُصلح الاستعلام دون تغيير SQL mode، وقُويت جداول الاختبار بمعرف مستقل وقيد تفرد. كشفت الجداول المقواة خمس حالات فاشلة قبل إصلاح الخدمة، ونجحت الحالات العلائقية الـ15 بعده؛ بقيت اختبارات MySQL الثلاثة متخطاة محليًا لغياب قاعدة اختبار. نجح TypeScript وESLint. على 968d3bc نجحت 3768 حالة في 300 ملف، دون تخطٍّ، ومنها حالات MySQL الثلاثة واختبارات القنوات المحمولة الخمسة عشر (CI run 41804863911، job 126490715302). كشف E2E اللاحق خلل مطابقة مستقلًا موثقًا أدناه، فلم تُدمج هذه النسخة."
     },
     {
       "id": "payment-history-stable-pagination",
@@ -1141,6 +1144,27 @@
         "server/__tests__/new-features/payment-history.test.ts"
       ],
       "validation_ar": "قبل الإصلاح: فشل اختباران ونجح واحد. بعد الإصلاح: نجحت الحالات الجديدة الثلاث واختبارات التاريخ القائمة العشرة، 13/13. تنفذ الحالات الجديدة استعلامات Drizzle الفعلية على SQLite علائقية؛ ليست قبول MySQL أو تصفح لقطة ثابتة أثناء الإدراج المتزامن."
+    },
+    {
+      "id": "financial-ledger-outer-booking-correlation",
+      "source_paths": [
+        "server/services/financial-reporting.service.ts",
+        "server/__tests__/financial-reporting-relational.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts"
+      ],
+      "finding_ar": "كشف E2E الفعلي على 968d3bc أن حجزًا له قيد تحصيل SAR يُحسب ضمن غير المطابقة. يزيل Drizzle تأهيل bookings.id داخل SELECT ذات الجدول الواحد، فيحل id داخل NOT EXISTS إلى معرّف قيد الدفتر. قد يخفي أيضًا غياب قيد تحصيل الحجز بسبب قيد آخر متصادف المعرّف.",
+      "change_ar": "تأهيل مرجع الحجز الخارجي بمعرّفات SQL ثابتة داخل شرط الارتباط، دون تغيير التوقع المالي أو الصلاحية أو الفترة أو العملة. تقوية fixtures بمعرّفات مستقلة وقيود لمستأجر آخر، ومقارنة أعمدة CSV العشرة كاملة في بوابة القبول الأصلية.",
+      "tests": [
+        "server/__tests__/financial-reporting-relational.test.ts",
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts"
+      ],
+      "validation_ar": "E2E job 126492113415 انتهى بـ56 ناجحًا وواحد فاشل دون تخطٍّ أو تذبذب؛ فشل توقع unreconciledBookings=0 في المحاولات الثلاث. نجحت خمس من ست حالات التقارير و24 تنزيلًا مكتمل التحقق؛ لم يكتمل مسار المالية ذي18 تنزيلًا. أعاد الاختبار المحمول إنتاج حالتي الخطأ قبل التصحيح (فشلان ونجاح واحد)، ثم نجحت الحالات الجديدة الثلاث والمالية القائمة الخمس عشرة. الحالات الأصلية الأربع متخطاة محليًا لغياب قاعدة اختبار؛ إيصال التشغيل النهائي للنسخة الجديدة في PR #265 قبل الدمج."
     }
   ]
 }
