@@ -35,7 +35,8 @@ export async function verifyHandlerStation(
 ) {
   assert(ctx.user);
   const userId = ctx.user.id;
-  const now = new Date();
+  // Route acceptance uses SQL second precision, so avoid rounding into the future.
+  const now = new Date(Math.floor(Date.now() / 1000) * 1000);
   const departure = new Date(now.getTime() + 72 * 3600_000);
   const [created] = await db.insert(s.flights).values({
     flightNumber: "ZY917",
