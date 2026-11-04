@@ -69,7 +69,9 @@ production incident merely because its counters are zero.
   and propagates driver failures; failed managed-pool construction cannot create
   an untracked fallback pool. An uninitialized Sentry client has nothing to
   flush; that no-op succeeds, while an initialized client's failed flush still
-  fails shutdown.
+  fails shutdown. Cache-backed requests use the shared client only after Redis
+  protocol readiness; a TCP connection alone keeps the enforced per-process
+  in-memory rate-limit fallback active.
 - **Notification delivery:** a tenant-scoped event must also read a flight in
   that scope. Queued emails pass a stable per-job/content provider idempotency
   key through every supported template, including generic and refund messages.
@@ -205,6 +207,10 @@ must remain visible when reporting a result.
   no thresholds, exclusions or provider changes conceal it.
 - Selected browser routes and negative cases do not imply exhaustive testing of
   every screen, every report input or every possible concurrency schedule.
+- The cache transport regression proves quota enforcement while a real Redis
+  client is TCP-connected but never protocol-ready. It does not establish a
+  latency bound for a later disconnect between commands of an already-ready
+  client; that client's existing queue/retry behavior remains a separate case.
 - An accepted PR revision does not establish that it has been merged or deployed.
 
 ## Reproduction

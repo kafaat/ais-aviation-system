@@ -22,6 +22,7 @@ nativeDescribe.sequential(
     let api: Awaited<ReturnType<typeof startApiProcessFixture>> | undefined;
     let databaseName = "";
     let created = false;
+    let phase = "startup readiness";
 
     beforeAll(async () => {
       const source = new URL(process.env.DATABASE_URL!);
@@ -90,16 +91,24 @@ nativeDescribe.sequential(
 
     async function request(path: string, init?: RequestInit) {
       if (!api) throw new Error("API fixture was not started");
-      const response = await fetch(api.origin + path, {
-        ...init,
-        signal: AbortSignal.timeout(5000),
-      });
-      const text = await response.text();
-      return {
-        status: response.status,
-        text,
-        body: JSON.parse(text) as Record<string, unknown>,
-      };
+      const started = Date.now();
+      try {
+        const response = await fetch(api.origin + path, {
+          ...init,
+          signal: AbortSignal.timeout(5000),
+        });
+        const text = await response.text();
+        return {
+          status: response.status,
+          text,
+          body: JSON.parse(text) as Record<string, unknown>,
+        };
+      } catch (error) {
+        throw new Error(
+          `API request failed during ${phase}: ${init?.method ?? "GET"} ${path} after ${Date.now() - started}ms; child DB proxy sockets=${api.proxy.connections()}\nCaptured child output (bounded):\n${api.diagnostics()}`,
+          { cause: error }
+        );
+      }
     }
     async function ready() {
       const deadline = Date.now() + 10_000;
@@ -129,12 +138,14 @@ nativeDescribe.sequential(
     }
 
     it("keeps REST/tRPC liveness while only the child's DB route fails, then recovers readiness in the same process", async () => {
+      phase = "before DB outage";
       expect(api!.proxy.connections()).toBeGreaterThan(0);
       const pid = api!.pid;
       const initial = await request("/api/trpc/health.ready");
       expect(initial.status).toBe(200);
       expect(trpcData(initial.body)).toEqual({ ready: true });
       api!.proxy.disconnect();
+      phase = "readiness during DB outage";
       try {
         for (const path of [
           "/api/rest/health/ready",
@@ -149,6 +160,7 @@ nativeDescribe.sequential(
           ["/api/rest/health/live", false],
           ["/api/trpc/health.live", true],
         ] as const) {
+          phase = "liveness during DB outage";
           const live = await request(path);
           expect(live.status).toBe(200);
           expect(trpc ? trpcData(live.body) : live.body).toEqual({
@@ -161,6 +173,7 @@ nativeDescribe.sequential(
       } finally {
         api!.proxy.reconnect();
       }
+      phase = "readiness after DB recovery";
       await ready();
       const recovered = await request("/api/trpc/health.ready");
       expect(recovered.status).toBe(200);
@@ -169,6 +182,7 @@ nativeDescribe.sequential(
     }, 25_000);
 
     it("keeps detailed health protected on both registered transports", async () => {
+      phase = "protected health";
       for (const path of ["/api/rest/health", "/api/trpc/health.check"]) {
         const denied = await request(path);
         expect(denied.status).toBe(401);
@@ -177,6 +191,7 @@ nativeDescribe.sequential(
     });
 
     it("verifies the original raw webhook bytes before JSON parsing and commits one receipt for an unsupported harmless event", async () => {
+      phase = "signed raw webhook";
       const eventId = `evt_nativeapi_${randomUUID()}`;
       const payload =
         JSON.stringify(
@@ -238,6 +253,7 @@ nativeDescribe.sequential(
     });
 
     it("rejects oversized JSON and raw-webhook bodies at the real middleware limits", async () => {
+      phase = "body limits";
       const json = await request("/api/rest/health/live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -259,6 +275,7 @@ nativeDescribe.sequential(
     });
 
     it("exits on a real SIGTERM after flushing observations and closing its existing pool", async () => {
+      phase = "shutdown readiness";
       await ready();
       const diagnostics = () => {
         const lifecycle = api!.records
