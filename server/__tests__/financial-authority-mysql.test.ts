@@ -192,15 +192,13 @@ nativeDescribe(
         seatsReserved: true,
         status: "confirmed",
       });
-      await db
-        .insert(schema.wallets)
-        .values({
-          id: 3,
-          userId: 9,
-          balance: 4000,
-          currency: "SAR",
-          status: "active",
-        });
+      await db.insert(schema.wallets).values({
+        id: 3,
+        userId: 9,
+        balance: 4000,
+        currency: "SAR",
+        status: "active",
+      });
       await db.insert(schema.travelAgents).values({
         id: 6,
         ownerUserId: 9,

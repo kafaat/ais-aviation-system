@@ -36,7 +36,14 @@ export async function deliverFlightStatusEmails(event: InboxEvent) {
         const [f] = await db
           .select()
           .from(flights)
-          .where(eq(flights.id, p.flightId));
+          .where(
+            and(
+              eq(flights.id, p.flightId),
+              event.tenantId === null
+                ? isNull(flights.tenantId)
+                : eq(flights.tenantId, event.tenantId)
+            )
+          );
         if (!f) throw new Error("Flight notification source unavailable");
         const [origin] = await db
           .select()

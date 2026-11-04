@@ -337,6 +337,7 @@ try {
     "refresh rotation has one winner and family revocation persists",
     async () => {
       const login = await mobileAuthServiceV2.login(id);
+      const otherDevice = await mobileAuthServiceV2.login(id);
       const results = await Promise.allSettled(
         [0, 1].map(() => mobileAuthServiceV2.refreshTokens(login.refreshToken))
       );
@@ -357,15 +358,41 @@ try {
             isNull(schema.refreshTokens.revokedAt)
           )
         );
-      assert.equal(active.length, 1);
+      // A concurrent loser is a replay. One successor is inserted, but replay
+      // revocation commits for the whole family before the loser is rejected.
+      assert.equal(active.length, 0);
+      const family = await db
+        .select()
+        .from(schema.refreshTokens)
+        .where(eq(schema.refreshTokens.familyId, login.sessionId));
+      assert.equal(family.length, 2);
+      const winner = results.find(result => result.status === "fulfilled");
+      assert(winner?.status === "fulfilled");
+      await assert.rejects(
+        () => mobileAuthServiceV2.authenticateAccessToken(login.accessToken),
+        error => (error as { code?: string }).code === "UNAUTHORIZED"
+      );
+      await assert.rejects(
+        () =>
+          mobileAuthServiceV2.authenticateAccessToken(winner.value.accessToken),
+        error => (error as { code?: string }).code === "UNAUTHORIZED"
+      );
+      // Replay cannot revoke another device, and an ordinary serialized
+      // rotation remains usable until its own explicit revocation.
+      const independent = await mobileAuthServiceV2.refreshTokens(
+        otherDevice.refreshToken
+      );
       assert.equal(
-        (await mobileAuthServiceV2.authenticateAccessToken(login.accessToken))
-          .id,
+        (
+          await mobileAuthServiceV2.authenticateAccessToken(
+            independent.accessToken
+          )
+        ).id,
         id
       );
-      await mobileAuthServiceV2.revokeFamily(login.sessionId);
+      await mobileAuthServiceV2.revokeFamily(otherDevice.sessionId);
       await assert.rejects(() =>
-        mobileAuthServiceV2.authenticateAccessToken(login.accessToken)
+        mobileAuthServiceV2.authenticateAccessToken(independent.accessToken)
       );
     }
   );

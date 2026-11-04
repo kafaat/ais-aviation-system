@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { interleaved2of5, drawingSVG } from "bwip-js/browser";
 import { useTranslation } from "react-i18next";
@@ -26,22 +32,30 @@ export default function KioskBagTag() {
     "ready" | "failed" | "unknown" | "reported" | "unavailable"
   >("ready");
   const busy = prepare.isPending;
+  const { reset } = prepare;
   const printCopy = useRef<HTMLDivElement>(null);
+  const generation = useRef(0);
+  const clear = useCallback(() => {
+    generation.current += 1;
+    setSelection(undefined);
+    setOutcome("ready");
+    // Detach the mutation observer too: gcTime alone cannot remove the
+    // personal document while this mounted page still observes its result.
+    reset();
+  }, [reset]);
 
   useEffect(() => {
     if (!selection) return;
     // Clear personal information on an unattended shared kiosk.
-    const clear = window.setTimeout(() => {
-      setSelection(undefined);
-      setOutcome("ready");
-    }, 120000);
-    return () => window.clearTimeout(clear);
-  }, [selection, outcome]);
+    const timer = window.setTimeout(clear, 120000);
+    return () => window.clearTimeout(timer);
+  }, [selection, outcome, clear]);
 
   async function lookup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const fields = new FormData(event.currentTarget);
     const tagNumber = String(fields.get("tagNumber")).trim();
+    const request = ++generation.current;
     setOutcome("ready");
     try {
       const input = {
@@ -50,11 +64,13 @@ export default function KioskBagTag() {
         tagNumber,
       };
       const document = await prepare.mutateAsync(input);
+      if (request !== generation.current) return;
       setSelection({
         input: { ...input, expectedVersion: document.documentVersion },
         document,
       });
     } catch {
+      if (request !== generation.current) return;
       setOutcome("unavailable");
     }
   }
@@ -62,27 +78,24 @@ export default function KioskBagTag() {
   async function reprint() {
     const selectedCopy = printCopy.current;
     if (!selectedCopy || !selection || busy) return;
+    const request = generation.current;
     try {
       // A station may have loaded the bag since the preview was opened.
       await prepare.mutateAsync(selection.input);
     } catch {
-      setSelection(undefined);
+      if (request !== generation.current) return;
+      clear();
       setOutcome("unavailable");
       return;
     }
     try {
-      if (printCopy.current !== selectedCopy) return;
+      if (request !== generation.current || printCopy.current !== selectedCopy)
+        return;
       window.print();
       setOutcome("unknown");
     } catch {
       setOutcome("failed");
     }
-  }
-
-  function clear() {
-    setSelection(undefined);
-    setOutcome("ready");
-    prepare.reset();
   }
 
   const tag = selection?.document.bagTags[0];
@@ -188,7 +201,7 @@ export default function KioskBagTag() {
           <Button onClick={reprint} disabled={busy}>
             {t("kioskBagTag.reprint")}
           </Button>
-          <Button variant="outline" onClick={clear} disabled={busy}>
+          <Button variant="outline" onClick={clear}>
             {t("kioskBagTag.finish")}
           </Button>
         </Card>
