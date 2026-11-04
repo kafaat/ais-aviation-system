@@ -1,5 +1,49 @@
 # Changelog
 
+## What's Changed in v1.37.0
+
+### Features
+
+- Add station-scoped handler coupon receipts and passenger roster-change checks to the departure desk (#261).
+- Add a standard-report catalog, owner-scoped saved templates, and durable manual or scheduled CSV, HTML and XML exports with checksums and delivery-state tracking (#266).
+
+### Bug Fixes
+
+- Connect report views and exports to scoped operational and financial sources, reconcile reporting metrics, and preserve filtering, currency and UTC boundaries in generated reports (#263, #265).
+- Preserve refresh-token family revocation and MFA state changes across transaction boundaries; strengthen internal-refund, inventory and delivery authority checks (#268).
+- Correct stale multi-city quotes, terminal payment states, private client-cache cleanup, report export actions and template recovery, and drain the API and database pool during shutdown (#268).
+- Recover isolated Stripe readiness without weakening required health checks; stabilize privacy-worker shutdown, flight-search state and consent recovery (#267, #269, #271).
+- Persist cache namespace generations, enforce bounded Redis operations and atomic quota updates, and exclude report records with conflicting ownership before row limits and aggregation (#271).
+- Guard booking soft deletion, restoration and exact-ID purging with transactional financial and document checks, and reject invalid crew-expiry evidence (#271).
+- Serialize compensation filing with booking purge using the booking's transaction lock, and roll back claim creation when final readback fails (#277).
+- Preserve owner-scoped Profile edits during refetch and save completion, prevent late responses from restoring private data after logout or identity changes, and show Notifications read and mutation failures with retry and accessible action labels (#277).
+
+### Security and Dependencies
+
+- Remediate vulnerable dependencies and the authentication image, and enforce dependency audits and HIGH/CRITICAL image-scan gates (#270).
+- Update the compatible authentication-service and contract-test dependencies, and pin the updated SARIF, SBOM and PR-size GitHub Actions (#273, #274, #275).
+
+### Database Upgrade
+
+- Apply the committed migrations through the normal deployment migrator before running the upgraded application: `0066_standard_reporting` creates `standard_report_templates` and `standard_report_runs` with their ownership, scheduling and recovery indexes; `0067_cache_namespace_generations` adds the persistent cache-generation authority table (#266, #271).
+- Retain the normal backup and migration preflight process. The CI restore evidence exercises a separate MySQL database and does not establish production storage recovery objectives.
+
+### Tests and Maintenance
+
+- Add and publish reporting/export browser evidence, source-bound coverage manifests, and native transaction, credit authority, cache, shutdown and ownership regression checks, including claim-versus-purge locking cases on MySQL 8.0 and 9.7 (#264, #268, #269, #271, #277).
+- Isolate Codecov uploads from application tests and authenticate them with GitHub OIDC; derive disjoint `server`, `client` and `shared` LCOV reports, verify their source and artifact identities, and upload each with its matching flag (#276, #277).
+- Correct unsupported Codecov configuration fields and refresh the CI action runtimes while preserving the configured coverage targets and acceptance boundaries (#269, #271, #277).
+- Report failed authentication image builds and reject missing, empty, malformed or incompatible Trivy JSON reports with explicit Docker validation errors, while retaining all HIGH/CRITICAL scan gates (#278).
+
+### Scope and Acceptance
+
+- The catalog contains 99 report definitions: 36 available from local sources, 35 partial and 28 blocked. The catalog and source-read fixes do not establish missing historical data, recognized revenue, external GDS/interline/ETL acceptance, or physical printer, carrier or bank certification.
+- Scoped Codecov upload acceptance and processing must be verified for the released source; a successful PR run or uploader job alone is insufficient. CI/V8 and Codecov aggregate coverage use different counting rules and are not interchangeable.
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.36.0...v1.37.0
+
+---
+
 ## What's Changed in v1.36.0
 
 ### Features
