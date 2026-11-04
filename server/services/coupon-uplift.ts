@@ -49,92 +49,97 @@ export async function ingestCouponUplift(
     tenantId = source.tenantId;
   const db = getDb();
   if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
-  return await db.transaction(async tx => {
-    const couponMatch = and(
-      eq(ticketCoupons.flightId, flightId),
-      byDocument
-        ? and(
-            eq(ticketCoupons.ticketNumber, ref.ticketNumber),
-            eq(ticketCoupons.couponNumber, ref.couponNumber)
+  // The document lookup can open a snapshot before the booking lock is acquired.
+  // Read committed lets a waiting replay see the previous holder's receipt.
+  return await db.transaction(
+    async tx => {
+      const couponMatch = and(
+        eq(ticketCoupons.flightId, flightId),
+        byDocument
+          ? and(
+              eq(ticketCoupons.ticketNumber, ref.ticketNumber),
+              eq(ticketCoupons.couponNumber, ref.couponNumber)
+            )
+          : and(
+              eq(ticketCoupons.id, ref.couponId),
+              eq(ticketCoupons.passengerId, ref.passengerId)
+            )
+      );
+      // Lock the booking before its coupon, in the same order as cancellation.
+      const bookingMatch = byDocument
+        ? inArray(
+            bookings.id,
+            tx
+              .select({ id: ticketCoupons.bookingId })
+              .from(ticketCoupons)
+              .where(couponMatch)
           )
-        : and(
-            eq(ticketCoupons.id, ref.couponId),
-            eq(ticketCoupons.passengerId, ref.passengerId)
+        : eq(bookings.id, ref.bookingId);
+      const [booking] = await tx
+        .select({ id: bookings.id, status: bookings.status })
+        .from(bookings)
+        .where(and(bookingMatch, eq(bookings.tenantId, tenantId)))
+        .for("update");
+      if (!booking)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Coupon not eligible for this source",
+        });
+      const [row] = await tx
+        .select({ coupon: ticketCoupons, flight: flights })
+        .from(ticketCoupons)
+        .innerJoin(flights, eq(flights.id, ticketCoupons.flightId))
+        .where(
+          and(
+            couponMatch,
+            eq(ticketCoupons.bookingId, booking.id),
+            eq(flights.tenantId, tenantId)
           )
-    );
-    // Lock the booking before its coupon, in the same order as cancellation.
-    const bookingMatch = byDocument
-      ? inArray(
-          bookings.id,
-          tx
-            .select({ id: ticketCoupons.bookingId })
-            .from(ticketCoupons)
-            .where(couponMatch)
         )
-      : eq(bookings.id, ref.bookingId);
-    const [booking] = await tx
-      .select({ id: bookings.id, status: bookings.status })
-      .from(bookings)
-      .where(and(bookingMatch, eq(bookings.tenantId, tenantId)))
-      .for("update");
-    if (!booking)
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Coupon not eligible for this source",
-      });
-    const [row] = await tx
-      .select({ coupon: ticketCoupons, flight: flights })
-      .from(ticketCoupons)
-      .innerJoin(flights, eq(flights.id, ticketCoupons.flightId))
-      .where(
-        and(
-          couponMatch,
-          eq(ticketCoupons.bookingId, booking.id),
-          eq(flights.tenantId, tenantId)
-        )
+        .for("update");
+      if (
+        !row ||
+        !source.airlineIds?.includes(row.flight.airlineId) ||
+        ((byDocument || source.airportIds !== undefined) &&
+          !source.airportIds?.includes(row.flight.originId)) ||
+        row.flight.status !== "completed" ||
+        row.flight.departureTime.getTime() > Date.parse(e.observedAt) ||
+        row.coupon.createdAt.getTime() > Date.parse(e.observedAt)
       )
-      .for("update");
-    if (
-      !row ||
-      !source.airlineIds?.includes(row.flight.airlineId) ||
-      ((byDocument || source.airportIds !== undefined) &&
-        !source.airportIds?.includes(row.flight.originId)) ||
-      row.flight.status !== "completed" ||
-      row.flight.departureTime.getTime() > Date.parse(e.observedAt) ||
-      row.coupon.createdAt.getTime() > Date.parse(e.observedAt)
-    )
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "Uplift must match an issued coupon on a completed operator flight",
-      });
-    // Keep the original signed payload and attach AIS's financial mapping separately.
-    const snapshot = byDocument
-      ? {
-          at: new Date(),
-          payload: {
-            bookingId: booking.id,
-            passengerId: row.coupon.passengerId,
-            couponId: row.coupon.id,
-            originId: row.flight.originId,
-          },
-        }
-      : undefined;
-    const receipt = await persistAviationEvidence(tx, e, source, snapshot);
-    if (receipt.duplicate && row.coupon.status === "F") return receipt;
-    if (
-      booking.status === "cancelled" ||
-      row.coupon.status !== "C" ||
-      receipt.duplicate
-    )
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: "Only a checked-in coupon can accept a new uplift receipt",
-      });
-    await tx
-      .update(ticketCoupons)
-      .set({ status: "F" })
-      .where(eq(ticketCoupons.id, row.coupon.id));
-    return receipt;
-  });
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Uplift must match an issued coupon on a completed operator flight",
+        });
+      // Keep the original signed payload and attach AIS's financial mapping separately.
+      const snapshot = byDocument
+        ? {
+            at: new Date(),
+            payload: {
+              bookingId: booking.id,
+              passengerId: row.coupon.passengerId,
+              couponId: row.coupon.id,
+              originId: row.flight.originId,
+            },
+          }
+        : undefined;
+      const receipt = await persistAviationEvidence(tx, e, source, snapshot);
+      if (receipt.duplicate && row.coupon.status === "F") return receipt;
+      if (
+        booking.status === "cancelled" ||
+        row.coupon.status !== "C" ||
+        receipt.duplicate
+      )
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Only a checked-in coupon can accept a new uplift receipt",
+        });
+      await tx
+        .update(ticketCoupons)
+        .set({ status: "F" })
+        .where(eq(ticketCoupons.id, row.coupon.id));
+      return receipt;
+    },
+    { isolationLevel: "read committed" }
+  );
 }
