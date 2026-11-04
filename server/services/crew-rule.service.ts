@@ -246,11 +246,17 @@ function assessCrewDuty(
   });
   const violations = [...checked.violations];
   if (crew.status !== "active") violations.push("Crew member is not active");
-  if (!crew.medicalExpiry || crew.medicalExpiry < duty.end)
+  if (
+    !crew.medicalExpiry ||
+    !Number.isFinite(crew.medicalExpiry.getTime()) ||
+    crew.medicalExpiry < duty.end
+  )
     violations.push("Valid medical evidence through duty end is required");
   if (
     ["captain", "first_officer"].includes(crew.role) &&
-    (!crew.licenseExpiry || crew.licenseExpiry < duty.end)
+    (!crew.licenseExpiry ||
+      !Number.isFinite(crew.licenseExpiry.getTime()) ||
+      crew.licenseExpiry < duty.end)
   )
     violations.push("Valid flight-crew license evidence is required");
   let qualified: string[] = [];

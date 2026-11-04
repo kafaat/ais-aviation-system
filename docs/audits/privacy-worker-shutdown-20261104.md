@@ -208,3 +208,80 @@ and propagated errors, alongside the owned-transport drain above. The existing
 pool test fixture now models the pinned driver's empty connection queue.
 The integrated head requires its own checks; earlier CI results do not replace
 validation of changed source or workflow action revisions.
+
+## Bounded one-shot execution
+
+The successful drain behavior above does not bound an active SQL command that
+never replies. The logger's five-second timer also cannot interrupt the main
+thread while the installed thread-stream `end()` handshake blocks synchronously.
+New controlled subprocess cases demonstrated both gaps: a never-answering SELECT
+and a real Pino destination whose `end()` waits indefinitely each required the
+test's eight-second failure watchdog to terminate the original helper. Direct
+SIGTERM during the pending query appeared as a signal exit, without an owned
+supervisor completing cancellation.
+
+The public `scripts/e2e/process-privacy.ts` entrypoint now supervises one owned
+Node child. The existing privacy work and pool/logger cleanup sequence moved to
+`process-privacy-task.ts` without changing its success or error behavior. The
+supervisor imports no database or logger code, so their blocked event loop cannot
+prevent its deadline callback. It validates the disposable database guard before
+launch and gives the task a total 20-second budget measured from just before
+launch. `AIS_PRIVACY_WORKER_TIMEOUT_MS` can reduce that budget to an integer from
+100 through 20,000 milliseconds; invalid, fractional, non-finite, or excessive
+values fail before database work starts. The browser keeps its existing
+30-second outer timeout.
+
+On its deadline, SIGTERM, or SIGINT, the supervisor marks failure and sends
+SIGKILL only to the child it created. It waits for the child's actual `close`
+event before returning a nonzero exit code; merely accepting the kill request
+does not count as completion. A child failure remains a failure, and normal exit
+zero is accepted only without a supervisor failure. Timer and signal/error
+listeners are removed after closure. No successful exit is forced, and no
+process-wide socket cleanup is introduced. The existing API shutdown's
+10-second deadline remains separate and unchanged.
+
+Only fixed `supervisor:deadline`, `supervisor:signal`, and `supervisor:error`
+phase names with elapsed times were added to the browser diagnostic allowlist.
+Workload phases retain their original child clock; supervisor phases measure
+from child launch. Arbitrary error text or child logs remain excluded from the
+browser failure summary. Authenticated export/content/download assertions,
+the other-account 404, and retry policy are unchanged.
+
+The stalled-destination fixture delegates to the real installed Pino and
+thread-stream, replacing only the destination's end handshake with a controlled
+blocking wait. It leaves the thread-stream main-thread `end()` implementation
+intact. With a three-second configured budget, the corrected SQL and logger
+probes completed in 3,101 ms and 3,110 ms respectively, exited with code 1 and no
+signal, and left no fixture database socket open. The logger case observed
+successful pool closure and logger-start evidence but no false logger-return
+receipt. Both SIGTERM and SIGINT cancellations also exited with code 1 and
+closed their pending SQL connection. Their test watchdog did not fire.
+
+All 21 privacy subprocess cases passed locally, including the original normal,
+held/reset peer, query error, pending-query drain, final-record/redaction,
+readiness-race, and delayed logger-error controls. Invalid budgets are checked
+before any query or connection. The test-only watchdog owns an isolated process
+group on POSIX so a future supervisor regression cannot orphan its task; this is
+test cleanup and never an application success path.
+
+The focused verification command passed 56 tests across six files on Node
+24.22.1, and changed TypeScript/CJS files passed ESLint with zero warnings:
+
+```sh
+node node_modules/vitest/vitest.mjs run --project server \
+  server/__tests__/privacy-worker-shutdown.test.ts \
+  server/__tests__/database-pool-shutdown.test.ts \
+  server/__tests__/api-shutdown.test.ts \
+  server/__tests__/api-shutdown-wiring.test.ts \
+  server/__tests__/sentry-shutdown.test.ts \
+  server/__tests__/new-features/unified-logger.test.ts
+```
+
+This is an independent-process deadline for these application stalls under a
+normally scheduled operating system, not a hard real-time guarantee against a
+frozen host or uninterruptible kernel operation. An external SIGKILL of the
+supervisor cannot execute its cancellation handler. Forced cancellation does
+not promise rollback of privacy work already committed. The reusable pool and
+logger APIs retain their existing boundaries; only the supervised one-shot
+entrypoint owns the new total budget. Integrated TypeScript checks, CI's Node 22
+run, and current-head first-attempt browser acceptance remain distinct gates.
