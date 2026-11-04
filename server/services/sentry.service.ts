@@ -192,8 +192,12 @@ export function startTransaction(
 /**
  * Flush all pending events before shutdown
  */
-export function flushSentry(timeout: number = 2000): Promise<boolean> {
-  return Sentry.flush(timeout);
+export async function flushSentry(timeout: number = 2000): Promise<boolean> {
+  // The SDK returns false when no client exists, including when Sentry is
+  // deliberately disabled. There are no owned events to drain in that case.
+  // An existing client's false result or rejection must still fail shutdown.
+  const client = Sentry.getClient();
+  return client ? await client.flush(timeout) : true;
 }
 
 /**

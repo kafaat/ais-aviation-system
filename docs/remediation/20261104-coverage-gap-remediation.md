@@ -67,7 +67,9 @@ production incident merely because its counters are zero.
   actual pool closure. Duplicate signals share one drain. Cleanup failures and
   deadlines produce failure rather than a success log. Pool closure is shared
   and propagates driver failures; failed managed-pool construction cannot create
-  an untracked fallback pool.
+  an untracked fallback pool. An uninitialized Sentry client has nothing to
+  flush; that no-op succeeds, while an initialized client's failed flush still
+  fails shutdown.
 - **Notification delivery:** a tenant-scoped event must also read a flight in
   that scope. Queued emails pass a stable per-job/content provider idempotency
   key through every supported template, including generic and refund messages.
@@ -173,7 +175,12 @@ the archive, but the archive's absent source identity prevents an exact
 same-revision causal claim about every percentage point.
 
 `Production Gates` runs the named native suites on both MySQL 8.0 and 9.7 before
-the existing transaction/integration/restore acceptance. New native fixtures
+the existing transaction/integration/restore acceptance. Each version's artifact
+includes `native-service-boundaries.json` and `native-service-boundaries.xml`, so
+a failed native suite preserves its own results even when later acceptance
+steps have not started. The failed test command still fails the job.
+
+New native fixtures
 require test mode, disposable-database opt-in and a loopback `_test` source. They
 create randomly named owned schemas and clean up only those schemas. Where
 `CREATE TABLE ... LIKE` is used, migrated types/defaults/indexes are exercised;

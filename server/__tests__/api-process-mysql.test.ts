@@ -260,7 +260,22 @@ nativeDescribe.sequential(
 
     it("exits on a real SIGTERM after flushing observations and closing its existing pool", async () => {
       await ready();
-      expect(await api!.stop()).toEqual({ code: 0, signal: null });
+      const diagnostics = () => {
+        const lifecycle = api!.records
+          .filter(record =>
+            /shutdown|closed|stopped|sentry_/.test(String(record.event))
+          )
+          .slice(-20)
+          .map(record => ({ event: record.event, message: record.message }));
+        return `API shutdown receipts:\n${JSON.stringify(lifecycle, null, 2).slice(-4000)}\nCaptured child output (bounded):\n${api!.diagnostics()}`;
+      };
+      let stopped;
+      try {
+        stopped = await api!.stop();
+      } catch (error) {
+        throw new Error(diagnostics(), { cause: error });
+      }
+      expect(stopped, diagnostics()).toEqual({ code: 0, signal: null });
       const events = api!.records.map(record => record.event);
       expect(events).toContain("pool_closed");
       expect(events).toContain("database_closed");
