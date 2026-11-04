@@ -86,7 +86,7 @@ external provider is contacted by these tests.
 - CI discovers all auth `test_*.py` files and retains the separate public
   registration assertion.
 - Dependabot version updates are scheduled weekly for npm, both Python manifests,
-  and GitHub Actions, with one open routine update PR per configuration. Compatible
+  GitHub Actions, and the auth container base, with one open routine update PR per configuration. Compatible
   minor/patch updates are grouped; major updates are not automatically merged or
   suppressed. Security updates remain independently enabled in GitHub settings.
 - Private vulnerability reporting was enabled and verified in the authenticated
@@ -112,6 +112,38 @@ external provider is contacted by these tests.
 
 The old main push CI run `41875776559` was separately rechecked and is now terminal
 `success`; that result belongs to the baseline commit, not to this new change.
+
+## First remote acceptance and container remediation
+
+The initial PR head `bee99028ee59053b54f5fdb758d59fd41ba4e25a` was tested as merge
+`21960bc4b29dc509387c8c090f65ed232d381192`, with the identical submitted tree.
+Its Dependency Review, Security Scan, Production Gates, and Component Labs passed.
+Both native MySQL versions completed 89 native tests, 154 live checks, and seven
+restore checks with zero skips or external provider calls. REST and real TCP
+fault checks also passed. These results belong to that initial head.
+
+Two failures prevented acceptance:
+
+1. The existing CI contract test rejected every `exit-code: "0"` in the complete
+   workflow, including the intentional SARIF reporting step. The actual separate
+   HIGH/CRITICAL gate passed. The contract is updated to inspect the individual
+   blocking scans and preserve complete reporting and upload behavior. The first
+   unit run recorded 4,471 passes and this one failure; browser E2E was therefore
+   skipped on that head.
+2. The newly added auth-image scan exposed 45 HIGH operating-system package rows
+   across nine distinct CVEs in `python:3.12-slim` (Debian 13.7), all without a
+   published fixed version in the scanner data. Its Python package scan had zero
+   findings. The gate remains enabled.
+
+The compatible official Python 3.12 Alpine 3.24 base is pinned by its verified
+multi-platform index digest. Its linux/amd64 image passed the same Trivy 0.74.0
+HIGH/CRITICAL scan with zero findings. All 33 auth requirements resolved to
+compatible musllinux or pure Python wheels; a separate review inspected native
+shared-library dependencies. The new image must also pass its 11 real ASGI/config
+tests, a default-command Uvicorn boot and HTTP probe, and a scan of the final
+built image. A clean base scan alone is not final application-image acceptance.
+See [auth-image-review.md](auth-image-review.md) for exact source, digest, and
+preflight evidence.
 
 ## Boundaries and follow-up verification
 

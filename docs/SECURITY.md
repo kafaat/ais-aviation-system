@@ -13,7 +13,7 @@ For ordinary bugs without security impact, use the repository's issue tracker. F
 
 ## Dependency Maintenance
 
-Dependabot checks npm, the auth service's Python packages, contract-test Python packages, and GitHub Actions weekly. Routine update pull requests are bounded and require the normal review and CI checks. Security alerts and security update pull requests remain enabled separately in repository settings.
+Dependabot checks npm, the auth service's Python packages and container base, contract-test Python packages, and GitHub Actions weekly. Routine update pull requests are bounded and require the normal review and CI checks. Security alerts and security update pull requests remain enabled separately in repository settings.
 
 Security changes must be verified against the resolved dependency graph and the affected runtime. A clean package audit describes the advisories known to that audit at the time; it does not replace application tests or container scans. Any false-positive classification must identify the exact advisory and dependency version and preserve its supporting evidence.
 

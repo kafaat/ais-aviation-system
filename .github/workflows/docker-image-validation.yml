@@ -13,6 +13,7 @@ on:
       - .npmrc
       - server/_core/**
       - scripts/ci/docker-image-smoke.sh
+      - scripts/ci/docker-auth-smoke.sh
       - .github/workflows/docker-image-validation.yml
   workflow_dispatch:
 
@@ -65,6 +66,9 @@ jobs:
             2>&1 | tee /tmp/ais-docker-build-evidence/build-auth.log
           docker image inspect ais-build-check:auth \
             > /tmp/ais-docker-build-evidence/image-auth.json
+      - name: Verify auth service tests and isolated image boot
+        if: ${{ !cancelled() && steps.auth_image.outcome == 'success' }}
+        run: bash scripts/ci/docker-auth-smoke.sh
       - name: Reject high or critical vulnerabilities in the auth service image
         if: ${{ !cancelled() && steps.auth_image.outcome == 'success' }}
         uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297
