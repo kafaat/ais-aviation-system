@@ -1,0 +1,298 @@
+{
+  "id": 126457348369,
+  "run_id": 41751398669,
+  "workflow_name": "CI/CD Pipeline",
+  "head_branch": "main",
+  "run_url": "https://api.github.com/repos/kafaat/ais-aviation-system/actions/runs/41751398669",
+  "run_attempt": 2,
+  "node_id": "CR_kwDOQZOg-88AAAAdcXIBEQ",
+  "head_sha": "76e03ba89dfc354bbc62736dd45548e52c0e557f",
+  "url": "https://api.github.com/repos/kafaat/ais-aviation-system/actions/jobs/126457348369",
+  "html_url": "https://github.com/kafaat/ais-aviation-system/actions/runs/41751398669/job/126457348369",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-11-04T07:51:13Z",
+  "started_at": "2026-11-04T07:51:16Z",
+  "completed_at": "2026-11-04T07:54:42Z",
+  "name": "E2E Tests",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-04T07:51:16Z",
+      "completed_at": "2026-11-04T07:51:18Z"
+    },
+    {
+      "name": "Initialize containers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-04T07:51:18Z",
+      "completed_at": "2026-11-04T07:51:46Z"
+    },
+    {
+      "name": "Checkout code",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-04T07:51:46Z",
+      "completed_at": "2026-11-04T07:51:48Z"
+    },
+    {
+      "name": "Setup Node.js",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-04T07:51:48Z",
+      "completed_at": "2026-11-04T07:51:48Z"
+    },
+    {
+      "name": "Setup pnpm",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-04T07:51:48Z",
+      "completed_at": "2026-11-04T07:51:49Z"
+    },
+    {
+      "name": "Get pnpm store directory",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-04T07:51:49Z",
+      "completed_at": "2026-11-04T07:51:49Z"
+    },
+    {
+      "name": "Setup pnpm cache",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-04T07:51:49Z",
+      "completed_at": "2026-11-04T07:51:54Z"
+    },
+    {
+      "name": "Get Playwright version",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-04T07:51:54Z",
+      "completed_at": "2026-11-04T07:51:54Z"
+    },
+    {
+      "name": "Cache Playwright browsers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 9,
+      "started_at": "2026-11-04T07:51:54Z",
+      "completed_at": "2026-11-04T07:51:56Z"
+    },
+    {
+      "name": "Install dependencies",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 10,
+      "started_at": "2026-11-04T07:51:56Z",
+      "completed_at": "2026-11-04T07:52:01Z"
+    },
+    {
+      "name": "Install browser and ticket verification tools",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 11,
+      "started_at": "2026-11-04T07:52:01Z",
+      "completed_at": "2026-11-04T07:52:14Z"
+    },
+    {
+      "name": "Wait for MySQL",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12,
+      "started_at": "2026-11-04T07:52:14Z",
+      "completed_at": "2026-11-04T07:52:14Z"
+    },
+    {
+      "name": "Run database migrations",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13,
+      "started_at": "2026-11-04T07:52:14Z",
+      "completed_at": "2026-11-04T07:52:23Z"
+    },
+    {
+      "name": "Verify migrated schema",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 14,
+      "started_at": "2026-11-04T07:52:23Z",
+      "completed_at": "2026-11-04T07:52:25Z"
+    },
+    {
+      "name": "Setup Python for auth service",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-04T07:52:25Z",
+      "completed_at": "2026-11-04T07:52:26Z"
+    },
+    {
+      "name": "Install auth service dependencies",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-04T07:52:26Z",
+      "completed_at": "2026-11-04T07:52:32Z"
+    },
+    {
+      "name": "Verify auth database URL configuration",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-04T07:52:32Z",
+      "completed_at": "2026-11-04T07:52:32Z"
+    },
+    {
+      "name": "Start auth service",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 18,
+      "started_at": "2026-11-04T07:52:32Z",
+      "completed_at": "2026-11-04T07:52:37Z"
+    },
+    {
+      "name": "Seed E2E test users",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 19,
+      "started_at": "2026-11-04T07:52:37Z",
+      "completed_at": "2026-11-04T07:52:37Z"
+    },
+    {
+      "name": "Seed flight data",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 20,
+      "started_at": "2026-11-04T07:52:37Z",
+      "completed_at": "2026-11-04T07:52:38Z"
+    },
+    {
+      "name": "Build application",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 21,
+      "started_at": "2026-11-04T07:52:38Z",
+      "completed_at": "2026-11-04T07:52:50Z"
+    },
+    {
+      "name": "Verify server can start",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 22,
+      "started_at": "2026-11-04T07:52:50Z",
+      "completed_at": "2026-11-04T07:53:00Z"
+    },
+    {
+      "name": "Run E2E smoke and funded journey tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 23,
+      "started_at": "2026-11-04T07:53:00Z",
+      "completed_at": "2026-11-04T07:54:35Z"
+    },
+    {
+      "name": "Upload E2E test results",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 24,
+      "started_at": "2026-11-04T07:54:35Z",
+      "completed_at": "2026-11-04T07:54:36Z"
+    },
+    {
+      "name": "Upload E2E test screenshots",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 25,
+      "started_at": "2026-11-04T07:54:36Z",
+      "completed_at": "2026-11-04T07:54:36Z"
+    },
+    {
+      "name": "E2E test summary",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 26,
+      "started_at": "2026-11-04T07:54:36Z",
+      "completed_at": "2026-11-04T07:54:36Z"
+    },
+    {
+      "name": "Post Setup Python for auth service",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 46,
+      "started_at": "2026-11-04T07:54:36Z",
+      "completed_at": "2026-11-04T07:54:36Z"
+    },
+    {
+      "name": "Post Cache Playwright browsers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 47,
+      "started_at": "2026-11-04T07:54:36Z",
+      "completed_at": "2026-11-04T07:54:36Z"
+    },
+    {
+      "name": "Post Setup pnpm cache",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 48,
+      "started_at": "2026-11-04T07:54:36Z",
+      "completed_at": "2026-11-04T07:54:39Z"
+    },
+    {
+      "name": "Post Setup pnpm",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 49,
+      "started_at": "2026-11-04T07:54:39Z",
+      "completed_at": "2026-11-04T07:54:39Z"
+    },
+    {
+      "name": "Post Setup Node.js",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 50,
+      "started_at": "2026-11-04T07:54:39Z",
+      "completed_at": "2026-11-04T07:54:39Z"
+    },
+    {
+      "name": "Post Checkout code",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 51,
+      "started_at": "2026-11-04T07:54:39Z",
+      "completed_at": "2026-11-04T07:54:40Z"
+    },
+    {
+      "name": "Stop containers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 52,
+      "started_at": "2026-11-04T07:54:40Z",
+      "completed_at": "2026-11-04T07:54:40Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 53,
+      "started_at": "2026-11-04T07:54:40Z",
+      "completed_at": "2026-11-04T07:54:40Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/kafaat/ais-aviation-system/check-runs/126457348369",
+  "labels": ["ubuntu-latest"],
+  "runner_id": 1001269530,
+  "runner_name": "GitHub Actions 1001269530",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}
