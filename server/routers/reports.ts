@@ -2,12 +2,18 @@ import { responseContracts } from "../contracts/reports";
 /**
  * Reports Router
  *
- * Admin endpoints for generating and exporting reports
+ * Tenant-scoped airline reports with global platform administrator access
  * Supports CSV, PDF, and Excel formats
  */
 
 import { z } from "zod";
-import { router, adminProcedure } from "../_core/trpc";
+import {
+  router,
+  airlineFinanceProcedure,
+  airlineOpsProcedure,
+} from "../_core/trpc";
+import { isAdmin } from "../services/rbac.service";
+import { requireValue } from "../services/required-value";
 import {
   exportBookingsToCSV,
   exportRevenueToCSV,
@@ -63,15 +69,28 @@ const flightInput = period
   })
   .refine(ordered, orderMessage);
 
+// Finance/ops capabilities are already declared centrally. Their scoped
+// procedures validate user/context tenant identity before any export is read.
+// Platform administrators retain their explicit system-wide reporting access.
+function reportTenant(ctx: {
+  user: { role: string };
+  tenantId: number | null;
+}) {
+  return isAdmin(ctx.user.role) ? undefined : requireValue(ctx.tenantId);
+}
+
 export const reportsRouter = router({
   /**
    * Export bookings report to CSV
    */
-  exportBookingsCSV: adminProcedure
+  exportBookingsCSV: airlineFinanceProcedure
     .input(bookingInput)
     .output(responseContracts["exportBookingsCSV"])
-    .mutation(async ({ input: filters }) => {
-      const csv = await exportBookingsToCSV(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const csv = await exportBookingsToCSV({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("bookings", "csv");
 
       return {
@@ -84,11 +103,14 @@ export const reportsRouter = router({
   /**
    * Export revenue report to CSV
    */
-  exportRevenueCSV: adminProcedure
+  exportRevenueCSV: airlineFinanceProcedure
     .input(periodInput)
     .output(responseContracts["exportRevenueCSV"])
-    .mutation(async ({ input: filters }) => {
-      const csv = await exportRevenueToCSV(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const csv = await exportRevenueToCSV({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("revenue", "csv");
 
       return {
@@ -101,11 +123,14 @@ export const reportsRouter = router({
   /**
    * Export flight performance report to CSV
    */
-  exportFlightPerformanceCSV: adminProcedure
+  exportFlightPerformanceCSV: airlineOpsProcedure
     .input(flightInput)
     .output(responseContracts["exportFlightPerformanceCSV"])
-    .mutation(async ({ input: filters }) => {
-      const csv = await exportFlightPerformanceToCSV(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const csv = await exportFlightPerformanceToCSV({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("flight-performance", "csv");
 
       return {
@@ -118,11 +143,14 @@ export const reportsRouter = router({
   /**
    * Generate bookings PDF report
    */
-  generateBookingsPDF: adminProcedure
+  generateBookingsPDF: airlineFinanceProcedure
     .input(bookingInput)
     .output(responseContracts["generateBookingsPDF"])
-    .mutation(async ({ input: filters }) => {
-      const pdfBuffer = await generateBookingsPDF(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const pdfBuffer = await generateBookingsPDF({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("bookings-report", "pdf");
 
       return {
@@ -136,11 +164,14 @@ export const reportsRouter = router({
   /**
    * Generate revenue PDF report
    */
-  generateRevenuePDF: adminProcedure
+  generateRevenuePDF: airlineFinanceProcedure
     .input(periodInput)
     .output(responseContracts["generateRevenuePDF"])
-    .mutation(async ({ input: filters }) => {
-      const pdfBuffer = await generateRevenuePDF(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const pdfBuffer = await generateRevenuePDF({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("revenue-report", "pdf");
 
       return {
@@ -158,11 +189,14 @@ export const reportsRouter = router({
   /**
    * Export bookings report to Excel
    */
-  exportBookingsExcel: adminProcedure
+  exportBookingsExcel: airlineFinanceProcedure
     .input(bookingInput)
     .output(responseContracts["exportBookingsExcel"])
-    .mutation(async ({ input: filters }) => {
-      const excelBuffer = await exportBookingsToExcel(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const excelBuffer = await exportBookingsToExcel({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("bookings", "xlsx");
 
       return {
@@ -177,11 +211,14 @@ export const reportsRouter = router({
   /**
    * Export revenue report to Excel
    */
-  exportRevenueExcel: adminProcedure
+  exportRevenueExcel: airlineFinanceProcedure
     .input(periodInput)
     .output(responseContracts["exportRevenueExcel"])
-    .mutation(async ({ input: filters }) => {
-      const excelBuffer = await exportRevenueToExcel(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const excelBuffer = await exportRevenueToExcel({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("revenue", "xlsx");
 
       return {
@@ -196,11 +233,14 @@ export const reportsRouter = router({
   /**
    * Export flight performance report to Excel
    */
-  exportFlightPerformanceExcel: adminProcedure
+  exportFlightPerformanceExcel: airlineOpsProcedure
     .input(flightInput)
     .output(responseContracts["exportFlightPerformanceExcel"])
-    .mutation(async ({ input: filters }) => {
-      const excelBuffer = await exportFlightPerformanceToExcel(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const excelBuffer = await exportFlightPerformanceToExcel({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("flight-performance", "xlsx");
 
       return {
@@ -215,11 +255,14 @@ export const reportsRouter = router({
   /**
    * Generate flight performance PDF report
    */
-  generateFlightPerformancePDF: adminProcedure
+  generateFlightPerformancePDF: airlineOpsProcedure
     .input(flightInput)
     .output(responseContracts["generateFlightPerformancePDF"])
-    .mutation(async ({ input: filters }) => {
-      const pdfBuffer = await generateFlightPerformancePDF(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const pdfBuffer = await generateFlightPerformancePDF({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("flight-performance-report", "pdf");
 
       return {
@@ -237,11 +280,14 @@ export const reportsRouter = router({
   /**
    * Export refunds report to CSV
    */
-  exportRefundsCSV: adminProcedure
+  exportRefundsCSV: airlineFinanceProcedure
     .input(periodInput)
     .output(responseContracts["exportRefundsCSV"])
-    .mutation(async ({ input: filters }) => {
-      const csv = await exportRefundsToCSV(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const csv = await exportRefundsToCSV({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("refunds", "csv");
 
       return {
@@ -254,11 +300,14 @@ export const reportsRouter = router({
   /**
    * Export refunds report to Excel
    */
-  exportRefundsExcel: adminProcedure
+  exportRefundsExcel: airlineFinanceProcedure
     .input(periodInput)
     .output(responseContracts["exportRefundsExcel"])
-    .mutation(async ({ input: filters }) => {
-      const excelBuffer = await exportRefundsToExcel(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const excelBuffer = await exportRefundsToExcel({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("refunds", "xlsx");
 
       return {
@@ -273,11 +322,14 @@ export const reportsRouter = router({
   /**
    * Generate refunds PDF report
    */
-  generateRefundsPDF: adminProcedure
+  generateRefundsPDF: airlineFinanceProcedure
     .input(periodInput)
     .output(responseContracts["generateRefundsPDF"])
-    .mutation(async ({ input: filters }) => {
-      const pdfBuffer = await generateRefundsPDF(filters);
+    .mutation(async ({ input: filters, ctx }) => {
+      const pdfBuffer = await generateRefundsPDF({
+        ...filters,
+        tenantId: reportTenant(ctx),
+      });
       const filename = getReportFilename("refunds-report", "pdf");
 
       return {

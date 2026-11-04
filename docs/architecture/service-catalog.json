@@ -280,7 +280,8 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/financial-reporting.service.ts"
+        "server/services/financial-reporting.service.ts",
+        "server/services/flight-state.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -2493,6 +2494,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/services/analytics.service.ts",
         "server/services/apis.service.ts",
         "server/services/dcs.service.ts",
         "server/services/disruption.service.ts",
@@ -2503,6 +2505,7 @@
         "server/services/irops.service.ts",
         "server/services/passenger-priority.service.ts",
         "server/services/revenue-accounting.service.ts",
+        "server/services/seat-map.service.ts",
         "server/services/travel-scenarios.service.ts"
       ],
       "dependencies": [
@@ -5410,6 +5413,7 @@
         "server/routers/gates.ts",
         "server/routers/operations.ts",
         "server/routers/payments.ts",
+        "server/routers/reports.ts",
         "server/routes/operational-integrations.ts",
         "server/services/access-control.service.ts",
         "server/services/baggage-registration.service.ts",
@@ -5704,6 +5708,7 @@
         "server/routers/admin.ts",
         "server/routers/bsp-reporting.ts",
         "server/routers/operations.ts",
+        "server/routers/reports.ts",
         "server/services/crew-assignment.service.ts",
         "server/services/flight-economics-evidence.service.ts",
         "server/services/intelligence/economics.agent.ts",
@@ -5979,6 +5984,7 @@
         "server/services/boarding-pass.service.ts",
         "server/services/dcs-state.service.ts",
         "server/services/departure-control.service.ts",
+        "server/services/flight-state.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/ticket-coupons.service.ts"
       ],

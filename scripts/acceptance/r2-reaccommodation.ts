@@ -1,7 +1,8 @@
 import { getFlightAPISStatus } from "../../server/services/apis.service";
 import { generateFlightManifest } from "../../server/services/dcs.service";
+import { getCheckInStatus } from "../../server/services/seat-map.service";
 import assert from "node:assert/strict";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   airlines,
   airports,
@@ -512,6 +513,120 @@ export async function verifyR2Reaccommodation(
         later.manifest.passengers.list.find(p => p.id === id + 3)?.seat,
         null
       );
+    }
+  );
+  await check(
+    "DCS check-in report: completed sectors and eligible passenger seat evidence",
+    async () => {
+      await db
+        .update(bookingSegments)
+        .set({ seatsReserved: true })
+        .where(
+          and(
+            eq(bookingSegments.bookingId, id + 3),
+            eq(bookingSegments.flightId, id)
+          )
+        );
+      await db
+        .update(seatInventory)
+        .set({
+          status: "checked_in",
+          boardingPassIssued: true,
+          checkInNonce: "7870c739-6124-4423-948d-9d3e74e1c501",
+          checkedInAt: new Date(),
+        })
+        .where(eq(seatInventory.passengerId, id + 3));
+      const current = await getCheckInStatus(id);
+      assert.equal(current.totalPassengers, 3);
+      assert.equal(current.checkedIn, 1);
+      assert.equal(current.notCheckedIn, 2);
+      assert.equal(current.boardingPassesIssued, 1);
+
+      // A flown segment remains in the historical report after inventory release.
+      await db
+        .update(bookingSegments)
+        .set({ status: "completed", seatsReserved: false })
+        .where(
+          and(
+            eq(bookingSegments.bookingId, id + 3),
+            eq(bookingSegments.flightId, id)
+          )
+        );
+      // Stale flags must not count canceled/moved sectors, mismatched passenger
+      // ownership, or released seats as checked in or as issued boarding passes.
+      await db.insert(seatInventory).values(
+        [
+          { booking: 2, passenger: 2, status: "checked_in" as const },
+          { booking: 4, passenger: 4, status: "checked_in" as const },
+          { booking: 5, passenger: 5, status: "checked_in" as const },
+          { booking: 1, passenger: 2, status: "checked_in" as const },
+          { booking: 1, passenger: 1, status: "available" as const },
+        ].map((row, index) => ({
+          flightId: id,
+          bookingId: id + row.booking,
+          passengerId: id + row.passenger,
+          seatMapId: id,
+          seatNumber: `${10 + index}A`,
+          row: 10 + index,
+          column: "A",
+          cabinClass: "economy" as const,
+          seatType: "window" as const,
+          status: row.status,
+          boardingPassIssued: true,
+        }))
+      );
+      assert.deepEqual(await getCheckInStatus(id), current);
+      assert.deepEqual(current.byClass, [
+        { cabinClass: "economy", total: 1, checkedIn: 1 },
+      ]);
+
+      // A revoked check-in nonce cannot substantiate a current check-in/pass,
+      // even if an old status flag has not yet been reconciled.
+      await db
+        .update(seatInventory)
+        .set({ checkInNonce: null })
+        .where(eq(seatInventory.passengerId, id + 3));
+      const revoked = await getCheckInStatus(id);
+      assert.equal(revoked.checkedIn, 0);
+      assert.equal(revoked.boardingPassesIssued, 0);
+      assert.equal(revoked.notCheckedIn, 3);
+
+      // Offloading/undoing check-in releases the seat without removing the
+      // passenger's confirmed reservation from the not-checked-in denominator.
+      await db
+        .update(seatInventory)
+        .set({ status: "available", boardingPassIssued: false })
+        .where(eq(seatInventory.passengerId, id + 3));
+      const released = await getCheckInStatus(id);
+      assert.equal(released.totalPassengers, 3);
+      assert.equal(released.checkedIn, 0);
+      assert.equal(released.notCheckedIn, 3);
+      assert.equal(released.boardingPassesIssued, 0);
+
+      await db
+        .update(seatInventory)
+        .set({
+          status: "checked_in",
+          boardingPassIssued: true,
+          checkInNonce: "7870c739-6124-4423-948d-9d3e74e1c502",
+        })
+        .where(eq(seatInventory.passengerId, id + 3));
+      await db.insert(seatInventory).values({
+        flightId: id,
+        bookingId: id + 3,
+        passengerId: id + 3,
+        seatMapId: id,
+        seatNumber: "20A",
+        row: 20,
+        column: "A",
+        cabinClass: "economy",
+        seatType: "window",
+        status: "occupied",
+      });
+      await assert.rejects(getCheckInStatus(id), {
+        code: "PRECONDITION_FAILED",
+        message: /multiple active seat assignments/,
+      });
     }
   );
 }

@@ -4,6 +4,7 @@ import {
   financialInteger,
   getFinancialDays,
   getFinancialSummary,
+  validateFinancialPeriod,
   type FinancialMonth,
 } from "./financial-reporting.service";
 /**
@@ -349,12 +350,9 @@ export async function getRevenueByRoute(
     eq(bookings.paymentStatus, "paid"),
   ];
 
-  if (startDate && endDate) {
-    conditions.push(
-      gte(bookings.createdAt, startDate),
-      lte(bookings.createdAt, endDate)
-    );
-  }
+  validateFinancialPeriod({ startDate, endDate });
+  if (startDate) conditions.push(gte(bookings.createdAt, startDate));
+  if (endDate) conditions.push(lte(bookings.createdAt, endDate));
 
   const _originAirports = airports;
 
@@ -451,12 +449,9 @@ export async function getRevenueByClass(
     eq(bookings.paymentStatus, "paid"),
   ];
 
-  if (startDate && endDate) {
-    conditions.push(
-      gte(bookings.createdAt, startDate),
-      lte(bookings.createdAt, endDate)
-    );
-  }
+  validateFinancialPeriod({ startDate, endDate });
+  if (startDate) conditions.push(gte(bookings.createdAt, startDate));
+  if (endDate) conditions.push(lte(bookings.createdAt, endDate));
 
   const classData = await db
     .select({
@@ -514,12 +509,9 @@ export async function getRevenueByChannel(
     eq(bookings.paymentStatus, "paid"),
   ];
 
-  if (startDate && endDate) {
-    conditions.push(
-      gte(bookings.createdAt, startDate),
-      lte(bookings.createdAt, endDate)
-    );
-  }
+  validateFinancialPeriod({ startDate, endDate });
+  if (startDate) conditions.push(gte(bookings.createdAt, startDate));
+  if (endDate) conditions.push(lte(bookings.createdAt, endDate));
 
   // Gross value for all paid bookings.
   const [totalStats] = await db
@@ -627,13 +619,11 @@ export async function getAncillaryRevenue(
       message: "Database not available",
     });
 
-  const dateFilter =
-    startDate && endDate
-      ? and(
-          gte(bookingAncillaries.createdAt, startDate),
-          lte(bookingAncillaries.createdAt, endDate)
-        )
-      : undefined;
+  validateFinancialPeriod({ startDate, endDate });
+  const dateFilter = and(
+    startDate ? gte(bookingAncillaries.createdAt, startDate) : undefined,
+    endDate ? lte(bookingAncillaries.createdAt, endDate) : undefined
+  );
 
   const categoryData = await db
     .select({
@@ -939,12 +929,9 @@ export async function getRevenueDashboard(
     eq(bookings.paymentStatus, "paid"),
   ];
 
-  if (startDate && endDate) {
-    conditions.push(
-      gte(bookings.createdAt, startDate),
-      lte(bookings.createdAt, endDate)
-    );
-  }
+  validateFinancialPeriod({ startDate, endDate });
+  if (startDate) conditions.push(gte(bookings.createdAt, startDate));
+  if (endDate) conditions.push(lte(bookings.createdAt, endDate));
 
   // Total revenue
   const [totalStats] = await db

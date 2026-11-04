@@ -777,10 +777,16 @@ export async function getAgentBookings(
     conditions.push(lte(agentBookings.createdAt, filters.endDate));
   }
 
-  // Get total count
+  if (filters.status) {
+    conditions.push(eq(bookings.status, filters.status));
+  }
+
+  // Count exactly the joined, filtered rows that can appear on a page.
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(agentBookings)
+    .innerJoin(bookings, eq(agentBookings.bookingId, bookings.id))
+    .innerJoin(flights, eq(bookings.flightId, flights.id))
     .where(and(...conditions));
 
   // Get bookings with flight details
@@ -794,18 +800,12 @@ export async function getAgentBookings(
     .innerJoin(bookings, eq(agentBookings.bookingId, bookings.id))
     .innerJoin(flights, eq(bookings.flightId, flights.id))
     .where(and(...conditions))
-    .orderBy(desc(agentBookings.createdAt))
+    .orderBy(desc(agentBookings.createdAt), desc(agentBookings.id))
     .limit(limit)
     .offset(offset);
 
-  // Filter by booking status if provided
-  let filteredResults = results;
-  if (filters.status) {
-    filteredResults = results.filter(r => r.booking.status === filters.status);
-  }
-
   return {
-    bookings: filteredResults.map(r => ({
+    bookings: results.map(r => ({
       id: r.agentBooking.id,
       bookingId: r.booking.id,
       bookingReference: r.booking.bookingReference,

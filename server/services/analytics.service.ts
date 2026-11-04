@@ -7,11 +7,48 @@ import {
   getFinancialDays,
   getFinancialSummary,
   type FinancialAmounts,
+  type FinancialPeriod,
+  validateFinancialPeriod,
 } from "./financial-reporting.service";
+import { flightBookingCondition } from "./flight-state.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { bookings, flights, airports } from "../../drizzle/schema";
-import { sql, and, gte, lte, eq, desc } from "drizzle-orm";
+import {
+  bookings,
+  flights,
+  airports,
+  bookingAncillaries,
+  ancillaryServices,
+} from "../../drizzle/schema";
+import { sql, and, gte, lte, eq, desc, isNull, isNotNull } from "drizzle-orm";
+
+export type AnalyticsPeriod = Pick<FinancialPeriod, "startDate" | "endDate">;
+
+function bookingPeriodFilter(period: AnalyticsPeriod) {
+  validateFinancialPeriod(period);
+  return and(
+    period.startDate ? gte(bookings.createdAt, period.startDate) : undefined,
+    period.endDate ? lte(bookings.createdAt, period.endDate) : undefined
+  );
+}
+
+function soldFlightBookingCondition() {
+  return and(
+    flightBookingCondition(flights.id, "manifest"),
+    sql`${bookings.status} IN ('confirmed','completed')`,
+    isNull(bookings.deletedAt)
+  );
+}
+
+// Ancillary KPIs describe active funded items for the selected booking cohort.
+// They are booked values, not cash-ledger collections or earned revenue.
+function fundedAncillaryCondition(period: AnalyticsPeriod) {
+  return and(
+    bookingPeriodFilter(period),
+    eq(bookingAncillaries.status, "active"),
+    isNotNull(bookingAncillaries.fundedAt)
+  );
+}
 
 export interface KPIMetrics extends FinancialAmounts {
   totalBookings: number;
@@ -56,13 +93,7 @@ export async function getKPIMetrics(
     });
   }
 
-  const dateFilter =
-    startDate && endDate
-      ? and(
-          gte(bookings.createdAt, startDate),
-          lte(bookings.createdAt, endDate)
-        )
-      : undefined;
+  const dateFilter = bookingPeriodFilter({ startDate, endDate });
 
   const financial = await getFinancialSummary({ startDate, endDate });
 
@@ -91,15 +122,25 @@ export async function getKPIMetrics(
         100
       : 0;
 
-  // Average occupancy rate (simplified - across all flights with bookings)
-  const [occupancyStats] = await db
+  // Capacity is counted once per flight with confirmed/completed bookings in
+  // the selected cohort; authoritative segments also include onward flights.
+  const occupancyRows = await db
     .select({
-      totalSeats: sql<number>`SUM(${flights.economySeats} + ${flights.businessSeats})`,
+      totalSeats: sql<number>`${flights.economySeats} + ${flights.businessSeats}`,
       bookedSeats: sql<number>`SUM(${bookings.numberOfPassengers})`,
     })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(and(dateFilter, sql`${bookings.status} != 'cancelled'`));
+    .from(flights)
+    .innerJoin(bookings, soldFlightBookingCondition())
+    .where(dateFilter)
+    .groupBy(flights.id, flights.economySeats, flights.businessSeats);
+
+  const occupancyStats = occupancyRows.reduce(
+    (total, row) => ({
+      totalSeats: total.totalSeats + Number(row.totalSeats || 0),
+      bookedSeats: total.bookedSeats + Number(row.bookedSeats || 0),
+    }),
+    { totalSeats: 0, bookedSeats: 0 }
+  );
 
   const averageOccupancyRate =
     occupancyStats.totalSeats > 0
@@ -107,12 +148,12 @@ export async function getKPIMetrics(
       : 0;
 
   return {
-    totalBookings: bookingStats.totalBookings || 0,
+    totalBookings: Number(bookingStats.totalBookings || 0),
     ...financial,
     totalRevenue: financial.netCollectedAmount, // Deprecated alias: net collections, not earned revenue.
     averageOccupancyRate: Math.round(averageOccupancyRate * 10) / 10,
     cancellationRate: Math.round(cancellationRate * 10) / 10,
-    totalPassengers: bookingStats.totalPassengers || 0,
+    totalPassengers: Number(bookingStats.totalPassengers || 0),
   };
 }
 
@@ -120,10 +161,16 @@ export async function getKPIMetrics(
  * Get revenue data over time (daily)
  */
 export async function getRevenueOverTime(
-  days: number = 30
+  days: number = 30,
+  period?: AnalyticsPeriod
 ): Promise<RevenueDataPoint[]> {
-  const startDate = new Date(Date.now() - days * 86400000);
-  return (await getFinancialDays({ startDate })).map(row => ({
+  return (
+    await getFinancialDays(
+      period ?? {
+        startDate: new Date(Date.now() - days * 86400000),
+      }
+    )
+  ).map(row => ({
     date: row.date,
     revenue: row.netCollectedAmount,
     bookings: row.bookings,
@@ -134,7 +181,8 @@ export async function getRevenueOverTime(
  * Get most popular destinations
  */
 export async function getPopularDestinations(
-  limit: number = 10
+  limit: number = 10,
+  period: AnalyticsPeriod = {}
 ): Promise<PopularDestination[]> {
   const db = await getDb();
   if (!db) {
@@ -155,7 +203,9 @@ export async function getPopularDestinations(
     .from(bookings)
     .innerJoin(flights, eq(bookings.flightId, flights.id))
     .innerJoin(airports, eq(flights.destinationId, airports.id))
-    .where(sql`${bookings.status} != 'cancelled'`)
+    .where(
+      and(bookingPeriodFilter(period), sql`${bookings.status} != 'cancelled'`)
+    )
     .groupBy(airports.id, airports.code, airports.name, airports.city)
     .orderBy(desc(sql`COUNT(${bookings.id})`))
     .limit(limit);
@@ -164,8 +214,8 @@ export async function getPopularDestinations(
     airportCode: row.airportCode,
     airportName: row.airportName,
     city: row.city,
-    bookingCount: row.bookingCount || 0,
-    revenue: row.revenue || 0,
+    bookingCount: Number(row.bookingCount || 0),
+    revenue: Number(row.revenue || 0),
   }));
 }
 
@@ -173,7 +223,8 @@ export async function getPopularDestinations(
  * Get booking trends over time
  */
 export async function getBookingTrends(
-  days: number = 30
+  days: number = 30,
+  period?: AnalyticsPeriod
 ): Promise<BookingTrend[]> {
   const db = await getDb();
   if (!db) {
@@ -183,8 +234,11 @@ export async function getBookingTrends(
     });
   }
 
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
+  const dateFilter = bookingPeriodFilter(
+    period ?? {
+      startDate: new Date(Date.now() - days * 86400000),
+    }
+  );
 
   const trends = await db
     .select({
@@ -193,14 +247,14 @@ export async function getBookingTrends(
       passengers: sql<number>`SUM(${bookings.numberOfPassengers})`,
     })
     .from(bookings)
-    .where(gte(bookings.createdAt, startDate))
+    .where(dateFilter)
     .groupBy(sql`DATE(${bookings.createdAt})`)
     .orderBy(sql`DATE(${bookings.createdAt})`);
 
   return trends.map(row => ({
     date: row.date,
-    bookings: row.bookings || 0,
-    passengers: row.passengers || 0,
+    bookings: Number(row.bookings || 0),
+    passengers: Number(row.passengers || 0),
   }));
 }
 
@@ -223,16 +277,10 @@ export async function getFlightOccupancyDetails() {
       departureTime: flights.departureTime,
       totalSeats: sql<number>`${flights.economySeats} + ${flights.businessSeats}`,
       bookedSeats: sql<number>`COALESCE(SUM(${bookings.numberOfPassengers}), 0)`,
-      occupancyRate: sql<number>`ROUND((COALESCE(SUM(${bookings.numberOfPassengers}), 0) / (${flights.economySeats} + ${flights.businessSeats})) * 100, 1)`,
+      occupancyRate: sql<number>`COALESCE(ROUND((COALESCE(SUM(${bookings.numberOfPassengers}), 0) / NULLIF(${flights.economySeats} + ${flights.businessSeats}, 0)) * 100, 1), 0)`,
     })
     .from(flights)
-    .leftJoin(
-      bookings,
-      and(
-        eq(bookings.flightId, flights.id),
-        sql`${bookings.status} != 'cancelled'`
-      )
-    )
+    .leftJoin(bookings, soldFlightBookingCondition())
     .where(gte(flights.departureTime, new Date()))
     .groupBy(
       flights.id,
@@ -243,7 +291,7 @@ export async function getFlightOccupancyDetails() {
     )
     .orderBy(
       desc(
-        sql`ROUND((COALESCE(SUM(${bookings.numberOfPassengers}), 0) / (${flights.economySeats} + ${flights.businessSeats})) * 100, 1)`
+        sql`COALESCE(ROUND((COALESCE(SUM(${bookings.numberOfPassengers}), 0) / NULLIF(${flights.economySeats} + ${flights.businessSeats}, 0)) * 100, 1), 0)`
       )
     )
     .limit(20);
@@ -291,35 +339,20 @@ export async function getAncillaryMetrics(
     });
   }
 
-  const { bookingAncillaries, ancillaryServices: _ancillaryServices } =
-    await import("../../drizzle/schema");
-
-  const dateFilter =
-    startDate && endDate
-      ? and(
-          gte(bookingAncillaries.createdAt, startDate),
-          lte(bookingAncillaries.createdAt, endDate)
-        )
-      : undefined;
+  const period = { startDate, endDate };
 
   // Total ancillary revenue and quantity
   const [ancillaryStats] = await db
     .select({
       totalRevenue: sql<number>`COALESCE(SUM(${bookingAncillaries.totalPrice}), 0)`,
       totalQuantity: sql<number>`COALESCE(SUM(${bookingAncillaries.quantity}), 0)`,
-      totalAncillaries: sql<number>`COUNT(*)`,
     })
     .from(bookingAncillaries)
-    .where(dateFilter);
+    .innerJoin(bookings, eq(bookingAncillaries.bookingId, bookings.id))
+    .where(fundedAncillaryCondition(period));
 
   // Total bookings in the same period
-  const bookingDateFilter =
-    startDate && endDate
-      ? and(
-          gte(bookings.createdAt, startDate),
-          lte(bookings.createdAt, endDate)
-        )
-      : undefined;
+  const bookingDateFilter = bookingPeriodFilter(period);
 
   const [bookingStats] = await db
     .select({
@@ -334,7 +367,8 @@ export async function getAncillaryMetrics(
       bookingsWithAncillaries: sql<number>`COUNT(DISTINCT ${bookingAncillaries.bookingId})`,
     })
     .from(bookingAncillaries)
-    .where(dateFilter);
+    .innerJoin(bookings, eq(bookingAncillaries.bookingId, bookings.id))
+    .where(fundedAncillaryCondition(period));
 
   const attachmentRate =
     bookingStats.totalBookings > 0
@@ -348,19 +382,19 @@ export async function getAncillaryMetrics(
       : 0;
 
   return {
-    totalAncillaryRevenue: ancillaryStats.totalRevenue || 0,
+    totalAncillaryRevenue: Number(ancillaryStats.totalRevenue || 0),
     ancillaryAttachmentRate: Math.round(attachmentRate * 10) / 10,
     averageAncillaryRevenuePerBooking: Math.round(avgRevenuePerBooking),
-    totalAncillariesSold: ancillaryStats.totalQuantity || 0,
+    totalAncillariesSold: Number(ancillaryStats.totalQuantity || 0),
   };
 }
 
 /**
  * Get ancillary revenue breakdown by category
  */
-export async function getAncillaryRevenueByCategory(): Promise<
-  AncillaryRevenueByCategory[]
-> {
+export async function getAncillaryRevenueByCategory(
+  period: AnalyticsPeriod = {}
+): Promise<AncillaryRevenueByCategory[]> {
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -369,9 +403,6 @@ export async function getAncillaryRevenueByCategory(): Promise<
     });
   }
 
-  const { bookingAncillaries, ancillaryServices } =
-    await import("../../drizzle/schema");
-
   const categoryRevenue = await db
     .select({
       category: ancillaryServices.category,
@@ -379,22 +410,24 @@ export async function getAncillaryRevenueByCategory(): Promise<
       quantity: sql<number>`SUM(${bookingAncillaries.quantity})`,
     })
     .from(bookingAncillaries)
+    .innerJoin(bookings, eq(bookingAncillaries.bookingId, bookings.id))
     .innerJoin(
       ancillaryServices,
       eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id)
     )
+    .where(fundedAncillaryCondition(period))
     .groupBy(ancillaryServices.category)
     .orderBy(desc(sql`SUM(${bookingAncillaries.totalPrice})`));
 
   const totalRevenue = categoryRevenue.reduce(
-    (sum, row) => sum + (row.revenue || 0),
+    (sum, row) => sum + Number(row.revenue || 0),
     0
   );
 
   return categoryRevenue.map(row => ({
     category: row.category,
-    revenue: row.revenue || 0,
-    quantity: row.quantity || 0,
+    revenue: Number(row.revenue || 0),
+    quantity: Number(row.quantity || 0),
     percentage:
       totalRevenue > 0
         ? Math.round(((row.revenue || 0) / totalRevenue) * 100 * 10) / 10
@@ -406,7 +439,8 @@ export async function getAncillaryRevenueByCategory(): Promise<
  * Get most popular ancillary services
  */
 export async function getPopularAncillaries(
-  limit: number = 10
+  limit: number = 10,
+  period: AnalyticsPeriod = {}
 ): Promise<PopularAncillary[]> {
   const db = await getDb();
   if (!db) {
@@ -416,9 +450,6 @@ export async function getPopularAncillaries(
     });
   }
 
-  const { bookingAncillaries, ancillaryServices } =
-    await import("../../drizzle/schema");
-
   const popularServices = await db
     .select({
       serviceName: ancillaryServices.name,
@@ -427,10 +458,12 @@ export async function getPopularAncillaries(
       revenue: sql<number>`SUM(${bookingAncillaries.totalPrice})`,
     })
     .from(bookingAncillaries)
+    .innerJoin(bookings, eq(bookingAncillaries.bookingId, bookings.id))
     .innerJoin(
       ancillaryServices,
       eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id)
     )
+    .where(fundedAncillaryCondition(period))
     .groupBy(
       ancillaryServices.id,
       ancillaryServices.name,
@@ -442,7 +475,7 @@ export async function getPopularAncillaries(
   return popularServices.map(row => ({
     serviceName: row.serviceName,
     category: row.category,
-    totalSold: row.totalSold || 0,
-    revenue: row.revenue || 0,
+    totalSold: Number(row.totalSold || 0),
+    revenue: Number(row.revenue || 0),
   }));
 }

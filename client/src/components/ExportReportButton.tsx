@@ -176,6 +176,7 @@ export function ExportReportButton({
           size={size}
           disabled={isExporting}
           className={className}
+          aria-label={`${t("reports.export")} ${getReportTypeLabel()}`}
         >
           {isExporting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -184,7 +185,7 @@ export function ExportReportButton({
           )}
           {showLabel && (
             <span className="ml-2">
-              {isExporting ? t("reports.exporting") : t("reports.export")}
+              {isExporting ? t("reports.exporting") : getReportTypeLabel()}
             </span>
           )}
           <ChevronDown className="ml-2 h-4 w-4" />
