@@ -21,6 +21,7 @@ import {
 import { drizzle, MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { readFileSync } from "node:fs";
+import type { Socket } from "node:net";
 import * as schema from "../drizzle/schema";
 import {
   agentBookings,
@@ -218,12 +219,49 @@ export function closePool(): Promise<void> {
   if (!pool) return Promise.resolve();
 
   // Share an in-flight close across signal handlers and other cleanup callers.
-  // Defer end() so even a synchronous driver error follows the same cleanup path.
+  // Defer cleanup so synchronous driver errors follow the same rejection path.
   _poolClosing = Promise.resolve()
-    .then(() => pool.end())
-    .then(() => {
-      _pool = null;
-      _db = null;
+    .then(async () => {
+      // mysql2's end callback acknowledges queued COM_QUIT, not TCP closure.
+      // Snapshot this pool's connections before ending it, including connections
+      // still handshaking. This is the same pinned internal queue used by stats;
+      // the subprocess regression guards its shape on dependency upgrades.
+      const poolInternal = pool.pool as unknown as {
+        _allConnections: {
+          length: number;
+          get(index: number): { stream: Socket };
+        };
+      };
+      const connections = Array.from(
+        { length: poolInternal._allConnections.length },
+        (_, index) => poolInternal._allConnections.get(index)
+      );
+      let endFailed = false;
+      let endError: unknown;
+      try {
+        await pool.end();
+      } catch (error) {
+        endFailed = true;
+        endError = error;
+      }
+
+      // Read the stream after end(): a handshake can replace TCP with TLS.
+      // destroySoon drains COM_QUIT before closing the owned socket locally;
+      // a peer that never sends FIN must not keep a completed worker alive.
+      const transports = new Set(
+        connections.map(connection => connection.stream)
+      );
+      const results = await Promise.allSettled(
+        [...transports].map(socket => closePoolTransport(socket, endFailed))
+      );
+      if (endFailed) throw endError;
+      const failures = results.filter(result => result.status === "rejected");
+      if (failures.length > 0) {
+        throw new AggregateError(
+          failures.map(result => result.reason),
+          "Database connection transport cleanup failed"
+        );
+      }
       log.info({ event: "pool_closed" }, "Database connection pool closed");
     })
     .catch(error => {
@@ -234,9 +272,42 @@ export function closePool(): Promise<void> {
       throw error;
     })
     .finally(() => {
+      _pool = null;
+      _db = null;
       _poolClosing = null;
     });
   return _poolClosing;
+}
+
+function closePoolTransport(socket: Socket, force: boolean): Promise<void> {
+  // mysql2 accepts a peer RST after COM_QUIT as normal termination. Keep
+  // that behavior once queued commands drained successfully; a reset
+  // during an active query still rejects pool.end() and remains a failure.
+  const reportableError = (error: Error | null): Error | undefined => {
+    if (!error) return undefined;
+    if (!force && (error as NodeJS.ErrnoException).code === "ECONNRESET")
+      return undefined;
+    return error;
+  };
+  // An error may precede the post-end observer, including on a closed socket.
+  let transportError = reportableError(socket.errored);
+  if (socket.closed)
+    return transportError ? Promise.reject(transportError) : Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error) => {
+      transportError ??= reportableError(error);
+    };
+    socket.on("error", onError);
+    socket.once("close", () => {
+      socket.off("error", onError);
+      if (transportError) reject(transportError);
+      else resolve();
+    });
+    if (!socket.destroyed) {
+      if (force) socket.destroy();
+      else socket.destroySoon();
+    }
+  });
 }
 
 // ============ Pagination Types & Helpers ============

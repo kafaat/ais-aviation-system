@@ -65,9 +65,13 @@ AIS_PROVIDER_BOUNDARY=isolated
 STRIPE_MOCK_HOST=http://${{stripe-mock.RAILWAY_PRIVATE_DOMAIN}}:12111
 ```
 
-Keep the existing test credential. The mock service must remain private. This
-configures readiness for the staging environment’s declared mock dependency;
-it does not enable real card processing or demonstrate provider acceptance.
+Use a synthetic token accepted by the configured mock. Retaining the legacy
+token in the first isolated rollout produced a real mock HTTP 401 and correctly
+left readiness at 503. The operational correction used the short token in
+Stripe's documented mock example, which still fails the open-mode key-format
+check. The mock service must remain private. This configures readiness for the
+staging environment's declared mock dependency; it does not enable real card
+processing or demonstrate provider acceptance.
 
 For the exact deployed source SHA, record:
 
@@ -86,3 +90,32 @@ synthetic suite, or a key-format match as live provider acceptance.
 A temporary credential-free pre-deploy diagnostic configuration was removed
 once the web process diagnostic identified the failing dependency. The normal
 start command is retained and no diagnostic endpoint is exposed publicly.
+
+## Verified rollout
+
+[PR #267](https://github.com/kafaat/ais-aviation-system/pull/267) merged as
+`538a577923175a84eecc3a7bf0994e508b083ec0`. After the actual mock authentication
+failure was corrected, web deployment
+`5d403d69-403a-438b-afe0-7f18847eb7d2` and worker deployment
+`48f1aef7-a6c9-4b5b-8cb2-6f03390f041d` both reached `SUCCESS` on that exact
+source. Both startup reports recorded `boundary=isolated` and an allowed Stripe
+mock. The worker kept its existing reference to the web service's synthetic
+token; the webhook secret was not changed.
+
+Two bounded public observations on 4 November 2026 confirmed recovery:
+
+| Observation (UTC) | Liveness              | Readiness             | Detailed health without login |
+| ----------------- | --------------------- | --------------------- | ----------------------------- |
+| 14:09:43          | 200, `{"alive":true}` | 200, `{"ready":true}` | 401, `UNAUTHORIZED`           |
+| 14:11:25          | 200, `{"alive":true}` | 200, `{"ready":true}` | 401, `UNAUTHORIZED`           |
+
+The private mock log independently recorded `GET /v1/balance` with HTTP 200.
+Its public domain and TCP proxy lists remained empty. The final Railway
+inspection at 14:14:28 UTC found no services with issues and no pending work;
+the temporary pre-deploy diagnostic command remained cleared.
+
+The [post-merge CI run](https://github.com/kafaat/ais-aviation-system/actions/runs/41843383106)
+and all twelve required checks completed successfully on the same main SHA.
+The PR receipt preserves test counts, the separate browser retry observation,
+deployment IDs, and the distinction between actual Railway verification and
+conditionally skipped Kubernetes rollout steps.

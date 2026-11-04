@@ -3,7 +3,11 @@ import { responseContracts } from "../contracts/flights";
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import { DynamicPricingService } from "./pricing/dynamic-pricing.service";
-import { redisCacheService, CacheTTL } from "./redis-cache.service";
+import {
+  redisCacheService,
+  CacheNamespace,
+  CacheTTL,
+} from "./redis-cache.service";
 import { civilDateOf } from "./civil-day";
 import {
   getFlightRbdAvailability,
@@ -156,7 +160,16 @@ export async function searchFlights(
     // database: nothing invalidates the cache when seats are sold or a
     // flight is cancelled, and a stale row sent customers to sold-out or
     // cancelled flights.
-    const cached = await redisCacheService.getCachedFlightSearch(cacheParams);
+    // A fill must stay in the generation observed before the source query.
+    // Re-reading the version after a concurrent flight insert/invalidation
+    // would publish the older result into the new generation.
+    const generation = await redisCacheService.captureGeneration(
+      CacheNamespace.SEARCH
+    );
+    const cached = await redisCacheService.getCachedFlightSearch(
+      cacheParams,
+      generation
+    );
     const parsed = cachedSearch.safeParse(cached);
     if (parsed.success)
       return attachRbdAvailability(
@@ -171,7 +184,8 @@ export async function searchFlights(
     await redisCacheService.cacheFlightSearch(
       cacheParams,
       results,
-      CacheTTL.FLIGHT_SEARCH
+      CacheTTL.FLIGHT_SEARCH,
+      generation
     );
 
     return results;

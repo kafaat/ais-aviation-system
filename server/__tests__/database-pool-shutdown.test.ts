@@ -14,7 +14,10 @@ vi.mock("../_core/logger", () => ({ createServiceLogger: () => fixture.log }));
 const pool = {
   end: vi.fn<() => Promise<void>>(),
   on: vi.fn(),
-  pool: { on: vi.fn() },
+  pool: {
+    on: vi.fn(),
+    _allConnections: { length: 0, get: vi.fn() },
+  },
 };
 beforeEach(() => {
   vi.resetModules();
