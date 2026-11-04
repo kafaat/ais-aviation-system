@@ -80,9 +80,25 @@ jobs:
           severity: "CRITICAL,HIGH"
       - name: Summarize image security findings
         if: ${{ !cancelled() && steps.images.outcome == 'success' }}
+        env:
+          AUTH_BUILD_OUTCOME: ${{ steps.auth_image.outcome }}
         run: |
+          set -euo pipefail
+          # Do not turn a skipped or failed image scan into an apparent zero.
+          if [[ "$AUTH_BUILD_OUTCOME" != "success" ]]; then
+            echo "::error::Auth image build did not succeed ($AUTH_BUILD_OUTCOME); auth vulnerability scan was not completed."
+            exit 1
+          fi
           for target in runner migrator auth; do
             report="/tmp/ais-docker-build-evidence/trivy-$target.json"
+            if [[ ! -s "$report" ]]; then
+              echo "::error::Missing or empty Trivy report for $target: $report"
+              exit 1
+            fi
+            if ! jq -e '(.Results | type == "array") and (.SchemaVersion == 2)' "$report" >/dev/null; then
+              echo "::error::Invalid Trivy JSON report for $target: $report"
+              exit 1
+            fi
             echo "Image: $target"
             jq -r '.Results[] | .Target as $target | .Vulnerabilities[]? |
               [$target, .PkgPath, .PkgName, .InstalledVersion, .VulnerabilityID, .Severity, .FixedVersion] | @tsv' "$report"
