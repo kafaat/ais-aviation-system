@@ -1119,14 +1119,14 @@
         "server/__tests__/monthly-financial-mysql.test.ts"
       ],
       "finding_ar": "إعادة الإنتاج قبل الإصلاح أعطت قيمة direct=-30000 وعدد حجوزات=-1 عند وجود رابط وكالة وشركة للحجز نفسه؛ كان الحجز يُجمع في القناتين ثم يطرح مرتين.",
-      "change_ar": "تصنيف كل حجز مرة واحدة عبر CASE/EXISTS في استعلام واحد، بأولوية corporate ثم agent ثم direct المتسقة مع recordRevenueEntry، مع جميع القنوات الصفرية للفترة الفارغة والتحقق من الأعداد الآمنة.",
+      "change_ar": "تصنيف كل حجز مرة واحدة في استعلام واحد عبر LEFT JOIN وCASE بأولوية corporate ثم agent ثم direct المتسقة مع recordRevenueEntry. يمنع bookingId UNIQUE في كل جدول ربط مضاعفة الصفوف. استُبدل CASE/EXISTS بعد أن كشف CI اختلاف التأهيل بين SELECT وGROUP BY مع MySQL الصارم. تبقى القنوات الصفرية والتحقق من الأعداد الآمنة.",
       "tests": [
         "server/__tests__/revenue-report-date-bounds.test.ts",
         "server/__tests__/financial-reporting.test.ts",
         "server/__tests__/monthly-financial-report-consistency.test.ts",
         "server/__tests__/monthly-financial-mysql.test.ts"
       ],
-      "validation_ar": "ثبت فشل اختبار التداخل على المصدر السابق ثم نجاح الاختبارات المالية المركزة 30/30 بعد الإصلاح. نجح TypeScript --incremental false وESLint للملفات المعدلة. أضيف اختبار مستقل إلى بوابة MySQL المعزولة؛ جرى تخطي اختبارات تلك البوابة الثلاثة محليًا لغياب قاعدة اختبار مصرح بها. تشغيلها الفعلي يحتاج AIS_DISPOSABLE_DATABASE=true وDATABASE_URL ولا يُدّعى هنا قبول MySQL أو مزود خارجي."
+      "validation_ar": "ثبت فشل اختبار التداخل على المصدر السابق ثم نجاح الاختبارات المالية المركزة 30/30 بعد الإصلاح. نجح TypeScript --incremental false وESLint للملفات المعدلة. أضيف اختبار مستقل إلى بوابة MySQL المعزولة؛ جرى تخطي اختبارات تلك البوابة الثلاثة محليًا لغياب قاعدة اختبار مصرح بها. تشغيلها الفعلي يحتاج AIS_DISPOSABLE_DATABASE=true وDATABASE_URL ولا يُدّعى هنا قبول MySQL أو مزود خارجي. كشف CI الأول على 016364e فشل حالتين من ثلاث في monthly-financial-mysql، بخطأ ER_WRONG_FIELD_WITH_GROUP مع ONLY_FULL_GROUP_BY؛ بلغ إجمالي الاختبارات 3766 ناجحًا واثنين فاشلين من 3768 دون تخطٍّ. أُصلح الاستعلام دون تغيير SQL mode، وقُويت جداول الاختبار بمعرف مستقل وقيد تفرد. كشفت الجداول المقواة خمس حالات فاشلة قبل إصلاح الخدمة، ونجحت الحالات العلائقية الـ15 بعده؛ بقيت اختبارات MySQL الثلاثة متخطاة محليًا لغياب قاعدة اختبار. نجح TypeScript وESLint. تحتاج النسخة المصححة إيصال CI جديدًا قبل الدمج."
     },
     {
       "id": "payment-history-stable-pagination",

@@ -114,8 +114,12 @@ nativeDescribe(
       await connection.query(
         "INSERT INTO booking_ancillaries VALUES (1,1200,1,'active'),(2,350,2,'active'),(2,450,1,'refunded')"
       );
-      await connection.query("CREATE TABLE corporate_bookings (bookingId INT)");
-      await connection.query("CREATE TABLE agent_bookings (bookingId INT)");
+      await connection.query(
+        "CREATE TABLE corporate_bookings (id INT PRIMARY KEY, bookingId INT NOT NULL UNIQUE)"
+      );
+      await connection.query(
+        "CREATE TABLE agent_bookings (id INT PRIMARY KEY, bookingId INT NOT NULL UNIQUE)"
+      );
       databaseState.db = drizzle(connection, { schema, mode: "default" });
     }, 30000);
 
@@ -215,8 +219,13 @@ nativeDescribe(
     it("counts overlapping agency and corporate links once in the native channel report", async () => {
       await connection!.beginTransaction();
       try {
-        await connection!.query("INSERT INTO agent_bookings VALUES (1), (2)");
-        await connection!.query("INSERT INTO corporate_bookings VALUES (2)");
+        // A link's primary key must never be mistaken for its booking foreign key.
+        await connection!.query(
+          "INSERT INTO agent_bookings VALUES (101, 1), (202, 2)"
+        );
+        await connection!.query(
+          "INSERT INTO corporate_bookings VALUES (303, 2)"
+        );
 
         const channels = await getRevenueByChannel();
         expect(

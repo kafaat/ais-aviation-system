@@ -515,12 +515,13 @@ export async function getRevenueByChannel(
 
   // Corporate attribution takes precedence over agency attribution, matching
   // recordRevenueEntry. A booking can have both links; classify it once in a
-  // single snapshot instead of subtracting overlapping channel totals.
+  // single snapshot instead of subtracting overlapping channel totals. Each
+  // link table has a UNIQUE bookingId, so the joins cannot multiply a booking.
+  // Joined column references also retain their qualification in Drizzle's
+  // SELECT and GROUP BY, including under MySQL ONLY_FULL_GROUP_BY.
   const channel = sql<ChannelRevenue["channel"]>`CASE
-    WHEN EXISTS (SELECT 1 FROM ${corporateBookings}
-      WHERE ${corporateBookings.bookingId} = ${bookings.id}) THEN 'corporate'
-    WHEN EXISTS (SELECT 1 FROM ${agentBookings}
-      WHERE ${agentBookings.bookingId} = ${bookings.id}) THEN 'agent'
+    WHEN ${corporateBookings.bookingId} IS NOT NULL THEN 'corporate'
+    WHEN ${agentBookings.bookingId} IS NOT NULL THEN 'agent'
     ELSE 'direct' END`;
   const stats = await db
     .select({
@@ -532,6 +533,8 @@ export async function getRevenueByChannel(
       bookingCount: sql<number>`COUNT(*)`.mapWith(financialInteger),
     })
     .from(bookings)
+    .leftJoin(corporateBookings, eq(corporateBookings.bookingId, bookings.id))
+    .leftJoin(agentBookings, eq(agentBookings.bookingId, bookings.id))
     .where(and(...conditions))
     .groupBy(channel);
 

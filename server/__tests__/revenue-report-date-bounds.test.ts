@@ -32,8 +32,10 @@ beforeEach(() => {
       cabinClass TEXT, createdAt TEXT);
     CREATE TABLE flights(id INTEGER, originId INTEGER, destinationId INTEGER);
     CREATE TABLE airports(id INTEGER, code TEXT, city TEXT);
-    CREATE TABLE corporate_bookings(bookingId INTEGER);
-    CREATE TABLE agent_bookings(bookingId INTEGER);
+    CREATE TABLE corporate_bookings(id INTEGER PRIMARY KEY,
+      bookingId INTEGER NOT NULL UNIQUE);
+    CREATE TABLE agent_bookings(id INTEGER PRIMARY KEY,
+      bookingId INTEGER NOT NULL UNIQUE);
     CREATE TABLE ancillary_services(id INTEGER, category TEXT);
     CREATE TABLE booking_ancillaries(ancillaryServiceId INTEGER, totalPrice INTEGER,
       quantity INTEGER, status TEXT, createdAt TEXT);
@@ -46,8 +48,9 @@ beforeEach(() => {
       (4,1,'confirmed','paid',40000,1,'business','2026-11-01 00:00:00.000'),
       (5,1,'cancelled','paid',90000,1,'economy','2026-10-10 00:00:00.000'),
       (6,1,'confirmed','pending',90000,1,'economy','2026-10-10 00:00:00.000');
-    INSERT INTO agent_bookings VALUES(2);
-    INSERT INTO corporate_bookings VALUES(3);
+    -- Link row IDs are independent of booking IDs, as in the production schema.
+    INSERT INTO agent_bookings VALUES(101,2);
+    INSERT INTO corporate_bookings VALUES(202,3);
     INSERT INTO ancillary_services VALUES(1,'baggage');
     INSERT INTO booking_ancillaries VALUES
       (1,1000,1,'active','2026-09-30 00:00:00.000'),
@@ -113,7 +116,7 @@ const cases = [
 
 describe("revenue report date bounds", () => {
   it("counts a corporate booking made by an agent once, without negative direct sales", async () => {
-    database.exec("INSERT INTO agent_bookings VALUES(3)");
+    database.exec("INSERT INTO agent_bookings VALUES(303,3)");
 
     const channels = await getRevenueByChannel(start, end);
 
