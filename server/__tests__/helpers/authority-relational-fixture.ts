@@ -99,13 +99,15 @@ export function authorityRelationalFixture(tables: MySqlTable[]) {
         "on conflict (`userId`) do update set"
       );
     }
-    // Raw sql`${date}` parameters are encoded by mysql2 in production, whereas
-    // Drizzle column predicates already encode them. SQLite needs the same UTC
-    // timestamp text and precision for both paths.
+    // mysql2 encodes raw dates and boolean parameters in production. Preserve
+    // UTC timestamp text/precision and its 0/1 boolean encoding; Node 22's
+    // SQLite binding API cannot accept a raw boolean.
     const bound = params.map(value =>
       value instanceof Date
         ? value.toISOString().replace("T", " ").replace(/Z$/, "")
-        : value
+        : typeof value === "boolean"
+          ? Number(value)
+          : value
     ) as SQLInputValue[];
     const statement = sqlite.prepare(executable);
     if (method === "all") {

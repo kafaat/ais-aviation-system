@@ -192,7 +192,11 @@ describe("privacy consent transactional authority", () => {
           analyticsTracking: true,
           personalizedAds: true,
         })
-      ).rejects.toThrow();
+      ).rejects.toMatchObject({
+        // Require the final revision failure: an earlier driver error must not
+        // satisfy this rollback regression without reaching the injected fault.
+        cause: { message: "synthetic audit write failure" },
+      });
       expect([
         fixture.rows(userConsents),
         fixture.rows(consentHistory),

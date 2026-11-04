@@ -85,6 +85,28 @@ place. Required CI must pass against the published commit/tested merge tree;
 its source-bound artifacts and run links are the final acceptance record, not
 the local counts in this document.
 
+### First published CI and fixture compatibility correction
+
+The first published head, `a5ac51be0fbe75fdf62daa2ced181336d1a156db`, passed
+both native MySQL jobs: 102 tests in 12 files per version, with no failures or
+skips. The full-suite run
+[41891537703](https://github.com/kafaat/ais-aviation-system/actions/runs/41891537703)
+then reported 4,604 passing and four failing tests. All four failures were in
+the new consent authority fixture: Node 22.23.4 rejected raw boolean SQLite
+parameters that the local Node 24.22.1 runtime had accepted. The failed run
+produced no valid coverage summary and did not run the dependent browser/build
+jobs.
+
+Running the unchanged seven consent cases with the exact CI runtime reproduced
+four failures and three passes. The fixture now encodes booleans as `0`/`1`,
+matching the production MySQL driver's binding behavior. Both rollback cases
+also require the exact injected final-revision error cause, so an earlier
+driver error cannot satisfy them. The corrected five-file authority group
+passes all 107 cases on both Node 22.23.4 and Node 24.22.1, with no skips.
+Independent review checked the patch and both runtime receipts. Production
+consent behavior, runtime selection and CI gates are unchanged. Fresh complete
+CI against the corrected published head remains the acceptance requirement.
+
 ## Remaining boundaries and follow-up work
 
 - **Reports:** availability remains 99 definitions: 36 available, 35 partial and
