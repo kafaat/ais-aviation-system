@@ -1,0 +1,44 @@
+[
+  {
+    "evidence_status": "REUSED_NOT_REEXECUTED",
+    "mysql": "8.0",
+    "source_sha": "76e03ba89dfc354bbc62736dd45548e52c0e557f",
+    "run_id": 41751398618,
+    "job_id": 126317069716,
+    "live_transaction_acceptance": {
+      "completed": true,
+      "passed": 154,
+      "skipped": 0,
+      "failedCheck": null,
+      "database": "real MySQL",
+      "cache": "real Redis",
+      "providerCalls": 0
+    },
+    "reporting_log_lines": [
+      "2026-11-04T01:07:18.3490272Z PASS REPORT-LINKAGE-01: All twelve export procedures render live data with tenant and role scope while preserving accounting records",
+      "2026-11-04T01:07:18.3827834Z PASS REPORT-ANALYTICS-01: Analytics count each flight capacity once and reconcile funded ancillary values to the selected booking cohort"
+    ],
+    "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/41751398618/job/126317069716"
+  },
+  {
+    "evidence_status": "REUSED_NOT_REEXECUTED",
+    "mysql": "9.7",
+    "source_sha": "76e03ba89dfc354bbc62736dd45548e52c0e557f",
+    "run_id": 41751398618,
+    "job_id": 126317070059,
+    "live_transaction_acceptance": {
+      "completed": true,
+      "passed": 154,
+      "skipped": 0,
+      "failedCheck": null,
+      "database": "real MySQL",
+      "cache": "real Redis",
+      "providerCalls": 0
+    },
+    "reporting_log_lines": [
+      "2026-11-04T01:07:27.9695119Z PASS REPORT-LINKAGE-01: All twelve export procedures render live data with tenant and role scope while preserving accounting records",
+      "2026-11-04T01:07:28.0052577Z PASS REPORT-ANALYTICS-01: Analytics count each flight capacity once and reconcile funded ancillary values to the selected booking cohort"
+    ],
+    "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/41751398618/job/126317070059"
+  }
+]
