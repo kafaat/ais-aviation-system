@@ -1,5 +1,15 @@
 # Changelog
 
+## What's Changed in v1.37.0
+
+### Features
+
+- feat(dcs): verify station-scoped handler coupon receipts and roster changes (#261) (dc541f2)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.36.0...v1.37.0
+
+---
+
 ## What's Changed in v1.36.0
 
 ### Features
