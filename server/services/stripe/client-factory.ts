@@ -7,7 +7,10 @@
  * so no request can reach api.stripe.com, however a job is triggered.
  */
 import Stripe from "stripe";
-import { providerBoundary } from "../../_core/provider-boundary";
+import {
+  resolveStripeTransport,
+  StripeConfigurationError,
+} from "../../_core/stripe-transport";
 
 export const STRIPE_API_VERSION = "2025-12-15.clover";
 
@@ -18,20 +21,26 @@ export function createStripeClient(
     "apiVersion" | "host" | "port" | "protocol"
   > = {}
 ): Stripe {
-  if (providerBoundary() === "isolated") {
-    const mock = process.env.STRIPE_MOCK_HOST?.trim();
-    if (!mock)
-      throw new Error(
-        "Stripe is unavailable under the isolated provider boundary: set STRIPE_MOCK_HOST to a stripe-mock instance or run with AIS_PROVIDER_BOUNDARY=open"
-      );
-    const url = new URL(mock.includes("://") ? mock : `http://${mock}`);
-    const protocol = url.protocol === "https:" ? "https" : "http";
-    return new Stripe(secretKey, {
+  const transport = resolveStripeTransport(secretKey);
+  if (transport.mode === "mock") {
+    // TypeScript's Omit does not protect JavaScript or untyped call sites.
+    for (const name of [
+      "host",
+      "port",
+      "protocol",
+      "httpClient",
+      "httpAgent",
+      "authenticator",
+    ]) {
+      if (Object.hasOwn(options, name))
+        throw new StripeConfigurationError("STRIPE_TRANSPORT_OVERRIDE_REFUSED");
+    }
+    return new Stripe(secretKey.trim(), {
       ...options,
       apiVersion: STRIPE_API_VERSION,
-      host: url.hostname,
-      port: url.port || (protocol === "https" ? "443" : "80"),
-      protocol,
+      host: transport.host,
+      port: transport.port,
+      protocol: transport.protocol,
     });
   }
   return new Stripe(secretKey, { ...options, apiVersion: STRIPE_API_VERSION });

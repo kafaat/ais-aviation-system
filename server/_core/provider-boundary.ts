@@ -25,7 +25,15 @@
  * states are, because this report is written to logs.
  */
 
-export type ProviderBoundary = "open" | "isolated";
+import {
+  providerBoundary,
+  resolveStripeTransport,
+  StripeConfigurationError,
+  type ProviderBoundary,
+} from "./stripe-transport";
+
+export { providerBoundary } from "./stripe-transport";
+export type { ProviderBoundary } from "./stripe-transport";
 
 export type BoundaryState =
   /** No credential or mode present; nothing can be called. */
@@ -42,7 +50,7 @@ export type BoundaryState =
 export interface BoundaryFinding {
   provider: string;
   state: BoundaryState;
-  /** False only for `live` under an isolated boundary. */
+  /** False for live providers or invalid transports under an isolated boundary. */
   allowed: boolean;
   reason: string;
 }
@@ -53,13 +61,6 @@ export interface BoundaryReport {
 }
 
 type Env = Record<string, string | undefined>;
-
-export function providerBoundary(env: Env = process.env): ProviderBoundary {
-  const value = env.AIS_PROVIDER_BOUNDARY?.trim();
-  if (!value || value === "open") return "open";
-  if (value === "isolated") return "isolated";
-  throw new Error("Invalid AIS_PROVIDER_BOUNDARY; expected open or isolated");
-}
 
 const present = (value: string | undefined): boolean =>
   Boolean(value && value.trim());
@@ -97,20 +98,35 @@ function stripeFinding(env: Env): BoundaryFinding {
       allowed: false,
       reason: "Live secret key present",
     };
-  if (present(env.STRIPE_MOCK_HOST))
+  if (providerBoundary(env) === "open")
+    return {
+      provider: "stripe",
+      state: key.startsWith("sk_test_") ? "sandbox" : "live",
+      allowed: true,
+      reason: "Open Stripe transport uses the standard API endpoint",
+    };
+  try {
+    resolveStripeTransport(key, env);
     return {
       provider: "stripe",
       state: "mock",
       allowed: true,
-      reason: "Client redirected to STRIPE_MOCK_HOST",
+      reason: "Client redirected to a validated internal STRIPE_MOCK_HOST",
     };
-  return {
-    provider: "stripe",
-    state: "blocked",
-    allowed: true,
-    reason:
-      "Test key present without STRIPE_MOCK_HOST; the client factory refuses to construct a client, so no request reaches api.stripe.com",
-  };
+  } catch (error) {
+    const reason =
+      error instanceof StripeConfigurationError
+        ? error.reason
+        : "STRIPE_CONFIGURATION_INVALID";
+    return {
+      provider: "stripe",
+      state: "blocked",
+      // An absent mock keeps an otherwise valid test credential disabled.
+      // An explicitly invalid transport must refuse isolated process startup.
+      allowed: reason === "STRIPE_MOCK_HOST_MISSING",
+      reason,
+    };
+  }
 }
 
 function credentialFinding(
