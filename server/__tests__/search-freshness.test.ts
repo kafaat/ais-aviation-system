@@ -22,8 +22,10 @@ vi.mock("../services/pricing/dynamic-pricing.service", () => ({
   DynamicPricingService: {},
 }));
 vi.mock("../services/redis-cache.service", () => ({
+  CacheNamespace: { SEARCH: "search" },
   CacheTTL: { FLIGHT_SEARCH: 120, FLIGHT_DETAILS: 300 },
   redisCacheService: {
+    captureGeneration: async () => ({ version: 0, epoch: 0 }),
     getCachedFlightSearch: async () => spies.cachedSearch,
     getCachedFlightDetails: async () => spies.cachedDetail,
     cacheFlightSearch: async () => undefined,

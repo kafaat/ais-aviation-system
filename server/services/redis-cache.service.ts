@@ -69,6 +69,12 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
+/** Reuse one generation across a cache read and its asynchronous source fill. */
+export interface CacheGeneration {
+  readonly version: number;
+  readonly epoch: number;
+}
+
 interface CacheStats {
   hits: number;
   misses: number;
@@ -196,6 +202,7 @@ class RedisCacheService {
   private redisClient: Redis | null = null;
   private memoryCache: LRUMemoryCache;
   private isRedisConnected = false;
+  private generationEpoch = 0;
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private cleanupTimer: NodeJS.Timeout | null = null;
@@ -268,7 +275,7 @@ class RedisCacheService {
     });
 
     this.redisClient.on("ready", () => {
-      this.isRedisConnected = true;
+      this.setConnectionState(true);
       this.reconnectAttempts = 0;
       logger.info({}, "Redis cache service ready");
     });
@@ -279,7 +286,7 @@ class RedisCacheService {
     });
 
     this.redisClient.on("close", () => {
-      this.isRedisConnected = false;
+      this.setConnectionState(false);
       logger.warn({}, "Redis connection closed");
     });
 
@@ -289,9 +296,18 @@ class RedisCacheService {
     });
 
     this.redisClient.on("end", () => {
-      this.isRedisConnected = false;
+      this.setConnectionState(false);
       logger.warn({}, "Redis connection ended");
     });
+  }
+
+  private setConnectionState(connected: boolean): void {
+    if (this.isRedisConnected === connected) return;
+    this.isRedisConnected = connected;
+    // A memory-only generation must not collide with the same Redis version
+    // after reconnect, nor revive an older fallback entry after another outage.
+    this.generationEpoch++;
+    this.memoryCache.clear();
   }
 
   private startCleanupInterval(): void {
@@ -318,6 +334,7 @@ class RedisCacheService {
    * Force reconnection to Redis
    */
   async reconnect(): Promise<boolean> {
+    this.setConnectionState(false);
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -403,13 +420,22 @@ class RedisCacheService {
     }
   }
 
+  async captureGeneration(namespace: string): Promise<CacheGeneration> {
+    // Capture before awaiting Redis: a connection change during this lookup
+    // makes the token stale and prevents read-through or source publication.
+    const epoch = this.generationEpoch;
+    return { version: await this.getNamespaceVersion(namespace), epoch };
+  }
+
   /**
    * Invalidate namespace by incrementing version (O(1) operation)
    */
   async invalidateNamespace(namespace: string): Promise<void> {
+    // Fence pending fills even while using memory fallback, where there is no
+    // Redis counter to advance. An unrelated fill may be skipped safely too.
+    this.generationEpoch++;
+    this.memoryCache.deletePattern(`${CACHE_PREFIX}:${namespace}:*`);
     if (!this.isConnected()) {
-      // For memory cache, we need to delete by pattern
-      this.memoryCache.deletePattern(`${CACHE_PREFIX}:${namespace}:*`);
       logger.info({ namespace }, "Invalidated namespace in memory cache");
       return;
     }
@@ -418,9 +444,10 @@ class RedisCacheService {
       const client = this.redisClient;
       if (!client) return;
       const versionKey = `${CACHE_PREFIX}:version:${namespace}`;
+      // Existing entries use v1 while this key is absent. Initializing with NX
+      // preserves concurrent increments and makes the first invalidation v2.
+      await client.set(versionKey, "1", "NX");
       await client.incr(versionKey);
-      // Also clear memory cache for this namespace
-      this.memoryCache.deletePattern(`${CACHE_PREFIX}:${namespace}:*`);
       logger.info({ namespace }, "Invalidated namespace");
     } catch (error) {
       logger.error({ namespace, error }, "Failed to invalidate namespace");
@@ -430,10 +457,18 @@ class RedisCacheService {
   /**
    * Get value from cache
    */
-  async get<T>(namespace: string, params: unknown): Promise<T | null> {
+  async get<T>(
+    namespace: string,
+    params: unknown,
+    generation?: CacheGeneration
+  ): Promise<T | null> {
     const hash = this.hashParams(params);
-    const version = await this.getNamespaceVersion(namespace);
-    const key = this.generateKey(namespace, version, hash);
+    const captured = generation ?? (await this.captureGeneration(namespace));
+    if (captured.epoch !== this.generationEpoch) {
+      this.stats.misses++;
+      return null;
+    }
+    const key = this.generateKey(namespace, captured.version, hash);
 
     // Try Redis first
     if (this.isConnected()) {
@@ -442,10 +477,14 @@ class RedisCacheService {
         if (client) {
           const cached = await client.get(key);
           if (cached) {
-            this.stats.hits++;
             // Also store in memory for faster subsequent access
             const parsed = JSON.parse(cached) as T;
             const ttl = await client.ttl(key);
+            if (captured.epoch !== this.generationEpoch) {
+              this.stats.misses++;
+              return null;
+            }
+            this.stats.hits++;
             if (ttl > 0) {
               this.memoryCache.set(key, parsed, ttl);
             }
@@ -458,6 +497,10 @@ class RedisCacheService {
       }
     }
 
+    if (captured.epoch !== this.generationEpoch) {
+      this.stats.misses++;
+      return null;
+    }
     // Try memory cache as fallback
     const memoryResult = this.memoryCache.get<T>(key);
     if (memoryResult !== null) {
@@ -477,11 +520,13 @@ class RedisCacheService {
     namespace: string,
     params: unknown,
     value: unknown,
-    ttlSeconds: number
+    ttlSeconds: number,
+    generation?: CacheGeneration
   ): Promise<void> {
     const hash = this.hashParams(params);
-    const version = await this.getNamespaceVersion(namespace);
-    const key = this.generateKey(namespace, version, hash);
+    const captured = generation ?? (await this.captureGeneration(namespace));
+    if (captured.epoch !== this.generationEpoch) return;
+    const key = this.generateKey(namespace, captured.version, hash);
     const serialized = JSON.stringify(value);
 
     this.stats.sets++;
@@ -629,22 +674,32 @@ class RedisCacheService {
       passengers?: number;
     },
     results: unknown,
-    ttlSeconds: number = CacheTTL.FLIGHT_SEARCH
+    ttlSeconds: number = CacheTTL.FLIGHT_SEARCH,
+    generation?: CacheGeneration
   ): Promise<void> {
-    await this.set(CacheNamespace.SEARCH, params, results, ttlSeconds);
+    await this.set(
+      CacheNamespace.SEARCH,
+      params,
+      results,
+      ttlSeconds,
+      generation
+    );
   }
 
   /**
    * Get cached flight search results
    */
-  getCachedFlightSearch(params: {
-    originId: number;
-    destinationId: number;
-    departureDate: string;
-    cabinClass?: string;
-    passengers?: number;
-  }): Promise<unknown | null> {
-    return this.get(CacheNamespace.SEARCH, params);
+  getCachedFlightSearch(
+    params: {
+      originId: number;
+      destinationId: number;
+      departureDate: string;
+      cabinClass?: string;
+      passengers?: number;
+    },
+    generation?: CacheGeneration
+  ): Promise<unknown | null> {
+    return this.get(CacheNamespace.SEARCH, params, generation);
   }
 
   /**
@@ -1134,6 +1189,7 @@ class RedisCacheService {
    * Gracefully shutdown the cache service
    */
   async shutdown(): Promise<void> {
+    this.generationEpoch++;
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
@@ -1164,6 +1220,7 @@ class RedisCacheService {
    * Clear all caches
    */
   async clearAll(): Promise<void> {
+    this.generationEpoch++;
     this.memoryCache.clear();
 
     if (this.isConnected()) {

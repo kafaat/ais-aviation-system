@@ -180,3 +180,31 @@ content assertions, and the other-account 404 assertion. Current-head CI and
 browser acceptance results must be recorded separately from these local
 controlled experiments. The completed Railway readiness recovery remains
 documented in [the readiness audit](readiness-recovery-20261104.md).
+
+## First-attempt browser acceptance and main integration
+
+The [fourth CI run](https://github.com/kafaat/ais-aviation-system/actions/runs/41866403623)
+tested head `d9d03da9747e81b703d46e70f99af1931c7b0d20` on Node 22.23.4.
+All 3,959 unit tests in 317 files passed, including all ten shutdown subprocess
+cases. The privacy browser case passed on its first attempt in 4,176 ms. All
+eleven reporting browser cases also passed on their first attempt, with 59
+download assertions. Artifact `13342292926` has verified SHA-256
+`b9303f3dbc4902639b6c68ce71c5864b8ba8a2b736306656c2f8844f37d6cdfe`.
+
+The full browser run contained 62 cases: 61 passed on their first attempt and
+one flight-search case passed on retry. That separate case failed because its
+first search did not contain the newly inserted fixture flight. The flight
+service, Redis cache service, and fixture source had not changed between the
+base and this head. A separate cache-generation investigation reproduced
+stale publication across invalidation; its correction and full-suite acceptance
+must be recorded independently. This run establishes first-attempt privacy
+acceptance, not a retry-free result for the entire browser suite.
+
+PR #268 subsequently advanced main to
+`dbf179516c5f91d423e6f6c2893cb95f862f6f08`. Merge commit
+`54b67a4a22be39ff53617f814c5efdc54b439e2b` reconciles `server/db.ts` with that
+main: it preserves removal of untracked fallback pools, deferred shared shutdown
+and propagated errors, alongside the owned-transport drain above. The existing
+pool test fixture now models the pinned driver's empty connection queue.
+The integrated head requires its own checks; earlier CI results do not replace
+validation of changed source or workflow action revisions.
