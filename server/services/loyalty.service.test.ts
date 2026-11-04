@@ -118,6 +118,9 @@ describe("Loyalty Service", () => {
     amount: number
   ) {
     const fixture = transactionMemory({
+      // Redemption locks the authoritative user before checking enrollment
+      // and spending miles, including when the account has no MFA enrollment.
+      users: [{ id: account.userId, openId: "loyalty-owner-fixture" }],
       mfa_settings: [],
       loyalty_accounts: [{ ...account, creditLotsInitializedAt: new Date() }],
       loyalty_credit_lots:
@@ -383,6 +386,48 @@ describe("Loyalty Service", () => {
     ).rejects.toThrow("Booking not found");
     expect(fixture.rows("user_credits")).toHaveLength(0);
     expect(fixture.rows("loyalty_accounts")[0].currentMilesBalance).toBe(500);
+  });
+
+  it("rejects a missing user without consuming a valid enrolled factor or spending miles", async () => {
+    const { redeemMiles } = await import("./loyalty.service");
+    const { encryptSecret, verifyTOTP } = await import("./mfa.service");
+    const fixture = funded(
+      { ...baseBronzeAccount, currentMilesBalance: 500 },
+      testBookingId,
+      1000
+    );
+    fixture.rows("users").splice(0);
+    // Public RFC 6238 test data, shared with the atomic redemption case above.
+    const rfc6238TestVector = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+    fixture.rows("mfa_settings").push({
+      userId: testUserId,
+      isEnabled: true,
+      lastUsedStep: null,
+      secret: encryptSecret(rfc6238TestVector),
+    });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(59_000);
+    try {
+      // Independent RFC 6238 vector: rejection must be due to the absent
+      // authoritative user, not an invalid or mocked authenticator code.
+      expect(verifyTOTP(rfc6238TestVector, "287082")).toBe(true);
+      await expect(
+        redeemMiles(
+          testUserId,
+          100,
+          undefined,
+          "287082",
+          "unit-redeem-missing-user"
+        )
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(fixture.rows("mfa_settings")[0].lastUsedStep).toBeNull();
+      expect(fixture.rows("loyalty_accounts")[0].currentMilesBalance).toBe(500);
+      expect(fixture.rows("loyalty_credit_lots")[0].remainingMiles).toBe(500);
+      expect(fixture.rows("miles_transactions")).toHaveLength(0);
+      expect(fixture.rows("user_credits")).toHaveLength(0);
+      expect(fixture.rows("idempotency_requests")).toHaveLength(0);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("should throw error when redeeming more miles than available", async () => {

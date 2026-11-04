@@ -54,7 +54,10 @@ class CacheService {
 
       this.client.on("connect", () => {
         logger.info({}, "Redis client connected");
-        this.connected = true;
+        // TCP can connect while Redis is still loading, authenticating or
+        // about to disconnect. Commands would queue until readiness/retries;
+        // callers must retain the memory fallback until the protocol is ready.
+        this.connected = false;
       });
 
       this.client.on("ready", () => {

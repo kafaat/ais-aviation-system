@@ -148,12 +148,17 @@ describe("revocable session families", () => {
     expect(results.filter(r => r.status === "rejected")).toHaveLength(1);
     expect(inserts).toHaveLength(1);
     expect(inserts[0].familyId).toBe(family);
+    const claims = claimSql.filter(sql => sql.includes("`id` ="));
+    expect(claims).toHaveLength(2);
     expect(
-      claimSql.every(
+      claims.every(
         sql =>
           sql.includes("`revokedAt` is null") && sql.includes("`expiresAt` >")
       )
     ).toBe(true);
+    expect(claimSql.filter(sql => sql.includes("`familyId` ="))).toHaveLength(
+      1
+    );
   });
 
   it("refuses to create an MFA session without a matching verified enrollment", async () => {

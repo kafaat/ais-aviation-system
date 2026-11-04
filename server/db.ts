@@ -79,6 +79,7 @@ export const POOL_CONFIG = {
 
 let _pool: mysql.Pool | null = null;
 let _db: MySql2Database<typeof schema> | null = null;
+let _poolClosing: Promise<void> | null = null;
 
 /**
  * Get the MySQL connection pool (singleton)
@@ -195,9 +196,6 @@ export function getDb(): MySql2Database<typeof schema> | null {
       const pool = getPool();
       if (pool) {
         _db = drizzle(pool, { schema, mode: "default" });
-      } else {
-        // Fallback to direct connection if pool fails
-        _db = drizzle(process.env.DATABASE_URL, { schema, mode: "default" });
       }
     } catch (error) {
       log.warn(
@@ -214,20 +212,31 @@ export function getDb(): MySql2Database<typeof schema> | null {
  * Gracefully close the connection pool
  * Call this during application shutdown
  */
-export async function closePool(): Promise<void> {
-  if (_pool) {
-    try {
-      await _pool.end();
+export function closePool(): Promise<void> {
+  if (_poolClosing) return _poolClosing;
+  const pool = _pool;
+  if (!pool) return Promise.resolve();
+
+  // Share an in-flight close across signal handlers and other cleanup callers.
+  // Defer end() so even a synchronous driver error follows the same cleanup path.
+  _poolClosing = Promise.resolve()
+    .then(() => pool.end())
+    .then(() => {
       _pool = null;
       _db = null;
       log.info({ event: "pool_closed" }, "Database connection pool closed");
-    } catch (error) {
+    })
+    .catch(error => {
       log.error(
         { event: "pool_close_failed", error },
         "Failed to close connection pool"
       );
-    }
-  }
+      throw error;
+    })
+    .finally(() => {
+      _poolClosing = null;
+    });
+  return _poolClosing;
 }
 
 // ============ Pagination Types & Helpers ============

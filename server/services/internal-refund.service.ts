@@ -242,6 +242,7 @@ export async function refundInternalFunding(
         if (
           !["refund", "partial_refund"].includes(entry.type) ||
           entry.currency !== "SAR" ||
+          entry.userId !== booking.userId ||
           !refund.success ||
           refund.data.originalLedgerId !== original.id ||
           refund.data.tender !== origin.data.tender

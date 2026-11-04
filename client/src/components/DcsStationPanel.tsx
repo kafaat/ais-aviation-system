@@ -52,7 +52,7 @@ export function DcsStationPanel({
       </Button>
       {expanded && (
         <StationTools
-          key={`${flightId}:${user.id}:${user.tenantId}:${reopenOnly}`}
+          key={`${flightId}:${user.id}:${user.tenantId}:${user.role}:${reopenOnly}`}
           expectedActorId={user.id}
           expectedTenantId={user.tenantId}
           flightId={flightId}

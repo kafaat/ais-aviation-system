@@ -19,6 +19,7 @@ import type {
 import StandardReports from "../StandardReports";
 import { trpc } from "@/lib/trpc";
 import { downloadFile } from "@/lib/downloadFile";
+import { deferred } from "@/test/trpc-fixture";
 
 const auth = vi.hoisted(() => ({
   user: {
@@ -770,4 +771,373 @@ describe("standard report workspace", () => {
       screen.getByTestId("standard-report-definition").closest('[dir="rtl"]')
     ).not.toBeNull();
   });
+
+  it("recovers failed previews and exports without showing output or a success before a retry", async () => {
+    handlers["standardReports.run"] = () => {
+      throw new Error("Source temporarily unavailable");
+    };
+    visit();
+    fireEvent.click(await screen.findByTestId("standard-run-report"));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The report could not be generated."
+    );
+    expect(
+      screen.queryByTestId("standard-report-table")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Download CSV" })
+    ).not.toBeInTheDocument();
+    handlers["standardReports.run"] = input => result(input);
+    await preview();
+    const original = handlers["standardReports.export"];
+    handlers["standardReports.export"] = () => {
+      throw new Error("Export temporarily unavailable");
+    };
+    fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The report could not be downloaded."
+    );
+    expect(downloadFile).not.toHaveBeenCalled();
+    expect(screen.queryByText("Report downloaded.")).not.toBeInTheDocument();
+    handlers["standardReports.export"] = original;
+    fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+    await screen.findByText("Report downloaded.");
+    expect(downloadFile).toHaveBeenCalledExactlyOnceWith(
+      "safe-csv",
+      "report-55.csv",
+      "text/csv"
+    );
+    expect(
+      calls.filter(call => call.path === "standardReports.run")
+    ).toHaveLength(2);
+    expect(
+      calls.filter(call => call.path === "standardReports.export")
+    ).toHaveLength(2);
+  });
+
+  it.each([
+    {
+      field: "name",
+      value: "   ",
+      expected: "Enter a name for the saved report.",
+    },
+    { field: "time", value: "", expected: "Enter a valid UTC run time." },
+    {
+      field: "days",
+      value: "0",
+      expected: "Choose between 1 and 366 complete UTC days.",
+    },
+    {
+      field: "days",
+      value: "367",
+      expected: "Choose between 1 and 366 complete UTC days.",
+    },
+    {
+      field: "days",
+      value: "1.5",
+      expected: "Choose between 1 and 366 complete UTC days.",
+    },
+    {
+      field: "days",
+      value: "",
+      expected: "Choose between 1 and 366 complete UTC days.",
+    },
+  ])(
+    "rejects invalid saved configuration $field=$value before sending a mutation",
+    async ({ field, value, expected }) => {
+      visit();
+      await preview();
+      fireEvent.change(screen.getByLabelText("Report name"), {
+        target: { value: field === "name" ? value : "Validated report" },
+      });
+      if (field === "time") {
+        fireEvent.change(screen.getByLabelText("Run frequency"), {
+          target: { value: "daily" },
+        });
+        fireEvent.change(screen.getByLabelText("Run time (UTC)"), {
+          target: { value },
+        });
+      }
+      if (field === "days") {
+        fireEvent.click(
+          screen.getByLabelText("Use previous complete UTC days")
+        );
+        fireEvent.change(screen.getByLabelText("Number of previous days"), {
+          target: { value },
+        });
+      }
+      // Exercise the submit handler even if native constraint validation is
+      // bypassed; the application must reject before it constructs a mutation.
+      fireEvent.submit(screen.getByTestId("standard-template-editor"));
+      expect(await screen.findByRole("alert")).toHaveTextContent(expected);
+      expect(
+        calls.filter(call => call.path === "standardReports.saveTemplate")
+      ).toEqual([]);
+      expect(screen.getByRole("button", { name: "Save report" })).toBeEnabled();
+    }
+  );
+
+  it("preserves the saved-report draft after a failed mutation and allows retry", async () => {
+    const original = handlers["standardReports.saveTemplate"];
+    handlers["standardReports.saveTemplate"] = () => {
+      throw new Error("Temporary storage outage");
+    };
+    visit();
+    await preview();
+    fireEvent.change(screen.getByLabelText("Report name"), {
+      target: { value: "Preserved draft" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save report" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The report configuration could not be saved."
+    );
+    expect(screen.getByLabelText("Report name")).toHaveValue("Preserved draft");
+    expect(
+      screen.queryByText("Report configuration saved.")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("standard-template-30")
+    ).not.toBeInTheDocument();
+    handlers["standardReports.saveTemplate"] = original;
+    fireEvent.click(screen.getByRole("button", { name: "Save report" }));
+    expect(await screen.findByTestId("standard-template-30")).toHaveTextContent(
+      "Preserved draft"
+    );
+    expect(
+      calls.filter(call => call.path === "standardReports.saveTemplate")
+    ).toHaveLength(2);
+  });
+
+  it("retains a scheduled template when pause or deletion fails and retries the same identity", async () => {
+    visit();
+    await preview();
+    fireEvent.change(screen.getByLabelText("Report name"), {
+      target: { value: "Morning payments" },
+    });
+    fireEvent.change(screen.getByLabelText("Run frequency"), {
+      target: { value: "daily" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save report" }));
+    await screen.findByTestId("standard-template-30");
+    const pause = handlers["standardReports.setTemplateEnabled"];
+    handlers["standardReports.setTemplateEnabled"] = () => {
+      throw new Error("Temporary schedule outage");
+    };
+    fireEvent.click(
+      screen.getByRole("button", { name: "Pause schedule Morning payments" })
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The report configuration could not be saved."
+    );
+    expect(
+      screen.getByRole("button", { name: "Pause schedule Morning payments" })
+    ).toBeEnabled();
+    expect(templates[0].enabled).toBe(true);
+    handlers["standardReports.setTemplateEnabled"] = pause;
+    fireEvent.click(
+      screen.getByRole("button", { name: "Pause schedule Morning payments" })
+    );
+    await screen.findByRole("button", {
+      name: "Enable schedule Morning payments",
+    });
+    const remove = handlers["standardReports.deleteTemplate"];
+    handlers["standardReports.deleteTemplate"] = () => ({ deleted: false });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete Morning payments" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirm deletion" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The saved report could not be deleted."
+    );
+    expect(screen.getByTestId("standard-template-30")).toBeVisible();
+    expect(screen.queryByText("Saved report deleted.")).not.toBeInTheDocument();
+    handlers["standardReports.deleteTemplate"] = remove;
+    fireEvent.click(screen.getByRole("button", { name: "Confirm deletion" }));
+    await screen.findByText("No saved reports yet.");
+    expect(
+      calls
+        .filter(call => call.path === "standardReports.deleteTemplate")
+        .map(call => call.input)
+    ).toEqual([{ id: 30 }, { id: 30 }]);
+  });
+
+  it("retains a generating request identity until a ready result, then allocates a new run", async () => {
+    visit();
+    await save();
+    let attempt = 0;
+    handlers["standardReports.runTemplate"] = () => {
+      attempt += 1;
+      const run = makeRun(
+        attempt === 1
+          ? {
+              status: "generating",
+              checksum: null,
+              recordCount: 0,
+              completedAt: null,
+            }
+          : { id: attempt === 2 ? 80 : 81 }
+      );
+      runs = [run];
+      return run;
+    };
+    fireEvent.click(
+      screen.getByRole("button", { name: "Run now Morning payments" })
+    );
+    let card = await screen.findByTestId("standard-run-80");
+    expect(
+      within(card).queryByRole("button", { name: "Download Morning payments" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Report generation is in progress. Refresh run history to check its result."
+      )
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Saved reports" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Run now Morning payments" })
+    );
+    await screen.findByText("The report output is ready in run history.");
+    card = await screen.findByTestId("standard-run-80");
+    expect(
+      await within(card).findByRole("button", {
+        name: "Download Morning payments",
+      })
+    ).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Saved reports" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Run now Morning payments" })
+    );
+    await screen.findByTestId("standard-run-81");
+    const requests = calls.filter(
+      call => call.path === "standardReports.runTemplate"
+    );
+    expect(requests).toHaveLength(3);
+    expect(requests[0].input.requestId).toBe(requests[1].input.requestId);
+    expect(requests[2].input.requestId).not.toBe(requests[1].input.requestId);
+  });
+
+  it("keeps a failed saved download retryable without claiming success", async () => {
+    runs = [makeRun()];
+    visit();
+    await screen.findByTestId("standard-report-option-55");
+    fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+    const button = await screen.findByRole("button", {
+      name: "Download Morning payments",
+    });
+    const original = handlers["standardReports.downloadRun"];
+    handlers["standardReports.downloadRun"] = () => {
+      throw new Error("Output temporarily unavailable");
+    };
+    fireEvent.click(button);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The report could not be downloaded."
+    );
+    expect(downloadFile).not.toHaveBeenCalled();
+    expect(button).toBeEnabled();
+    handlers["standardReports.downloadRun"] = original;
+    fireEvent.click(button);
+    await screen.findByText("Report downloaded.");
+    expect(downloadFile).toHaveBeenCalledExactlyOnceWith(
+      "saved output",
+      "saved.csv",
+      "text/csv"
+    );
+    expect(
+      calls
+        .filter(call => call.path === "standardReports.downloadRun")
+        .map(call => call.input)
+    ).toEqual([{ id: 80 }, { id: 80 }]);
+  });
+
+  it("does not navigate or populate another account from a late save response", async () => {
+    const response = deferred<unknown>();
+    handlers["standardReports.saveTemplate"] = () => response.promise;
+    const route = visit();
+    await preview();
+    fireEvent.change(screen.getByLabelText("Report name"), {
+      target: { value: "Previous account private report" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save report" }));
+    await waitFor(() =>
+      expect(
+        calls.filter(call => call.path === "standardReports.saveTemplate")
+      ).toHaveLength(1)
+    );
+    const saved = calls.find(
+      call => call.path === "standardReports.saveTemplate"
+    )!.input.template;
+    auth.user = {
+      id: 12,
+      role: "finance",
+      tenantId: 202,
+      email: "other@example.test",
+    };
+    route.refreshAuth();
+    await screen.findByTestId("standard-report-option-55");
+    await act(async () =>
+      response.resolve({
+        ...saved,
+        id: 30,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        nextRunAt: null,
+      })
+    );
+    expect(
+      screen.queryByText("Report configuration saved.")
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("standard-run-report")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Saved reports" }));
+    expect(await screen.findByText("No saved reports yet.")).toBeVisible();
+    expect(
+      screen.queryByText("Previous account private report")
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(["filters", "account"])(
+    "discards a saved download that finishes after %s change",
+    async change => {
+      runs = [makeRun()];
+      const response = deferred<unknown>();
+      handlers["standardReports.downloadRun"] = () => response.promise;
+      const route = visit();
+      await screen.findByTestId("standard-report-option-55");
+      fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Download Morning payments" })
+      );
+      await waitFor(() =>
+        expect(
+          calls.filter(call => call.path === "standardReports.downloadRun")
+        ).toHaveLength(1)
+      );
+      if (change === "account") {
+        auth.user = {
+          id: 12,
+          role: "finance",
+          tenantId: 202,
+          email: "other@example.test",
+        };
+        runs = [];
+        route.refreshAuth();
+        await screen.findByTestId("standard-report-option-55");
+      } else {
+        fireEvent.click(screen.getByRole("button", { name: "Report catalog" }));
+        fireEvent.change(await screen.findByLabelText("Start date (UTC)"), {
+          target: { value: "2026-10-01" },
+        });
+      }
+      await act(async () =>
+        response.resolve({
+          filename: "old.csv",
+          contentType: "text/csv",
+          content: "private prior context",
+          checksum: "b".repeat(64),
+          recordCount: 1,
+        })
+      );
+      expect(downloadFile).not.toHaveBeenCalled();
+      expect(screen.queryByText("Report downloaded.")).not.toBeInTheDocument();
+    }
+  );
 });

@@ -36,7 +36,11 @@ export default function LoadPlanning() {
   const [activeTab, setActiveTab] = useState<Tab>("plan");
   const [flightId, setFlightId] = useState("");
 
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
+  const numericFlightId = Number(flightId);
+  const parsedFlightId =
+    Number.isSafeInteger(numericFlightId) && numericFlightId > 0
+      ? numericFlightId
+      : 0;
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -64,10 +68,16 @@ export default function LoadPlanning() {
       <Card className="p-4 mb-6 shadow-sm rounded-xl">
         <div className="flex gap-4 items-end">
           <div className="flex-1 max-w-xs">
-            <Label>{t("loadPlanning.flightId", "Flight ID")}</Label>
+            <Label htmlFor="load-planning-flight-id">
+              {t("loadPlanning.flightId", "Flight ID")}
+            </Label>
             <Input
+              id="load-planning-flight-id"
               type="number"
+              min={1}
+              step={1}
               value={flightId}
+              aria-invalid={Boolean(flightId) && !parsedFlightId}
               onChange={e => setFlightId(e.target.value)}
               placeholder={t(
                 "loadPlanning.enterFlightId",
@@ -138,6 +148,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
   const {
     data: plan,
     isLoading: planLoading,
+    error: planError,
     refetch: refetchPlan,
   } = trpc.loadPlanning.get.useQuery({ flightId }, { enabled: flightId > 0 });
 
@@ -190,6 +201,17 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
     return (
       <Card className="p-6 animate-pulse shadow-sm rounded-xl">
         <div className="h-40 bg-muted rounded" />
+      </Card>
+    );
+  }
+
+  if (planError) {
+    return (
+      <Card className="p-6 space-y-4 shadow-sm rounded-xl" role="alert">
+        <p>{planError.message}</p>
+        <Button variant="outline" onClick={() => void refetchPlan()}>
+          {t("common.retry", "Retry")}
+        </Button>
       </Card>
     );
   }
