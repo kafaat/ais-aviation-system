@@ -258,6 +258,12 @@ export async function verifyHandlerStation(
     assert.equal(replies[0].evidenceId, replies[1].evidenceId);
     assert.equal(replies.filter(x => !x.duplicate).length, 1);
     const { evidenceId } = replies[0];
+    const firstReceivedAt = new Date();
+    mock.timers.setTime(Date.now() + 3600_000);
+    const delayed = await caller.ingestCouponUplift(
+      signed(kept.coupon, "pilot-kept")
+    );
+    assert.deepEqual(delayed, { evidenceId, duplicate: true });
     await assert.rejects(
       caller.ingestCouponUplift(signed(removed.coupon, "pilot-kept")),
       { code: "CONFLICT" }
@@ -274,6 +280,19 @@ export async function verifyHandlerStation(
       proofs.map(p => p.id),
       [evidenceId]
     );
+    assert.deepEqual(proofs[0].payload, {
+      ticketNumber: kept.coupon.ticketNumber,
+      couponNumber: kept.coupon.couponNumber,
+    });
+    assert.deepEqual(proofs[0].ingestSnapshot, {
+      bookingId: kept.booking.bookingId,
+      passengerId: kept.pax.id,
+      couponId: kept.coupon.id,
+      originId: tenantId,
+    });
+    assert(proofs[0].receivedAt <= firstReceivedAt);
+    assert(proofs[0].ingestSnapshotAt);
+    assert(proofs[0].ingestSnapshotAt <= firstReceivedAt);
     const events = await db
       .select()
       .from(s.outbox)
@@ -313,6 +332,7 @@ export async function verifyHandlerStation(
       recognizedMinor: flown.baseFareMinor,
       voidedCouponStatus: voided.status,
       concurrentDeliveries: replies.length,
+      delayedRetryDuplicate: delayed.duplicate,
       committedEvents: events.length,
       externalHandlerCalls: 0,
     };

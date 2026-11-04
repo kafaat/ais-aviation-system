@@ -78,10 +78,6 @@ const payloadSchemas = {
     bagTag: z.string().regex(/^\d{10}$/),
     surname: safeToken,
     givenName: safeToken,
-    seatNumber: z
-      .string()
-      .regex(/^[1-9][0-9]{0,2}[A-Z]$/)
-      .optional(),
   }),
   BPM: commonSchema.extend({
     bagTag: z.string().regex(/^\d{10}$/),
