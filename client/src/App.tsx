@@ -53,6 +53,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AnalyticsDashboard = lazy(() => import("./pages/AnalyticsDashboard"));
 const RefundsDashboard = lazy(() => import("./pages/admin/RefundsDashboard"));
 const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
+const StandardReports = lazy(() => import("./pages/admin/StandardReports"));
 const GroupBookingsManagement = lazy(
   () => import("./pages/admin/GroupBookingsManagement")
 );
@@ -438,6 +439,13 @@ function Router() {
             <ProtectedRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <ReportsDashboard />
+              </Suspense>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/admin/standard-reports">
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <StandardReports />
               </Suspense>
             </ProtectedRoute>
           </Route>

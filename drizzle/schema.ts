@@ -6257,6 +6257,7 @@ export const loadPlanDetails = mysqlTable("load_plan_details", {
 
 // Canonical operational schemas used by services and migration generation.
 export * from "./operations-schema";
+export * from "./standard-report-schema";
 
 /** Durable checkout intent; its presence freezes the unpaid invoice until verified expiry. */
 export const bookingCheckoutRequests = mysqlTable("booking_checkout_requests", {

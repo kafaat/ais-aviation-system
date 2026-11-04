@@ -205,6 +205,16 @@ export const PERIODIC_JOB_CATALOG = [
       await processScheduledExports();
     },
   },
+  {
+    name: "standardReports",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { processStandardReportSchedules } =
+        await import("./standard-report-schedules.service");
+      await processStandardReportSchedules();
+    },
+  },
 ] as const;
 
 const scheduledTasks: Array<{ stop: () => void | Promise<void> }> = [];
