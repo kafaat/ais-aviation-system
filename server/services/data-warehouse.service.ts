@@ -1149,54 +1149,65 @@ export async function processScheduledExports() {
   const db = await warehouseDb();
   const { isAdmin } = await import("./rbac.service");
   const now = new Date();
+  const failedSchedules: number[] = [];
   for (const schedule of await getSchedules(true)) {
     if (schedule.nextRunAt > now) continue;
-    const [owner] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, schedule.createdBy))
-      .limit(1);
-    if (!owner || !isAdmin(owner.role))
-      throw new Error(
-        `Export schedule ${schedule.id} requires an active administrator owner`
+    try {
+      const [owner] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, schedule.createdBy))
+        .limit(1);
+      if (!owner || !isAdmin(owner.role))
+        throw new Error(
+          `Export schedule ${schedule.id} requires an active administrator owner`
+        );
+      const startDate =
+        schedule.lastRunAt ??
+        new Date(
+          now.getTime() -
+            (schedule.frequency === "daily"
+              ? 1
+              : schedule.frequency === "weekly"
+                ? 7
+                : 31) *
+              86400000
+        );
+      const result = await createExportJob(
+        schedule.exportType,
+        { startDate, endDate: now },
+        schedule.format,
+        schedule.createdBy,
+        false,
+        undefined,
+        `schedule:${schedule.id}:${schedule.nextRunAt.toISOString()}`
       );
-    const startDate =
-      schedule.lastRunAt ??
-      new Date(
-        now.getTime() -
-          (schedule.frequency === "daily"
-            ? 1
-            : schedule.frequency === "weekly"
-              ? 7
-              : 31) *
-            86400000
-      );
-    const result = await createExportJob(
-      schedule.exportType,
-      { startDate, endDate: now },
-      schedule.format,
-      schedule.createdBy,
-      false,
-      undefined,
-      `schedule:${schedule.id}:${schedule.nextRunAt.toISOString()}`
-    );
-    if (result.status !== "completed")
-      throw new Error(
-        `Scheduled export ${schedule.id} failed: ${result.errorMessage}`
-      );
-    await db
-      .update(warehouseSchedules)
-      .set({
-        lastRunAt: result.dateRangeEnd,
-        nextRunAt: calculateNextRunAt(schedule.frequency),
-      })
-      .where(
-        and(
-          eq(warehouseSchedules.id, schedule.id),
-          eq(warehouseSchedules.nextRunAt, schedule.nextRunAt)
-        )
-      );
+      if (result.status !== "completed")
+        throw new Error(
+          `Scheduled export ${schedule.id} failed: ${result.errorMessage}`
+        );
+      await db
+        .update(warehouseSchedules)
+        .set({
+          lastRunAt: result.dateRangeEnd,
+          nextRunAt: calculateNextRunAt(schedule.frequency),
+        })
+        .where(
+          and(
+            eq(warehouseSchedules.id, schedule.id),
+            eq(warehouseSchedules.nextRunAt, schedule.nextRunAt)
+          )
+        );
+    } catch {
+      // One invalid owner or failed export must not starve later due schedules.
+      // Keep failed due dates retryable and report only identifiers, never data.
+      failedSchedules.push(schedule.id);
+    }
   }
+  if (failedSchedules.length)
+    throw new Error(
+      `Scheduled exports failed for schedule IDs: ${failedSchedules.join(", ")}`
+    );
 }
 
 // ============================================================================

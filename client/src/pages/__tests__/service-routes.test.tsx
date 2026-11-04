@@ -103,6 +103,9 @@ it.each([
     visit("/airline", role);
     await screen.findByRole("heading", { name: allowed }, { timeout: 6000 });
     expect(
+      screen.getByRole("button", { name: i18n.t("nav.reports") })
+    ).toBeVisible();
+    expect(
       screen.queryByRole("heading", { name: forbidden })
     ).not.toBeInTheDocument();
   }
@@ -213,4 +216,74 @@ it("shows family pool errors separately and offers creation after a verified emp
   );
   await screen.findByRole("button", { name: "Create Family Group" });
   expect(group).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  ["finance", ["bookings", "revenue", "refunds"]],
+  ["ops", ["flights"]],
+  ["airline_admin", ["bookings", "revenue", "flights", "refunds"]],
+  ["admin", ["bookings", "revenue", "flights", "refunds"]],
+  ["super_admin", ["bookings", "revenue", "flights", "refunds"]],
+] as const)(
+  "exposes only permitted report families to %s",
+  async (role, allowed) => {
+    visit("/admin/reports", role);
+    await screen.findByRole(
+      "heading",
+      { name: i18n.t("reports.title") },
+      { timeout: 6000 }
+    );
+    for (const type of ["bookings", "revenue", "flights", "refunds"]) {
+      const tab = screen.queryByRole("tab", {
+        name: i18n.t(`reports.${type}`),
+      });
+      if ((allowed as readonly string[]).includes(type))
+        expect(tab).toBeVisible();
+      else expect(tab).not.toBeInTheDocument();
+    }
+    const selected = role === "ops" ? "flights" : "bookings";
+    expect(
+      screen.getByRole("tab", { name: i18n.t(`reports.${selected}`) })
+    ).toHaveAttribute("aria-selected", "true");
+  }
+);
+
+it("keeps passenger accounts out of the report export page", async () => {
+  const route = visit("/admin/reports", "user");
+  await waitFor(() => expect(route.history.at(-1)).toBe("/"));
+  expect(
+    screen.queryByRole("heading", { name: i18n.t("reports.title") })
+  ).not.toBeInTheDocument();
+});
+
+it("exports the permitted flight report from the operations default tab", async () => {
+  const exportFlights = vi.fn(() => ({
+    filename: "flights.csv",
+    content: "Flight\nSV1",
+    contentType: "text/csv",
+  }));
+  const download = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => {});
+  const oldCreate = URL.createObjectURL;
+  const oldRevoke = URL.revokeObjectURL;
+  URL.createObjectURL = vi.fn(() => "blob:report-test");
+  URL.revokeObjectURL = vi.fn();
+  try {
+    visit("/admin/reports", "ops", {
+      "reports.exportFlightPerformanceCSV": exportFlights,
+    });
+    const button = await screen.findByRole(
+      "button",
+      { name: i18n.t("reports.exportCSV") },
+      { timeout: 6000 }
+    );
+    fireEvent.click(button);
+    await waitFor(() => expect(download).toHaveBeenCalledOnce());
+    expect(exportFlights).toHaveBeenCalledOnce();
+  } finally {
+    download.mockRestore();
+    URL.createObjectURL = oldCreate;
+    URL.revokeObjectURL = oldRevoke;
+  }
 });

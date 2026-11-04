@@ -435,11 +435,11 @@ function Router() {
             </AdminRoute>
           </Route>
           <Route path="/admin/reports">
-            <AdminRoute>
+            <ProtectedRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <ReportsDashboard />
               </Suspense>
-            </AdminRoute>
+            </ProtectedRoute>
           </Route>
           <Route path="/admin/group-bookings">
             <AdminRoute>

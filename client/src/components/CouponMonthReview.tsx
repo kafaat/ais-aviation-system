@@ -84,6 +84,49 @@ export function CouponMonthReview() {
             </dt>
             <dd>{display(result.loyaltyDeferredMinor)}</dd>
           </dl>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="text-start font-medium py-2">
+                {l("أدلة القسائم المحلية", "Local coupon evidence")}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{l("القسيمة", "Coupon ID")}</th>
+                  <th scope="col">{l("الرحلة", "Flight ID")}</th>
+                  <th scope="col">{l("المسافر", "Passenger ID")}</th>
+                  <th scope="col">{l("الحالة", "Status")}</th>
+                  <th scope="col">{l("الأجرة الأساسية", "Base fare")}</th>
+                  <th scope="col">
+                    {l("دليل الاستخدام", "Uplift evidence ID")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.coupons.map(coupon => (
+                  <tr key={coupon.couponId}>
+                    <td>{coupon.couponId}</td>
+                    <td>{coupon.flightId}</td>
+                    <td>{coupon.passengerId}</td>
+                    <td>{coupon.status}</td>
+                    <td>{display(coupon.baseFareMinor)}</td>
+                    <td>
+                      {coupon.upliftEvidenceId ?? l("غير مثبت", "Unverified")}
+                    </td>
+                  </tr>
+                ))}
+                {result.coupons.length === 0 && (
+                  <tr>
+                    <td colSpan={6}>
+                      {l(
+                        "لا توجد قسائم لهذه المراجعة",
+                        "No coupons in this review"
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           {result.issues.length > 0 && (
             <p>
               {l("أسباب تعذّر المطابقة", "Reconciliation issues")}:{" "}

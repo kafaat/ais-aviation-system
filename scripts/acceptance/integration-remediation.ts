@@ -2386,6 +2386,18 @@ try {
   const { verifySsrPriorityReconciliation } =
     await import("./ssr-priority-reconciliation");
   await verifySsrPriorityReconciliation(db, id, record);
+  const { verifyReportLinkage } = await import("./report-linkage");
+  await record(
+    "REPORT-LINKAGE-01",
+    "All twelve export procedures render live data with tenant and role scope while preserving accounting records",
+    () => verifyReportLinkage(db, ctx, id)
+  );
+  const { verifyAnalyticsLinkage } = await import("./analytics-linkage");
+  await record(
+    "REPORT-ANALYTICS-01",
+    "Analytics count each flight capacity once and reconcile funded ancillary values to the selected booking cohort",
+    () => verifyAnalyticsLinkage(db, ctx, id)
+  );
   await writeFile(
     reportPath,
     JSON.stringify(

@@ -46,6 +46,7 @@ async function buildXlsxBuffer(
 // ============================================================================
 
 export interface ReportFilters {
+  tenantId?: number;
   startDate?: Date;
   endDate?: Date;
   status?: typeof bookings.$inferSelect.status;
@@ -103,6 +104,9 @@ async function getBookingRows(filters: ReportFilters) {
     });
 
   const conditions = [];
+  if (filters.tenantId !== undefined) {
+    conditions.push(eq(bookings.tenantId, filters.tenantId));
+  }
   if (filters.startDate) {
     conditions.push(gte(bookings.createdAt, filters.startDate));
   }
@@ -252,7 +256,11 @@ async function revenueReport(filters: ReportFilters) {
   const endDate = filters.endDate ?? new Date();
   const startDate =
     filters.startDate ?? new Date(endDate.getTime() - 30 * 86400000);
-  const rows = await getFinancialDays({ startDate, endDate });
+  const rows = await getFinancialDays({
+    startDate,
+    endDate,
+    tenantId: filters.tenantId,
+  });
   return { startDate, endDate, rows };
 }
 
@@ -267,6 +275,7 @@ export async function exportRevenueToCSV(
 }
 
 type FlightReportFilters = {
+  tenantId?: number;
   startDate?: Date;
   endDate?: Date;
   status?: typeof flights.$inferSelect.status;
@@ -320,6 +329,9 @@ async function getFlightPerformance(filters: FlightReportFilters) {
     )
     .where(
       and(
+        filters.tenantId !== undefined
+          ? eq(flights.tenantId, filters.tenantId)
+          : undefined,
         filters.startDate
           ? gte(flights.departureTime, filters.startDate)
           : undefined,
