@@ -3,11 +3,7 @@
   "reference": "https://www.videcom.com/airline-system-reporting.aspx",
   "reviewed_base_sha": "3dc68d8c23a8a56484864f209c80da3d233730da",
   "report_route": "/admin/standard-reports",
-  "formats": [
-    "csv",
-    "html",
-    "xml"
-  ],
+  "formats": ["csv", "html", "xml"],
   "date_basis": "UTC",
   "source_limit": 10000,
   "counts": {
@@ -22,9 +18,7 @@
       "category": "commercial",
       "availability": "partial",
       "description": "All users in the permitted tenant, with their declared role and role capabilities; no credentials are exported.",
-      "filters": [
-        "status"
-      ],
+      "filters": ["status"],
       "limitations": [
         "Internal sales-office assignments are not recorded. Office is unknown; the role description does not override endpoint-specific authorization."
       ]
@@ -35,9 +29,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Flight passenger documents, dates of birth and document completeness, including passengers with missing data.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": [
         "This is a protected document report, not an authority submission or acknowledgment."
       ]
@@ -48,9 +40,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Confirmed and completed sector members for a specific flight.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": []
     },
     {
@@ -68,13 +58,7 @@
       "category": "operations",
       "availability": "available",
       "description": "One UTC departure day with booked, checked-in, boarded, offloaded and recorded no-show counts.",
-      "filters": [
-        "startDate",
-        "flightId",
-        "origin",
-        "destination",
-        "status"
-      ],
+      "filters": ["startDate", "flightId", "origin", "destination", "status"],
       "limitations": [
         "No-shows are reported only after an explicit DCS close. Boarding is local attendance evidence, not external ticket uplift."
       ]
@@ -85,11 +69,7 @@
       "category": "finance",
       "availability": "available",
       "description": "Current coupon states for a specified local ticket number.",
-      "filters": [
-        "ticketNumber",
-        "couponNumber",
-        "status"
-      ],
+      "filters": ["ticketNumber", "couponNumber", "status"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance."
       ]
@@ -133,9 +113,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "All local ticket coupons and monetary source lines for a specified PNR or booking reference.",
-      "filters": [
-        "bookingReference"
-      ],
+      "filters": ["bookingReference"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon."
@@ -158,11 +136,7 @@
       "category": "commercial",
       "availability": "partial",
       "description": "Filed fare-class rules applicable to the specified origin airport, including unrestricted rules and each rule's validity and pricing terms.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "origin"
-      ],
+      "filters": ["startDate", "endDate", "origin"],
       "limitations": [
         "The system stores relative fare-class/rule pricing, not an independently filed final fare amount. This is a configuration report, not a passenger quote. Tenant attribution uses airlines with flights owned by that tenant."
       ]
@@ -173,12 +147,7 @@
       "category": "commercial",
       "availability": "partial",
       "description": "Filed fare-class rules for the specified directional airport pair, including route-wide rules.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "origin", "destination"],
       "limitations": [
         "The system stores relative fare-class/rule pricing, not an independently filed final fare amount. This is a configuration report, not a passenger quote. Tenant attribution uses airlines with flights owned by that tenant."
       ]
@@ -218,13 +187,7 @@
       "category": "operations",
       "availability": "available",
       "description": "All flights in one UTC day with cabin capacity and effective availability after unexpired holds.",
-      "filters": [
-        "startDate",
-        "flightId",
-        "origin",
-        "destination",
-        "status"
-      ],
+      "filters": ["startDate", "flightId", "origin", "destination", "status"],
       "limitations": []
     },
     {
@@ -233,13 +196,7 @@
       "category": "operations",
       "availability": "available",
       "description": "All flights in seven UTC days starting on the chosen date, including unexpired holds.",
-      "filters": [
-        "startDate",
-        "flightId",
-        "origin",
-        "destination",
-        "status"
-      ],
+      "filters": ["startDate", "flightId", "origin", "destination", "status"],
       "limitations": []
     },
     {
@@ -248,9 +205,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Passenger, booking, current local coupon, sector seat and attributed baggage details.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": [
         "Ticket and coupon fields describe AIS local documents. They do not certify external carrier issuance, uplift or settlement.",
         "Ambiguous or missing coupon identities are shown explicitly. Returned bags are excluded; unresolved physical registrations block the manifest."
@@ -262,9 +217,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Alternative flight passenger list using current sector membership.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": []
     },
     {
@@ -273,9 +226,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Passenger counts for one flight, with route, dates, cabin and passenger types.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": []
     },
     {
@@ -284,9 +235,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Passenger detail with distinct booking reference, PNR and passenger type.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": []
     },
     {
@@ -306,9 +255,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Operational details of a flight by database identifier.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": []
     },
     {
@@ -317,9 +264,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Passengers retaining inventory, plus unallocated active holds clearly separated from named reservations.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": [
         "Unallocated holds have no passenger or PNR; they are shown with empty identity fields and their seat quantity."
       ]
@@ -341,9 +286,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Passenger list selected by the flight database identifier.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": []
     },
     {
@@ -386,12 +329,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Payment records by creation period and method, with current attempt status.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "bookingReference",
-        "status"
-      ],
+      "filters": ["startDate", "endDate", "bookingReference", "status"],
       "limitations": [
         "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
         "Payment attempts are separate from settled ledger movements."
@@ -403,11 +341,7 @@
       "category": "commercial",
       "availability": "available",
       "description": "Every recorded miles transaction in the UTC creation period, including member, type, signed miles and balance after the transaction.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "status"
-      ],
+      "filters": ["startDate", "endDate", "status"],
       "limitations": []
     },
     {
@@ -416,11 +350,7 @@
       "category": "commercial",
       "availability": "available",
       "description": "Members whose recorded membership start falls in the UTC period; member ID is the user's ID.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "status"
-      ],
+      "filters": ["startDate", "endDate", "status"],
       "limitations": []
     },
     {
@@ -429,12 +359,7 @@
       "category": "commercial",
       "availability": "available",
       "description": "All recorded transactions for the selected member (user ID), optionally restricted by UTC creation period and transaction type.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "memberId",
-        "status"
-      ],
+      "filters": ["startDate", "endDate", "memberId", "status"],
       "limitations": []
     },
     {
@@ -709,9 +634,7 @@
       "category": "operations",
       "availability": "available",
       "description": "Passengers on a specific flight with cabin, type, booking reference and PNR.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": []
     },
     {
@@ -736,12 +659,7 @@
       "category": "finance",
       "availability": "available",
       "description": "All authorized payment records in a UTC creation period, including method, provider and current status.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "bookingReference",
-        "status"
-      ],
+      "filters": ["startDate", "endDate", "bookingReference", "status"],
       "limitations": [
         "A payment record is not proof of settlement. Use the ledger-movement report for cash and non-cash settlement."
       ]
@@ -752,9 +670,7 @@
       "category": "operations",
       "availability": "partial",
       "description": "Generate an operator-template PNL draft from authorized flight members and a configured route.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": [
         "The generated draft is downloadable report content. It is not persisted, queued, sent or acknowledged by this read operation.",
         "A configured Type-B address and valid Latin document names are required; carrier acceptance remains separate."
@@ -793,9 +709,7 @@
       "category": "commercial",
       "availability": "partial",
       "description": "Unified local booking snapshot: booking, passengers, sectors, local coupons, payments, fare components, ancillary purchases and recorded history, with an explicit record type per row.",
-      "filters": [
-        "bookingReference"
-      ],
+      "filters": ["bookingReference"],
       "limitations": [
         "Only allowlisted local business fields are included. Provider credentials, payment payloads, raw audit values and passenger travel documents are excluded. External issuance and unrecorded historic events are not inferred."
       ]
@@ -806,11 +720,7 @@
       "category": "commercial",
       "availability": "partial",
       "description": "Unified local timeline of booking creation, state transitions, payment events, servicing requests, ledger entries and booking audit events. The period filters event time.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "bookingReference"
-      ],
+      "filters": ["startDate", "endDate", "bookingReference"],
       "limitations": [
         "The report preserves source identifiers and separate events; it does not claim that every historical action produced an event. Raw audit values, provider payloads and free-text error details are excluded."
       ]
@@ -832,9 +742,7 @@
       "category": "commercial",
       "availability": "partial",
       "description": "Unified local booking snapshots for all current booking-sector members of the selected flight. Legacy bookings are included only when they have no sector rows.",
-      "filters": [
-        "flightId"
-      ],
+      "filters": ["flightId"],
       "limitations": [
         "Uses the same allowlisted local fields as PNR Full. External issuance and unrecorded historical events are not inferred."
       ]
@@ -845,12 +753,7 @@
       "category": "commercial",
       "availability": "partial",
       "description": "Every funded ancillary purchase, by its recorded funding time, including product, booking, quantity, snapshot prices and current cancellation/refund state.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "bookingReference",
-        "status"
-      ],
+      "filters": ["startDate", "endDate", "bookingReference", "status"],
       "limitations": [
         "Rows are funded purchases, including authorized no-charge purchases. Product-level cash collections and net refund allocation are not independently recorded. Historic rows without funding evidence are excluded; sale-currency snapshots are unavailable and catalog currency is labelled separately."
       ]
@@ -923,11 +826,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Posted refund and partial-refund ledger entries by transaction date, keeping cash and non-cash tenders distinct.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "bookingReference"
-      ],
+      "filters": ["startDate", "endDate", "bookingReference"],
       "limitations": [
         "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office."
       ]
@@ -961,11 +860,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "All posted booking ledger movements by transaction date, including charges and their refund reversals.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "bookingReference"
-      ],
+      "filters": ["startDate", "endDate", "bookingReference"],
       "limitations": [
         "This is a settlement movement register. A settlement does not establish the ticket sale/issue event required for full equivalence."
       ]
@@ -976,12 +871,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Funded baggage product line items with their recorded funding reference and lifecycle state.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "bookingReference",
-        "status"
-      ],
+      "filters": ["startDate", "endDate", "bookingReference", "status"],
       "limitations": [
         "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
         "The product catalogue identifies baggage but does not classify airport excess-weight sales. Excess classification and net item refund allocation remain unknown."
@@ -1039,13 +929,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Separately dated booking, local-document and evidenced uplift component values, grouped by UTC Monday-start week.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "origin", "destination"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1058,13 +942,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Separately dated booking, local-document and evidenced uplift component values, grouped by UTC day.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "origin", "destination"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1077,13 +955,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "All route/day groups for separately dated component values; no top-route truncation.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "origin", "destination"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1096,13 +968,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Separately dated component values for every matching flight identity.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "origin", "destination"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1115,13 +981,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Passenger/sector component lines with independent booking, local-document and uplift dates.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "origin", "destination"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1134,13 +994,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Component values by dated flight identity, filterable by flight ID and departure city/airport.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "origin", "destination"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1153,13 +1007,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Recorded uplift component values grouped by sector route and observation date.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "origin", "destination"],
       "limitations": [
         "Only an F coupon with exactly one matching persisted coupon_uplift receipt is included. Check-in, boarding and completed flight status alone are insufficient. Production uplift ingestion remains subject to external acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1195,13 +1043,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Monthly route component values; the reference's sales-office dimension remains unavailable.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "origin",
-        "destination"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "origin", "destination"],
       "limitations": [
         "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1322,10 +1164,7 @@
       "category": "finance",
       "availability": "partial",
       "description": "Details of one ticket/coupon, its current state, monetary source lines and matching uplift receipt.",
-      "filters": [
-        "ticketNumber",
-        "couponNumber"
-      ],
+      "filters": ["ticketNumber", "couponNumber"],
       "limitations": [
         "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
         "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
@@ -1446,12 +1285,7 @@
       "category": "commercial",
       "availability": "partial",
       "description": "Recorded outbound Type-B message transmissions created in the UTC period, retaining draft, sending and acknowledgment states separately.",
-      "filters": [
-        "startDate",
-        "endDate",
-        "flightId",
-        "status"
-      ],
+      "filters": ["startDate", "endDate", "flightId", "status"],
       "limitations": [
         "No complete generated-email ledger exists. These are Type-B transmission metadata, not a combined email/TTY history; content and provider payloads are excluded."
       ]
