@@ -20,7 +20,6 @@ import { logger } from "../_core/logger";
 import {
   generateSecret,
   generateQRCodeURL,
-  consumeTotpStep,
   generateBackupCodes,
   hashBackupCode,
   encryptSecret,
@@ -28,7 +27,7 @@ import {
   upsertMfaSetup,
   enableMfa,
   disableMfa,
-  updateBackupCodes,
+  regenerateBackupCodes,
 } from "../services/mfa.service";
 
 // ============================================================================
@@ -215,22 +214,11 @@ export const mfaRouter = router({
         });
       }
 
-      // Verify the TOTP token
-      const isValid = await consumeTotpStep(userId, input.token);
-
-      if (!isValid) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Invalid verification code.",
-        });
-      }
-
-      // Generate new backup codes
-      const newCodes = generateBackupCodes();
-      const hashedCodes = newCodes.map(hashBackupCode);
-
-      // Store hashed codes
-      await updateBackupCodes(userId, hashedCodes);
+      const newCodes = await regenerateBackupCodes(
+        userId,
+        settings.secret,
+        input.token
+      );
 
       logger.info({ userId }, "Backup codes regenerated");
 

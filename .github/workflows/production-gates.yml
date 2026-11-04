@@ -100,6 +100,7 @@ jobs:
           server/__tests__/financial-authority-mysql.test.ts
           server/__tests__/operations-inventory-mysql.test.ts
           server/__tests__/flight-delivery-mysql.test.ts
+          server/__tests__/api-process-mysql.test.ts
       - name: Verify backup failure boundaries and worker liveness
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
       - name: Verify baggage entitlement mutation sensitivity

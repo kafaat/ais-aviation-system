@@ -218,7 +218,9 @@ export const mobileAuthServiceV2 = {
         proof.secret === mfa?.secret &&
         mfa.isEnabled
       );
-      if (mfa?.isEnabled && !mfaVerified)
+      // A supplied proof must still match an enabled enrollment, including
+      // when disable/setup removed or replaced it after challenge completion.
+      if ((proof || mfa?.isEnabled) && !mfaVerified)
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "MFA_REQUIRED",

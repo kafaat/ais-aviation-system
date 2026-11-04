@@ -36,10 +36,29 @@ requires the same user and current enabled enrollment. Changing the enrollment
 between verification and issuance invalidates the proof. Challenges and TOTP
 steps remain single-use.
 
+A supplied proof is rejected if its enrollment was removed or became disabled
+before session issuance. Ordinary password login without a proof remains
+available after MFA has been disabled.
+
 Enabling or disabling MFA checks the expected enrollment, consumes the TOTP
 step, performs any encryption migration, changes enrollment, and revokes prior
 sessions/challenges in one locked transaction. A rejected or failed change does
 not consume a valid step in a separate earlier transaction.
+
+Regenerating backup codes likewise verifies the expected enabled enrollment,
+consumes its TOTP step, performs any encryption migration, and replaces its
+backup-code hashes in one transaction. Failure rolls all of these writes back.
+A request that read an older enrollment cannot overwrite a replacement
+enrollment's codes. Regeneration invalidates previous backup codes but preserves
+existing sessions, as before; enable and disable revoke sessions.
+
+MFA mutations acquire the user row lock before settings or challenge locks.
+Challenge completion first reads the challenge owner without locking the
+challenge, then takes that user lock and rechecks the challenge's ownership,
+expiry, consumption and attempt budget with a current locking read. This
+serializes completion with enrollment changes and avoids their previous
+challenge/settings lock cycle. A protected action that consumes TOTP takes the
+same user lock before its other action locks.
 
 ## Password-provider responses
 
@@ -53,8 +72,9 @@ Service-token requirements are still controlled by the provider deployment.
 
 - `auth-session-regression.test.ts` exercises the real router, crypto and session
   services with a commit/rollback persistence adapter. It reproduces rollback of
-  replay revocation and the migrated-secret proof failure without claiming
-  native SQL or locking acceptance.
+  replay revocation and the migrated-secret proof failure. A one-user lock
+  fixture executes competing MFA operations and detects wait-for cycles; it
+  does not claim native SQL isolation or locking acceptance.
 - `auth-service-http.test.ts` uses an owned loopback HTTP password fixture and
   the real HTTP client/circuit breaker. Its downstream session boundary is a
   test double; malformed responses must never reach it.
@@ -62,6 +82,9 @@ Service-token requirements are still controlled by the provider deployment.
   a loopback MySQL endpoint and an `ais_*test` source database. It creates an
   owned schema using the migrated table definitions and drops only that schema.
   It exercises real MySQL transactions and the HTTP router/session/MFA chain.
+  Contention cases use MySQL 8/9 `performance_schema.data_lock_waits` to prove
+  requests are waiting on the owned user's lock before releasing it. The CI
+  test account therefore needs read access to those lock-observation tables.
   Its password provider is a controlled HTTP fixture, not FastAPI or bcrypt
   acceptance. Native cases are skipped when the disposable-database opt-in is
   absent; a skip is not a pass.

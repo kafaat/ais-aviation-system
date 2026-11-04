@@ -360,3 +360,103 @@ it("expands and closes a history record without turning it into a new calculatio
     requests.some(request => request.path === "weightBalance.calculate")
   ).toBe(false);
 });
+
+const generatedSheet = () => ({
+  loadSheetNumber: "SIMULATED-SHEET-7",
+  edition: "PRELIMINARY",
+  generatedAt: "2030-01-01T12:00:00Z",
+  flight: {
+    id: 7,
+    flightNumber: "TEST7",
+    date: "2030-01-15",
+    origin: "RUH",
+    destination: "JED",
+    aircraftType: "TEST",
+    registration: "SYNTHETIC",
+  },
+  crew: { cockpit: 2, cabin: 2, total: 4 },
+  passengers: {
+    males: 1,
+    females: 0,
+    children: 0,
+    infants: 0,
+    totalExcludingInfants: 1,
+    total: 1,
+  },
+  weights: {
+    operatingEmptyWeight: 1000,
+    passengerWeight: 80,
+    baggageWeight: 20,
+    cargoMailWeight: 25.5,
+    totalTrafficLoad: 125.5,
+    dryOperatingWeight: 1000,
+    zeroFuelWeightActual: 1125.5,
+    zeroFuelWeightMax: 1500,
+    takeoffFuel: 100.75,
+    takeoffWeightActual: 1226.25,
+    takeoffWeightMax: 2000,
+    tripFuel: 80.75,
+    landingWeightActual: 1145.5,
+    landingWeightMax: 1800,
+  },
+  balance: {
+    cgPercent: 25,
+    cgForwardLimit: 15,
+    cgAftLimit: 35,
+    trimSetting: 4,
+    stabilizerSetting: 4,
+  },
+  cargoByZone: [],
+  limitations: { isWithinAllLimits: true, items: [] },
+  remarks: ["Synthetic training response; no dispatch acceptance."],
+});
+
+it.each(["during", "after"])(
+  "hides a generated sheet for another flight when its identifier changes %s generation",
+  async timing => {
+    const response = deferred<ReturnType<typeof generatedSheet>>();
+    const { requests } = visit({
+      "weightBalance.generateLoadSheet": () => response.promise,
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: i18n.t("wb.tabs.loadsheet") })
+    );
+    fireEvent.change(flightInput(), { target: { value: "7" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: i18n.t("wb.loadsheet.generateBtn") })
+    );
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        path: "weightBalance.generateLoadSheet",
+        input: { flightId: 7 },
+      })
+    );
+    if (timing === "after") {
+      await act(async () => response.resolve(generatedSheet()));
+      expect(await screen.findByText(/SIMULATED-SHEET-7/)).toBeVisible();
+      expect(notices.success).toHaveBeenCalledWith(
+        i18n.t("wb.loadsheet.generated")
+      );
+      notices.success.mockClear();
+    }
+    fireEvent.change(flightInput(), { target: { value: "8" } });
+    if (timing === "during") {
+      await act(async () => response.resolve(generatedSheet()));
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", {
+            name: i18n.t("wb.loadsheet.generateBtn"),
+          })
+        ).toBeEnabled()
+      );
+    }
+    expect(screen.queryByText(/SIMULATED-SHEET-7/)).not.toBeInTheDocument();
+    expect(notices.success).not.toHaveBeenCalled();
+    expect(screen.getByText(i18n.t("dcs.loadTrainingNotice"))).toBeVisible();
+    expect(
+      requests.filter(
+        request => request.path === "weightBalance.generateLoadSheet"
+      )
+    ).toHaveLength(1);
+  }
+);

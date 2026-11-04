@@ -8,6 +8,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { focusManager } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
+import { trpc } from "@/lib/trpc";
 import { createTrpcFixture, deferred } from "@/test/trpc-fixture";
 import RefundsDashboard from "../RefundsDashboard";
 
@@ -239,28 +241,69 @@ describe("refund dashboard interactions through real tRPC hooks", () => {
 
   it("polls only an open selected detail and stops after closing it", async () => {
     // Keep HTTP batching and React notifications on real timers. Only the
-    // query observer's polling interval is advanced deterministically.
+    // query observer's polling interval is advanced by this test.
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     focusManager.setFocused(true);
     const intervals = vi.spyOn(globalThis, "setInterval");
+    const clearIntervals = vi.spyOn(globalThis, "clearInterval");
+    let reads = 0;
+    handlers["refunds.splitCancellation"] = () =>
+      detail(++reads === 1 ? "review_required" : "processing");
+    const commitNotifications = async () => {
+      // An idle cache can precede React Query's queued notification and the
+      // effect that commits observer options. Drain that real timer inside
+      // act before measuring the interval owned by the committed observer.
+      await act(async () => {
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+      });
+    };
     const page = await visit();
     expect(page.calls("splitCancellation")).toEqual([]);
     const dialog = await openDetail();
     expect(page.calls("splitCancellation")).toHaveLength(1);
-    expect(intervals.mock.calls.some(call => call[1] === 5000)).toBe(true);
-    expect(vi.getTimerCount()).toBeGreaterThan(0);
     await waitFor(() => expect(page.cache.isFetching()).toBe(0));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
+    await commitNotifications();
+    const selectedQuery = page.cache.getQueryCache().find({
+      queryKey: getQueryKey(
+        trpc.refunds.splitCancellation,
+        { bookingId: 90 },
+        "query"
+      ),
+      exact: true,
+    });
+    expect(selectedQuery?.getObserversCount()).toBe(1);
+    expect(selectedQuery?.observers[0].options).toMatchObject({
+      enabled: true,
+      refetchInterval: 5000,
+    });
+    expect(intervals.mock.calls.some(call => call[1] === 5000)).toBe(true);
+    // Advance synchronously: an asynchronous tick lets real notifications
+    // re-arm the interval midway through the artificial five-second jump.
+    act(() => {
+      vi.advanceTimersByTime(5000);
     });
     await waitFor(() =>
       expect(page.calls("splitCancellation")).toHaveLength(2)
     );
+    await within(dialog).findByText("cancelBooking.split.plan.processing");
+    await waitFor(() => expect(page.cache.isFetching()).toBe(0));
+    await commitNotifications();
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await commitNotifications();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(15000);
+    expect(selectedQuery?.getObserversCount()).toBe(0);
+    intervals.mock.calls.forEach((call, index) => {
+      if (call[1] === 5000)
+        expect(clearIntervals).toHaveBeenCalledWith(
+          intervals.mock.results[index].value
+        );
     });
+    act(() => {
+      vi.advanceTimersByTime(15000);
+    });
+    // Flush any HTTP batch that an orphaned interval would have queued, so
+    // the no-request assertion cannot pass before the request is dispatched.
+    await commitNotifications();
     expect(page.calls("splitCancellation")).toHaveLength(2);
     expect(
       page

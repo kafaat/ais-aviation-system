@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { getTableName } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
@@ -43,7 +44,7 @@ const payments = router({
   wallet: walletRouter,
   splitPayments: splitPaymentsRouter,
 });
-const requestKey = "b56d8209-4614-4d2f-a6f8-57d4ed7dc589";
+const requestKey = randomUUID();
 const token = "a".repeat(64);
 const booking = { id: 10, userId: 101, tenantId: 9, totalAmount: 10000 };
 const split = { id: 20, bookingId: 10 };

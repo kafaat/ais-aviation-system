@@ -32,6 +32,61 @@ type Tables = Record<string, Row[]>;
 type Where = (table: typeof refreshTokens, ops: typeof operators) => SQL;
 const operators = { and, eq, gt, isNull, isNotNull };
 let tables: Tables;
+const hooks: {
+  afterCommit?: () => Promise<void>;
+  afterSettingsRead?: () => void;
+  failBackupWrite?: boolean;
+  locks?: FixtureLocks;
+} = {};
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => (resolve = done));
+  return { promise, resolve };
+}
+
+// This fixture has one user. Table keys therefore represent the user's row
+// locks. It executes the services concurrently and detects a wait-for cycle;
+// it does not claim to implement MySQL isolation or native deadlock recovery.
+class FixtureLocks {
+  private owners = new Map<string, number>();
+  private waits = new Map<number, number>();
+  private changed = deferred();
+  nextId = 0;
+  afterAcquire?: (id: number, table: string) => Promise<void>;
+  onWait?: (id: number, table: string) => void;
+
+  async acquire(id: number, table: string) {
+    while (this.owners.has(table) && this.owners.get(table) !== id) {
+      this.waits.set(id, this.owners.get(table)!);
+      this.onWait?.(id, table);
+      let owner = this.waits.get(id);
+      const seen = new Set<number>([id]);
+      while (owner !== undefined) {
+        if (seen.has(owner)) {
+          this.waits.delete(id);
+          throw new Error("Fixture detected a transaction deadlock");
+        }
+        seen.add(owner);
+        owner = this.waits.get(owner);
+      }
+      await this.changed.promise;
+      this.waits.delete(id);
+    }
+    const firstAcquisition = !this.owners.has(table);
+    this.owners.set(table, id);
+    if (firstAcquisition) await this.afterAcquire?.(id, table);
+  }
+
+  release(id: number) {
+    for (const [table, owner] of this.owners)
+      if (owner === id) this.owners.delete(table);
+    this.waits.delete(id);
+    const previous = this.changed;
+    this.changed = deferred();
+    previous.resolve();
+  }
+}
 
 // A deliberately small commit/rollback adapter for deterministic regressions.
 // Reads return detached records, as MySQL does. Native locking, isolation and
@@ -66,7 +121,19 @@ function matches(row: Row, predicate?: SQL): boolean {
   return true;
 }
 
-function persistence(data: Tables) {
+function persistence(
+  data: Tables,
+  transaction?: { id: number; source: Tables; hasLock: boolean }
+) {
+  const lock = async (name: string) => {
+    if (!transaction || !hooks.locks) return;
+    await hooks.locks.acquire(transaction.id, name);
+    if (!transaction.hasLock) {
+      // A locking read sees the committed state after waiting for its owner.
+      Object.assign(data, structuredClone(transaction.source));
+      transaction.hasLock = true;
+    }
+  };
   const db = {
     query: {
       refreshTokens: {
@@ -80,9 +147,18 @@ function persistence(data: Tables) {
     },
     async transaction<T>(run: (tx: unknown) => Promise<T>): Promise<T> {
       const pending = structuredClone(data);
-      const result = await run(persistence(pending));
-      // A thrown callback never publishes its writes.
-      Object.assign(data, pending);
+      const id = hooks.locks ? ++hooks.locks.nextId : 0;
+      let result: T;
+      try {
+        result = await run(
+          persistence(pending, { id, source: data, hasLock: false })
+        );
+        // A thrown callback never publishes its writes.
+        Object.assign(data, pending);
+      } finally {
+        hooks.locks?.release(id);
+      }
+      await hooks.afterCommit?.();
       return result;
     },
     select(projection?: unknown) {
@@ -114,7 +190,10 @@ function persistence(data: Tables) {
         innerJoin: () => chain,
         leftJoin: () => chain,
         limit: () => chain,
-        for: () => Promise.resolve(read()),
+        for: async () => {
+          await lock(name);
+          return read();
+        },
         then: <T>(resolve: (value: Row[]) => T) =>
           Promise.resolve(read()).then(resolve),
       };
@@ -124,6 +203,9 @@ function persistence(data: Tables) {
       return {
         set: (values: Row) => ({
           async where(predicate: SQL) {
+            await lock(getTableName(table));
+            if (hooks.failBackupWrite && values.backupCodes !== undefined)
+              throw new Error("Fixture backup-code persistence failure");
             const rows = (data[getTableName(table)] ?? []).filter(row =>
               matches(row, predicate)
             );
@@ -147,6 +229,7 @@ function persistence(data: Tables) {
       return {
         async where(predicate: SQL) {
           const name = getTableName(table);
+          await lock(name);
           const before = data[name].length;
           data[name] = data[name].filter(row => !matches(row, predicate));
           return [{ affectedRows: before - data[name].length }];
@@ -155,13 +238,20 @@ function persistence(data: Tables) {
     },
     async execute(query: SQL) {
       const { sql, params } = dialect.sqlToQuery(query);
+      if (sql.startsWith("UPDATE mfa_settings SET backupCodes")) {
+        if (hooks.failBackupWrite)
+          throw new Error("Fixture backup-code persistence failure");
+        const row = data.mfa_settings.find(row => row.userId === params[2]);
+        if (row) Object.assign(row, { backupCodes: params[0] });
+        return [{ affectedRows: row ? 1 : 0 }];
+      }
       if (!sql.includes("FROM mfa_settings"))
         throw new Error("Unsupported regression fixture query");
-      return [
-        structuredClone(
-          data.mfa_settings.filter(row => row.userId === params[0])
-        ),
-      ];
+      const rows = structuredClone(
+        data.mfa_settings.filter(row => row.userId === params[0])
+      );
+      hooks.afterSettingsRead?.();
+      return [rows];
     },
   };
   return db;
@@ -195,6 +285,8 @@ function tokenRow(
 }
 
 beforeEach(() => {
+  for (const name of Object.keys(hooks))
+    delete hooks[name as keyof typeof hooks];
   vi.resetModules();
   vi.stubEnv("JWT_SECRET", JWT);
   vi.stubEnv("REFRESH_TOKEN_PEPPER", JWT);
@@ -228,6 +320,174 @@ afterEach(() => {
 });
 
 describe("authentication transaction regressions", () => {
+  async function enabledMfa() {
+    const mfa = await import("../services/mfa.service");
+    const secret = mfa.encryptSecret(SECRET);
+    tables.mfa_settings.push({
+      id: 1,
+      userId: 1,
+      secret,
+      isEnabled: true,
+      backupCodes: JSON.stringify([mfa.hashBackupCode("backup01")]),
+      lastUsedStep: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const { mfaRouter } = await import("../routers/mfa");
+    const caller = mfaRouter.createCaller({
+      user: tables.users[0],
+      tenantId: null,
+      authMethod: "bearer",
+      req: { headers: {} },
+      res: {},
+    } as unknown as TrpcContext);
+    return { mfa, secret, caller };
+  }
+
+  it("cannot overwrite a replacement enrollment after committing the regeneration factor", async () => {
+    const { mfa, caller } = await enabledMfa();
+    const replacement = {
+      ...tables.mfa_settings[0],
+      id: 2,
+      secret: mfa.encryptSecret(SECRET),
+      backupCodes: JSON.stringify([mfa.hashBackupCode("newcode1")]),
+      lastUsedStep: null,
+    };
+    // A second request commits disable/setup/enable at the first request's
+    // transaction boundary. An unconditional later write must not touch it.
+    hooks.afterCommit = async () => {
+      delete hooks.afterCommit;
+      tables.mfa_settings = [structuredClone(replacement)];
+    };
+    const result = await caller.regenerateBackupCodes({ token: "379410" });
+    expect(result.backupCodes).toHaveLength(10);
+    expect(tables.mfa_settings).toEqual([replacement]);
+    expect(
+      result.backupCodes.some(
+        code =>
+          mfa.verifyBackupCode(code, JSON.parse(replacement.backupCodes)).valid
+      )
+    ).toBe(false);
+  });
+
+  it("rejects a stale regeneration enrollment without consuming its factor or changing replacement codes", async () => {
+    const { mfa, caller } = await enabledMfa();
+    const replacement = {
+      ...tables.mfa_settings[0],
+      id: 2,
+      secret: mfa.encryptSecret(SECRET),
+      backupCodes: JSON.stringify([mfa.hashBackupCode("newcode1")]),
+    };
+    hooks.afterSettingsRead = () => {
+      delete hooks.afterSettingsRead;
+      tables.mfa_settings = [structuredClone(replacement)];
+    };
+    await expect(
+      caller.regenerateBackupCodes({ token: "379410" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(tables.mfa_settings).toEqual([replacement]);
+  });
+
+  it("rolls the regeneration factor back when backup-code persistence fails", async () => {
+    const { caller } = await enabledMfa();
+    const original = structuredClone(tables.mfa_settings);
+    hooks.failBackupWrite = true;
+    await expect(
+      caller.regenerateBackupCodes({ token: "379410" })
+    ).rejects.toThrow("Fixture backup-code persistence failure");
+    expect(tables.mfa_settings).toEqual(original);
+    hooks.failBackupWrite = false;
+    await expect(
+      caller.regenerateBackupCodes({ token: "379410" })
+    ).resolves.toMatchObject({ backupCodes: expect.any(Array) });
+  });
+
+  it("regenerates legacy-key backup codes atomically and refuses a reused TOTP", async () => {
+    const { mfa, caller } = await enabledMfa();
+    tables.mfa_settings[0].secret = legacyCiphertext();
+    const result = await caller.regenerateBackupCodes({ token: "379410" });
+    expect(tables.mfa_settings[0].secret).toMatch(/^k2:/);
+    const stored = JSON.parse(String(tables.mfa_settings[0].backupCodes));
+    expect(result.backupCodes).toHaveLength(10);
+    for (const code of result.backupCodes)
+      expect(mfa.verifyBackupCode(code, stored).valid).toBe(true);
+    expect(mfa.verifyBackupCode("backup01", stored).valid).toBe(false);
+    const beforeReplay = structuredClone(tables.mfa_settings);
+    await expect(
+      caller.regenerateBackupCodes({ token: "379410" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(tables.mfa_settings).toEqual(beforeReplay);
+  });
+
+  it("completes a login challenge while a disable request contends without a lock cycle", async () => {
+    const { mfa, secret } = await enabledMfa();
+    const challenge = await mfa.createMfaChallenge(1);
+    // The adapter supplies schema defaults for this directly-created row.
+    Object.assign(tables.mfa_challenges[0], { consumedAt: null, attempts: 0 });
+    const firstLock = deferred();
+    const resumeCompletion = deferred();
+    const completionWaitsForSettings = deferred();
+    const locks = new FixtureLocks();
+    hooks.locks = locks;
+    let completionPaused = false;
+    locks.afterAcquire = async (id, table) => {
+      if (id === 1 && !completionPaused) {
+        completionPaused = true;
+        firstLock.resolve();
+        await resumeCompletion.promise;
+      }
+      if (id === 2 && table === "mfa_settings") {
+        resumeCompletion.resolve();
+        // With the old order, completion owns the challenge while disable
+        // owns settings. Let completion wait before disable revokes it.
+        if (locks.nextId === 2 && !tables.mfa_challenges[0].consumedAt)
+          await completionWaitsForSettings.promise;
+      }
+    };
+    locks.onWait = (id, table) => {
+      if (id === 1 && table === "mfa_settings")
+        completionWaitsForSettings.resolve();
+      if (id === 2 && table === "users") resumeCompletion.resolve();
+    };
+    const completion = mfa.completeMfaChallenge(challenge, "backup01");
+    await firstLock.promise;
+    const disabling = mfa.disableMfa(1, secret, "379410");
+    const results = await Promise.allSettled([completion, disabling]);
+    for (const result of results) {
+      if (result.status === "rejected") throw result.reason;
+      expect(result).toMatchObject({ status: "fulfilled" });
+    }
+    expect(tables.mfa_settings).toEqual([]);
+    expect(tables.mfa_challenges[0].consumedAt).toBeInstanceOf(Date);
+  });
+
+  it.each(["removed", "disabled"])(
+    "rejects a captured MFA proof after enrollment is %s but permits ordinary password login",
+    async enrollment => {
+      const { mfa } = await enabledMfa();
+      const { mobileAuthServiceV2: auth } =
+        await import("../services/mobile-auth-v2.service");
+      const challenge = await mfa.createMfaChallenge(1);
+      Object.assign(tables.mfa_challenges[0], {
+        consumedAt: null,
+        attempts: 0,
+      });
+      const proof = await mfa.completeMfaChallenge(challenge, "backup01");
+      if (enrollment === "removed") tables.mfa_settings = [];
+      else tables.mfa_settings[0].isEnabled = false;
+      await expect(auth.login(1, undefined, proof)).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: "MFA_REQUIRED",
+      });
+      expect(tables.refresh_tokens).toEqual([]);
+      await expect(auth.login(1)).resolves.toMatchObject({
+        tokenType: "Bearer",
+      });
+      expect(tables.refresh_tokens).toHaveLength(1);
+      expect(tables.refresh_tokens[0].mfaVerified).toBe(false);
+    }
+  );
+
   it("keeps the enrollment and TOTP step unchanged when verification or the expected enrollment fails", async () => {
     const mfa = await import("../services/mfa.service");
     const secret = legacyCiphertext();

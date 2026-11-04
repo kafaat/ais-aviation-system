@@ -573,38 +573,12 @@ export async function updateLastUsed(userId: number): Promise<void> {
   );
 }
 
-/**
- * Update backup codes for a user
- */
-export async function updateBackupCodes(
+/** Replace backup codes only for the enrollment whose fresh TOTP is consumed. */
+export async function regenerateBackupCodes(
   userId: number,
-  hashedCodes: string[]
-): Promise<void> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  const now = new Date();
-  const codesJson = JSON.stringify(hashedCodes);
-  await db.execute(
-    sql`UPDATE mfa_settings SET backupCodes = ${codesJson}, updatedAt = ${now} WHERE userId = ${userId}`
-  );
-}
-
-/**
- * Verify a TOTP code for an account change (enable, disable, regenerate
- * backup codes) and consume its time step, so a code observed at login
- * cannot be replayed within its window to change the account. Same rule as
- * completeMfaChallenge. Returns false for an unknown user or a bad code.
- */
-export async function consumeTotpStep(
-  userId: number,
+  expectedSecret: string,
   token: string
-): Promise<boolean> {
+): Promise<string[]> {
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -612,16 +586,53 @@ export async function consumeTotpStep(
       message: "Database not available",
     });
   }
-  return db.transaction(tx => consumeActionTotp(tx, userId, token, "required"));
+
+  return db.transaction(async tx => {
+    await tx.select().from(users).where(eq(users.id, userId)).for("update");
+    const [settings] = await tx
+      .select()
+      .from(mfaSettings)
+      .where(eq(mfaSettings.userId, userId))
+      .for("update");
+    if (!settings?.isEnabled || settings.secret !== expectedSecret)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "MFA setup changed; retry verification",
+      });
+    if (!(await consumeActionTotp(tx, userId, token, "required")))
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid verification code.",
+      });
+    const codes = generateBackupCodes();
+    await tx
+      .update(mfaSettings)
+      .set({
+        backupCodes: JSON.stringify(codes.map(hashBackupCode)),
+        updatedAt: new Date(),
+      })
+      .where(eq(mfaSettings.id, settings.id));
+    return codes;
+  });
 }
 
-/** Lock and consume the factor in the same transaction as a protected action. */
+/**
+ * Lock and consume the factor in the same transaction as a protected action.
+ * Call before acquiring the action's other locks: every MFA mutation takes the
+ * user lock first, including actions that allow an unenrolled account.
+ */
 export async function consumeActionTotp(
   tx: SettlementTx,
   userId: number,
   token: string | undefined,
   mode: "required" | "if-enrolled"
 ): Promise<boolean> {
+  const [user] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .for("update");
+  if (!user) return false;
   const [settings] = await tx
     .select()
     .from(mfaSettings)
@@ -718,12 +729,30 @@ export async function completeMfaChallenge(
     .update(challengeToken)
     .digest("hex");
   const result = await db.transaction(async tx => {
+    // Discover only the immutable owner without a lock. Taking a challenge
+    // lock before the user/settings locks can deadlock an enrollment change
+    // that holds settings while revoking this user's challenges.
+    const [candidate] = await tx
+      .select({ userId: mfaChallenges.userId })
+      .from(mfaChallenges)
+      .where(eq(mfaChallenges.tokenHash, tokenHash))
+      .limit(1);
+    if (!candidate) return null;
+    const [user] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, candidate.userId))
+      .for("update");
+    if (!user) return null;
+    // This current locking read rechecks expiry, consumption and ownership
+    // after any wait for an enrollment change or another completion.
     const [challenge] = await tx
       .select()
       .from(mfaChallenges)
       .where(
         and(
           eq(mfaChallenges.tokenHash, tokenHash),
+          eq(mfaChallenges.userId, candidate.userId),
           gt(mfaChallenges.expiresAt, new Date()),
           isNull(mfaChallenges.consumedAt)
         )

@@ -152,6 +152,42 @@ nativeDescribe("native authentication sessions, rotation and MFA", () => {
       .from(schema.refreshTokens)
       .where(eq(schema.refreshTokens.familyId, familyId));
   }
+  async function lockUser() {
+    const connection = await pool!.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.query("SELECT id FROM users WHERE id = ? FOR UPDATE", [
+        ownerId,
+      ]);
+      return connection;
+    } catch (error) {
+      connection.release();
+      throw error;
+    }
+  }
+  async function waitForUserWaiters(expected: number) {
+    // MySQL 8/9 native lock evidence, restricted to this test's owned schema.
+    // Date is faked for TOTP, so use a monotonic deadline for coordination.
+    const deadline = performance.now() + 5000;
+    let actual = 0;
+    do {
+      const [rows] = await pool!.query<mysql.RowDataPacket[]>(
+        `SELECT COUNT(DISTINCT waits.REQUESTING_THREAD_ID) AS count
+           FROM performance_schema.data_lock_waits AS waits
+           JOIN performance_schema.data_locks AS locks
+             ON locks.ENGINE = waits.ENGINE
+            AND locks.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID
+          WHERE locks.OBJECT_SCHEMA = ? AND locks.OBJECT_NAME = 'users'`,
+        [databaseName]
+      );
+      actual = Number(rows[0].count);
+      if (actual === expected) return;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    } while (performance.now() < deadline);
+    expect(actual, "contenders waiting on the owned user's native lock").toBe(
+      expected
+    );
+  }
 
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
@@ -663,6 +699,333 @@ nativeDescribe("native authentication sessions, rotation and MFA", () => {
       message: "MFA_REQUIRED",
     });
   });
+
+  it("regenerates legacy-key backup codes over HTTP and consumes both the TOTP and replacement codes once", async () => {
+    await enroll(legacyCiphertext());
+    const proof = await mfa.completeMfaChallenge(
+      await mfa.createMfaChallenge(ownerId),
+      "backup01"
+    );
+    const session = await auth.login(ownerId, undefined, proof);
+    const headers = { authorization: `Bearer ${session.accessToken}` };
+    const regenerated = await post(
+      "/mfa/regenerate-backup-codes",
+      { token: authenticatorCode(SECRET) },
+      headers
+    );
+    expect(regenerated.status).toBe(200);
+    const { backupCodes } = (await regenerated.json()) as {
+      backupCodes: string[];
+    };
+    expect(backupCodes).toHaveLength(10);
+    const settings = await mfa.getMfaSettings(ownerId);
+    expect(settings!.secret).toMatch(/^k2:/);
+    expect(JSON.parse(settings!.backupCodes)).toEqual(
+      backupCodes.map(mfa.hashBackupCode)
+    );
+    expect(
+      (
+        await post(
+          "/mfa/regenerate-backup-codes",
+          { token: authenticatorCode(SECRET) },
+          headers
+        )
+      ).status
+    ).toBe(400);
+    expect((await mfa.getMfaSettings(ownerId))!.backupCodes).toBe(
+      settings!.backupCodes
+    );
+    await expect(
+      mfa.completeMfaChallenge(
+        await mfa.createMfaChallenge(ownerId),
+        "backup02"
+      )
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    const fresh = await mfa.completeMfaChallenge(
+      await mfa.createMfaChallenge(ownerId),
+      backupCodes[0]
+    );
+    await expect(auth.login(ownerId, undefined, fresh)).resolves.toMatchObject({
+      tokenType: "Bearer",
+    });
+    await expect(
+      mfa.completeMfaChallenge(
+        await mfa.createMfaChallenge(ownerId),
+        backupCodes[0]
+      )
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    // Regeneration does not revoke existing sessions; enable/disable does.
+    await expect(
+      auth.authenticateAccessToken(session.accessToken)
+    ).resolves.toMatchObject({ id: ownerId });
+  });
+
+  it("cannot overwrite an enrollment replaced at regeneration's commit boundary", async () => {
+    await enroll();
+    const proof = await mfa.completeMfaChallenge(
+      await mfa.createMfaChallenge(ownerId),
+      "backup01"
+    );
+    const session = await auth.login(ownerId, undefined, proof);
+    const database = state.db!;
+    let replace = true;
+    let replacement: Awaited<ReturnType<typeof mfa.getMfaSettings>> = null;
+    // Intercept only the boundary after a real MySQL commit. Enrollment
+    // replacement also executes the real disable/setup/enable transactions.
+    state.db = new Proxy(database, {
+      get(target, key, receiver) {
+        if (key === "transaction")
+          return async (...args: Parameters<typeof database.transaction>) => {
+            const result = await database.transaction(...args);
+            if (replace) {
+              replace = false;
+              vi.setSystemTime(Date.now() + 60000);
+              const current = await mfa.getMfaSettings(ownerId);
+              await mfa.disableMfa(
+                ownerId,
+                current!.secret,
+                authenticatorCode(SECRET)
+              );
+              const newSecret = mfa.generateSecret();
+              const encrypted = mfa.encryptSecret(newSecret);
+              await mfa.upsertMfaSetup(ownerId, encrypted, [
+                mfa.hashBackupCode("newcode1"),
+              ]);
+              await mfa.enableMfa(
+                ownerId,
+                encrypted,
+                authenticatorCode(newSecret)
+              );
+              replacement = await mfa.getMfaSettings(ownerId);
+            }
+            return result;
+          };
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    try {
+      const response = await post(
+        "/mfa/regenerate-backup-codes",
+        { token: authenticatorCode(SECRET) },
+        { authorization: `Bearer ${session.accessToken}` }
+      );
+      expect(response.status).toBe(200);
+      const result = (await response.json()) as { backupCodes: string[] };
+      const persisted = await mfa.getMfaSettings(ownerId);
+      expect(replacement).not.toBeNull();
+      expect(persisted).toEqual(replacement);
+      expect(JSON.parse(persisted!.backupCodes)).toEqual([
+        mfa.hashBackupCode("newcode1"),
+      ]);
+      for (const code of result.backupCodes)
+        expect(
+          mfa.verifyBackupCode(code, JSON.parse(persisted!.backupCodes)).valid
+        ).toBe(false);
+    } finally {
+      state.db = database;
+    }
+  });
+
+  it("refuses regeneration after an enrollment replacement commits while it waits for the user lock", async () => {
+    await enroll();
+    const expected = (await mfa.getMfaSettings(ownerId))!.secret;
+    const holder = await lockUser();
+    const result = Promise.allSettled([
+      mfa.regenerateBackupCodes(ownerId, expected, authenticatorCode(SECRET)),
+    ]);
+    const replacementCodes = JSON.stringify([mfa.hashBackupCode("newcode1")]);
+    const replacementSecret = mfa.encryptSecret(SECRET);
+    try {
+      await waitForUserWaiters(1);
+      // Commit a replacement enrollment under the same user lock as setup.
+      await holder.query("DELETE FROM mfa_settings WHERE userId = ?", [
+        ownerId,
+      ]);
+      await holder.query(
+        "INSERT INTO mfa_settings (userId, secret, isEnabled, backupCodes) VALUES (?, ?, 1, ?)",
+        [ownerId, replacementSecret, replacementCodes]
+      );
+      await holder.commit();
+      expect((await result)[0]).toMatchObject({
+        status: "rejected",
+        reason: { code: "CONFLICT" },
+      });
+      expect(
+        await state.db!.query.mfaSettings.findFirst({
+          where: eq(schema.mfaSettings.userId, ownerId),
+        })
+      ).toMatchObject({
+        secret: replacementSecret,
+        backupCodes: replacementCodes,
+        lastUsedStep: null,
+      });
+    } finally {
+      await holder.rollback();
+      holder.release();
+      await result;
+    }
+  });
+
+  it("rolls back TOTP consumption and key migration when replacement backup persistence fails", async () => {
+    await enroll(legacyCiphertext());
+    const original = await state.db!.query.mfaSettings.findFirst({
+      where: eq(schema.mfaSettings.userId, ownerId),
+    });
+    await pool!.query(`CREATE TRIGGER reject_backup_replacement
+      BEFORE UPDATE ON mfa_settings FOR EACH ROW
+      BEGIN
+        IF NEW.backupCodes <> OLD.backupCodes THEN
+          SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'fixture backup persistence failure';
+        END IF;
+      END`);
+    try {
+      await expect(
+        mfa.regenerateBackupCodes(
+          ownerId,
+          original!.secret,
+          authenticatorCode(SECRET)
+        )
+      ).rejects.toThrow();
+      expect(
+        await state.db!.query.mfaSettings.findFirst({
+          where: eq(schema.mfaSettings.userId, ownerId),
+        })
+      ).toEqual(original);
+    } finally {
+      await pool!.query("DROP TRIGGER reject_backup_replacement");
+    }
+    const codes = await mfa.regenerateBackupCodes(
+      ownerId,
+      original!.secret,
+      authenticatorCode(SECRET)
+    );
+    expect(codes).toHaveLength(10);
+    expect((await mfa.getMfaSettings(ownerId))!.secret).toMatch(/^k2:/);
+  });
+
+  it("serializes challenge completion and disabling at the user lock without deadlock", async () => {
+    await enroll();
+    const settings = (await mfa.getMfaSettings(ownerId))!;
+    const challenge = await mfa.createMfaChallenge(ownerId);
+    const holder = await lockUser();
+    const result = Promise.allSettled([
+      mfa.completeMfaChallenge(challenge, "backup01"),
+      mfa.disableMfa(ownerId, settings.secret, authenticatorCode(SECRET)),
+    ]);
+    try {
+      await waitForUserWaiters(2);
+      await holder.commit();
+      const [completion, disabled] = await result;
+      expect(disabled).toMatchObject({ status: "fulfilled" });
+      if (completion.status === "rejected")
+        expect(completion.reason).toMatchObject({ code: "UNAUTHORIZED" });
+      else
+        await expect(
+          auth.login(ownerId, undefined, completion.value)
+        ).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: "MFA_REQUIRED",
+        });
+      expect(await mfa.getMfaSettings(ownerId)).toBeNull();
+      await expect(
+        mfa.completeMfaChallenge(challenge, "backup02")
+      ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    } finally {
+      await holder.rollback();
+      holder.release();
+      await result;
+    }
+  });
+
+  it("allows only one of two concurrent challenges to consume the same TOTP", async () => {
+    await enroll();
+    const challenges = await Promise.all([
+      mfa.createMfaChallenge(ownerId),
+      mfa.createMfaChallenge(ownerId),
+    ]);
+    const results = await Promise.allSettled(
+      challenges.map(token =>
+        mfa.completeMfaChallenge(token, authenticatorCode(SECRET))
+      )
+    );
+    expect(
+      results.filter(result => result.status === "fulfilled")
+    ).toHaveLength(1);
+    expect(results.find(result => result.status === "rejected")).toMatchObject({
+      reason: { code: "UNAUTHORIZED" },
+    });
+    const attempts = await state.db!.select().from(schema.mfaChallenges);
+    expect(attempts.map(row => row.attempts)).toEqual([1, 1]);
+    expect(attempts.filter(row => row.consumedAt !== null)).toHaveLength(1);
+  });
+
+  it.each(["expired", "consumed"])(
+    "revalidates a challenge that became %s while completion waited for the user lock",
+    async stateChange => {
+      await enroll();
+      const before = (await mfa.getMfaSettings(ownerId))!;
+      const challenge = await mfa.createMfaChallenge(ownerId);
+      const holder = await lockUser();
+      const result = Promise.allSettled([
+        mfa.completeMfaChallenge(challenge, "backup01"),
+      ]);
+      try {
+        await waitForUserWaiters(1);
+        if (stateChange === "expired") vi.setSystemTime(Date.now() + 301000);
+        else
+          await holder.query(
+            "UPDATE mfa_challenges SET consumedAt = ? WHERE userId = ?",
+            [new Date(), ownerId]
+          );
+        await holder.commit();
+        expect((await result)[0]).toMatchObject({
+          status: "rejected",
+          reason: { code: "UNAUTHORIZED" },
+        });
+        expect((await mfa.getMfaSettings(ownerId))!.backupCodes).toBe(
+          before.backupCodes
+        );
+        expect(
+          await state.db!.select().from(schema.mfaChallenges)
+        ).toMatchObject([{ attempts: 0 }]);
+      } finally {
+        await holder.rollback();
+        holder.release();
+        await result;
+      }
+    }
+  );
+
+  it.each(["removed", "pending"])(
+    "rejects a captured proof after the enabled enrollment is %s and still permits ordinary password login",
+    async enrollment => {
+      await enroll();
+      const proof = await mfa.completeMfaChallenge(
+        await mfa.createMfaChallenge(ownerId),
+        "backup01"
+      );
+      await mfa.disableMfa(ownerId, proof.secret, authenticatorCode(SECRET));
+      if (enrollment === "pending")
+        await mfa.upsertMfaSetup(ownerId, mfa.encryptSecret(SECRET), [
+          mfa.hashBackupCode("newcode1"),
+        ]);
+      await expect(auth.login(ownerId, undefined, proof)).rejects.toMatchObject(
+        {
+          code: "PRECONDITION_FAILED",
+          message: "MFA_REQUIRED",
+        }
+      );
+      expect(await state.db!.select().from(schema.refreshTokens)).toEqual([]);
+      const ordinary = await login();
+      await expect(
+        auth.authenticateAccessToken(ordinary.accessToken)
+      ).resolves.toMatchObject({ id: ownerId });
+      expect(await state.db!.select().from(schema.refreshTokens)).toMatchObject(
+        [{ mfaVerified: false }]
+      );
+    }
+  );
 
   it.each([false, true])(
     "changes legacy-key enrollment atomically through HTTP (already enabled: %s)",

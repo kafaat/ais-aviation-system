@@ -71,6 +71,8 @@ function MultiCityResultsForm({ search }: { search: string }) {
   });
 
   // Calculate price for selected flights
+  const completeSelection =
+    selectedFlights.length === segments.length && segments.length >= 2;
   const quote = trpc.multiCity.calculatePrice.useQuery(
     {
       segments: selectedFlights.map(sf => ({
@@ -83,13 +85,15 @@ function MultiCityResultsForm({ search }: { search: string }) {
     },
     {
       retry: false,
-      enabled:
-        selectedFlights.length === segments.length && segments.length >= 2,
+      enabled: completeSelection,
     }
   );
 
+  // A disabled query can still expose a cached quote for a shorter itinerary.
   const priceResult =
-    quote.isError || quote.isFetching ? undefined : quote.data;
+    !completeSelection || quote.isError || quote.isFetching
+      ? undefined
+      : quote.data;
 
   // Trigger search when segments are loaded
   useEffect(() => {

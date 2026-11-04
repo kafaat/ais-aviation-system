@@ -1143,13 +1143,18 @@ function LoadSheetTab() {
   const [flightId, setFlightId] = useState("");
   const parsedFlightId = positiveId(flightId);
 
-  const generateMutation = wbTrpc.generateLoadSheet.useMutation({
-    onSuccess: () =>
-      toast.success(t("wb.loadsheet.generated", "Load sheet generated")),
+  const generateMutation = trpc.weightBalance.generateLoadSheet.useMutation({
+    onSuccess: (_result, variables) => {
+      if (variables.flightId !== parsedFlightId) return;
+      toast.success(t("wb.loadsheet.generated", "Load sheet generated"));
+    },
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const loadSheet = generateMutation.data;
+  const loadSheet =
+    generateMutation.variables?.flightId === parsedFlightId
+      ? generateMutation.data
+      : undefined;
 
   return (
     <div className="space-y-6">
