@@ -43,13 +43,23 @@ const passengerSchema = z.object({
   recordLocator: safeToken,
   surname: safeToken,
   givenName: safeToken,
+  seatNumber: z
+    .string()
+    .regex(/^[1-9][0-9]{0,2}[A-Z]$/)
+    .optional(),
 });
 
 const payloadSchemas = {
   PNL: commonSchema.extend({ passengers: z.array(passengerSchema).max(999) }),
   ADL: commonSchema.extend({
     changes: z
-      .array(passengerSchema.extend({ action: z.enum(["ADD", "DEL", "CHG"]) }))
+      .array(
+        passengerSchema
+          .extend({ action: z.enum(["ADD", "DEL", "CHG"]) })
+          .refine(p => p.action !== "DEL" || p.seatNumber === undefined, {
+            message: "A deleted passenger cannot be assigned a seat",
+          })
+      )
       .max(999),
   }),
   LDM: commonSchema.extend({
@@ -68,6 +78,10 @@ const payloadSchemas = {
     bagTag: z.string().regex(/^\d{10}$/),
     surname: safeToken,
     givenName: safeToken,
+    seatNumber: z
+      .string()
+      .regex(/^[1-9][0-9]{0,2}[A-Z]$/)
+      .optional(),
   }),
   BPM: commonSchema.extend({
     bagTag: z.string().regex(/^\d{10}$/),
@@ -111,6 +125,11 @@ function line(...parts: Array<string | number>) {
   return parts.join("/");
 }
 
+function passengerLine(p: z.infer<typeof passengerSchema>) {
+  const name = `${p.recordLocator}.${p.surname}/${p.givenName}`;
+  return p.seatNumber ? `${name}\n.SEAT/${p.seatNumber}` : name;
+}
+
 function buildBody(
   messageType: OperationalMessageType,
   value: Record<string, unknown>
@@ -123,10 +142,7 @@ function buildBody(
     return [
       "PNL",
       line(flight, route),
-      ...payload.passengers.map(
-        passenger =>
-          `-${passenger.recordLocator}.${passenger.surname}/${passenger.givenName}`
-      ),
+      ...payload.passengers.map(passenger => `-${passengerLine(passenger)}`),
       "END",
     ];
   }
@@ -136,8 +152,7 @@ function buildBody(
       "ADL",
       line(flight, route),
       ...payload.changes.map(
-        passenger =>
-          `${passenger.action} ${passenger.recordLocator}.${passenger.surname}/${passenger.givenName}`
+        passenger => `${passenger.action} ${passengerLine(passenger)}`
       ),
       "END",
     ];

@@ -59,6 +59,31 @@ describe("operational message drafts", () => {
     expect(bsm.requiresExternalAcceptance).toBe(true);
   });
 
+  it("carries a changed seat in the operator ADL and rejects seat data on a deletion", () => {
+    const passenger = {
+      recordLocator: "ABC123",
+      surname: "SALEH",
+      givenName: "ALI",
+    };
+    const draft = (action: string, seatNumber?: string) =>
+      generateOperationalDraft({
+        messageType: "ADL",
+        route,
+        payload: {
+          ...common,
+          changes: [{ ...passenger, action, seatNumber }],
+        },
+      });
+    expect(
+      parseOperationalDraft(draft("CHG", "12A").messageContent).lines.slice(1)
+    ).toEqual(["CHG ABC123.SALEH/ALI", ".SEAT/12A"]);
+    expect(
+      parseOperationalDraft(draft("DEL").messageContent).lines.at(-1)
+    ).toBe("DEL ABC123.SALEH/ALI");
+    expect(() => draft("DEL", "12A")).toThrow();
+    expect(() => draft("CHG", "1A\nEND")).toThrow();
+  });
+
   it("emits UTC MVT time and validates the four local baggage events", () => {
     const mvt = generateOperationalDraft({
       messageType: "MVT",

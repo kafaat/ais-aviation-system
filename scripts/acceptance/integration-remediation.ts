@@ -2365,6 +2365,12 @@ try {
     "Signed coupon uplift separates cash, unused carriage, flown carriage and loyalty at a synthetic month close",
     () => verifyCouponMonthClose(db, ctx, id)
   );
+  const { verifyHandlerStation } = await import("./handler-station");
+  await record(
+    "HANDLER-STATION-01",
+    "One synthetic departure station reconciles roster changes and a replayed handler ticket receipt to the eligible coupon",
+    () => verifyHandlerStation(db, ctx, id)
+  );
   const { verifyBspLocalEvidence } = await import("./bsp-local-evidence");
   await record(
     "BSP-LOCAL-01",
