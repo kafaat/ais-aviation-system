@@ -156,3 +156,14 @@ jobs:
                 !prBody.match(/https:\/\/github\.com\/.*\/issues\/\d+/i)) {
               core.notice('Consider linking related issues in your PR description');
             }
+
+  gap-closure-evidence:
+    name: Validate gap and reporting closure evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Validate closure ledger against reporting catalog
+        run: python3 scripts/ci/check_gap_closure_ledger.py
