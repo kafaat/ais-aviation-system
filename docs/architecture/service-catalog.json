@@ -696,7 +696,8 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/services/baggage-custody.service.ts",
-        "server/services/dcs.service.ts"
+        "server/services/dcs.service.ts",
+        "server/services/standard-reports-ops.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -759,6 +760,7 @@
         "server/services/baggage-custody.service.ts",
         "server/services/baggage-reconciliation.service.ts",
         "server/services/dcs.service.ts",
+        "server/services/standard-reports-ops.service.ts",
         "server/services/weight-balance.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
@@ -1724,6 +1726,7 @@
         "server/services/price-alerts.service.ts",
         "server/services/scheduled-task.service.ts",
         "server/services/split-refund.service.ts",
+        "server/services/standard-report-schedules.service.ts",
         "server/services/travel-scenarios.service.ts",
         "server/services/waitlist.service.ts",
         "server/services/weather-operations.service.ts"
@@ -1745,7 +1748,8 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/routers/ibe-public.ts",
-        "server/routers/pricing.router.ts"
+        "server/routers/pricing.router.ts",
+        "server/services/standard-reports-commercial.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -2140,6 +2144,7 @@
         "server/services/queue.service.ts",
         "server/services/refunds.service.ts",
         "server/services/split-payment.service.ts",
+        "server/services/standard-report-schedules.service.ts",
         "server/webhooks/stripe.ts"
       ],
       "dependencies": [],
@@ -2747,6 +2752,7 @@
         "server/services/disaster-recovery.service.ts"
       ],
       "dependencies": [
+        "server/_core/logger.ts",
         "server/db.ts",
         "server/services/redis-cache.service.ts"
       ],
@@ -4122,14 +4128,17 @@
     },
     {
       "file": "server/services/operational-messaging.service.ts",
-      "lifecycle": "unwired",
+      "lifecycle": "active",
       "technicalOwner": "server/services/operational-messaging.service.ts",
       "domain": "platform",
       "accountableOwner": null,
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/services/aviation-message-transmission.service.ts"],
+      "consumers": [
+        "server/services/aviation-message-transmission.service.ts",
+        "server/services/standard-reports-ops.service.ts"
+      ],
       "dependencies": [],
       "tableExpressions": {
         "reads": [],
@@ -5420,6 +5429,9 @@
         "server/services/data-warehouse.service.ts",
         "server/services/dcs-operations.service.ts",
         "server/services/internal-refund.service.ts",
+        "server/services/standard-report-schedules.service.ts",
+        "server/services/standard-reports-commercial.service.ts",
+        "server/services/standard-reports.service.ts",
         "server/services/supplier-finance.service.ts"
       ],
       "dependencies": [],
@@ -5714,6 +5726,9 @@
         "server/services/intelligence/economics.agent.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/premium-experiment.service.ts",
+        "server/services/standard-report-schedules.service.ts",
+        "server/services/standard-reports-ops.service.ts",
+        "server/services/standard-reports.service.ts",
         "server/services/travel-clearance.service.ts",
         "server/services/travel-evidence.service.ts"
       ],
@@ -6130,7 +6145,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/sms.ts"],
+      "consumers": [
+        "server/routers/sms.ts",
+        "server/services/standard-reports-commercial.service.ts"
+      ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
@@ -6289,6 +6307,227 @@
       "replacement": null
     },
     {
+      "file": "server/services/standard-report-schedules.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/standard-report-schedules.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/standard-reports.ts",
+        "server/services/cron.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/contracts/standard-reports.ts",
+        "server/db.ts",
+        "server/services/email.service.ts",
+        "server/services/rbac.service.ts",
+        "server/services/required-value.ts",
+        "server/services/standard-reports.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["standardReportRuns", "standardReportTemplates", "users"],
+        "writes": [
+          "run.content",
+          "standardReportRuns",
+          "standardReportTemplates"
+        ]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/standard-report-utils.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/standard-report-utils.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/standard-reports-commercial.service.ts",
+        "server/services/standard-reports-finance.service.ts",
+        "server/services/standard-reports-ops.service.ts",
+        "server/services/standard-reports.service.ts"
+      ],
+      "dependencies": ["shared/standard-reports.ts"],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/standard-reports-commercial.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/standard-reports-commercial.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/standard-reports.service.ts"],
+      "dependencies": [
+        "drizzle/operations-schema.ts",
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/currency/currency.service.ts",
+        "server/services/rbac.service.ts",
+        "server/services/sms.service.ts",
+        "server/services/standard-report-utils.ts",
+        "shared/ibe-search.ts",
+        "shared/standard-reports.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "airlines",
+          "airports",
+          "ancillaryServices",
+          "auditLogs",
+          "bookingAncillaries",
+          "bookingFareComponents",
+          "bookingModifications",
+          "bookingSegments",
+          "bookingStatusHistory",
+          "bookings",
+          "currencies",
+          "destination",
+          "exchangeRates",
+          "fareClasses",
+          "fareRules",
+          "financialLedger",
+          "flights",
+          "loyaltyAccounts",
+          "milesTransactions",
+          "operationalMessageRoutes",
+          "operationalMessageTransmissions",
+          "origin",
+          "passengers",
+          "paymentHistory",
+          "payments",
+          "ticketCoupons",
+          "users"
+        ],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/standard-reports-finance.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/standard-reports-finance.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/standard-reports.service.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/standard-report-utils.ts",
+        "shared/standard-reports.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "agentBookings",
+          "ancillaryServices",
+          "aviationEvidence",
+          "bookingAncillaries",
+          "bookingFareComponents",
+          "bookings",
+          "destination",
+          "financialLedger",
+          "flights",
+          "legacyCoupon",
+          "origin",
+          "outbox",
+          "passengers",
+          "payments",
+          "periodCoupon",
+          "periodUplift",
+          "ticketCoupons",
+          "travelAgents"
+        ],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/standard-reports-ops.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/standard-reports-ops.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/standard-reports.service.ts"],
+      "dependencies": [
+        "drizzle/operations-schema.ts",
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/baggage-reconciliation.service.ts",
+        "server/services/baggage-sector-scope.ts",
+        "server/services/operational-messaging.service.ts",
+        "server/services/required-value.ts",
+        "server/services/standard-report-utils.ts",
+        "shared/standard-reports.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "apisData",
+          "baggageItems",
+          "bookings",
+          "destination",
+          "fareClasses",
+          "flightFareClassInventory",
+          "flights",
+          "inventoryLocks",
+          "operationalMessageRoutes",
+          "operationalMessageTransmissions",
+          "origin",
+          "passengers",
+          "seatHolds",
+          "ticketCoupons"
+        ],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/standard-reports.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/standard-reports.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/standard-reports.ts",
+        "server/services/standard-report-schedules.service.ts"
+      ],
+      "dependencies": [
+        "server/services/rbac.service.ts",
+        "server/services/required-value.ts",
+        "server/services/standard-report-utils.ts",
+        "server/services/standard-reports-commercial.service.ts",
+        "server/services/standard-reports-finance.service.ts",
+        "server/services/standard-reports-ops.service.ts",
+        "shared/csv.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": ["content"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/stripe/client-factory.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/stripe/client-factory.ts",
@@ -6408,6 +6647,7 @@
         "server/services/pricing-approval.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
+        "server/services/standard-report-schedules.service.ts",
         "server/services/supplier-finance.service.ts",
         "server/services/travel-agent.service.ts",
         "server/services/wallet.service.ts"
