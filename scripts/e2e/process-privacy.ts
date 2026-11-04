@@ -11,8 +11,10 @@ function markPhase(
     | "closePool:start"
     | "closePool:return"
     | "closeLogger:start"
-    | "closeLogger:return",
-  resourceTypes?: string[]
+    | "closeLogger:return"
+    | "closeLogger:error",
+  resourceTypes?: string[],
+  failure?: "timeout" | "transport"
 ) {
   // Direct stderr preserves phase evidence independently of logger cleanup.
   process.stderr.write(
@@ -23,6 +25,7 @@ function markPhase(
         ...(resourceTypes && {
           resourceTypes: [...new Set(resourceTypes)].sort(),
         }),
+        ...(failure && { failure }),
       }) +
       "\n"
   );
@@ -40,7 +43,19 @@ try {
     markPhase("closePool:return", process.getActiveResourcesInfo());
   } finally {
     markPhase("closeLogger:start");
-    await closeLogger();
+    try {
+      await closeLogger();
+    } catch (error) {
+      // A fixed category preserves diagnosis without exposing arbitrary logs.
+      markPhase(
+        "closeLogger:error",
+        undefined,
+        error instanceof Error && error.message === "Logger shutdown timed out"
+          ? "timeout"
+          : "transport"
+      );
+      throw error;
+    }
     markPhase("closeLogger:return", process.getActiveResourcesInfo());
   }
 }

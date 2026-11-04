@@ -324,7 +324,36 @@ describe("privacy worker database shutdown", () => {
     12000
   );
 
-  it("reports flush rejection without an unhandled delayed transport error", async () => {
+  it.each(["pretty", "json"])(
+    "closes %s logs when writes overtake the transport readiness barrier",
+    async format => {
+      const { stdout, stderr } = await promisify(execFile)(
+        process.execPath,
+        [
+          "--import",
+          "tsx",
+          "server/__tests__/fixtures/privacy-logger-readiness-race.cjs",
+        ],
+        {
+          cwd: root,
+          timeout: 8000,
+          env: { PATH: process.env.PATH, NODE_ENV: "test", LOG_FORMAT: format },
+        }
+      );
+      expect(stdout.match(/READINESS_RECORD_[AB]/g)).toEqual([
+        "READINESS_RECORD_A",
+        "READINESS_RECORD_B",
+      ]);
+      expect(stderr).toContain('"phase":"readiness:overshot"');
+      expect(stderr).toContain('"phase":"LOGGER_READINESS_RACE_COMPLETE"');
+      expect(stderr).toContain('"recordsRetained":true');
+      expect(stderr).toContain('"workerExited":true');
+      expect(stderr).toContain('"closed":true');
+    },
+    12000
+  );
+
+  it("rejects a shutdown transport error and observes its eventual closure", async () => {
     const program = `
       import { once } from 'node:events';
       import pino from 'pino';
@@ -333,20 +362,19 @@ describe("privacy worker database shutdown", () => {
       if (!transport.ready) await once(transport, 'ready');
       // Observe the delayed failure and closure even after shutdown rejects.
       transport.ref();
-      // thread-stream rejects flush callbacks before emitting its error event.
-      transport.flush = callback => {
-        const error = new Error('fixture_flush_failure');
-        process.nextTick(() => callback(error));
+      const end = transport.end.bind(transport);
+      transport.end = () => {
+        const error = new Error('fixture_shutdown_failure');
         setImmediate(() => transport.emit('error', error));
-        setImmediate(() => transport.end());
+        setImmediate(end);
       };
       let rejected = false;
       try { await closeLogger(); }
       catch (error) {
-        if (error.message !== 'fixture_flush_failure') throw error;
+        if (error.message !== 'fixture_shutdown_failure') throw error;
         rejected = true;
       }
-      if (!rejected) throw new Error('Flush failure was reported as success');
+      if (!rejected) throw new Error('Shutdown failure was reported as success');
       if (!transport.closed)
         await new Promise(resolve => transport.once('close', resolve));
       process.stdout.write('[logger-error] observed\\n');

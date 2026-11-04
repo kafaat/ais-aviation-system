@@ -1088,6 +1088,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
         "closePool:return",
         "closeLogger:start",
         "closeLogger:return",
+        "closeLogger:error",
       ]);
       const resourceTypes = new Set([
         "PipeWrap",
@@ -1129,6 +1130,11 @@ test.describe("Funded journeys and truthful operational reads", () => {
                   {
                     phase: phase.phase,
                     elapsedMs: phase.elapsedMs,
+                    ...(phase.phase === "closeLogger:error" &&
+                      (phase.failure === "timeout" ||
+                        phase.failure === "transport") && {
+                        failure: phase.failure,
+                      }),
                     ...((phase.phase === "closePool:return" ||
                       phase.phase === "closeLogger:return") &&
                       Array.isArray(phase.resourceTypes) && {

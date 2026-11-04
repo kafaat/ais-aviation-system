@@ -102,28 +102,77 @@ permits retries was not treated as completion of this shutdown investigation.
 
 ## Explicit logger shutdown
 
-The one-shot worker now awaits the owned Pino transport as well as the database.
-The existing logger construction, formatting, destinations, and redaction are
-retained. Pino's exported stream symbol identifies that logger's transport.
-Concurrent shutdown callers share one promise: it waits for transport readiness,
-asynchronously flushes output, requests termination, and awaits the close event.
-The error listener spans the whole shutdown, including an error emitted after
-a flush callback has already rejected. Logger cleanup runs even when database
-cleanup fails.
+The first logger follow-up awaited the owned Pino transport as well as the
+database. It retained the existing logger construction, formatting, destinations,
+and redaction. Pino's exported stream symbol identifies that logger's transport.
+Concurrent shutdown callers shared one promise that waited for transport
+readiness, asynchronously flushed output, requested termination, and awaited
+the close event. Its error listener spanned shutdown, including a delayed error
+after a flush callback had rejected. Logger cleanup also ran after database
+cleanup failure.
 
 A referenced five-second watchdog keeps the event loop active while awaiting
-asynchronous startup and flush acknowledgements and reports failure if those
-waits stall. It cannot preempt thread-stream's synchronous `end()` handshake,
-which has its own library timeout. No complete five-second process-exit bound
-is claimed. A logger failure does not become successful work.
+asynchronous completion and reports failure if that wait stalls. It cannot
+preempt thread-stream's synchronous `end()` handshake, which has its own library
+timeout. No complete five-second process-exit bound is claimed. A logger failure
+does not become successful work.
 
 Direct stderr phases now distinguish database and logger cleanup. The browser's
 existing allowlist accepts only those phase names, elapsed times, and safe
 resource-type names; arbitrary child logs remain excluded from its error report.
-Three additional subprocess cases verify final pretty/JSON records, redaction,
-concurrent and repeated closure, and rejection with the transport's delayed
-error-event ordering. The complete local shutdown regression file has eight
-cases. Browser first-attempt acceptance remains a separate current-head gate.
+Three additional subprocess cases verified final pretty/JSON records, redaction,
+concurrent and repeated closure, and rejection with delayed transport errors.
+Those eight shutdown cases passed locally and in CI, but did not reproduce the
+remaining browser failure.
+
+The [third CI run](https://github.com/kafaat/ais-aviation-system/actions/runs/41861575803)
+on `4088ff9f00c4ec6a4df623ef5f0a8af6b1da2f28` passed 3,957 tests in 317 files.
+Its privacy case still needed a retry: processing returned at 107 ms, database
+cleanup at 109 ms, then `closeLogger:start` was the last recorded phase. The child
+exited with code 1, without being killed or receiving a signal. The sanitized
+artifact did not retain the underlying logger error, so it cannot distinguish a
+timeout from a transport failure. Artifact `13340673083` has verified SHA-256
+`27accadc372e7bdc3e76ca12bb71da098e486dd5f4185fd5fb12e70a62f0123c`.
+
+## Reproduced logger readiness race and correction
+
+A deterministic scheduling fixture reproduced a race in the unmodified pinned
+thread-stream 4.2.0. Its `READY` handler captures a write position and waits for
+the read position to equal it. Further writes can be consumed before that wait's
+callback runs, advancing the read position beyond the captured value. The stream
+then remains unready even though all current bytes have been consumed. An
+asynchronous flush also waits for readiness and cannot release this condition.
+
+The fixture delegates to the real installed Pino pretty/JSON destination and
+gates only scheduling. It reads the internal indices to prove the race, without
+changing the library, its worker, or the indices. Against the previous
+`closeLogger()`, read and write positions both reached 412 while readiness stayed
+false; shutdown rejected after 5,002–5,005 ms with `Logger shutdown timed out`.
+The revised function closed the real worker in 11 ms for pretty output and 15 ms
+for JSON. Both records were retained exactly once and in order, and the processes
+exited naturally with code 0. This proves the controlled defect and its repair;
+the historical CI snapshot alone still does not identify its internal indices.
+
+The revised shutdown calls the transport's public `end()` directly and awaits
+actual closure. That API drains queued writes, including writes waiting for the
+shared buffer, and ends the destination before acknowledging completion. It
+does not require the readiness barrier or a preceding asynchronous flush.
+Concurrent callers still share one promise. Scoped error observation and checks
+of the pinned transport's `writableErrored` getter preserve failures before and
+after closure. Normal server logging remains asynchronous with the same options.
+
+Separate large-output controls queued 12,000 records before readiness in each
+format, exceeding the four-MiB shared buffer. Pretty output retained 8,700,000
+bytes and JSON retained 7,956,000 bytes; each had all 12,000 unique markers in
+order and exited naturally with its worker closed. This exercises deferred
+buffer drain and rollover, not just empty-stream closure.
+
+The regression suite adds deterministic readiness-race cases for both formats.
+All ten shutdown cases and eleven existing unified-logger cases passed locally
+on Node 24.22.1; CI must verify the same source on its Node 22 runtime.
+Direct stderr diagnostics also classify logger failure as only `timeout` or
+`transport`; the browser allowlist never includes arbitrary exception messages.
+Browser first-attempt acceptance remains a separate current-head gate.
 
 The application does not force successful process exit. The browser case keeps
 its original timeout and retry policy, its authenticated export download and
