@@ -1,4 +1,5 @@
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
+import { assertProviderBoundary } from "./provider-boundary";
 import { timingSafeEqual } from "node:crypto";
 import { initTracing, stopTracing } from "./telemetry";
 import { privacyDownload } from "../routes/privacy-download";
@@ -72,6 +73,11 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   assertIntegrationConfiguration();
+  const providerBoundary = assertProviderBoundary();
+  log.info(
+    { event: "provider_boundary_verified", providerBoundary },
+    "Web provider boundary verified"
+  );
   initTracing("api");
   // Initialize Sentry for error tracking
   initSentry();

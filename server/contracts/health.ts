@@ -13,6 +13,7 @@ export const responseContracts = {
       }),
       stripe: z.object({
         status: z.enum(["pass", "fail"]),
+        mode: z.enum(["configuration", "mock"]).optional(),
         responseTime: z.union([z.undefined(), outputNumber]).optional(),
         error: z.union([z.undefined(), z.string()]).optional(),
       }),

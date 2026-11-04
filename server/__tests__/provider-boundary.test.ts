@@ -188,9 +188,9 @@ describe("provider boundary", () => {
       expect(client.getApiField("protocol")).toBe("http");
       expect(client.getApiField("version")).toBe(STRIPE_API_VERSION);
 
-      vi.stubEnv("STRIPE_MOCK_HOST", "https://stripe-mock.internal");
+      vi.stubEnv("STRIPE_MOCK_HOST", "https://stripe-mock.railway.internal");
       const secure = createStripeClient("sk_test_example");
-      expect(secure.getApiField("host")).toBe("stripe-mock.internal");
+      expect(secure.getApiField("host")).toBe("stripe-mock.railway.internal");
       expect(secure.getApiField("port")).toBe("443");
       expect(secure.getApiField("protocol")).toBe("https");
     });
