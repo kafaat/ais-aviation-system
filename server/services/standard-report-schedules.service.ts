@@ -19,7 +19,10 @@ import {
   users,
 } from "../../drizzle/schema";
 import type { StandardReportFilters } from "../../shared/standard-reports";
-import { reportTemplateInputSchema } from "../contracts/standard-reports";
+import {
+  reportTemplateInputSchema,
+  type reportTemplateSchema,
+} from "../contracts/standard-reports";
 import { getDb } from "../db";
 import { requireValue } from "./required-value";
 import { isAdmin } from "./rbac.service";
@@ -38,12 +41,34 @@ import {
 
 type TemplateInput = z.infer<typeof reportTemplateInputSchema>;
 type Template = typeof standardReportTemplates.$inferSelect;
+type PublicTemplate = z.infer<typeof reportTemplateSchema>;
 const {
   content: _content,
   leaseToken: _leaseToken,
   ...runMetadata
 } = getTableColumns(standardReportRuns);
 const LEASE_MS = 15 * 60_000;
+
+/** Authorize with the stored owner and tenant before projecting the strict public response. */
+function publicTemplate(template: Template): PublicTemplate {
+  return {
+    id: template.id,
+    reportId: template.reportId,
+    name: template.name,
+    filters: template.filters,
+    columns: template.columns ?? undefined,
+    format: template.format,
+    cadence: template.cadence,
+    hourUtc: template.hourUtc,
+    minuteUtc: template.minuteUtc,
+    lookbackDays: template.lookbackDays,
+    emailToOwner: template.emailToOwner,
+    enabled: template.enabled,
+    nextRunAt: template.nextRunAt,
+    createdAt: template.createdAt,
+    updatedAt: template.updatedAt,
+  };
+}
 
 async function reportDb() {
   const db = await getDb();
@@ -148,7 +173,7 @@ export async function listStandardReportTemplates(
         return false;
       }
     })
-    .map(row => ({ ...row, columns: row.columns ?? undefined }));
+    .map(publicTemplate);
 }
 
 export async function saveStandardReportTemplate(
@@ -245,7 +270,7 @@ export async function saveStandardReportTemplate(
     .from(standardReportTemplates)
     .where(eq(standardReportTemplates.id, requireValue(savedId)))
     .limit(1);
-  return { ...saved, columns: saved.columns ?? undefined };
+  return publicTemplate(saved);
 }
 
 export async function deleteStandardReportTemplate(
@@ -306,7 +331,7 @@ export async function setStandardReportTemplateEnabled(
       )
     );
   const saved = await getTemplate(user, contextTenant, id);
-  return { ...saved, columns: saved.columns ?? undefined };
+  return publicTemplate(saved);
 }
 
 async function getTemplate(
