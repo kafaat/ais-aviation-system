@@ -262,6 +262,17 @@ jobs:
           scan-ref: "."
           format: "sarif"
           output: "trivy-results.sarif"
+          # Keep every severity visible in code scanning; enforce the blocking
+          # high/critical policy in the separate filesystem scan below.
+          exit-code: "0"
+
+      - name: Reject high or critical filesystem vulnerabilities
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
+          exit-code: "1"
           severity: "CRITICAL,HIGH"
 
       - name: Upload Trivy scan results
@@ -416,9 +427,9 @@ jobs:
       - name: Install auth service dependencies
         run: pip install -r auth-service/requirements.txt
 
-      - name: Verify auth database URL configuration
+      - name: Verify auth service regression tests
         run: |
-          python -m unittest discover -s auth-service -p 'test_config.py' -v
+          python -m unittest discover -s auth-service -p 'test_*.py' -v
           python auth-service/test_public_registration.py
 
       - name: Start auth service
@@ -726,6 +737,14 @@ jobs:
         uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }}
+          format: "table"
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+
+      - name: Scan auth service image for vulnerabilities
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}
           format: "table"
           exit-code: "1"
           severity: "CRITICAL,HIGH"
