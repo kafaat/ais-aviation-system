@@ -33,6 +33,7 @@
 - Add and publish reporting/export browser evidence, source-bound coverage manifests, and native transaction, credit authority, cache, shutdown and ownership regression checks, including claim-versus-purge locking cases on MySQL 8.0 and 9.7 (#264, #268, #269, #271, #277).
 - Isolate Codecov uploads from application tests and authenticate them with GitHub OIDC; derive disjoint `server`, `client` and `shared` LCOV reports, verify their source and artifact identities, and upload each with its matching flag (#276, #277).
 - Correct unsupported Codecov configuration fields and refresh the CI action runtimes while preserving the configured coverage targets and acceptance boundaries (#269, #271, #277).
+- Report failed authentication image builds and reject missing, empty, malformed or incompatible Trivy JSON reports with explicit Docker validation errors, while retaining all HIGH/CRITICAL scan gates (#278).
 
 ### Scope and Acceptance
 
