@@ -16,6 +16,38 @@ import crypto from "crypto";
 import { logger } from "../_core/logger";
 
 const CACHE_PREFIX = process.env.CACHE_PREFIX || "ais";
+const REQUEST_COMMAND_TIMEOUT_MS = 250;
+
+// One round trip and one atomic mutation: a disconnect cannot split creation,
+// increment and expiry, or leave an immortal counter at a window boundary.
+const RATE_LIMIT_SCRIPT = `
+local count = redis.call("INCR", KEYS[1])
+local ttl = redis.call("PTTL", KEYS[1])
+if ttl < 0 then
+  redis.call("PEXPIRE", KEYS[1], ARGV[1])
+  ttl = tonumber(ARGV[1])
+end
+return {count, ttl}
+`;
+
+/** Request deadlines belong to the transport that accepted the command. */
+class RequestRedis extends Redis {
+  override sendCommand(
+    ...args: Parameters<Redis["sendCommand"]>
+  ): ReturnType<Redis["sendCommand"]> {
+    const result = super.sendCommand(...args);
+    const transport = this.stream;
+    void args[0].promise.catch((error: unknown) => {
+      if (error instanceof Error && error.message === "Command timed out") {
+        // ioredis commandTimeout rejects without removing commandQueue entries.
+        // Closing their original socket flushes them (maxRetriesPerRequest: 0).
+        // Never look up this.stream here: it may already be a recovered socket.
+        transport?.destroy(error);
+      }
+    });
+    return result;
+  }
+}
 
 /**
  * Redis Cache Service
@@ -34,10 +66,19 @@ class CacheService {
     }
 
     try {
-      this.client = new Redis(
+      this.client = new RequestRedis(
         process.env.REDIS_URL || "redis://localhost:6379",
         {
-          maxRetriesPerRequest: 10,
+          // This connection serves requests, not durable background jobs.
+          // A failed mutation must never be replayed after its caller has
+          // fallen back, especially after a rate-limit window has expired.
+          maxRetriesPerRequest: 0,
+          enableOfflineQueue: false,
+          autoResendUnfulfilledCommands: false,
+          commandTimeout: REQUEST_COMMAND_TIMEOUT_MS,
+          // Pinned ioredis's socketTimeout survives close and targets the
+          // current stream. RequestRedis instead closes only the command's
+          // captured transport, without a timer on an idle healthy connection.
           retryStrategy: (retries: number) => {
             if (retries > 10) {
               logger.error({}, "Redis reconnection failed after 10 retries");
@@ -81,7 +122,10 @@ class CacheService {
    * Check if Redis is connected
    */
   isConnected(): boolean {
-    return this.connected && this.client !== null;
+    const client = this.client;
+    return (
+      this.connected && client?.status === "ready" && !client.stream.destroyed
+    );
   }
 
   /**
@@ -541,32 +585,39 @@ class CacheService {
     key: string,
     limit: number,
     windowSeconds: number
-  ): Promise<{ allowed: boolean; remaining: number }> {
-    if (!this.isConnected()) {
+  ): Promise<{ allowed: boolean; remaining: number; ttlMs: number }> {
+    const client = this.client;
+    if (!this.isConnected() || !client) {
       // Let the caller apply its bounded fallback or fail closed.
       throw new Error("Redis rate limiter unavailable");
     }
+    const windowMs = windowSeconds * 1000;
+    if (!Number.isSafeInteger(windowMs) || windowMs <= 0)
+      throw new Error("Invalid Redis rate limit window");
 
     try {
-      const client = this.client;
-      if (!client) throw new Error("Redis rate limiter unavailable");
       const rateLimitKey = `${CACHE_PREFIX}:ratelimit:${key}`;
-
-      await client.set(rateLimitKey, 0, "EX", windowSeconds, "NX");
-      const current = await client.incr(rateLimitKey);
-
-      // Safety: if the key expired between SET NX and INCR, the INCR creates
-      // a new key with no TTL. Ensure the key always has an expiry to prevent
-      // a permanently stuck rate limit counter.
-      const ttl = await client.ttl(rateLimitKey);
-      if (ttl === -1) {
-        await client.expire(rateLimitKey, windowSeconds);
-      }
+      const reply = await client.eval(
+        RATE_LIMIT_SCRIPT,
+        1,
+        rateLimitKey,
+        windowMs
+      );
+      if (
+        !Array.isArray(reply) ||
+        reply.length !== 2 ||
+        !Number.isSafeInteger(reply[0]) ||
+        reply[0] < 1 ||
+        !Number.isSafeInteger(reply[1]) ||
+        reply[1] < 0
+      )
+        throw new Error("Invalid Redis rate limit reply");
+      const [current, ttlMs] = reply as [number, number];
 
       const allowed = current <= limit;
       const remaining = Math.max(0, limit - current);
 
-      return { allowed, remaining };
+      return { allowed, remaining, ttlMs };
     } catch (error) {
       logger.error({ key, error }, "Rate limit check error");
       throw error;
@@ -630,11 +681,19 @@ class CacheService {
    * Disconnect from Redis
    */
   async disconnect(): Promise<void> {
-    if (this.client) {
-      await this.client.quit();
-      this.connected = false;
-      logger.info({}, "Redis cache service disconnected");
+    const client = this.client;
+    this.client = null;
+    this.connected = false;
+    if (!client) return;
+    try {
+      if (client.status === "ready") await client.quit();
+    } finally {
+      // An unavailable transport cannot acknowledge QUIT. Stop reconnecting
+      // and dispose of this owned socket even if a ready QUIT times out.
+      client.disconnect();
+      client.stream?.destroy();
     }
+    logger.info({}, "Redis cache service disconnected");
   }
 }
 

@@ -8,7 +8,11 @@
  * @date 2026-02-05
  */
 
-import { redisCacheService, CacheTTL } from "./redis-cache.service";
+import {
+  redisCacheService,
+  CacheTTL,
+  CacheNamespace,
+} from "./redis-cache.service";
 import { getDb } from "../db";
 import { bookings, flights, airports } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte } from "drizzle-orm";
@@ -160,7 +164,10 @@ export async function getPopularRoutes(
   limit: number = 10
 ): Promise<PopularRoute[]> {
   // Try cache first
-  const cached = await redisCacheService.getCachedPopularRoutes();
+  const generation = await redisCacheService.captureGeneration(
+    CacheNamespace.ROUTES
+  );
+  const cached = await redisCacheService.getCachedPopularRoutes(generation);
   if (cached && Array.isArray(cached)) {
     return (cached as PopularRoute[]).slice(0, limit);
   }
@@ -170,7 +177,11 @@ export async function getPopularRoutes(
 
   // Cache the results
   if (routes.length > 0) {
-    await redisCacheService.cachePopularRoutes(routes, CacheTTL.POPULAR_ROUTES);
+    await redisCacheService.cachePopularRoutes(
+      routes,
+      CacheTTL.POPULAR_ROUTES,
+      generation
+    );
   }
 
   return routes;
@@ -224,7 +235,14 @@ export async function getSuggestedDestinations(
   limit: number = 5
 ): Promise<PopularRoute[]> {
   // Check cache first
-  const cached = await redisCacheService.getCachedRoute(originId, 0);
+  const generation = await redisCacheService.captureGeneration(
+    CacheNamespace.ROUTES
+  );
+  const cached = await redisCacheService.getCachedRoute(
+    originId,
+    0,
+    generation
+  );
   if (cached && Array.isArray(cached)) {
     return (cached as PopularRoute[]).slice(0, limit);
   }
@@ -301,7 +319,8 @@ export async function getSuggestedDestinations(
         originId,
         0,
         routes,
-        CacheTTL.POPULAR_ROUTES
+        CacheTTL.POPULAR_ROUTES,
+        generation
       );
     }
 

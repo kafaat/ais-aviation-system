@@ -4,6 +4,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   gte,
   inArray,
   isNull,
@@ -294,6 +295,33 @@ export const commercialReportDefinitions: StandardReportDefinition[] = [
 
 function tenantCondition(column: AnyMySqlColumn, scope: StandardReportScope) {
   return scope.tenantId === undefined ? undefined : eq(column, scope.tenantId);
+}
+
+function sameTenant(left: AnyMySqlColumn, right: AnyMySqlColumn) {
+  return or(eq(left, right), and(isNull(left), isNull(right)));
+}
+
+/** Legacy child rows inherit ownership from their booking only when unset. */
+function ownedNullableTenant(child: AnyMySqlColumn) {
+  return or(isNull(child), eq(child, bookings.tenantId));
+}
+
+function ownedOptionalPassenger(db: Reader, passengerId: AnyMySqlColumn) {
+  return or(
+    isNull(passengerId),
+    exists(
+      db
+        .select({ one: sql`1` })
+        .from(passengers)
+        .where(
+          and(
+            eq(passengers.id, passengerId),
+            eq(passengers.bookingId, bookings.id),
+            ownedNullableTenant(passengers.tenantId)
+          )
+        )
+    )
+  );
 }
 
 function periodConditions(
@@ -908,7 +936,7 @@ async function matchingBookings(
   if (id === 62) {
     const flightId = required(filters.flightId, "Flight ID");
     const flight = await db
-      .select({ id: flights.id })
+      .select({ id: flights.id, tenantId: flights.tenantId })
       .from(flights)
       .where(
         and(eq(flights.id, flightId), tenantCondition(flights.tenantId, scope))
@@ -920,6 +948,9 @@ async function matchingBookings(
         message: "Flight was not found in the reporting scope",
       });
     conditions.push(
+      flight[0].tenantId === null
+        ? isNull(bookings.tenantId)
+        : eq(bookings.tenantId, flight[0].tenantId),
       or(
         sql`EXISTS (SELECT 1 FROM ${bookingSegments} WHERE ${bookingSegments.bookingId} = ${bookingIdRef} AND ${bookingSegments.flightId} = ${flightId} AND ${bookingSegments.status} IN ('pending', 'confirmed', 'completed'))`,
         and(
@@ -980,8 +1011,7 @@ const detailColumns = [
 async function bookingTimeline(
   db: Reader,
   bookingRows: Awaited<ReturnType<typeof matchingBookings>>,
-  filters: StandardReportFilters,
-  scope: StandardReportScope
+  filters: StandardReportFilters
 ) {
   if (!bookingRows.length) return [];
   const ids = bookingRows.map(row => row.bookingId);
@@ -1041,17 +1071,18 @@ async function bookingTimeline(
       userId: paymentHistory.userId,
     })
     .from(paymentHistory)
+    .innerJoin(bookings, eq(bookings.id, paymentHistory.bookingId))
     .innerJoin(
       payments,
       and(
         eq(payments.id, paymentHistory.paymentId),
-        eq(payments.bookingId, paymentHistory.bookingId)
+        eq(payments.bookingId, paymentHistory.bookingId),
+        ownedNullableTenant(payments.tenantId)
       )
     )
     .where(
       and(
         inArray(paymentHistory.bookingId, ids),
-        tenantCondition(payments.tenantId, scope),
         ...periodConditions(paymentHistory.createdAt, filters)
       )
     )
@@ -1176,7 +1207,7 @@ async function pnrReport(
   if (id === 60)
     return reportTable(
       detailColumns,
-      await bookingTimeline(db, bookingRows, filters, scope),
+      await bookingTimeline(db, bookingRows, filters),
       [
         "Each row is an event from its named source. A servicing row is dated when its request was created; its current status is not presented as a historically timestamped completion.",
       ]
@@ -1206,10 +1237,11 @@ async function pnrReport(
       occurredAt: passengers.createdAt,
     })
     .from(passengers)
+    .innerJoin(bookings, eq(bookings.id, passengers.bookingId))
     .where(
       and(
         inArray(passengers.bookingId, ids),
-        tenantCondition(passengers.tenantId, scope)
+        ownedNullableTenant(passengers.tenantId)
       )
     )
     .orderBy(asc(passengers.bookingId), asc(passengers.id))
@@ -1241,11 +1273,12 @@ async function pnrReport(
       occurredAt: bookingSegments.createdAt,
     })
     .from(bookingSegments)
+    .innerJoin(bookings, eq(bookings.id, bookingSegments.bookingId))
     .innerJoin(
       flights,
       and(
         eq(flights.id, bookingSegments.flightId),
-        tenantCondition(flights.tenantId, scope)
+        sameTenant(flights.tenantId, bookings.tenantId)
       )
     )
     .innerJoin(origin, eq(origin.id, flights.originId))
@@ -1282,7 +1315,7 @@ async function pnrReport(
       flights,
       and(
         eq(flights.id, bookings.flightId),
-        tenantCondition(flights.tenantId, scope)
+        sameTenant(flights.tenantId, bookings.tenantId)
       )
     )
     .innerJoin(origin, eq(origin.id, flights.originId))
@@ -1317,19 +1350,20 @@ async function pnrReport(
       occurredAt: ticketCoupons.createdAt,
     })
     .from(ticketCoupons)
+    .innerJoin(bookings, eq(bookings.id, ticketCoupons.bookingId))
     .innerJoin(
       passengers,
       and(
         eq(passengers.id, ticketCoupons.passengerId),
         eq(passengers.bookingId, ticketCoupons.bookingId),
-        tenantCondition(passengers.tenantId, scope)
+        ownedNullableTenant(passengers.tenantId)
       )
     )
     .innerJoin(
       flights,
       and(
         eq(flights.id, ticketCoupons.flightId),
-        tenantCondition(flights.tenantId, scope)
+        sameTenant(flights.tenantId, bookings.tenantId)
       )
     )
     .where(inArray(ticketCoupons.bookingId, ids))
@@ -1354,10 +1388,11 @@ async function pnrReport(
       occurredAt: payments.createdAt,
     })
     .from(payments)
+    .innerJoin(bookings, eq(bookings.id, payments.bookingId))
     .where(
       and(
         inArray(payments.bookingId, ids),
-        tenantCondition(payments.tenantId, scope)
+        ownedNullableTenant(payments.tenantId)
       )
     )
     .orderBy(asc(payments.bookingId), asc(payments.id))
@@ -1384,17 +1419,19 @@ async function pnrReport(
       reversedAt: bookingFareComponents.reversedAt,
     })
     .from(bookingFareComponents)
+    .innerJoin(bookings, eq(bookings.id, bookingFareComponents.bookingId))
     .innerJoin(
       flights,
       and(
         eq(flights.id, bookingFareComponents.flightId),
-        tenantCondition(flights.tenantId, scope)
+        sameTenant(flights.tenantId, bookings.tenantId)
       )
     )
     .where(
       and(
         inArray(bookingFareComponents.bookingId, ids),
-        tenantCondition(bookingFareComponents.tenantId, scope)
+        ownedNullableTenant(bookingFareComponents.tenantId),
+        ownedOptionalPassenger(db, bookingFareComponents.passengerId)
       )
     )
     .orderBy(
@@ -1422,11 +1459,17 @@ async function pnrReport(
       occurredAt: bookingAncillaries.createdAt,
     })
     .from(bookingAncillaries)
+    .innerJoin(bookings, eq(bookings.id, bookingAncillaries.bookingId))
     .innerJoin(
       ancillaryServices,
       eq(ancillaryServices.id, bookingAncillaries.ancillaryServiceId)
     )
-    .where(inArray(bookingAncillaries.bookingId, ids))
+    .where(
+      and(
+        inArray(bookingAncillaries.bookingId, ids),
+        ownedOptionalPassenger(db, bookingAncillaries.passengerId)
+      )
+    )
     .orderBy(asc(bookingAncillaries.bookingId), asc(bookingAncillaries.id))
     .limit(LIMIT);
   result.push(
@@ -1438,7 +1481,7 @@ async function pnrReport(
     }))
   );
   ensureCapacity(result);
-  result.push(...(await bookingTimeline(db, bookingRows, {}, scope)));
+  result.push(...(await bookingTimeline(db, bookingRows, {})));
   const references = new Map(bookingRows.map(row => [row.bookingId, row]));
   return reportTable(
     detailColumns,
@@ -1449,6 +1492,7 @@ async function pnrReport(
     })),
     [
       "Record types prevent passenger/sector/payment joins from multiplying monetary rows. Segment quantity denotes segment order; booking quantity denotes declared passengers.",
+      "Children are included only through their owning booking. Nullable legacy tenant fields inherit that booking's ownership; explicit tenant or passenger/booking conflicts are excluded even in a global report.",
       "Fare components retain their recorded component codes and reversal state; they are not an approved tax-code registry. Local coupon state is not external carrier acceptance.",
       "Ancillary currency is unknown where the purchase did not capture it; current catalog currency is not retroactively substituted. No booking total is apportioned across passengers or sectors without recorded allocation.",
     ]

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as schema from "../../drizzle/schema";
 import {
   baseFinanceRows,
+  component,
   financeFixtureTables,
   financeScope,
   fixtureInsert,
@@ -17,6 +18,7 @@ import {
 const state = vi.hoisted(() => ({ db: null as unknown }));
 vi.mock("../db", () => ({ getDb: () => state.db }));
 import { getFinanceStandardReport } from "../services/standard-reports-finance.service";
+import { getCommercialStandardReport } from "../services/standard-reports-commercial.service";
 
 const allowed =
   process.env.AIS_DISPOSABLE_DATABASE === "true" &&
@@ -157,6 +159,120 @@ nativeDescribe(
         voidStatus: "V",
         voidEventId: "synthetic-void-1",
       });
+    });
+
+    it("keeps nullable legacy ownership while rejecting inconsistent PNR and financial relationships", async () => {
+      await connection!.execute(
+        "UPDATE passengers SET tenantId=NULL WHERE id=1"
+      );
+      await connection!.execute("UPDATE payments SET tenantId=NULL WHERE id=1");
+      await connection!.execute(
+        "UPDATE booking_fare_components SET tenantId=NULL WHERE id=1"
+      );
+      for (const [id, tenantId, bookingId] of [
+        [4, 202, 1],
+        [5, 101, 2],
+        [6, null, 1],
+      ]) {
+        const entry = fixtureInsert(schema.passengers, {
+          id,
+          tenantId,
+          bookingId,
+          firstName: "Synthetic",
+          lastName: `Passenger ${id}`,
+        });
+        await connection!.execute(entry.sql, entry.params);
+      }
+      for (const [id, passengerId] of [
+        [50, 3],
+        [51, 4],
+        [52, 5],
+        [53, 6],
+        [54, 999],
+      ]) {
+        const entry = fixtureInsert(
+          schema.bookingFareComponents,
+          component(id, { passengerId, amount: 100 })
+        );
+        await connection!.execute(entry.sql, entry.params);
+      }
+      const invalidPayment = fixtureInsert(
+        schema.payments,
+        payment(6, { tenantId: 202 })
+      );
+      await connection!.execute(invalidPayment.sql, invalidPayment.params);
+      for (const [id, paymentId] of [
+        [1, 1],
+        [2, 6],
+      ]) {
+        const entry = fixtureInsert(schema.paymentHistory, {
+          id,
+          paymentId,
+          bookingId: 1,
+          event: "completed",
+          amount: 12000,
+          currency: "SAR",
+          createdAt: "2026-10-01 00:01:00",
+        });
+        await connection!.execute(entry.sql, entry.params);
+      }
+      const invalidSegment = fixtureInsert(schema.bookingSegments, {
+        id: 100,
+        bookingId: 1,
+        flightId: 3,
+        segmentOrder: 1,
+        status: "confirmed",
+      });
+      await connection!.execute(invalidSegment.sql, invalidSegment.params);
+
+      for (const scope of [financeScope, { userId: financeScope.userId }]) {
+        const snapshot = await getCommercialStandardReport(
+          59,
+          { bookingReference: "REF001" },
+          scope
+        );
+        expect(
+          snapshot!.rows
+            .filter(row => row.recordType === "passenger")
+            .map(row => row.passengerId)
+        ).toEqual([1, 2, 6]);
+        expect(
+          snapshot!.rows
+            .filter(row => row.recordType === "fare_component")
+            .map(row => row.recordId)
+        ).toEqual([1, 2, 3, 4, 53]);
+        expect(
+          snapshot!.rows
+            .filter(row => row.recordType === "payment")
+            .map(row => row.recordId)
+        ).toEqual([1, 3, 4]);
+        expect(
+          snapshot!.rows
+            .filter(row => row.recordType === "payment_event")
+            .map(row => row.recordId)
+        ).toEqual([1]);
+        expect(snapshot!.rows.some(row => row.recordType === "segment")).toBe(
+          false
+        );
+        const daily = await getFinanceStandardReport(
+          76,
+          { ...october, flightId: 1 },
+          scope
+        );
+        expect(daily!.rows.find(row => row.basis === "booked")).toMatchObject({
+          amountMinor: 19100,
+          sourceLines: 4,
+          recognizedRevenueMinor: null,
+        });
+      }
+      const flightReport = await getCommercialStandardReport(
+        62,
+        { flightId: 3 },
+        { userId: financeScope.userId }
+      );
+      expect([
+        ...new Set(flightReport!.rows.map(row => row.bookingId)),
+      ]).toEqual([2]);
     });
   }
 );

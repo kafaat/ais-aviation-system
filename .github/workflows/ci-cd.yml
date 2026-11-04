@@ -164,6 +164,10 @@ jobs:
           pnpm run db:verify
           pnpm run db:verify-catalog
 
+      - name: Prepare isolated native Redis test binary
+        timeout-minutes: 5
+        run: bash scripts/ci/provision-test-redis.sh
+
       - name: Run tests with coverage
         id: coverage
         env:
@@ -187,7 +191,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: github.event_name != 'pull_request'
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.coverage.outputs.evidence-dir }}/coverage/lcov.info
@@ -884,8 +888,12 @@ jobs:
 
       - name: Notify deployment success
         if: success() && vars.SLACK_WEBHOOK_URL != ''
-        uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
+          webhook: ${{ vars.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          errors: true
+          retries: "0"
           payload: |
             {
               "text": "Staging Deployment Success",
@@ -899,14 +907,15 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
       - name: Notify deployment failure
         if: failure() && vars.SLACK_WEBHOOK_URL != ''
-        uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
+          webhook: ${{ vars.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          errors: true
+          retries: "0"
           payload: |
             {
               "text": "Staging Deployment Failed",
@@ -920,9 +929,6 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
       # =============================================================================
       # STAGE 7: Deploy to Production (with approval)
@@ -1143,8 +1149,12 @@ jobs:
 
       - name: Notify deployment success
         if: success() && vars.SLACK_WEBHOOK_URL != ''
-        uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
+          webhook: ${{ vars.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          errors: true
+          retries: "0"
           payload: |
             {
               "text": "Production Deployment Success",
@@ -1158,14 +1168,15 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
       - name: Notify deployment failure
         if: failure() && vars.SLACK_WEBHOOK_URL != ''
-        uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
+          webhook: ${{ vars.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          errors: true
+          retries: "0"
           payload: |
             {
               "text": "Production Deployment Failed",
@@ -1179,9 +1190,6 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
       # =============================================================================
       # STAGE 8: Post-Deployment Monitoring
