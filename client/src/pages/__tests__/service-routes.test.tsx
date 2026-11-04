@@ -197,7 +197,14 @@ it("shows family pool errors separately and offers creation after a verified emp
     })
     .mockReturnValue(null);
   visit("/loyalty", "user", {
-    "loyalty.myAccount": () => null,
+    "loyalty.myAccount": () => ({
+      id: 1,
+      userId: 1,
+      tier: "bronze",
+      totalMilesEarned: 0,
+      currentMilesBalance: 0,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    }),
     "loyalty.myTransactions": () => [],
     "familyPool.myGroup": group,
   });
@@ -216,6 +223,41 @@ it("shows family pool errors separately and offers creation after a verified emp
   );
   await screen.findByRole("button", { name: "Create Family Group" });
   expect(group).toHaveBeenCalledTimes(2);
+});
+
+it("connects the routed analytics page to upcoming flight occupancy", async () => {
+  const occupancy = vi.fn(() => [
+    {
+      flightId: 17,
+      flightNumber: "ZZ0017",
+      departureTime: new Date("2030-11-15T08:30:00Z"),
+      totalSeats: 40,
+      bookedSeats: 10,
+      occupancyRate: 25,
+    },
+  ]);
+  visit("/analytics", "admin", {
+    "analytics.getKPIs": () => ({
+      totalBookings: 0,
+      totalRevenue: 0,
+      totalPassengers: 0,
+      averageOccupancyRate: 0,
+      cancellationRate: 0,
+    }),
+    "analytics.getRevenueOverTime": () => [],
+    "analytics.getPopularDestinations": () => [],
+    "analytics.getBookingTrends": () => [],
+    "analytics.getAncillaryMetrics": () => ({}),
+    "analytics.getAncillaryRevenueByCategory": () => [],
+    "analytics.getPopularAncillaries": () => [],
+    "analytics.getFlightOccupancy": occupancy,
+  });
+  const flight = await screen.findByText("ZZ0017", {}, { timeout: 6000 });
+  expect(within(flight.closest("tr")!).getByText("25%")).toBeVisible();
+  expect(
+    screen.getByText(i18n.t("admin.analytics.upcomingOccupancyScope"))
+  ).toBeVisible();
+  expect(occupancy).toHaveBeenCalledOnce();
 });
 
 it.each([

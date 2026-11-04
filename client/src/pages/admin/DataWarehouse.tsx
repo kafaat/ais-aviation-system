@@ -299,13 +299,19 @@ export default function DataWarehouse() {
   // ---------- Mutations ----------
 
   const createExportMutation = trpc.dataWarehouse.createExport.useMutation({
-    onSuccess: (data: { recordCount: number }) => {
+    onSuccess: data => {
+      void refetchExports();
+      if (data.status !== "completed") {
+        toast.error(
+          `Export failed: ${data.errorMessage ?? "Export did not complete"}`
+        );
+        return;
+      }
       toast.success(
         `Export created: ${data.recordCount.toLocaleString()} records exported`
       );
       setIsExportDialogOpen(false);
       setExportForm(initialExportForm);
-      refetchExports();
     },
     onError: (error: { message: string }) => {
       toast.error(`Export failed: ${error.message}`);
@@ -674,9 +680,18 @@ export default function DataWarehouse() {
                             {format(new Date(exp.createdAt), "MMM dd, HH:mm")}
                           </TableCell>
                           <TableCell>
-                            {exp.status === "completed" && (
-                              <Button variant="ghost" size="sm">
-                                <Download className="h-4 w-4" />
+                            {exp.status === "completed" && exp.filePath && (
+                              <Button asChild variant="ghost" size="sm">
+                                <a
+                                  href={`/api/data-warehouse/download/${exp.id}`}
+                                  download
+                                  aria-label={l(
+                                    `تنزيل التصدير ${exp.id}`,
+                                    `Download export ${exp.id}`
+                                  )}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </a>
                               </Button>
                             )}
                           </TableCell>

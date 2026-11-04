@@ -68,7 +68,7 @@ export async function getUserPaymentHistory(
     .innerJoin(airports, eq(flights.originId, airports.id))
     .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
     .where(and(...conditions))
-    .orderBy(desc(payments.createdAt))
+    .orderBy(desc(payments.createdAt), desc(payments.id))
     .limit(filters.limit || 50)
     .offset(filters.offset || 0);
 
@@ -165,7 +165,7 @@ export async function getAdminPaymentHistory(
     .innerJoin(airports, eq(flights.originId, airports.id))
     .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(payments.createdAt))
+    .orderBy(desc(payments.createdAt), desc(payments.id))
     .limit(filters.limit || 100)
     .offset(filters.offset || 0);
 

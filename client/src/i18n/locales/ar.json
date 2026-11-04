@@ -727,7 +727,17 @@
     "unlimitedBenefits": "جميع المزايا مفعلة",
     "earnedThisMonth": "المكتسب هذا الشهر",
     "redeemedThisMonth": "المسترد هذا الشهر",
-    "viewAll": "عرض الكل"
+    "viewAll": "عرض الكل",
+    "accountUnavailable": "تعذر تحميل حساب الولاء.",
+    "transactionsUnavailable": "تعذر تحميل سجل معاملات الأميال.",
+    "earnedRecent": "الأميال المكتسبة في أحدث المعاملات",
+    "redeemedRecent": "الأميال المستبدلة في أحدث المعاملات",
+    "recentScope": "أحدث المعاملات بحد أقصى {{count}} معاملة",
+    "recentChartScope": "النشاط الشهري ضمن أحدث {{count}} معاملة كحد أقصى خلال آخر 6 أشهر.",
+    "historyPagination": "صفحات سجل معاملات الأميال",
+    "historyPage": "الصفحة {{page}}",
+    "previousPage": "الصفحة السابقة",
+    "nextPage": "الصفحة التالية"
   },
   "ancillary": {
     "title": "الخدمات الإضافية",
@@ -2158,7 +2168,13 @@
       "sales": "المبيعات",
       "noData": "لا توجد بيانات",
       "unavailable": "تعذرت قراءة المؤشرات المالية.",
-      "financialBasis": "الفوترة: {{billed}} · التحصيل: {{collected}} · الاسترداد: {{refunded}} ر.س · سجلات تحتاج مطابقة: {{gaps}}. الإيراد المكتسب غير مقاس."
+      "financialBasis": "الفوترة: {{billed}} · التحصيل: {{collected}} · الاسترداد: {{refunded}} ر.س · سجلات تحتاج مطابقة: {{gaps}}. الإيراد المكتسب غير مقاس.",
+      "upcomingOccupancyScope": "أعلى الرحلات القادمة من حيث نسبة الحجز، بحد أقصى 20 رحلة. يعتمد هذا العرض على مواعيد المغادرة القادمة بصورة مستقلة عن الفترة المحددة أعلاه.",
+      "departureUTC": "المغادرة (UTC)",
+      "bookedCapacity": "المحجوز / السعة",
+      "occupancyUnavailable": "غير متاح (لا توجد سعة)",
+      "occupancyLoadError": "تعذر تحميل إشغال الرحلات القادمة.",
+      "noUpcomingFlights": "لا توجد رحلات قادمة."
     },
     "aiPricing": {
       "title": "التسعير الديناميكي بالذكاء الاصطناعي",

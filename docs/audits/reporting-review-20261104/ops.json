@@ -1,0 +1,920 @@
+{
+  "schema_version": "1.0",
+  "reviewed_base_sha": "76e03ba89dfc354bbc62736dd45548e52c0e557f",
+  "scope_note": "خط أساس مراجعة الشيفرة 76e03ba89dfc354bbc62736dd45548e52c0e557f. تشمل حالات الصفوف الإصلاحات المرافقة لهذه المراجعة، بما فيها إكمال حقول مرجع الحجز ونوع الراكب في الصف 20؛ ليست جميعها وصفًا غير معدل لخط الأساس. أسماء ملفات الاختبار دليل على موضع التحقق، ولا تعني إعادة تشغيل كل قبول SQL أو E2E في هذا العمل.",
+  "rows": [
+    {
+      "id": 2,
+      "title": "APIS Data",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/apis.service.ts",
+        "server/routers/apis.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/APISManagement.tsx"
+      ],
+      "apis": [
+        "apis.getFlightStatus",
+        "apis.generateMessage",
+        "apis.getSubmissionCapability"
+      ],
+      "ui_routes": ["/admin/apis"],
+      "tests": [
+        "server/__tests__/apis-paxlst.test.ts",
+        "server/__tests__/apis-pnrgov.test.ts",
+        "scripts/acceptance/r2-reaccommodation.ts"
+      ],
+      "finding_ar": "توجد بيانات الوثائق والميلاد في apis_data مرتبطة بالراكب والحجز، وقائمة حالة حسب الرحلة ومسودتا PAXLST/PNRGOV قابلتان للعرض والتنزيل من الشاشة المسجلة.",
+      "gap_ar": "جدول الرحلة يعرض حالة البيانات ولا يعرض كشفًا منظّمًا بالميلاد والجواز لكل راكب. المسودة تشمل الوثائق المتحقق منها فقط وتتطلب عنوان الجهة المعتمد؛ إرسال الجهة نفسها محجوب صراحة ولا يُعد نجاح المسودة قبولًا خارجيًا.",
+      "acceptance_ar": "قبول كشف APIS مقيد بالصلاحية والرحلة، يوضح البيانات الناقصة ويطابق أسماء وميلاد ووثائق كل عضو في القطاع، مع اختبار بيانات حقيقية معزولة وتصدير. اعتماد الإرسال الخارجي مسار مستقل."
+    },
+    {
+      "id": 3,
+      "title": "Confirmed Passengers",
+      "implementation_status": "complete",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx"
+      ],
+      "apis": ["dcs.getFlightManifest"],
+      "ui_routes": ["/admin/dcs"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx"
+      ],
+      "finding_ar": "قائمة manifest تُقرأ من الحجوزات والركاب وعضوية booking_segments، وتعرض كل الركاب المؤكدين للرحلة المحددة؛ تبقى القطاعات المكتملة في الكشف التاريخي، وتستبعد القطاعات المنقولة والملغاة والحجوزات المحذوفة.",
+      "gap_ar": "التكافؤ هنا لقائمة الركاب المؤكدين؛ لا يعني اكتمال حقول Flight Manifest الموسعة أو اعتماد سلطة الطيران.",
+      "acceptance_ar": "الحفاظ على اختبار عضوية القطاع الحالي وتطابق جميع صفوف الواجهة وCSV مع الرحلة المحددة، بما يشمل رحلة بلا ركاب."
+    },
+    {
+      "id": 5,
+      "title": "Daily Flight Load",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/contracts/reports.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "server/services/dcs-operations.service.ts",
+        "server/services/dcs-state.service.ts",
+        "server/routers/dcs-operations.ts",
+        "server/contracts/dcs-operations.ts",
+        "client/src/pages/DcsDesk.tsx"
+      ],
+      "apis": [
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.generateFlightPerformancePDF",
+        "dcsOperations.getDesk"
+      ],
+      "ui_routes": ["/admin/reports", "/airline/dcs"],
+      "tests": [
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts",
+        "server/__tests__/dcs-operations.test.ts",
+        "client/src/pages/__tests__/DcsDesk.test.tsx",
+        "scripts/acceptance/dcs-counter-lifecycle.ts"
+      ],
+      "finding_ar": "تقرير أداء الرحلات يرشح تاريخ المغادرة ويصدر رقم الرحلة والمسار والمقاعد المحجوزة؛ مكتب DCS يعرض حضور وصعود وإخراج ركاب رحلة واحدة.",
+      "gap_ar": "لا يوجد تقرير يومي موحّد يجمع نوع الطائرة وأوقات الرحلة والأعداد المحجوزة والمصعدة والغائبة والمخرجة من أدلة الحضور. دمج هذين المصدرين يدويًا لا يحقق التقرير.",
+      "acceptance_ar": "تعريف يوم التقرير والمنطقة الزمنية ثم قراءة موحّدة من الرحلة والقطاعات وحضور DCS، مع ركاب متعددين وانتقال وإلغاء وإخراج واختبار تصدير الأعداد."
+    },
+    {
+      "id": 13,
+      "title": "FAX Information",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/dcs-operations.service.ts",
+        "server/services/dcs-state.service.ts",
+        "server/routers/dcs-operations.ts",
+        "server/contracts/dcs-operations.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/DcsDesk.tsx",
+        "server/services/dcs-station.service.ts",
+        "client/src/components/DcsStationPanel.tsx"
+      ],
+      "apis": ["dcsOperations.stationReport"],
+      "ui_routes": ["/airline/dcs"],
+      "tests": [
+        "server/__tests__/dcs-operations.test.ts",
+        "client/src/pages/__tests__/DcsDesk.test.tsx",
+        "scripts/acceptance/dcs-counter-lifecycle.ts"
+      ],
+      "finding_ar": "توجد شاشة APFAX قابلة للطباعة وCSV من SSR/OSI المرتبطة بالراكب والقطاع الصحيح، وتمنع إخراج السجلات غير المحسومة.",
+      "gap_ar": "اسم APFAX لا يثبت أن كشف SSR/OSI يطابق FAX Information الخاص بمعلومات المطار. جدول airports لا يحوي دليل FAX، ولا توجد مطابقة موثقة لحقول تقرير Videcom المقصودة.",
+      "acceptance_ar": "تثبيت حقول FAX Information المطلوبة مع المشغل ثم مطابقتها مع بيانات المحطة أو دليل المطار، وإضافة حالة قبول للحقول الفعلية قبل إعلان التكافؤ."
+    },
+    {
+      "id": 14,
+      "title": "Flown Load",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/contracts/reports.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "server/services/dcs-operations.service.ts",
+        "server/services/dcs-state.service.ts",
+        "server/routers/dcs-operations.ts",
+        "server/contracts/dcs-operations.ts",
+        "client/src/pages/DcsDesk.tsx"
+      ],
+      "apis": [
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.generateFlightPerformancePDF",
+        "dcsOperations.getDesk"
+      ],
+      "ui_routes": ["/admin/reports", "/airline/dcs"],
+      "tests": [
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts",
+        "server/__tests__/dcs-operations.test.ts",
+        "client/src/pages/__tests__/DcsDesk.test.tsx",
+        "scripts/acceptance/dcs-counter-lifecycle.ts"
+      ],
+      "finding_ar": "يمكن تصدير الرحلات المكتملة ضمن فترة وعرض المحجوز من السعة؛ توجد سجلات حضور DCS لكل قطاع.",
+      "gap_ar": "حمولة الركاب الذين سافروا فعلًا غير مجمعة في تقرير زمني. اختيار completed لا يحول السعة ناقص المتاح إلى عدد المصعدين أو الكوبونات المرفوعة.",
+      "acceptance_ar": "تقرير فترة يعتمد حالة boarded أو دليل uplift النهائي بعد التسوية، ويستبعد الغياب والإخراج ويعالج تغيير الرحلة دون تكرار."
+    },
+    {
+      "id": 15,
+      "title": "Flight Availability 1 Day",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flights.service.ts",
+        "server/routers/flights.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/BookingPage.tsx",
+        "server/routers/operations.ts",
+        "client/src/pages/AirlineConsole.tsx"
+      ],
+      "apis": ["flights.search", "operations.airlineFlights"],
+      "ui_routes": ["/search", "/airline"],
+      "tests": [
+        "server/services/flights.service.test.ts",
+        "server/services/flights-cache.test.ts",
+        "server/routers/flights.test.ts"
+      ],
+      "finding_ar": "بحث الرحلات يعرض التوفر لزوج مطارات في تاريخ مغادرة؛ قائمة التشغيل تعرض التوفر المخزن مع ترقيم بالمؤشر.",
+      "gap_ar": "لا يوجد كشف شامل للتوفر على جميع رحلات يوم واحد. البحث يتطلب وجهة، وقائمة التشغيل لا توفر مرشح يوم أو أسبوع ولا تصدير كشف موحّد.",
+      "acceptance_ar": "كشف فترة يوم واحد مع منطقة زمنية معلنة وحجوزات مؤقتة فعالة وسعة كل درجة، واختبار جميع الصفحات وحدود البداية والنهاية وتطابق التصدير."
+    },
+    {
+      "id": 16,
+      "title": "Flight Availability 1 Week",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flights.service.ts",
+        "server/routers/flights.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/BookingPage.tsx",
+        "server/routers/operations.ts",
+        "client/src/pages/AirlineConsole.tsx"
+      ],
+      "apis": ["flights.search", "operations.airlineFlights"],
+      "ui_routes": ["/search", "/airline"],
+      "tests": [
+        "server/services/flights.service.test.ts",
+        "server/services/flights-cache.test.ts",
+        "server/routers/flights.test.ts"
+      ],
+      "finding_ar": "بحث الرحلات يعرض التوفر لزوج مطارات في تاريخ مغادرة؛ قائمة التشغيل تعرض التوفر المخزن مع ترقيم بالمؤشر.",
+      "gap_ar": "لا يوجد كشف شامل للتوفر على جميع رحلات أسبوع كامل. البحث يتطلب وجهة، وقائمة التشغيل لا توفر مرشح يوم أو أسبوع ولا تصدير كشف موحّد.",
+      "acceptance_ar": "كشف فترة أسبوع كامل مع منطقة زمنية معلنة وحجوزات مؤقتة فعالة وسعة كل درجة، واختبار جميع الصفحات وحدود البداية والنهاية وتطابق التصدير."
+    },
+    {
+      "id": 17,
+      "title": "Flight Manifest",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx"
+      ],
+      "apis": ["dcs.getFlightManifest"],
+      "ui_routes": ["/admin/dcs"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx"
+      ],
+      "finding_ar": "قائمة الرحلة متصلة فعليًا بالبيانات، وتعرض الأسماء ومرجع الحجز وPNR والنوع والدرجة والمقعد والمسار، مع ملخص أمتعة وCSV.",
+      "gap_ar": "القائمة لا تربط رقم التذكرة وحالة الكوبون والحقائب المقبولة لكل راكب؛ إجمالي أمتعة الرحلة لا يحقق تفاصيل الأمتعة المطلوبة في المثال.",
+      "acceptance_ar": "إضافة ربط التذكرة والكوبون بالقطاع والراكب والأمتعة المسجلة من سجلاتها المعتمدة، والتحقق من تبديل الرحلة واستبدال التذكرة والإخراج وإعادة الحقيبة."
+    },
+    {
+      "id": 18,
+      "title": "Flight List",
+      "implementation_status": "complete",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx"
+      ],
+      "apis": ["dcs.getFlightManifest"],
+      "ui_routes": ["/admin/dcs"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx"
+      ],
+      "finding_ar": "كشف ركاب بديل متاح حسب معرّف الرحلة، يعرض الاسم وPNR والدرجة والمقعد والنوع ويصدر CSV من نفس القائمة.",
+      "gap_ar": "تغطية هذا المثال تعني قائمة الركاب، ولا تعني اكتمال مثال Flight Manifest الذي يشترط بيانات التذكرة.",
+      "acceptance_ar": "الحفاظ على تطابق عضوية القطاع وعدد الصفوف وعلى اختيار الرحلة ومنع تصدير استجابة مخزنة لرحلة أخرى."
+    },
+    {
+      "id": 19,
+      "title": "Flight Count",
+      "implementation_status": "complete",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx"
+      ],
+      "apis": ["dcs.getFlightManifest"],
+      "ui_routes": ["/admin/dcs"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx"
+      ],
+      "finding_ar": "تُظهر شاشة manifest مجموع الركاب الحقيقي من القائمة، مع رقم الرحلة ومطارَي المسار وتاريخ ووقت المغادرة، بالإضافة إلى توزيع الأعمار والدرجات.",
+      "gap_ar": "العد مرتبط برحلة محددة؛ لا يمثل تقرير الفترات Flight Counts ذي الأعداد المحجوزة والمصدرة تذاكرها.",
+      "acceptance_ar": "مطابقة العدد مع قائمة الركاب والقطاع الصحيح والمسار والتاريخ، بما يشمل الأطفال والرضع والرحلات ذات العدد صفر."
+    },
+    {
+      "id": 20,
+      "title": "Flight Count",
+      "implementation_status": "complete",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx"
+      ],
+      "apis": ["dcs.getFlightManifest"],
+      "ui_routes": ["/admin/dcs"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx"
+      ],
+      "finding_ar": "الخدمة تعيد bookingRef وPNR ونوع المسافر. أُكمل في هذه المراجعة إظهار مرجع الحجز مستقلًا في الجدول، وإضافة مرجع الحجز ونوع المسافر إلى CSV مع الحفاظ على منع حقن صيغ الجداول.",
+      "gap_ar": "الاكتمال للقائمة المحددة ذات مرجع الحجز والنوع. التغيير لا يضيف أرقام تذاكر أو حقولًا غير متاحة من الخدمة.",
+      "acceptance_ar": "اختبار مرجع حجز مختلف عن PNR مع النوع نفسه في الشاشة وCSV؛ يحافظ على الحقول المسموح بها واختيار الرحلة الحالي، وقد ثبت فشله قبل الإصلاح ونجاحه بعده."
+    },
+    {
+      "id": 21,
+      "title": "Flight Group",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/inventory/inventory.service.ts",
+        "server/services/inventory-capacity.service.ts",
+        "server/routers/inventory.router.ts",
+        "server/routers.ts",
+        "server/services/multi-city.service.ts",
+        "server/routers/multi-city.ts",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "multiCity.search",
+        "multiCity.getSegments",
+        "inventory.getStatus"
+      ],
+      "ui_routes": ["/booking/multi-city"],
+      "tests": [
+        "server/__tests__/new-features/multi-city.test.ts",
+        "server/__tests__/inventory-hold-boundary.test.ts"
+      ],
+      "finding_ar": "تتوفر قطاعات الحجوزات المتعددة وبحث كل قطاع مستقلًا وحالة مخزون رحلة/درجة.",
+      "gap_ar": "الحجز متعدد المدن ليس مجموعة تشغيلية لرحلة متعددة المقاطع. لا يوجد تقرير واحد يربط المجموعة بمخزون كل مقطع ودرجاته في لقطة متسقة.",
+      "acceptance_ar": "تعريف مجموعة الرحلة وربط المقاطع بها ثم كشف موحّد للسعة والمباع والمحجوز مؤقتًا والمتاح لكل مقطع، مع انتقالات وتغيّر التوفر."
+    },
+    {
+      "id": 22,
+      "title": "Flight ID",
+      "implementation_status": "complete",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flights.service.ts",
+        "server/routers/flights.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/BookingPage.tsx"
+      ],
+      "apis": ["flights.getById"],
+      "ui_routes": ["/booking/:id"],
+      "tests": [
+        "server/services/flights.service.test.ts",
+        "server/services/flights-cache.test.ts",
+        "server/routers/flights.test.ts"
+      ],
+      "finding_ar": "المسار المسجل flights.getById يقرأ الرحلة بمعرّف قاعدة البيانات ويعيد الرقم والمسار والتوقيت والطائرة والسعة؛ BookingPage يستخدمه في المسار /booking/:id.",
+      "gap_ar": "هذا عرض تفاصيل رحلة بالمعرّف، ولا يمثل تقرير مخزون أو تاريخ تغييرات كاملًا.",
+      "acceptance_ar": "الحفاظ على التحقق من معرّف الاستجابة المخزنة والتعامل مع الرحلة غير الموجودة وتحديث الحالة الحية؛ اختبارات الخدمة والمسار تغطي استرجاع الهوية."
+    },
+    {
+      "id": 23,
+      "title": "Flight Complete List",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx",
+        "server/services/dcs-operations.service.ts",
+        "server/services/dcs-state.service.ts",
+        "server/routers/dcs-operations.ts",
+        "server/contracts/dcs-operations.ts",
+        "client/src/pages/DcsDesk.tsx"
+      ],
+      "apis": ["dcs.getFlightManifest", "dcsOperations.getDesk"],
+      "ui_routes": ["/admin/dcs", "/airline/dcs"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx",
+        "server/__tests__/dcs-operations.test.ts",
+        "client/src/pages/__tests__/DcsDesk.test.tsx",
+        "scripts/acceptance/dcs-counter-lifecycle.ts"
+      ],
+      "finding_ar": "توجد قوائم مؤكدة وتفاصيل DCS مع الاسم ومرجع الحجز، ويستخدم DCS حجزًا مؤكدًا مدفوعًا وقطاعًا يحتفظ بمقاعد.",
+      "gap_ar": "كل من يحتفظ بمخزون أوسع من الركاب المؤكدين أو المدفوعين؛ الحالات المعلقة أو الحجز المؤقت لا تُجمع في كشف كامل للرحلة.",
+      "acceptance_ar": "تحديد معنى holding space ثم إدراج الحجوزات والقطاعات والحجوزات المؤقتة الفعالة بدون تضاعف مع تمييز الحالة والمرجع وعدم إدراج المقاعد المحررة."
+    },
+    {
+      "id": 24,
+      "title": "Flight Passengers By Office",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx",
+        "server/services/travel-agent.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "توجد قائمة ركاب وبيانات وكالات في النظام، ولكن لم يوجد مسار تقرير يربط راكب الرحلة بمكتب إنشاء الحجز.",
+      "gap_ar": "هوية الوكيل أو المستخدم ليست دليل مكتب مبيعات منشئ للحجز؛ لا تُخرج قائمة الركاب هذا البعد.",
+      "acceptance_ar": "اعتماد مصدر تاريخي لمكتب إنشاء الحجز ثم تقرير رحلة يربط كل راكب بذلك المكتب، بما يشمل الحجز المباشر ونقل الوكالة والبيانات القديمة غير المعروفة."
+    },
+    {
+      "id": 25,
+      "title": "Flight Passenger Table",
+      "implementation_status": "complete",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx"
+      ],
+      "apis": ["dcs.getFlightManifest"],
+      "ui_routes": ["/admin/dcs"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx"
+      ],
+      "finding_ar": "جدول الركاب يعمل بمعرّف الرحلة في قاعدة البيانات ويقرأ العضوية من القطاعات الحالية، مع عرض الاسم ومرجع الحجز وPNR والنوع والدرجة والمقعد.",
+      "gap_ar": "يعتمد نطاق القائمة على عضوية manifest المؤكدة/المكتملة؛ تقرير المخزون المحتفظ به أوسع ومصنف منفصلًا.",
+      "acceptance_ar": "استمرار اختبار الرحلات المنقولة والمقاعد المحررة، وتحقق تبديل معرّف الرحلة ومنع تصدير نتيجة رحلة سابقة."
+    },
+    {
+      "id": 26,
+      "title": "Flight Times",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flights.service.ts",
+        "server/routers/flights.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/BookingPage.tsx",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/contracts/reports.ts",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "server/routers/operations.ts"
+      ],
+      "apis": [
+        "flights.getById",
+        "flights.search",
+        "operations.airlineFlights",
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.generateFlightPerformancePDF"
+      ],
+      "ui_routes": ["/search", "/booking/:id", "/airline", "/admin/reports"],
+      "tests": [
+        "server/services/flights.service.test.ts",
+        "server/services/flights-cache.test.ts",
+        "server/routers/flights.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts"
+      ],
+      "finding_ar": "تفاصيل الرحلة تتضمن المغادرة والوصول؛ تقرير أداء الرحلات يرشح فترة المغادرة ويخرج وقت المغادرة.",
+      "gap_ar": "لا يوجد كشف يجمع وقتَي المغادرة والوصول لكل رحلات فترة من مدينة محددة. البحث يشترط مدينة وصول، وتصدير الأداء لا يتضمن وقت الوصول أو مرشح المنشأ.",
+      "acceptance_ar": "إضافة كشف بفترة ومدينة منشأ مع أوقات المغادرة والوصول والمنطقة الزمنية واختبار رحلات عابرة لليوم وحدود الفلترة."
+    },
+    {
+      "id": 27,
+      "title": "Flight Counts",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/contracts/reports.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx"
+      ],
+      "apis": [
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.generateFlightPerformancePDF"
+      ],
+      "ui_routes": ["/admin/reports"],
+      "tests": [
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts"
+      ],
+      "finding_ar": "تصدير أداء الرحلات يتضمن المسار ورقم الرحلة والتاريخ وإجمالي المقاعد المحجوزة المستنتج من السعة والمتاح.",
+      "gap_ar": "لا يميز بين عدد الركاب المحجوزين وعدد الركاب ذوي التذاكر الصالحة، ولا يعتمد عدًا من الكوبونات لكل قطاع.",
+      "acceptance_ar": "تجميع عدد الركاب وعدد المصدرة تذاكرهم بصورة مستقلة من القطاعات والكوبونات الحالية مع عدم تكرار تذكرة مستبدلة أو ملغاة."
+    },
+    {
+      "id": 44,
+      "title": "Load Factors",
+      "implementation_status": "complete",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/contracts/reports.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx"
+      ],
+      "apis": [
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.generateFlightPerformancePDF"
+      ],
+      "ui_routes": ["/admin/reports"],
+      "tests": [
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts"
+      ],
+      "finding_ar": "تقرير الرحلات يدعم تاريخ المغادرة والحالة ويصدر عامل حمولة كل رحلة كنسبة المقاعد المحجوزة إلى السعة. Excel/PDF يستخدمان ملخصًا موزونًا بمجموع المقاعد وليس متوسط نسب الرحلات.",
+      "gap_ar": "العامل هنا عامل حجز محسوب من مخزون النظام الحالي؛ لا يثبت عدد المسافرين الفعلي أو إيرادًا محققًا، والتقرير يرفض تجاوز ألف رحلة بدل اقتطاع النتائج.",
+      "acceptance_ar": "الحفاظ على تطابق CSV/Excel/PDF ووزن السعة، واختبار الفترة الكاملة والرحلات صفر السعة وحد tenant وعدم إدخال التقدير المالي كتحصيل."
+    },
+    {
+      "id": 45,
+      "title": "Load Overbookings",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/inventory/inventory.service.ts",
+        "server/services/inventory-capacity.service.ts",
+        "server/routers/inventory.router.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/OverbookingManagement.tsx"
+      ],
+      "apis": [
+        "inventory.getStatus",
+        "inventory.getOverbookingConfigs",
+        "inventory.getRecommendedOverbooking"
+      ],
+      "ui_routes": ["/admin/overbooking"],
+      "tests": ["server/__tests__/inventory-hold-boundary.test.ts"],
+      "finding_ar": "يوجد معدل إشغال وحالة مخزون وتكوين وتوصية overbooking لرحلة محددة، وتوجد شاشة إدارة التكوينات.",
+      "gap_ar": "لا يوجد كشف يسرد كل الرحلات التي بلغ حجزها 100% أو تجاوز السعة. التوصية تتعلق بسياسة الحجز الزائد ولا تحقق كشف الاستثناءات.",
+      "acceptance_ar": "تقرير فترة بعتبة نسبة إشغال معلنة ومقارنة المباع بالسعة لكل رحلة، مع حد 100% بالضبط وحجوزات مؤقتة منفصلة واختبار التصدير."
+    },
+    {
+      "id": 48,
+      "title": "No Seat Plan",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/seat-map.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "مصادر بيانات قريبة موجودة، لكن التقرير المطلوب غير مسجل في API ولا في واجهة النظام.",
+      "gap_ar": "تتوفر seat_maps وseat_inventory وتعيين أو إعادة تعيين المقاعد، لكن لا توجد قائمة رحلات بلا مخطط مقاعد.",
+      "acceptance_ar": "كشف الرحلات التي لا تملك مخططًا صالحًا في فترة محددة، وبيان الفرق بين غياب المخطط وغياب المقاعد أو إعادة تهيئة الطائرة."
+    },
+    {
+      "id": 49,
+      "title": "No Tickets",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/inventory-lock.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "مصادر بيانات قريبة موجودة، لكن التقرير المطلوب غير مسجل في API ولا في واجهة النظام.",
+      "gap_ar": "لم يوجد استعلام أو API أو شاشة استثناءات تجمع الحجوزات المحتفظة بالمخزون دون تذاكر صادرة. حالة الدفع أو عدم طباعة PDF ليسا بديلًا لحالة إصدار التذكرة.",
+      "acceptance_ar": "ربط seatsReserved والقطاعات الفعالة مع هوية التذكرة والكوبون، وإخراج الحجوزات دون تذاكر فقط مع التمييز بين الملغى والمستبدل."
+    },
+    {
+      "id": 50,
+      "title": "No Ticket or Time Limit",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/inventory-lock.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "مصادر بيانات قريبة موجودة، لكن التقرير المطلوب غير مسجل في API ولا في واجهة النظام.",
+      "gap_ar": "لا يوجد كشف يجمع حجز المخزون مع غياب التذاكر وغياب مهلة إصدار التذكرة. انتهاء inventory lock ليس تلقائيًا مهلة التذكرة التجارية.",
+      "acceptance_ar": "تثبيت مصدر مهلة إصدار معتمد ثم كشف بدون تذكرة وبدون مهلة، مع فصل الوقت التجاري عن انتهاء حجز مؤقت للمقاعد."
+    },
+    {
+      "id": 53,
+      "title": "Passengers",
+      "implementation_status": "complete",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx",
+        "server/services/dcs-operations.service.ts",
+        "server/services/dcs-state.service.ts",
+        "server/routers/dcs-operations.ts",
+        "server/contracts/dcs-operations.ts",
+        "client/src/pages/DcsDesk.tsx"
+      ],
+      "apis": ["dcs.getFlightManifest", "dcsOperations.getDesk"],
+      "ui_routes": ["/admin/dcs", "/airline/dcs"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx",
+        "server/__tests__/dcs-operations.test.ts",
+        "client/src/pages/__tests__/DcsDesk.test.tsx",
+        "scripts/acceptance/dcs-counter-lifecycle.ts"
+      ],
+      "finding_ar": "قوائم ركاب الرحلات متصلة بالأسماء ومرجع الحجز وPNR والمقاعد، ومكتب DCS يضيف حالة الحضور مع نطاق الشركة والتحقق من القطاعات.",
+      "gap_ar": "الاكتمال لقائمة الركاب المعنية؛ لا ينقل تلقائيًا اكتمالًا إلى التقارير ذات شروط تذاكر أو مكاتب أو فترة مختلفة.",
+      "acceptance_ar": "الحفاظ على منع خلط الشركات والرحلات وعلى عضوية الركاب بعد النقل والإلغاء وعلى تطابق قائمة CSV."
+    },
+    {
+      "id": 54,
+      "title": "Passenger Summary",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts",
+        "server/contracts/dcs.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/DcsDashboard.tsx",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/contracts/reports.ts",
+        "client/src/pages/admin/ReportsDashboard.tsx"
+      ],
+      "apis": [
+        "dcs.getFlightManifest",
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.generateFlightPerformancePDF"
+      ],
+      "ui_routes": ["/admin/dcs", "/admin/reports"],
+      "tests": [
+        "scripts/acceptance/r2-reaccommodation.ts",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts"
+      ],
+      "finding_ar": "ملخص manifest يحصي بالغين وأطفالًا ورضعًا لرحلة واحدة، والتصدير العام يوفر رقم الرحلة والمسار والفترة.",
+      "gap_ar": "لا يوجد تقرير فترة يربط كل رحلة بأعداد أنواع الركاب؛ لا يمكن اعتبار مجموعتين منفصلتين تقريرًا واحدًا.",
+      "acceptance_ar": "تقرير مجمع حسب الرحلة والمسار والتاريخ ونوع الراكب يستند إلى قطاع الحجز الصحيح، مع تطابق التفاصيل والإجماليات في التصدير."
+    },
+    {
+      "id": 56,
+      "title": "PNL (Passenger Name List)",
+      "implementation_status": "partial",
+      "linkage_status": "none",
+      "source_paths": [
+        "server/services/operational-messaging.service.ts",
+        "server/services/aviation-message-transmission.service.ts",
+        "scripts/acceptance/handler-station.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [
+        "server/__tests__/operational-messaging.test.ts",
+        "scripts/acceptance/handler-station.ts"
+      ],
+      "finding_ar": "مولد PNL محلي حتمي يقبل حمولة ركاب يقدمها المستدعي ويعيد نصًا وبصمة، وتوجد اختبارات صياغة وقبول داخلي لناقل المحطة.",
+      "gap_ar": "لا يوجد مسار تقرير مسجل يبني PNL من ركاب الرحلة في قاعدة البيانات إلى شاشة أو تنزيل. الاختبار يبني الحمولة يدويًا. نقل Type-B يتطلب قبول الناقل والعنوان والإعداد الخارجي.",
+      "acceptance_ar": "ربط مولد الحمولة بمصدر عضوية manifest وصلاحية الشركة والرحلة وإضافة تنزيل/سجل حالة، ثم قبول مستقل مع الجهة الناقلة قبل اعتبار الإرسال فعليًا."
+    },
+    {
+      "id": 57,
+      "title": "PNL Status",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/operational-messaging.service.ts",
+        "server/services/aviation-message-transmission.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": ["server/__tests__/operational-messaging.test.ts"],
+      "finding_ar": "توجد حالات نقل رسائل عامة واختبارات انتقال إرسال، لكن لا يوجد كشف PNL حسب فترة ومدينة المغادرة.",
+      "gap_ar": "حالات إرسال رسالة عامة دون ربط صفوف الرحلات والفترة والمدينة وإصدار PNL ليست PNL Status.",
+      "acceptance_ar": "حفظ هوية الرحلة ونسخة PNL وبصمتها وتوقيت التوليد والإرسال والإقرار، ثم كشف فترة/مدينة يُبقي المسودة والإرسال والاستلام والرفض حالات منفصلة."
+    },
+    {
+      "id": 72,
+      "title": "Reservations By Flight Date",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/contracts/reports.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx"
+      ],
+      "apis": [
+        "reports.exportBookingsCSV",
+        "reports.exportBookingsExcel",
+        "reports.generateBookingsPDF"
+      ],
+      "ui_routes": ["/admin/reports"],
+      "tests": [
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "scripts/acceptance/report-linkage.ts",
+        "e2e/vrs-report-exports.spec.ts"
+      ],
+      "finding_ar": "تقرير الحجوزات يعرض رقم الرحلة ووقت المغادرة والمرجع والحالة والأعداد، وله تصديرات متصلة ومقيدة بالشركة.",
+      "gap_ar": "مرشح التقرير الحالي يستخدم bookings.createdAt، لا تاريخ رحلة الحجز. الربط المباشر بـbookings.flightId لا يغطي كل القطاعات في الحجز متعدد المقاطع.",
+      "acceptance_ar": "توفير تقرير صريح بتاريخ السفر اعتمادًا على booking_segments مع خيار فصل تاريخ الإنشاء، واختبار حجوزات أُنشئت في يوم وسافرت في يوم آخر والعودة والقطاعات المنقولة."
+    },
+    {
+      "id": 73,
+      "title": "Reservations Without Tickets",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/flight-state.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "توجد هوية تذكرة وكوبونات وحجوزات ذات مقاعد محجوزة، ولكن لا يوجد تقرير بدون تذاكر ضمن فترة الرحلة.",
+      "gap_ar": "تصفية الحجوزات المعلقة أو غير المدفوعة لا تعادل غياب تذكرة صالحة للقطاع، ولا يوجد استعلام يُثبت مجموعة الاستثناءات.",
+      "acceptance_ar": "كشف فترة لاحتفاظ فعلي بالمقاعد دون كوبون صالح للقطاع، مع التذاكر المستبدلة والملغاة والرحلات المنقولة والتمييز بين التذكرة المفقودة والبيانات التاريخية غير المتاحة."
+    },
+    {
+      "id": 74,
+      "title": "Restricted Flights",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/inventory/inventory.service.ts",
+        "server/services/flight-state.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "حالة الرحلة والمخزون وبعض قيود المقاعد موجودة، لكن لم يوجد تقرير قيود بيع الرحلات.",
+      "gap_ar": "إلغاء الرحلة أو نفاد المخزون أو مقعد restricted لا يساوي قيد بيع تجاري على رحلة، ولا توجد قائمة بالقيود المطلوبة.",
+      "acceptance_ar": "تحديد مصدر قيود البيع والمدة والسبب ونطاقها ثم تقرير الرحلات المقيدة، مع توثيق رفع القيد وعدم الخلط بين القيد وحالة التشغيل."
+    },
+    {
+      "id": 84,
+      "title": "RO Reports",
+      "implementation_status": "partial",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/inventory/inventory.service.ts",
+        "server/services/inventory-capacity.service.ts",
+        "server/routers/inventory.router.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["inventory.getStatus"],
+      "ui_routes": [],
+      "tests": [
+        "server/__tests__/inventory-hold-boundary.test.ts",
+        "server/__tests__/rbd-inventory.test.ts"
+      ],
+      "finding_ar": "واجهة inventory.getStatus مسجلة وتعيد السعة والمباع والمحجوز مؤقتًا والمتاح وقائمة الانتظار وحد الحجز الزائد لرحلة ودرجة.",
+      "gap_ar": "لم يوجد مستهلك UI لهذا API ولا كشف RO كامل لكل الرحلات والدرجات؛ الرقم لكل درجة ليس تصدير مخزون الرحلة الكامل أو تقرير مجموعة تشغيلية.",
+      "acceptance_ar": "شاشة وتصدير مخزون لجميع درجات الرحلة مع RBD والحجوزات المؤقتة والانتظار، في لقطة قراءة متسقة، وتأكيد الحقول المقصودة بتقرير RO."
+    },
+    {
+      "id": 91,
+      "title": "Ticket Go Shows",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/dcs-operations.service.ts",
+        "server/services/dcs-state.service.ts",
+        "server/routers/dcs-operations.ts",
+        "server/contracts/dcs-operations.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/DcsDesk.tsx",
+        "server/services/dcs-station.service.ts",
+        "client/src/components/DcsStationPanel.tsx"
+      ],
+      "apis": [
+        "dcsOperations.stationReport",
+        "dcsOperations.openCase",
+        "dcsOperations.resolveCase"
+      ],
+      "ui_routes": ["/airline/dcs"],
+      "tests": [
+        "server/__tests__/dcs-operations.test.ts",
+        "client/src/pages/__tests__/DcsDesk.test.tsx",
+        "scripts/acceptance/dcs-counter-lifecycle.ts"
+      ],
+      "finding_ar": "توجد حالات محطة go_show وno_rec يمكن فتحها ثم ربطها براكب ممول في الرحلة، وتظهر في تقرير المحطة.",
+      "gap_ar": "الحالة التشغيلية اليدوية لا تثبت أن الراكب سافر على رحلة مختلفة عن رحلة التذكرة. لا يوجد كشف يطابق القطاع الذي سافر عليه مع الكوبون الأصلي.",
+      "acceptance_ar": "تقرير يربط حضور السفر النهائي برحلة الكوبون قبل التغيير، مع استبعاد الحالة غير المحسومة والراكب الذي لم يصعد واحتساب تبديل الرحلة مرة واحدة."
+    },
+    {
+      "id": 92,
+      "title": "Ticket No Shows",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/dcs-operations.service.ts",
+        "server/services/dcs-state.service.ts",
+        "server/routers/dcs-operations.ts",
+        "server/contracts/dcs-operations.ts",
+        "server/routers.ts",
+        "client/src/App.tsx",
+        "client/src/pages/DcsDesk.tsx",
+        "server/services/seat-map.service.ts",
+        "server/routers/seat-map.ts",
+        "server/services/inventory/inventory.service.ts"
+      ],
+      "apis": [
+        "dcsOperations.getDesk",
+        "seatMap.getCheckInStatus",
+        "inventory.getRecommendedOverbooking"
+      ],
+      "ui_routes": ["/airline/dcs", "/admin/overbooking"],
+      "tests": [
+        "server/__tests__/dcs-operations.test.ts",
+        "client/src/pages/__tests__/DcsDesk.test.tsx",
+        "scripts/acceptance/dcs-counter-lifecycle.ts",
+        "scripts/acceptance/r2-reaccommodation.ts"
+      ],
+      "finding_ar": "توجد حالة عدم تسجيل الدخول لكل راكب في DCS وعدّاد check-in، وتوصية overbooking تستخدم نسبة غياب تقديرية.",
+      "gap_ar": "لا يوجد كشف valid ticket + not checked in حسب القطاع. تقدير الغياب القديم يعتمد حجوزات flightId وحقل checkedIn على الحجز، فلا يثبت غياب الراكب في قطاع متعدد المقاطع أو صلاحية الكوبون.",
+      "acceptance_ar": "تقرير فترة بعد إغلاق الرحلة يطابق كوبونًا صالحًا مع غياب دليل check-in للراكب والقطاع؛ اختباره مع ركاب متعددين وانتقال وتذكرة مستبدلة وإخراج."
+    },
+    {
+      "id": 93,
+      "title": "Tickets without bookings",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/ticket-revalidation.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "توجد تذاكر وكوبونات مرتبطة بحجز وقطاع، لكن لم يوجد كشف التذاكر الصالحة التي فُقد قطاع حجزها.",
+      "gap_ar": "وجود روابط bookingId وflightId وحده لا يكشف انقطاع العلاقة أو إلغاء القطاع مع بقاء التذكرة صالحة؛ لا API أو UI لهذا الاستثناء.",
+      "acceptance_ar": "كشف anti-join بين الكوبون الصالح وعضوية القطاع الحالية مع تاريخ إعادة الإصدار، واختبار القطاع المحذوف/المنقول والحجز الملغى والبيانات القديمة."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "OPS-MANIFEST-REFERENCE-TYPE",
+      "report_ids": [20],
+      "paths": [
+        "client/src/pages/admin/DcsDashboard.tsx",
+        "client/src/pages/admin/__tests__/DcsManifestExport.test.tsx"
+      ],
+      "summary_ar": "إظهار مرجع الحجز مستقلًا عن PNR وإضافة مرجع الحجز ونوع الراكب إلى CSV من الحقول الموجودة في الخدمة.",
+      "verification_ar": "اختبار DcsManifestExport يثبت مرجعًا مختلفًا عن PNR والنوع في الجدول وCSV، ويحافظ على UTC والهروب من صيغ CSV وقائمة الحقول المسموحة ومنع تصدير رحلة سابقة. فشل قبل الإصلاح لغياب عمود Booking reference. نجح الاختبار بعد الإصلاح: ملف واحد واختبار واحد؛ سبق التغيير نجاح 153 اختبارًا في 9 ملفات مرتبطة بالتشغيل والتقارير."
+    }
+  ]
+}

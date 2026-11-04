@@ -513,93 +513,47 @@ export async function getRevenueByChannel(
   if (startDate) conditions.push(gte(bookings.createdAt, startDate));
   if (endDate) conditions.push(lte(bookings.createdAt, endDate));
 
-  // Gross value for all paid bookings.
-  const [totalStats] = await db
+  // Corporate attribution takes precedence over agency attribution, matching
+  // recordRevenueEntry. A booking can have both links; classify it once in a
+  // single snapshot instead of subtracting overlapping channel totals.
+  const channel = sql<ChannelRevenue["channel"]>`CASE
+    WHEN EXISTS (SELECT 1 FROM ${corporateBookings}
+      WHERE ${corporateBookings.bookingId} = ${bookings.id}) THEN 'corporate'
+    WHEN EXISTS (SELECT 1 FROM ${agentBookings}
+      WHERE ${agentBookings.bookingId} = ${bookings.id}) THEN 'agent'
+    ELSE 'direct' END`;
+  const stats = await db
     .select({
+      channel,
       totalRevenue:
         sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`.mapWith(
           financialInteger
         ),
-      totalBookings: sql<number>`COUNT(*)`,
+      bookingCount: sql<number>`COUNT(*)`.mapWith(financialInteger),
     })
     .from(bookings)
-    .where(and(...conditions));
+    .where(and(...conditions))
+    .groupBy(channel);
 
-  // Corporate channel revenue
-  const [corporateStats] = await db
-    .select({
-      totalRevenue:
-        sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`.mapWith(
-          financialInteger
-        ),
-      bookingCount: sql<number>`COUNT(${bookings.id})`,
-    })
-    .from(bookings)
-    .innerJoin(corporateBookings, eq(corporateBookings.bookingId, bookings.id))
-    .where(and(...conditions));
-
-  // Agent channel revenue
-  const [agentStats] = await db
-    .select({
-      totalRevenue:
-        sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`.mapWith(
-          financialInteger
-        ),
-      bookingCount: sql<number>`COUNT(${bookings.id})`,
-    })
-    .from(bookings)
-    .innerJoin(agentBookings, eq(agentBookings.bookingId, bookings.id))
-    .where(and(...conditions));
-
-  // Direct channel = Total - Corporate - Agent
-  const directRevenue =
-    (totalStats.totalRevenue || 0) -
-    (corporateStats.totalRevenue || 0) -
-    (agentStats.totalRevenue || 0);
-  const directBookings =
-    (totalStats.totalBookings || 0) -
-    (corporateStats.bookingCount || 0) -
-    (agentStats.bookingCount || 0);
-
-  const grandTotal = totalStats.totalRevenue || 1; // Avoid division by zero
-
-  const channels: ChannelRevenue[] = [
-    {
-      channel: "direct",
-      totalRevenue: directRevenue,
-      bookingCount: directBookings,
+  const grandTotal = financialInteger(
+    stats.reduce((sum, row) => sum + row.totalRevenue, 0)
+  );
+  return (["direct", "agent", "corporate"] as const).map(channel => {
+    const row = stats.find(row => row.channel === channel);
+    const totalRevenue = row?.totalRevenue ?? 0;
+    const bookingCount = row?.bookingCount ?? 0;
+    return {
+      channel,
+      totalRevenue,
+      bookingCount,
       averageRevenue:
-        directBookings > 0 ? Math.round(directRevenue / directBookings) : 0,
-      percentageOfTotal: Math.round((directRevenue / grandTotal) * 1000) / 10,
-    },
-    {
-      channel: "agent",
-      totalRevenue: agentStats.totalRevenue || 0,
-      bookingCount: agentStats.bookingCount || 0,
-      averageRevenue:
-        agentStats.bookingCount > 0
-          ? Math.round((agentStats.totalRevenue || 0) / agentStats.bookingCount)
-          : 0,
+        bookingCount > 0 ? Math.round(totalRevenue / bookingCount) : 0,
       percentageOfTotal:
-        Math.round(((agentStats.totalRevenue || 0) / grandTotal) * 1000) / 10,
-    },
-    {
-      channel: "corporate",
-      totalRevenue: corporateStats.totalRevenue || 0,
-      bookingCount: corporateStats.bookingCount || 0,
-      averageRevenue:
-        corporateStats.bookingCount > 0
-          ? Math.round(
-              (corporateStats.totalRevenue || 0) / corporateStats.bookingCount
-            )
+        grandTotal > 0
+          ? Math.round((totalRevenue / grandTotal) * 1000) / 10
           : 0,
-      percentageOfTotal:
-        Math.round(((corporateStats.totalRevenue || 0) / grandTotal) * 1000) /
-        10,
-    },
-  ];
-
-  return channels;
+    };
+  });
 }
 
 /**

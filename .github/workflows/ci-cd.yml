@@ -527,15 +527,17 @@ jobs:
           echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f test-results/results.json ]; then
-            TOTAL=$(cat test-results/results.json | jq -r '.stats.total // 0')
-            PASSED=$(cat test-results/results.json | jq -r '.stats.expected // 0')
-            FAILED=$(cat test-results/results.json | jq -r '.stats.unexpected // 0')
-            SKIPPED=$(cat test-results/results.json | jq -r '.stats.skipped // 0')
+            TOTAL=$(jq -r '[(.stats.expected // 0), (.stats.unexpected // 0), (.stats.flaky // 0), (.stats.skipped // 0)] | add' test-results/results.json)
+            PASSED=$(jq -r '.stats.expected // 0' test-results/results.json)
+            FAILED=$(jq -r '.stats.unexpected // 0' test-results/results.json)
+            FLAKY=$(jq -r '.stats.flaky // 0' test-results/results.json)
+            SKIPPED=$(jq -r '.stats.skipped // 0' test-results/results.json)
             echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
             echo "| Total | ${TOTAL} |" >> $GITHUB_STEP_SUMMARY
             echo "| Passed | ${PASSED} |" >> $GITHUB_STEP_SUMMARY
             echo "| Failed | ${FAILED} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Flaky | ${FLAKY} |" >> $GITHUB_STEP_SUMMARY
             echo "| Skipped | ${SKIPPED} |" >> $GITHUB_STEP_SUMMARY
           else
             echo "E2E test results not available" >> $GITHUB_STEP_SUMMARY

@@ -211,5 +211,29 @@ nativeDescribe(
       const days = await getFinancialDays({ tenantId: 101 });
       expect(days).toHaveLength(5);
     });
+
+    it("counts overlapping agency and corporate links once in the native channel report", async () => {
+      await connection!.beginTransaction();
+      try {
+        await connection!.query("INSERT INTO agent_bookings VALUES (1), (2)");
+        await connection!.query("INSERT INTO corporate_bookings VALUES (2)");
+
+        const channels = await getRevenueByChannel();
+        expect(
+          channels.map(row => [
+            row.channel,
+            row.totalRevenue,
+            row.bookingCount,
+            row.percentageOfTotal,
+          ])
+        ).toEqual([
+          ["direct", 0, 0, 0],
+          ["agent", 10000, 1, 50],
+          ["corporate", 10000, 1, 50],
+        ]);
+      } finally {
+        await connection!.rollback();
+      }
+    });
   }
 );

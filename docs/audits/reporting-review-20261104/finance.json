@@ -1,0 +1,1146 @@
+{
+  "schema_version": "1.0",
+  "reviewed_base_sha": "76e03ba89dfc354bbc62736dd45548e52c0e557f",
+  "scope_note": "تغطي الصفوف المصدر المراجع والإصلاحات المرافقة لهذه المراجعة. complete يعني تحقق معنى التقرير وحقوله الأساسية في القراءة، بينما linkage_status مستقل؛ ذكر اختبار أو مسار قريب في صف جزئي/مفقود يثبت البنية المتاحة ولا يعد قبولًا للتقرير المطلوب. ملفات tests أدلة قابلة للفحص وليست ادعاء تشغيلها جميعًا في هذه الموجة؛ نتائج التشغيل الجديدة مذكورة في fixes. قبول الجهات الخارجية وقواعد الضرائب والإيراد المكتسب لا يستنتج من حالة الحجز أو أسماء الخدمات.",
+  "rows": [
+    {
+      "id": 6,
+      "title": "Eticket Status",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "تخزن ticket_coupons حالات القسائم المحلية وتعرض مراجعة الإقفال صفوف الحالة ومعرف الرحلة والمسافر لحجز واحد وشهر واحد.",
+      "gap_ar": "لا يوجد بحث تقريري بأرقام التذاكر المطلوبة أو عرض كامل لحالة كل تذكرة؛ رقم وثيقة محلية لا يثبت إصدار ناقل خارجي.",
+      "acceptance_ar": "قارئ مستقل للبحث برقم التذكرة مع القسائم والجهة المصدرة ومصدر الحالة وتاريخها، محكوم بنطاق الشركة، واختبار انتقال الحالات والقراءة من الشاشة."
+    },
+    {
+      "id": 7,
+      "title": "ETL Processing",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/coupon-uplift.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/routers/aviation-integrations.ts"
+      ],
+      "apis": ["aviationIntegrations.ingestCouponUplift"],
+      "ui_routes": [],
+      "tests": [
+        "scripts/acceptance/coupon-month-close.ts",
+        "server/__tests__/aviation-evidence.test.ts"
+      ],
+      "finding_ar": "يوجد استقبال موقع لإثبات رفع القسيمة، ومن مصادره handler_etl، مع سجل aviation_evidence وربط محلي للقسيمة.",
+      "gap_ar": "الاستقبال يرفض بيئة الإنتاج صراحة لعدم قبول الرفع؛ لا توجد قائمة إيصالات ETL اليومية بتفاصيل التذاكر والقسائم. ETL مستودع البيانات ليس هذا التقرير.",
+      "acceptance_ar": "اعتماد مصدر الناقل وإيصالاته ونطاقه أولًا، ثم قائمة يومية قابلة للتصدير تحفظ هوية الإيصال والقسائم والرفض والتكرار؛ اختبار عقد المزود والقراءة الفعلية."
+    },
+    {
+      "id": 8,
+      "title": "Eticket Values",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/fare-components.service.ts",
+        "server/services/retail-offer.service.ts"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx",
+        "server/__tests__/fare-components-zatca.test.ts"
+      ],
+      "finding_ar": "توجد مكونات أجرة محفوظة لكل حجز/مسافر/قطاع، وتظهر الأجرة الأساسية في مراجعة القسائم المحلية.",
+      "gap_ar": "لا يوجد تقرير كل التذاكر خلال فترة مع تفصيل كل ضريبة وأجرة لكل كوبون؛ OFFER_TAX_ESTIMATE تقدير عرض وليس تصنيف ضريبة معتمدًا.",
+      "acceptance_ar": "إظهار التذاكر والقسائم ضمن الفترة مع مكونات الأجرة والضرائب وأكوادها ومصدرها وعملتها، وحفظ غير المثبت كغير مثبت، والتحقق من مجموع المكونات دون مضاعفة مبلغ الحجز."
+    },
+    {
+      "id": 9,
+      "title": "Eticket Value (PNR)",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/fare-components.service.ts",
+        "server/services/retail-offer.service.ts",
+        "server/services/ticket-documents.service.ts",
+        "server/routers/eticket.ts"
+      ],
+      "apis": [
+        "revenueAccounting.couponMonthReview",
+        "eticket.generateETicket"
+      ],
+      "ui_routes": ["/airline", "/admin/revenue-accounting", "/my-bookings"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx",
+        "server/__tests__/fare-components-zatca.test.ts"
+      ],
+      "finding_ar": "يمكن مراجعة صافي النقد وأجرة النقل لحجز داخلي وشهر، وتنزيل وثيقة راكب محلية؛ البيانات الأساسية للحجز والقسائم موجودة.",
+      "gap_ar": "لا يوجد إدخال PNR ينتج كامل التفصيل المالي لتذاكره وقسائمه وضرائبه ورسومه؛ مراجعة الشهر تعرض الأجرة الأساسية فقط.",
+      "acceptance_ar": "حل PNR ضمن الصلاحية ثم عرض جميع تذاكره وقسائمه ومكونات قيمها وربط المجاميع بالدفتر، مع اختبار حجز متعدد الركاب والقطاعات واسترداد جزئي."
+    },
+    {
+      "id": 10,
+      "title": "Expired Tickets",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/queue-v2.service.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "جدول القسائم المحلية يحتوي حالات التشغيل والإلغاء والاسترداد، ولا يحتوي صلاحية تذكرة أو حالة انتهاء معتمدة.",
+      "gap_ar": "تنظيف الحجز غير المدفوع أو انتهاء جلسة دفع لا يعني انتهاء صلاحية تذكرة؛ لا يوجد قارئ أو شاشة لهذا التقرير.",
+      "acceptance_ar": "تعريف وحفظ صلاحية الوثيقة ومصدر قاعدة الانتهاء، ثم تقرير التذاكر المنتهية مع تواريخها وأسبابها واختبار حدود التاريخ؛ عدم استنتاج الانتهاء من عمر الحجز."
+    },
+    {
+      "id": 28,
+      "title": "Form Of Payments",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/payment-history.service.ts",
+        "server/routers/payment-history.ts",
+        "server/routers/payments.ts",
+        "server/routers.ts",
+        "client/src/pages/PaymentHistory.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "paymentHistory.adminHistory",
+        "payments.adminGetHistory",
+        "payments.getHistory"
+      ],
+      "ui_routes": ["/payment-history"],
+      "tests": ["server/__tests__/new-features/payment-history.test.ts"],
+      "finding_ar": "قائمة payments مرتبطة بالحجز والرحلة وتدعم طريقة الدفع والحالة والفترة في API، وتعرض شاشة المستخدم سجله الشخصي عبر payments.getHistory.",
+      "gap_ar": "لا يوجد بُعد مكتب بيع أو مرشح مكتب، والشاشة الشخصية لا تمرر الفترة ولا تمثل سجل الإدارة الكامل. الاختبار الحالي للخدمة يفحص وجود الدوال أكثر من دقة الصفوف.",
+      "acceptance_ar": "تسجيل مكتب البيع الحقيقي للدفع ثم قائمة لكل مكتب/فترة/طريقة مع صفحات مستقرة وصلاحيات واختبار علائقي للمجاميع وحدود الفترة."
+    },
+    {
+      "id": 38,
+      "title": "Interline Etickets",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/interline.service.ts",
+        "server/services/codeshare.service.ts",
+        "server/routers/interline.ts",
+        "server/routers.ts"
+      ],
+      "apis": [
+        "interline.listAgreements",
+        "interline.getAgreement",
+        "interline.checkEligibility"
+      ],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "المسار المسجل يدير اتفاقيات Interline وأهليتها؛ هذه الاتفاقيات لا تمثل وثائق IET أو حجوزات مصدرة خارجيًا.",
+      "gap_ar": "لا توجد قائمة حجوزات IATA IET موثقة أو إيصالات إصدار وقبول ناقلين؛ لا توجد شاشة تقرير تذاكر Interline.",
+      "acceptance_ar": "قبول واجهة الإصدار بين الناقلين وتخزين مرجع الوثيقة وحالة كل كوبون ونطاق المشغل، ثم تقرير حجوزات IET واختبار عقد خارجي وواجهة قراءة."
+    },
+    {
+      "id": 39,
+      "title": "Interline IDEC Files",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/interline.service.ts",
+        "server/services/codeshare.service.ts",
+        "server/routers/interline.ts",
+        "server/routers.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "لم يُعثر على قارئ IDEC أو جدول وارد IDEC أو API لعرض معاملاته ضمن الخدمات المسجلة.",
+      "gap_ar": "وجود اتفاقيات Interline أو استيراد HOT في تسوية BSP لا يقدم وارد IDEC؛ مواصفة الملف وقبول الشريك غير مثبتين.",
+      "acceptance_ar": "الحصول على ملف ومواصفة وعقد تبادل مقبولين، ثم استيراد مع تحقق البنية والإجماليات ومنع التكرار وحفظ المصدر، وعرض معاملات الملف واختبار عينة قبول."
+    },
+    {
+      "id": 40,
+      "title": "Interline Values",
+      "implementation_status": "blocked_external",
+      "linkage_status": "blocked",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/interline.service.ts",
+        "server/services/codeshare.service.ts",
+        "server/routers/interline.ts",
+        "server/routers.ts"
+      ],
+      "apis": ["interline.calculateProrate"],
+      "ui_routes": [],
+      "tests": [],
+      "finding_ar": "calculateProrate يحسب قسمة مبلغ يرسله المستدعي وفق اتفاقية ومسافات أو نسبة.",
+      "gap_ar": "الحساب لا يقرأ قيم كوبونات تذاكر Interline المقبولة ولا يثبت معاملات التسوية؛ لا يوجد تقرير قيم كوبونات أو شاشة مخصصة.",
+      "acceptance_ar": "ربط القيم الفعلية للتذاكر والقسائم والإيصالات والاتفاقيات المقبولة ثم عرض القيم وحصص الناقلين والعملة والمصدر؛ مقارنة نتائج التقرير بعينة تسوية مقبولة."
+    },
+    {
+      "id": 43,
+      "title": "Lifted Tickets",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/coupon-uplift.ts"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "تظهر حالة F ودليل الرفع في مراجعة كوبونات حجز واحد، ويُحفظ الدليل الموقّع منفصلًا عن حالة الرحلة.",
+      "gap_ar": "لا توجد قائمة قسائم مرفوعة حسب تاريخ الرحلة؛ استقبال الرفع الإنتاجي محجوب، واكتمال الرحلة وحده ليس دليل استخدام لكل قسيمة.",
+      "acceptance_ar": "قارئ قسائم مرفوعة بفترة تاريخ الرحلة مع رقم التذكرة والكوبون ودليل الرفع المقبول؛ تحقق العبور بين الفترات وعدم احتساب الراكب المتخلف أو القسيمة المستبدلة."
+    },
+    {
+      "id": 55,
+      "title": "Payments",
+      "implementation_status": "complete",
+      "linkage_status": "api_only",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/payment-history.service.ts",
+        "server/routers/payment-history.ts",
+        "server/routers/payments.ts",
+        "server/routers.ts",
+        "client/src/pages/PaymentHistory.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["paymentHistory.adminHistory", "payments.adminGetHistory"],
+      "ui_routes": [],
+      "tests": [
+        "server/__tests__/new-features/payment-history.test.ts",
+        "server/services/payment-history-reporting.test.ts"
+      ],
+      "finding_ar": "توجد قائمة إدارية فعلية حسب dateFrom/dateTo للحركات المحفوظة في payments، مع المبلغ والعملة والطريقة والحالة ومرجع المعاملة والحجز والرحلة وصفحات limit/offset. أكملت المراجعة المستقلة ثبات صفحات القراءة الإدارية والشخصية عند تعادل الوقت بإضافة id DESC إلى الترتيب.",
+      "gap_ar": "معنى قائمة المدفوعات للفترة متحقق في API؛ لا توجد شاشة إدارية مستهلكة له. /payment-history يستعمل القارئ الشخصي عبر payments.getHistory ويعرض 50 سجلًا دون تحكم بالفترة. أضيف اختبار علائقي للصفحات والمرشحات وعزل المالك؛ لا يثبت ذلك شاشة إدارية أو قبول MySQL مستقلًا.",
+      "acceptance_ar": "ربط القائمة الإدارية بواجهة الفترة والصفحات والتصدير، وإضافة تحقق علائقي من طرق الدفع وحدود الفترة وتساوي timestamps والصلاحيات؛ إبقاء تسويات financial_ledger مستقلة عن حالة محاولة الدفع. نجحت قراءة 106 مدفوعات إدارية و105 للمالك عبر ثلاث صفحات ثابتة، مع مرشحات التاريخ والحالة والطريقة واستبعاد الصف غير المرتبط."
+    },
+    {
+      "id": 66,
+      "title": "Remittances",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/bsp-reporting.service.ts",
+        "server/services/bsp-local-evidence.ts",
+        "server/routers/bsp-reporting.ts",
+        "server/routers.ts",
+        "client/src/components/SettlementLedgerDraft.tsx",
+        "client/src/components/BspEvidenceReview.tsx",
+        "client/src/pages/admin/BSPReporting.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["bspReporting.ledgerDraft", "bspReporting.comparePayout"],
+      "ui_routes": [],
+      "tests": ["server/__tests__/bsp-local-evidence.test.ts"],
+      "finding_ar": "توجد مسودة دفتر داخلية ومطابقة أدلة تسوية محلية، وتصرح النتيجة بأنها internal_ledger_not_bsp.",
+      "gap_ar": "لا يوجد كشف تحويلات مكتب بيع أو رابط مكتب/تحويل مثبت. مسودة دفتر الحجز أو مقارنة دفع بنك لا تحقق تقرير جميع تحويلات مكتب معين.",
+      "acceptance_ar": "تسجيل تحويلات مكاتب البيع بإيصال وقيمة وعملة وتاريخ ومصدر ومكتب واضح، ثم قارئ وتصدير بحسب المكتب مع مطابقة المبلغ بالتحويلات المقبولة."
+    },
+    {
+      "id": 67,
+      "title": "Revenue Post Departure",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "client/src/pages/admin/ReportsDashboard.tsx"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx",
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts"
+      ],
+      "finding_ar": "مراجعة الإقفال تحسب أجرة نقل مستخدمة فقط عند وجود مكونات قابلة للربط ودليل رفع وتوافق التمويل.",
+      "gap_ar": "المراجعة لحجز وشهر ولا تجمع كوبونات ما بعد الرحلة حسب مكتب البيع؛ الحقول غير المثبتة تعود null، ورفع الإنتاج يحتاج قبولًا خارجيًا.",
+      "acceptance_ar": "تجميع قيمة النقل المكتسبة من القسائم المقبولة حسب مكتب البيع وفترة الرحلة، مع فصل الضريبة والالتزامات والاسترداد، وحالات عدم التثبت واختبارات عدم الحضور والاستبدال."
+    },
+    {
+      "id": 68,
+      "title": "Refunds",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx",
+        "server/services/refunds-stats.service.ts",
+        "server/routers/refunds.ts",
+        "client/src/pages/admin/RefundsDashboard.tsx"
+      ],
+      "apis": [
+        "refunds.getStats",
+        "refunds.getHistory",
+        "refunds.getTrends",
+        "reports.exportRefundsCSV",
+        "reports.exportRefundsExcel",
+        "reports.generateRefundsPDF"
+      ],
+      "ui_routes": ["/admin/refunds", "/admin/reports"],
+      "tests": [
+        "server/__tests__/refund-reporting-boundary.test.ts",
+        "server/__tests__/split-refund-boundary.test.ts",
+        "server/routers/refunds.security.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts"
+      ],
+      "finding_ar": "القراءة والتصدير يعرضان قيود استرداد SAR النقدية المسجلة، بما فيها الجزئي، بتاريخ التسوية ومعرف ثابت ونطاق الشركة؛ الشاشة الإدارية مرتبطة.",
+      "gap_ar": "لا يوجد تجميع أو مرشح مكتب بيع كما في المرجع؛ استرداد التمويل غير النقدي مفصول في التقارير المالية وليس من صفوف تصدير الاسترداد النقدي.",
+      "acceptance_ar": "إضافة بُعد مكتب البيع الحقيقي إلى القيود والتقرير، وتوضيح نطاق النقد/غير النقد؛ مقارنة إجماليات كل مكتب مع الدفتر دون تكرار الاسترداد الجزئي."
+    },
+    {
+      "id": 69,
+      "title": "Reported Sales By Office",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx"
+      ],
+      "apis": [
+        "revenueAccounting.getRevenueByChannel",
+        "revenueAccounting.couponMonthReview"
+      ],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "يوجد توزيع قيمة الحجوزات المدفوعة حسب القناة ومراجعة قسائم حجز واحد؛ أُصلح تكرار الحجز ذي رابط الشركة والوكيل في تجميع القنوات.",
+      "gap_ar": "قناة direct/agent/corporate ليست مكتب بيع، ولا توجد قائمة بيع المكتب مع تفاصيل كل كوبون أو تاريخ إصدار معتمد.",
+      "acceptance_ar": "تسجيل مكتب الإصدار ثم كشف المبيعات والكوبونات المرتبطة بالمكتب مع مكونات قيمتها وتاريخها، واختبار حجز وكالة لشركة دون مضاعفة أي مبلغ."
+    },
+    {
+      "id": 70,
+      "title": "Reported Sales System Wide",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "revenueAccounting.getDashboard",
+        "revenueAccounting.generateReport",
+        "revenueAccounting.getReports",
+        "reports.exportRevenueCSV",
+        "reports.exportRevenueExcel",
+        "reports.generateRevenuePDF",
+        "reports.exportBookingsCSV",
+        "reports.exportBookingsExcel",
+        "reports.generateBookingsPDF"
+      ],
+      "ui_routes": ["/admin/revenue-accounting", "/admin/reports"],
+      "tests": [
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts"
+      ],
+      "finding_ar": "توجد صادرات حجوزات بفترة وتقرير يومي/شهري لقيمة الفواتير والتحصيل والاسترداد؛ أُبقيت هذه المصادر مسماة بحسب معناها.",
+      "gap_ar": "قيمة الفواتير بتاريخ إنشاء الحجز تختلف عن مبيعات تذاكر مُصدرة، ولا يوجد سجل موحد لكل أنواع البيع بتاريخ حدوث البيع مع معكوساته.",
+      "acceptance_ar": "تعريف حدث البيع ومصدره ثم كشف شامل قابل للتصدير يطابق المجاميع مع القيود ويشمل الإصدار والاستبدال والاسترداد دون استخدام الحجز غير المدفوع كبيع."
+    },
+    {
+      "id": 71,
+      "title": "Reported Excess Baggage Sales",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx",
+        "server/services/ancillary-services.service.ts"
+      ],
+      "apis": ["revenueAccounting.getAncillaryRevenue"],
+      "ui_routes": ["/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts"
+      ],
+      "finding_ar": "الشاشة تعرض قيمة الإضافات النشطة المحجوزة حسب الفئة من booking_ancillaries، ومنها baggage.",
+      "gap_ar": "هذا مجموع أسعار إضافات نشطة وليس سجل بيع وزن زائد مُحصّل؛ لا يميز الوزن الزائد عن الحقائب الأخرى، ولا يجزئ النتائج حسب مكتب بيع.",
+      "acceptance_ar": "ربط إيصال دفع الوزن الزائد بنوع الخدمة والرحلة والراكب والمكتب وتاريخ البيع، ثم تقرير تفاصيل ومجاميع مع الإلغاء والاسترداد والتحقق من التمويل."
+    },
+    {
+      "id": 75,
+      "title": "Revenue System Wide",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "revenueAccounting.getDashboard",
+        "revenueAccounting.generateReport",
+        "revenueAccounting.getReports",
+        "reports.exportRevenueCSV",
+        "reports.exportRevenueExcel",
+        "reports.generateRevenuePDF"
+      ],
+      "ui_routes": ["/admin/revenue-accounting", "/admin/reports"],
+      "tests": [
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts"
+      ],
+      "finding_ar": "تقارير النظام المالية تعرض قيمة الفواتير والتحصيل النقدي وغير النقدي والاسترداد حسب يوم UTC والشهر.",
+      "gap_ar": "لا يوجد تقسيم أسبوعي منفصل booked/ticketed/flown؛ recognizedRevenue يظل null حين لا يوجد دليل، ولا يجوز تسميته صفراً أو مساواته بالحجز المدفوع.",
+      "acceptance_ar": "تجميع أسبوعي من ثلاثة أحداث مستقلة: حجز وإصدار واستخدام كوبون، وربط كل مبلغ بمصدره واختبار عبور الأسابيع والاسترداد بعد شهر البيع."
+    },
+    {
+      "id": 76,
+      "title": "Revenue Daily Flight",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "revenueAccounting.getDashboard",
+        "revenueAccounting.generateReport",
+        "revenueAccounting.getReports",
+        "reports.exportRevenueCSV",
+        "reports.exportRevenueExcel",
+        "reports.generateRevenuePDF"
+      ],
+      "ui_routes": ["/admin/revenue-accounting", "/admin/reports"],
+      "tests": [
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts"
+      ],
+      "finding_ar": "يوجد تقرير يومي لقيم إنشاء الحجوزات وتسويات الدفتر، مع تصدير يدعم الفترة.",
+      "gap_ar": "التقرير اليومي لا يفصل قيم الحجز والتذكرة والاستخدام، ولا يمثل تلقائيًا أجرة النقل المكتسبة لكل يوم.",
+      "acceptance_ar": "إضافة أعمدة مستقلة للحجز والإصدار والرفع من أحداثها الصحيحة مع تعريف يوم UTC؛ اختبار إصدار واستخدام يقعان في يومين مختلفين عن إنشاء الحجز."
+    },
+    {
+      "id": 77,
+      "title": "Revenue By Route",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["revenueAccounting.getRevenueByRoute"],
+      "ui_routes": ["/admin/revenue-accounting"],
+      "tests": ["server/__tests__/revenue-report-date-bounds.test.ts"],
+      "finding_ar": "getRevenueByRoute يقرأ قيمة الحجوزات المدفوعة غير الملغاة ضمن تاريخ إنشاء الحجز، ويجمعها حسب مسار الرحلة الأساسية؛ الشاشة مرتبطة.",
+      "gap_ar": "يعرض أعلى 20 مسارًا ولا يجزئ booked/ticketed/flown؛ ربط الرحلة الأساسية لا يوزع قيمة رحلة متعددة القطاعات على قطاعاتها.",
+      "acceptance_ar": "تقرير يوم كامل لكل المسارات مع صفحات/إجمالي واضح وتخصيص على القطاعات والكوبونات، وثلاثة أسس زمنية وقيم منفصلة واختبار رحلة متعددة القطاعات."
+    },
+    {
+      "id": 78,
+      "title": "Revenue By Flight",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx",
+        "server/services/flight-economics-evidence.service.ts",
+        "server/services/aviation-evidence.service.ts"
+      ],
+      "apis": ["revenueAccounting.getYieldAnalysis"],
+      "ui_routes": ["/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/flight-cost-capacity-snapshot.test.ts",
+        "scripts/acceptance/aviation-research.ts"
+      ],
+      "finding_ar": "قراءة العائد تعرض flightId/flightNumber وقيمة recognizedRevenueMinor فقط من دليل اقتصادي متاح ومصدر مقبول؛ غياب الدليل يظهر صراحة.",
+      "gap_ar": "ليست ثلاثة مجاميع booked/ticketed/flown لكل رحلة؛ قائمة العائد محدودة، وعدد الركاب يمثل عضوية حجز ممولة لا إثبات حمل فعلي لكل كوبون.",
+      "acceptance_ar": "تقرير رحلات بفترة وصفحات يجمع قيمة كل قطاع على أساس الحجز والإصدار والرفع، ويعرض مصدر الإثبات ولا يحول عدد الحجوزات الممولة إلى ركاب مطيرين."
+    },
+    {
+      "id": 79,
+      "title": "Revenue By Passenger",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/fare-components.service.ts",
+        "server/services/retail-offer.service.ts"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx",
+        "server/__tests__/fare-components-zatca.test.ts"
+      ],
+      "finding_ar": "مراجعة القسائم تعرض passengerId والأجرة الأساسية وحالة القسيمة ودليل الرفع للحجز المحدد.",
+      "gap_ar": "لا يوجد تقرير يومي لكل الركاب على مستوى كوبون التذكرة أو أعمدة الحجز والإصدار والطيران؛ تفاصيل الضرائب والرسوم ليست في هذا العرض.",
+      "acceptance_ar": "قائمة يومية بجميع القسائم والركاب والمكونات، مع ربط هوية التذكرة لكل مبلغ وفصل أحداث الحجز والإصدار والرفع واختبار تعدد الركاب والقطاعات."
+    },
+    {
+      "id": 80,
+      "title": "Revenue Flight Number",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx",
+        "server/services/flight-economics-evidence.service.ts"
+      ],
+      "apis": ["revenueAccounting.getYieldAnalysis"],
+      "ui_routes": ["/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/flight-cost-capacity-snapshot.test.ts",
+        "scripts/acceptance/aviation-research.ts"
+      ],
+      "finding_ar": "صفوف العائد تحتوي رقم الرحلة ورمز مدينتي/مطارَي المسار وقيمة إيراد مثبتة فقط عند توفر دليلها.",
+      "gap_ar": "لا يوجد مرشح مدينة المغادرة أو تقرير إيراد رقم رحلة متكامل؛ لا ينبغي اعتبار الإيراد غير المثبت صفرًا.",
+      "acceptance_ar": "مرشح مدينة مغادرة ورقم رحلة وفترة مع رحلة مؤرخة وهوية ثابتة ومصدر القيمة، وصفحات شاملة واختبار تكرار رقم الرحلة عبر أيام ومسارات مختلفة."
+    },
+    {
+      "id": 81,
+      "title": "Revenue By Route",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx"
+      ],
+      "apis": [
+        "revenueAccounting.getRevenueByRoute",
+        "revenueAccounting.couponMonthReview"
+      ],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "يوجد تجميع قيمة حجوزات حسب المسار ومراجعة محلية لأجرة النقل المستخدمة لكل حجز.",
+      "gap_ar": "لا يوجد تجميع إيراد ما بعد المغادرة حسب المسار؛ getRevenueByRoute يستخدم إنشاء الحجز المدفوع وليس دليل رفع القسائم.",
+      "acceptance_ar": "تجميع القسائم المرفوعة والقيم المعترف بها بحسب مسار القطاع وتاريخ الاستخدام، مع مستند المصدر ومعالجة الاستبدال والتخلف عن الرحلة والاسترداد."
+    },
+    {
+      "id": 82,
+      "title": "Revenue Tickets",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx"
+      ],
+      "apis": [
+        "revenueAccounting.getRevenueByChannel",
+        "revenueAccounting.couponMonthReview"
+      ],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts",
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "توجد قيم حجوزات حسب القناة ومراجعة كوبونات محلية قابلة للتتبع.",
+      "gap_ar": "لا يوجد تقرير إيراد تذاكر حسب مكتب البيع؛ القناة ليست مكتبًا ومبلغ الحجز ليس قيمة إيراد تذكرة مكتسب تلقائيًا.",
+      "acceptance_ar": "ربط مكتب الإصدار بالوثيقة ثم تقرير قيمة كل تذكرة/كوبون والمجاميع حسب المكتب، مع تحديد أساس المبلغ وإظهار غير المثبت بدل اختلاق قيمة."
+    },
+    {
+      "id": 83,
+      "title": "Revenue By Route And Month",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "revenueAccounting.generateReport",
+        "revenueAccounting.getReports",
+        "revenueAccounting.getRevenueByRoute"
+      ],
+      "ui_routes": ["/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts"
+      ],
+      "finding_ar": "توجد تقارير شهرية حية للدفتر وقيمة الحجوزات حسب المسار في قارئ منفصل.",
+      "gap_ar": "وصف المرجع لهذا العنوان يطلب الإيراد الشهري بحسب مكتب البيع؛ لا يوجد هذا البعد ولا تجميع مسار/مكتب/شهر، والتقارير الشهرية ليست أرشيف اعتماد محفوظًا.",
+      "acceptance_ar": "حسم البعد المطلوب بحسب وصف المرجع ثم تجميع شهر UTC ومكتب البيع والمسار من قيم قابلة للتتبع؛ إعلان حالة التقرير وحفظ إصدار معتمد إذا طُلب أرشيف."
+    },
+    {
+      "id": 85,
+      "title": "Sales",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx",
+        "server/services/travel-agent.service.ts",
+        "server/routers/travel-agent.ts",
+        "server/services/agent-portal.service.ts",
+        "server/routers/agent-portal.ts",
+        "client/src/pages/AgentPortal.tsx",
+        "client/src/pages/admin/TravelAgentManagement.tsx"
+      ],
+      "apis": [
+        "travelAgent.getBookings",
+        "agentPortal.dashboard",
+        "revenueAccounting.getRevenueByChannel"
+      ],
+      "ui_routes": [
+        "/agent",
+        "/admin/travel-agents",
+        "/admin/revenue-accounting"
+      ],
+      "tests": [
+        "server/services/distribution-reporting.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts"
+      ],
+      "finding_ar": "سجل حجوزات الوكيل يطبق الحالة والفترة قبل العد والصفحات؛ وتوزيع القنوات مرتبط باللوحة المالية.",
+      "gap_ar": "الفترة مبنية على تاريخ رابط الحجز/الحجز وليست تاريخ إصدار التذكرة؛ لا توجد قائمة كل تذاكر الوكالة بقيمها وإصداراتها.",
+      "acceptance_ar": "تقرير إصدار تذاكر حسب الوكالة وتاريخ الإصدار الثابت مع القسائم والقيم والاستبدال والإلغاء، واختبار اختلاف يوم الحجز عن يوم إصدار التذكرة."
+    },
+    {
+      "id": 86,
+      "title": "Sales All",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [
+        "revenueAccounting.getDashboard",
+        "revenueAccounting.generateReport",
+        "revenueAccounting.getReports",
+        "reports.exportRevenueCSV",
+        "reports.exportRevenueExcel",
+        "reports.generateRevenuePDF",
+        "reports.exportBookingsCSV",
+        "reports.exportBookingsExcel",
+        "reports.generateBookingsPDF"
+      ],
+      "ui_routes": ["/admin/revenue-accounting", "/admin/reports"],
+      "tests": [
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/services/report-export.service.test.ts",
+        "server/__tests__/report-export-access.test.ts"
+      ],
+      "finding_ar": "يمكن تصدير الحجوزات وقراءة القيم والتحصيل يوميًا وشهريًا على مستوى النظام للمسؤول المصرح.",
+      "gap_ar": "لا يوجد سجل مبيعات تذاكر بتاريخ البيع/الإصدار؛ جميع الحجوزات أو قيود التحصيل ليست بديلًا مطابقًا لجميع مبيعات الوثائق.",
+      "acceptance_ar": "قائمة كل مبيعات التذاكر بتاريخ بيع ثابت وهوية مصدر مع عكس البيع والاستبدال وتصدير مطابق للواجهة، واختبار عدم تكرار إصدار الوثيقة عند تنزيلها مجددًا."
+    },
+    {
+      "id": 87,
+      "title": "Sales by City",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        "server/services/report-export.service.ts",
+        "server/routers/reports.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/pages/admin/ReportsDashboard.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["revenueAccounting.getRevenueByRoute"],
+      "ui_routes": ["/admin/revenue-accounting"],
+      "tests": ["server/__tests__/revenue-report-date-bounds.test.ts"],
+      "finding_ar": "يوجد تجميع قيمة الحجز حسب مسار مطار المغادرة والوصول، وتظهر بيانات المدينة المرتبطة بالمطار.",
+      "gap_ar": "مدينة المطار ليست موقع مدينة مكتب البيع؛ لا يوجد تجميع مبيعات حسب موقع البيع المطلوب أو تعريف ذلك البعد.",
+      "acceptance_ar": "حفظ مدينة موقع البيع وربطها بمعاملة البيع ثم تجميع القيم حسب المدينة دون استبدالها بمدينة الرحلة، مع اختبار بيع مدينة لرحلة تنطلق من مدينة أخرى."
+    },
+    {
+      "id": 88,
+      "title": "Tax Codes",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/fare-components.service.ts",
+        "server/services/retail-offer.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": ["server/__tests__/fare-components-zatca.test.ts"],
+      "finding_ar": "توجد مكونات tax محفوظة من العرض بأكواد تقديرية، مع منع اعتبارها تلقائيًا تحديدًا ضريبيًا أو مستند ZATCA صادرًا.",
+      "gap_ar": "لم يُعثر على سجل أكواد ضرائب معتمد أو قارئ وشاشة لجميع الضرائب المكوّنة في النظام؛ قيمة OFFER_TAX_ESTIMATE ليست ذلك السجل.",
+      "acceptance_ar": "تعريف كتالوج ضرائب فعلي بإصدار السياسة والنطاق والرمز وطريقة الاحتساب وفترة السريان، ثم تقرير قراءة واختبارات حدود التطبيق وفق سياسة المشغل المقبولة."
+    },
+    {
+      "id": 89,
+      "title": "Ticket Calculation",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/fare-components.service.ts",
+        "server/services/retail-offer.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/ticket-documents.service.ts"
+      ],
+      "apis": [
+        "revenueAccounting.couponMonthReview",
+        "revenueAccounting.zatcaDraftAvailability",
+        "revenueAccounting.prepareZatcaDraft"
+      ],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/fare-components-zatca.test.ts",
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "تُحفظ مكونات عرض التسعير مع مصدر وإصدار سياسة وتحفظ مجموع مبلغ الحجز؛ مراجعة القسائم تعرض جزء الأجرة الأساسية.",
+      "gap_ar": "لا يوجد قارئ جميع حسابات التذاكر وتفصيل مكونات كل وثيقة؛ مسودة الفاتورة المحلية أو PDF التذكرة لا تحقق هذا الكشف ولا تثبت سياسة ضريبية مقبولة.",
+      "acceptance_ar": "قارئ حساب التذكرة يعرض الأجرة والضرائب والرسوم والخصم والإضافات لكل راكب وقطاع ومصدرها، ويثبت حفظ المجموع وعدم توزيع إجمالي الحجز كاملًا على كل تذكرة."
+    },
+    {
+      "id": 90,
+      "title": "Ticket Coupons",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/ticket-documents.service.ts"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "تظهر القسائم المحلية بمعرفها ورحلتها وراكبها وحالتها وأجرتها الأساسية ودليل الرفع في مراجعة الإقفال.",
+      "gap_ar": "لا توجد قراءة تفاصيل كاملة لقسيمة معينة بواسطة رقم التذكرة ورقم الكوبون؛ العرض الحالي لا يعيد هوية التذكرة/رقم الكوبون أو كل المكونات والتواريخ.",
+      "acceptance_ar": "شاشة تفاصيل كوبون محدد تشمل هوية الوثيقة والراكب والقطاع والحالة وتاريخها والمكونات ودليل المصدر والتاريخ السابق، مع صلاحية الشركة واختبارات الاستبدال والرفع."
+    },
+    {
+      "id": 94,
+      "title": "Ticket Status",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "تتوفر حالات القسائم المحلية ويعرضها قارئ حجز/شهر مع قيود تحفظ عدم التثبت التاريخي.",
+      "gap_ar": "لا توجد قائمة حالات جميع التذاكر ضمن فترة أو تعريف صريح لتاريخ الفترة: إصدار أم تغير حالة؛ createdAt للقسيمة لا يغني عن سجل حالة تاريخي.",
+      "acceptance_ar": "تقرير فترة بتعريف تاريخ واضح وسجل انتقالات لا يعيد كتابة التاريخ، مع التذاكر والقسائم ونطاق الشركة واختبارات انتهاء الشهر والاستبدال."
+    },
+    {
+      "id": 95,
+      "title": "Ticket Used",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx",
+        "server/services/coupon-uplift.ts"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "حالة F المحلية مرتبطة بإثبات رفع محفوظ ويمكن رؤيتها في مراجعة قسائم حجز محدد.",
+      "gap_ar": "لا يوجد قارئ لكل التذاكر المستخدمة أو تصديرها؛ استقبال دليل الرفع في الإنتاج ما زال محجوبًا حتى القبول الخارجي.",
+      "acceptance_ar": "قائمة التذاكر ذات قسائم مستخدمة بمصدر الرفع المقبول وتاريخه، مع تعريف التذكرة المستخدمة جزئيًا، واختبار عدم اعتبار check-in أو رحلة مكتملة استخدامًا مثبتًا."
+    },
+    {
+      "id": 96,
+      "title": "Tickets Voided",
+      "implementation_status": "partial",
+      "linkage_status": "ui",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/services/coupon-month-review.ts",
+        "server/routers/revenue-accounting.ts",
+        "server/routers.ts",
+        "client/src/components/CouponMonthReview.tsx",
+        "client/src/pages/AirlineConsole.tsx",
+        "client/src/pages/admin/RevenueAccounting.tsx",
+        "client/src/App.tsx"
+      ],
+      "apis": ["revenueAccounting.couponMonthReview"],
+      "ui_routes": ["/airline", "/admin/revenue-accounting"],
+      "tests": [
+        "server/__tests__/ticket-coupons.test.ts",
+        "scripts/acceptance/coupon-month-close.ts",
+        "client/src/components/__tests__/CouponMonthReview.test.tsx"
+      ],
+      "finding_ar": "خدمة القسائم تحفظ V عند الإبطال وتوثق الانتقال المحلي، وتعرض المراجعة القسائم المتاحة.",
+      "gap_ar": "لا يوجد تقرير التذاكر المبطلة حسب تاريخ الإبطال؛ الحالة الحالية قد تصبح R لاحقًا فلا يكفي ترشيحها وحدها لإعادة بناء حدث الإبطال.",
+      "acceptance_ar": "قارئ أحداث إبطال غير قابلة للمحو مرتبط بالوثيقة والكوبون والمصدر والتاريخ، مع مرشح فترة وتصدير واختبار إبطال تبعه استرداد."
+    },
+    {
+      "id": 98,
+      "title": "Web Bookings without Credit Card Authorizations",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/booking-checkout.service.ts",
+        "server/services/queue-v2.service.ts",
+        "server/routers/payments.ts",
+        "server/routers/bookings.ts",
+        "server/routers.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": [
+        "server/__tests__/payment-settlement-boundary.test.ts",
+        "server/__tests__/booking-expiry-checkout-guard.test.ts"
+      ],
+      "finding_ar": "توجد حالات جلسة الدفع وإيصالات التسوية وحماية من تأكيد حجز دون تمويل متحقق.",
+      "gap_ar": "لا يوجد تقرير يحصر حجوزات IBE الخالية من تفويض بطاقة؛ انتظار الدفع أو غياب قيد تسوية ليسا دليلًا كافيًا لغياب authorization، كما لا يوجد مرشح قناة ويب لهذا الكشف.",
+      "acceptance_ar": "تسجيل قناة الحجز ومرجع/حالة تفويض البطاقة المقبول ثم anti-join واضح للحجوزات المقصودة، يميز غير مطلوب/مرفوض/قيد المعالجة ويختبر المحافظ والائتمان المؤسسي."
+    },
+    {
+      "id": 99,
+      "title": "Web Bookings On TTL",
+      "implementation_status": "missing",
+      "linkage_status": "none",
+      "source_paths": [
+        "drizzle/schema.ts",
+        "server/services/booking-checkout.service.ts",
+        "server/services/queue-v2.service.ts",
+        "server/routers/payments.ts",
+        "server/routers/bookings.ts",
+        "server/routers.ts"
+      ],
+      "apis": [],
+      "ui_routes": [],
+      "tests": ["server/__tests__/booking-expiry-checkout-guard.test.ts"],
+      "finding_ar": "يوجد تنظيف للحجوزات المعلقة وحماية لجلسات الدفع الحية وأموال المراجعة، مع أقفال مخزون مؤقتة.",
+      "gap_ar": "لا توجد قائمة ويب على ticketing time limit تعرض موعدًا فعليًا للحجز والمهلة والمخزون؛ وقت انتهاء جلسة الدفع أو عمر الحجز ليس تلقائيًا TTL تذاكر موحدًا.",
+      "acceptance_ar": "تعريف وحفظ مهلة التذاكر وقناة IBE وحالة حجز المساحة، ثم قائمة تنتظر الدفع مع موعد الانتهاء والمنطقة الزمنية؛ اختبار الجلسة الحية وإيصال قيد المراجعة وانتهاء المخزون."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "finance-channel-overlap",
+      "source_paths": [
+        "server/services/revenue-accounting.service.ts",
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts"
+      ],
+      "finding_ar": "إعادة الإنتاج قبل الإصلاح أعطت قيمة direct=-30000 وعدد حجوزات=-1 عند وجود رابط وكالة وشركة للحجز نفسه؛ كان الحجز يُجمع في القناتين ثم يطرح مرتين.",
+      "change_ar": "تصنيف كل حجز مرة واحدة عبر CASE/EXISTS في استعلام واحد، بأولوية corporate ثم agent ثم direct المتسقة مع recordRevenueEntry، مع جميع القنوات الصفرية للفترة الفارغة والتحقق من الأعداد الآمنة.",
+      "tests": [
+        "server/__tests__/revenue-report-date-bounds.test.ts",
+        "server/__tests__/financial-reporting.test.ts",
+        "server/__tests__/monthly-financial-report-consistency.test.ts",
+        "server/__tests__/monthly-financial-mysql.test.ts"
+      ],
+      "validation_ar": "ثبت فشل اختبار التداخل على المصدر السابق ثم نجاح الاختبارات المالية المركزة 30/30 بعد الإصلاح. نجح TypeScript --incremental false وESLint للملفات المعدلة. أضيف اختبار مستقل إلى بوابة MySQL المعزولة؛ جرى تخطي اختبارات تلك البوابة الثلاثة محليًا لغياب قاعدة اختبار مصرح بها. تشغيلها الفعلي يحتاج AIS_DISPOSABLE_DATABASE=true وDATABASE_URL ولا يُدّعى هنا قبول MySQL أو مزود خارجي."
+    },
+    {
+      "id": "payment-history-stable-pagination",
+      "source_paths": [
+        "server/services/payment-history.service.ts",
+        "server/services/payment-history-reporting.test.ts"
+      ],
+      "finding_ar": "كشف المراجع المستقل أن القراءتين ترتبان بالتاريخ فقط، ولا تحسمان تعادل الوقت أثناء offset pagination. فشل اختبارا ترتيب الإدارة والمالك قبل الإصلاح.",
+      "change_ar": "إضافة payments.id DESC بعد createdAt DESC إلى القراءتين دون تغيير الصلاحيات أو المرشحات أو عقد الاستجابة.",
+      "tests": [
+        "server/services/payment-history-reporting.test.ts",
+        "server/__tests__/new-features/payment-history.test.ts"
+      ],
+      "validation_ar": "قبل الإصلاح: فشل اختباران ونجح واحد. بعد الإصلاح: نجحت الحالات الجديدة الثلاث واختبارات التاريخ القائمة العشرة، 13/13. تنفذ الحالات الجديدة استعلامات Drizzle الفعلية على SQLite علائقية؛ ليست قبول MySQL أو تصفح لقطة ثابتة أثناء الإدراج المتزامن."
+    }
+  ]
+}

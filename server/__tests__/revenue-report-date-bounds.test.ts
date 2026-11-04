@@ -112,6 +112,56 @@ const cases = [
 ];
 
 describe("revenue report date bounds", () => {
+  it("counts a corporate booking made by an agent once, without negative direct sales", async () => {
+    database.exec("INSERT INTO agent_bookings VALUES(3)");
+
+    const channels = await getRevenueByChannel(start, end);
+
+    expect(channels).toEqual([
+      {
+        channel: "direct",
+        totalRevenue: 0,
+        bookingCount: 0,
+        averageRevenue: 0,
+        percentageOfTotal: 0,
+      },
+      {
+        channel: "agent",
+        totalRevenue: 20000,
+        bookingCount: 1,
+        averageRevenue: 20000,
+        percentageOfTotal: 40,
+      },
+      {
+        channel: "corporate",
+        totalRevenue: 30000,
+        bookingCount: 1,
+        averageRevenue: 30000,
+        percentageOfTotal: 60,
+      },
+    ]);
+  });
+
+  it("returns all channel buckets as zero for a period without paid bookings", async () => {
+    const channels = await getRevenueByChannel(
+      new Date("2026-12-01T00:00:00.000Z")
+    );
+
+    expect(channels.map(row => row.channel)).toEqual([
+      "direct",
+      "agent",
+      "corporate",
+    ]);
+    for (const row of channels) {
+      expect(row).toMatchObject({
+        totalRevenue: 0,
+        bookingCount: 0,
+        averageRevenue: 0,
+        percentageOfTotal: 0,
+      });
+    }
+  });
+
   it.each(cases)(
     "keeps route, class, channel and add-on cohorts consistent: $name",
     async ({ startDate, endDate, total, count, direct }) => {

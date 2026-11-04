@@ -1,0 +1,178 @@
+{
+  "schema_version": "1.0",
+  "reviewed_base_sha": "b0ddb1fe370475678a38cc333815c8354e4760d4",
+  "scope_note": "مراجعة ربط الواجهات والجدولة على قاعدة تحتوي إصلاح pagination للولاء. النتائج أدناه تشمل إصلاحات الواجهة المرافقة، ولا تنسبها إلى base SHA وحده. هذا ملحق وظيفي ولا يضيف تقارير إلى عدد أمثلة Videcom الـ99.",
+  "modules": [
+    {
+      "id": "routed_flight_occupancy",
+      "linkage_status": "ui",
+      "ui_routes": ["/analytics"],
+      "apis": ["analytics.getFlightOccupancy"],
+      "source_paths": [
+        "client/src/App.tsx",
+        "client/src/pages/AnalyticsDashboard.tsx",
+        "server/routers.ts",
+        "server/routers/analytics.ts",
+        "server/contracts/analytics.ts",
+        "server/services/analytics.service.ts"
+      ],
+      "tests": [
+        "client/src/pages/__tests__/AnalyticsDashboard.test.tsx",
+        "client/src/pages/__tests__/service-routes.test.tsx",
+        "server/__tests__/analytics-reporting.test.ts",
+        "scripts/acceptance/analytics-linkage.ts"
+      ],
+      "finding_ar": "كان مستهلك API في صفحة admin/AnalyticsDashboard غير المسجلة في App. رُبط الآن بصفحة /analytics الفعلية، مع الرحلة والمغادرة UTC والمحجوز والسعة والنسبة. تمنع query options الطلبات قبل تحقق دور admin/super_admin، وتُفصل حالات التحميل والخطأ والفراغ. تُحجب صفوف مخزنة عند الخطأ وتُعرض النسبة غير متاحة عند سعة صفر.",
+      "scope_ar": "حتى20 رحلة قادمة مرتبة بأعلى نسبة حجز؛ مستقل عن فلتر الفترة التاريخية. يعرض حجز المقاعد، ولا يمثل قائمة كل الرحلات أو إثبات ركاب صعدوا فعليًا. لا يضيف هذا الإصلاح فلتر تاريخ إلى الخدمة."
+    },
+    {
+      "id": "loyalty_personal_history",
+      "linkage_status": "ui",
+      "ui_routes": ["/loyalty"],
+      "apis": ["loyalty.myAccount", "loyalty.myTransactions"],
+      "source_paths": [
+        "client/src/App.tsx",
+        "client/src/pages/LoyaltyDashboard.tsx",
+        "server/routers.ts",
+        "server/routers/loyalty.ts",
+        "server/contracts/loyalty.ts",
+        "server/services/loyalty.service.ts"
+      ],
+      "tests": [
+        "client/src/pages/__tests__/LoyaltyDashboard.test.tsx",
+        "client/src/pages/__tests__/service-routes.test.tsx",
+        "server/services/distribution-reporting.test.ts"
+      ],
+      "finding_ar": "زر عرض الكل أصبح يفتح صفحات50 معاملة مع السابق/التالي، اعتمادًا على عقد offset المحمي للمستخدم الحالي. تبقى الإحصاءات والرسم من أحدث50 مع تسمية صريحة لهذا النطاق، ولا تتبدل مع تصفح صفحات أقدم. فشل الرصيد أو السجل يظهر خطأ وإعادة محاولة، ويمنع عرض بيانات مخزنة على أنها قراءة ناجحة أو تحويل الفشل إلى صفر.",
+      "scope_ar": "سجل شخصي للمستخدم المصادق، بحد offset يطابق API وهو1000000. لا توجد هنا شاشة بحث إداري عن أي عضو، ولا تقرير كل أعضاء البرنامج بفترة. الإحصاءات الأخيرة ليست مجاميع شهرية كاملة، والرسم يجمع فقط المعاملات ضمن العينة الأخيرة والستة أشهر."
+    },
+    {
+      "id": "warehouse_manual_exports",
+      "linkage_status": "ui",
+      "ui_routes": ["/admin/data-warehouse"],
+      "apis": [
+        "dataWarehouse.createExport",
+        "dataWarehouse.getExports",
+        "dataWarehouse.getETLStatus",
+        "GET /api/data-warehouse/download/:id"
+      ],
+      "source_paths": [
+        "client/src/App.tsx",
+        "client/src/pages/admin/DataWarehouse.tsx",
+        "server/routers.ts",
+        "server/routers/data-warehouse.ts",
+        "server/services/data-warehouse.service.ts",
+        "server/routes/operational-integrations.ts",
+        "server/_core/index.ts",
+        "drizzle/schema.ts"
+      ],
+      "tests": [
+        "client/src/pages/admin/__tests__/DataWarehouse.test.tsx",
+        "server/__tests__/operational-http-boundary.test.ts",
+        "server/__tests__/durable-operations.test.ts",
+        "scripts/acceptance/forensic.ts",
+        "scripts/acceptance/r2-trace.ts"
+      ],
+      "finding_ar": "خمسة أنواع محددة: bookings/flights/revenue/customers/operational. الإنشاء يقرأ خدمات/جداول حقيقية ويحفظ محتوى الملف وحجمه وعدد السجلات وSHA256 وحالة المعالجة في warehouse_exports. التحميل يمر بمسار HTTP مسجل يتحقق من المدير وchecksum. أُصلح زر التنزيل الذي كان بلا فعل، وأُصلحت رسالة نجاح زائفة عند رجوع سجل status=failed رغم نجاح RPC.",
+      "formats": ["csv", "json", "jsonl"],
+      "scope_ar": "واجهة وHTTP للمسؤول العام admin/super_admin، وليست صلاحية تنزيل محصورة بمنشئ الملف أو tenant. الأنواع والحقول يحددها الكود؛ الحد الحالي للملف8MiB. لا يوجد مصمم تقارير حرة أو اختيار أعمدة عام."
+    },
+    {
+      "id": "warehouse_scheduled_exports",
+      "linkage_status": "ui",
+      "ui_routes": ["/admin/data-warehouse"],
+      "apis": [
+        "dataWarehouse.createSchedule",
+        "dataWarehouse.getSchedules",
+        "dataWarehouse.updateSchedule",
+        "dataWarehouse.deleteSchedule"
+      ],
+      "source_paths": [
+        "client/src/pages/admin/DataWarehouse.tsx",
+        "server/routers/data-warehouse.ts",
+        "server/services/data-warehouse.service.ts",
+        "server/worker.ts",
+        "server/services/cron.service.ts",
+        "server/services/scheduled-task.service.ts",
+        "drizzle/schema.ts"
+      ],
+      "tests": [
+        "server/__tests__/warehouse-schedule-isolation.test.ts",
+        "server/services/cron.service.test.ts"
+      ],
+      "finding_ar": "إنشاء وتفعيل/تعطيل وحذف جداول يومية وأسبوعية وشهرية موصول بwarehouse_schedules. worker يستدعي startCronJobs؛ مهمةwarehouseExports تفحص المستحق كل دقيقةUTC من خلالrunScheduledTask ذي lease وسجلlastSuccessAt. يعاد التحقق من صلاحية مدير مالك الجدول، ويحافظ فشل جدول على due date قابلة للإعادة مع استمرار الجداول الصحيحة التالية. لا يتقدم lastRunAt إلا بعد ملف مكتمل.",
+      "scope_ar": "config محفوظ في قاعدة البيانات لكنه لا يستخدم لتحديد أعمدة أو قالب أو بريد مستلم أو وقت ساعة مخصص. تكرارdaily/weekly/monthly محدد بالخدمة. نجاح تشغيلworker الفعلي على البيئة المستهدفة يحتاج آخرreceipt/lastSuccessAt؛ لم يُشاهد تشغيل إنتاجي جديد في مراجعة الواجهة."
+    },
+    {
+      "id": "bespoke_builder_and_delivery",
+      "linkage_status": "none",
+      "ui_routes": [],
+      "apis": [],
+      "source_paths": [
+        "server/routers/data-warehouse.ts",
+        "server/services/data-warehouse.service.ts",
+        "client/src/pages/admin/DataWarehouse.tsx"
+      ],
+      "tests": [],
+      "finding_ar": "لم يُعثر ضمن مسار reporting/warehouse على مصمم SQL/حقول وقوالب مخصصة، أو مخرجات تقارير عامةHTML/XML، أو ربط وظيفة تقرير بمستلم بريد وإيصال تسليم. وجود خدمات إرسال رسائل عامة لا يثبت تسليم التقرير.",
+      "gap_ar": "يلزم تعريف آمن للتقرير المخصص وصلاحياته وحدوده والتحقق من صيغHTML/XML، ثم وظائف تسليم تقرير بمرفق/رابط مع صلاحيات وreceipts قابلة للفحص. هذه قدرات ناقصة ولم يُفترض اكتمالها من اسمwarehouse أو حقولconfig."
+    }
+  ],
+  "fixes": [
+    "ربط إشغال الرحلات بصفحة التحليلات المسجلة، بنطاق معلن وحالات قراءة واضحة.",
+    "ربط سجل الولاء بصفحات فعالة، وتقييد معنى إحصاءات العينة الأخيرة، ومنع رصيد زائف عند خطأالمصدر.",
+    "ربط تنزيلwarehouse بالمسارHTTP المحمي، وإظهار فشل توليد الملف حين يكونstatus=failed."
+  ],
+  "validation": {
+    "local_evidence_type": "unit/component + App routing with substituted HTTP transport; no production traffic or new native MySQL/browser run from this agent",
+    "red_before_fixes": {
+      "analytics_failed": 5,
+      "loyalty_failed": 4,
+      "warehouse_false_success_failed": 1,
+      "warehouse_download_failed": 1
+    },
+    "local_verification": {
+      "method": "آخر تشغيل كامل لكل ملف على التغييرات المرافقة؛ عُدّ كل اختبار مرة واحدة فقط، ولم تُجمع إعادة التشغيل المتكررة.",
+      "test_files": [
+        {
+          "path": "client/src/pages/__tests__/AnalyticsDashboard.test.tsx",
+          "passed": 14,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "path": "client/src/pages/__tests__/LoyaltyDashboard.test.tsx",
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "path": "client/src/pages/__tests__/service-routes.test.tsx",
+          "passed": 16,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "path": "client/src/pages/admin/__tests__/DataWarehouse.test.tsx",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        }
+      ],
+      "typescript": {
+        "command": "NODE_OPTIONS=--max-old-space-size=4096 pnpm check --incremental false",
+        "status": "passed"
+      },
+      "eslint_changed_typescript": "passed",
+      "prettier_changed_files": "passed",
+      "git_diff_check": "passed",
+      "existing_server_coverage_note": "مسارات الاختبارات الخادمة في modules توثق التغطية الموجودة ولا تعني إعادة تشغيلها في هذا العمل."
+    },
+    "not_executed_here": [
+      "native MySQL",
+      "browser Playwright",
+      "live scheduled worker",
+      "SMTP report delivery"
+    ]
+  }
+}
