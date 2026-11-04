@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { Redirect } from "wouter";
+import { Link, Redirect } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -46,7 +46,7 @@ type ReportType = "bookings" | "revenue" | "flights" | "refunds";
 type ExportFormat = "csv" | "pdf" | "excel";
 
 export default function ReportsDashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const canFinance = Boolean(
     user &&
@@ -209,6 +209,14 @@ export default function ReportsDashboard() {
       <div>
         <h1 className="text-2xl font-bold">{t("reports.title")}</h1>
         <p className="text-muted-foreground">{t("reports.description")}</p>
+        <Button asChild variant="outline" className="mt-3">
+          <Link href="/admin/standard-reports">
+            <FileText className="size-4" aria-hidden="true" />
+            {i18n?.language?.startsWith("ar")
+              ? "التقارير القياسية والقوالب"
+              : "Standard reports and templates"}
+          </Link>
+        </Button>
       </div>
 
       {/* Filters */}

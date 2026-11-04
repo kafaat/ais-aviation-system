@@ -227,7 +227,9 @@ function sanitizeUrl(url: string): string {
 }
 
 /** Returns success only when the configured provider accepts the message. */
-export async function sendEmail(template: EmailTemplate): Promise<boolean> {
+export async function sendEmailWithReceipt(
+  template: EmailTemplate
+): Promise<{ id: string; acceptedAt: Date }> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!key || !from)
@@ -261,7 +263,14 @@ export async function sendEmail(template: EmailTemplate): Promise<boolean> {
   if (!response.ok)
     throw new Error(`Email provider rejected message: HTTP ${response.status}`);
   const receipt = (await response.json()) as { id?: string };
-  if (!receipt.id) throw new Error("Email provider response has no message ID");
+  if (!receipt.id || typeof receipt.id !== "string" || receipt.id.length > 160)
+    throw new Error("Email provider response has no valid message ID");
+  return { id: receipt.id, acceptedAt: new Date() };
+}
+
+/** A provider acceptance receipt is distinct from delivery to the recipient. */
+export async function sendEmail(template: EmailTemplate): Promise<boolean> {
+  await sendEmailWithReceipt(template);
   return true;
 }
 

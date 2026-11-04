@@ -103,6 +103,12 @@ const adminMenuItems: MenuItem[] = [
     adminOnly: true,
   },
   {
+    icon: FileSpreadsheet,
+    labelKey: "Standard reports / التقارير القياسية",
+    path: "/admin/standard-reports",
+    adminOnly: true,
+  },
+  {
     icon: RefreshCcw,
     labelKey: "nav.refunds",
     path: "/admin/refunds",
@@ -388,6 +394,12 @@ function DashboardLayoutContent({
             icon: FileText,
             labelKey: "nav.reports",
             path: "/admin/reports",
+            adminOnly: false,
+          },
+          {
+            icon: FileSpreadsheet,
+            labelKey: "Standard reports / التقارير القياسية",
+            path: "/admin/standard-reports",
             adminOnly: false,
           },
         ]

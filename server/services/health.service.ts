@@ -1,5 +1,6 @@
 import { getDb } from "../db";
 import { redisCacheService } from "./redis-cache.service";
+import { logger } from "../_core/logger";
 
 export interface HealthStatus {
   status: "healthy" | "unhealthy" | "degraded";
@@ -159,8 +160,21 @@ export async function performHealthChecks(): Promise<HealthStatus> {
  * Check if system is ready to accept traffic (readiness probe)
  * Returns true only if all critical services are available
  */
+let lastReadinessState: string | undefined;
 export async function isReady(): Promise<boolean> {
   const health = await performHealthChecks();
+  const dependencies = {
+    database: health.checks.database.status,
+    stripe: health.checks.stripe.status,
+    cache: health.checks.cache.status,
+  };
+  const state = JSON.stringify(dependencies);
+  if (health.status !== "healthy" && state !== lastReadinessState) {
+    // Operator logs identify the failed dependency without credentials, raw
+    // driver errors, or a public expansion of the readiness response.
+    logger.warn({ dependencies }, "Readiness dependencies are not ready");
+  }
+  lastReadinessState = state;
   return health.status === "healthy";
 }
 

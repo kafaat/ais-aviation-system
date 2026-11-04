@@ -96,6 +96,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/analytics": "Analytics Dashboard",
   "/admin/refunds": "Refunds Management",
   "/admin/reports": "Reports Dashboard",
+  "/admin/standard-reports": "Standard Reports",
   "/admin/group-bookings": "Group Bookings Management",
   "/admin/vouchers": "Voucher Management",
   "/admin/gates": "Gate Management",
