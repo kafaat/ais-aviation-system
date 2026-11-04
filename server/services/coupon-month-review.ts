@@ -141,7 +141,7 @@ export async function reviewCouponMonth(
           eq(aviationEvidence.tenantId, tenantId),
           lt(aviationEvidence.receivedAt, cutoff),
           lt(aviationEvidence.observedAt, cutoff),
-          sql`JSON_EXTRACT(${aviationEvidence.payload}, '$.bookingId') = ${bookingId}`
+          sql`COALESCE(JSON_EXTRACT(${aviationEvidence.ingestSnapshot}, '$.bookingId'), JSON_EXTRACT(${aviationEvidence.payload}, '$.bookingId')) = ${bookingId}`
         )
       );
     const liabilities = await tx
@@ -218,12 +218,14 @@ export async function reviewCouponMonth(
       );
       const value =
         base.length === 1 && base[0].amount >= 0 ? base[0].amount : null;
-      const proof = evidence.filter(
-        e =>
+      const proof = evidence.filter(e => {
+        const ref = e.ingestSnapshot ?? e.payload;
+        return (
           e.flightId === c.flightId &&
-          e.payload.passengerId === c.passengerId &&
-          e.payload.couponId === c.id
-      );
+          ref.passengerId === c.passengerId &&
+          ref.couponId === c.id
+        );
+      });
       if (c.status !== "E" && c.status !== "V" && c.status !== "R") {
         if (seen.has(k) || !expected.has(k))
           issues.add("ambiguous_coupon_scope");
