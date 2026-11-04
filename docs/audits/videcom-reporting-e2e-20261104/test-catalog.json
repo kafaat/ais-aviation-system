@@ -1,0 +1,704 @@
+[
+  {
+    "file": "agency-commissions.spec.ts",
+    "title": "admin approves a funded agency commission once and cannot record an unverified payout",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2969
+      }
+    ]
+  },
+  {
+    "file": "agency-credit.spec.ts",
+    "title": "one agency credit line admits one concurrent invoice and reconciles cancellation and actual funding",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3753
+      }
+    ]
+  },
+  {
+    "file": "agency-owner.spec.ts",
+    "title": "admin links an agency, its first sale belongs to the owner, and a foreign user cannot take it",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3285
+      }
+    ]
+  },
+  {
+    "file": "ci-smoke.spec.ts",
+    "title": "home renders the current one-way search controls",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2165
+      }
+    ]
+  },
+  {
+    "file": "ci-smoke.spec.ts",
+    "title": "public accessibility statement is reachable through the footer",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1450
+      }
+    ]
+  },
+  {
+    "file": "ci-smoke.spec.ts",
+    "title": "airports remains readable after its cache is populated",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 161
+      }
+    ]
+  },
+  {
+    "file": "ci-smoke.spec.ts",
+    "title": "airlines remains readable after its cache is populated",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 171
+      }
+    ]
+  },
+  {
+    "file": "ci-smoke.spec.ts",
+    "title": "calendar selection reaches search in en across a year boundary",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3569
+      }
+    ]
+  },
+  {
+    "file": "ci-smoke.spec.ts",
+    "title": "calendar selection reaches search in ar across a year boundary",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3698
+      }
+    ]
+  },
+  {
+    "file": "ci-smoke.spec.ts",
+    "title": "login renders the combined authentication form",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 976
+      }
+    ]
+  },
+  {
+    "file": "extra-seat.spec.ts",
+    "title": "a historical EXST request stays readable and cannot reserve or confirm an extra seat",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2005
+      }
+    ]
+  },
+  {
+    "file": "fixtures/baggage-consistency.ts",
+    "title": "AT-02 preserves funded baggage totals and the single-bag cap from e-ticket to bag drop",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 4972
+      }
+    ]
+  },
+  {
+    "file": "fixtures/codeshare.ts",
+    "title": "codeshare checkout and concurrent sales respect the last configured seat",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3676
+      }
+    ]
+  },
+  {
+    "file": "fixtures/dcs-counter.ts",
+    "title": "scoped desk recovers a boarded passenger after departure on a delayed flight",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 4582
+      }
+    ]
+  },
+  {
+    "file": "fixtures/dcs-counter.ts",
+    "title": "scoped desk recovers a boarded passenger after departure on a cancelled flight",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 4800
+      }
+    ]
+  },
+  {
+    "file": "fixtures/dcs-counter.ts",
+    "title": "scoped desk persists boarding and recovers a received bag after a lost response",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 5161
+      }
+    ]
+  },
+  {
+    "file": "fixtures/dcs-counter.ts",
+    "title": "scoped desk recovers the same 5 kg bag receipt after reload and registers a second equal-weight bag",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 6505
+      }
+    ]
+  },
+  {
+    "file": "fixtures/family-check-in.ts",
+    "title": "a family can check in its eligible passenger while a companion remains denied",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2780
+      }
+    ]
+  },
+  {
+    "file": "fixtures/provider-checkout.ts",
+    "title": "checkout redirect does not mark an unpaid invoice paid",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2332
+      }
+    ]
+  },
+  {
+    "file": "fixtures/provider-checkout.ts",
+    "title": "checkout failure does not mark an unpaid invoice paid",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2417
+      }
+    ]
+  },
+  {
+    "file": "fixtures/provider-checkout.ts",
+    "title": "checkout missing-url does not mark an unpaid invoice paid",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2560
+      }
+    ]
+  },
+  {
+    "file": "fixtures/ibe-journeys.ts",
+    "title": "search party survives login and a promotion settles once through the owned wallet",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 7473
+      }
+    ]
+  },
+  {
+    "file": "fixtures/ibe-journeys.ts",
+    "title": "public reference lookup shows only the itinerary and does not grant account access",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1256
+      }
+    ]
+  },
+  {
+    "file": "fixtures/ibe-mobile.ts",
+    "title": "passengers and agents can reach their own entry from the mobile header",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 4325
+      }
+    ]
+  },
+  {
+    "file": "fixtures/ibe-mobile.ts",
+    "title": "only the listed corporate origin embeds search and a tap opens native AIS results",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2112
+      }
+    ]
+  },
+  {
+    "file": "fixtures/agent-portal.ts",
+    "title": "a linked owner books once through the portal and reviews their pending invoice",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1528
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "wheelchair assistance selected in My Bookings stays on its requested sector",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3829
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "payment history shows an outage and recovers through the real reader",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 8101
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "passenger-rights referral cites an official source and keeps follow-ups local",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 975
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "issuer capability hides the exchange button and rejects a direct command for the same booking",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2198
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "outbound bag and return meal selected in checkout belong to different passengers and sectors",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 6311
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "second-sector exchange recovers the completed change after its response is lost",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 5357
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "exchange chat links the funded reservation without creating a quote or collecting again",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1961
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "invalid passport blocks Complete Booking & Payment before booking or payment",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1620
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "invalid passport blocks Split with Others before booking or payment",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1805
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "named fare rules follow the passenger from search to a booked RBD",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3214
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "flight search and detail preserve dates across repeated Redis-backed HTTP reads",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 945
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "booking creation replays one unpaid invoice without consuming a seat",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1001
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "customer confirms full credit funding in the booking screen; replay posts once",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1699
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "approved partial refund retains the funded itinerary",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1556
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "approved full refund cancels all inventory and restores original credit",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1450
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "customer cannot execute a finance refund or fund another owner's invoice",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 272
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "a profile export reaches an authenticated browser download and a different account receives 404",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3223
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "demonstrates operational booking values alongside unverified earned revenue",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1317
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "revenue source failure stays visible instead of presenting zero cash",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 7720
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "biometric without an accepted adapter reports unavailable, not empty",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 7967
+      }
+    ]
+  },
+  {
+    "file": "hardening-journeys.spec.ts",
+    "title": "kiosk API has no registered devices and the screen shows that state",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1103
+      }
+    ]
+  },
+  {
+    "file": "local-ticket-revalidation.spec.ts",
+    "title": "owner revalidates an open local coupon to a different date once and recovers its receipt",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3178
+      }
+    ]
+  },
+  {
+    "file": "multi-city-fare.spec.ts",
+    "title": "multi-city selects named fares per sector and rejects a stale class without a cabin fallback",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2907
+      }
+    ]
+  },
+  {
+    "file": "vrs-baggage-admission.spec.ts",
+    "title": "AT-03 rejects new baggage across channels before check-in, after offload, above allowance and after cancellation",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 4867
+      }
+    ]
+  },
+  {
+    "file": "vrs-kiosk-tags.spec.ts",
+    "title": "a kiosk passenger retries the same return-sector bag tag after a printer failure",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2382
+      }
+    ]
+  },
+  {
+    "file": "vrs-report-exports.spec.ts",
+    "title": "booking downloads include the whole UTC creation day and only the selected status",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 3331
+      }
+    ]
+  },
+  {
+    "file": "vrs-report-exports.spec.ts",
+    "title": "flight exports use the same flight IDs, departure day, status and seat totals",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 2110
+      }
+    ]
+  },
+  {
+    "file": "vrs-report-exports.spec.ts",
+    "title": "revenue downloads reconcile a paid ticket and a later partial refund by UTC day",
+    "project": "chromium",
+    "status": "expected",
+    "attempts": [
+      {
+        "status": "passed",
+        "retry": 0,
+        "duration": 1839
+      }
+    ]
+  }
+]

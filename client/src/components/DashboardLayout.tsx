@@ -103,6 +103,12 @@ const adminMenuItems: MenuItem[] = [
     adminOnly: true,
   },
   {
+    icon: FileSpreadsheet,
+    labelKey: "Standard reports / التقارير القياسية",
+    path: "/admin/standard-reports",
+    adminOnly: true,
+  },
+  {
     icon: RefreshCcw,
     labelKey: "nav.refunds",
     path: "/admin/refunds",
@@ -384,6 +390,18 @@ function DashboardLayoutContent({
             path: "/airline",
             adminOnly: false,
           },
+          {
+            icon: FileText,
+            labelKey: "nav.reports",
+            path: "/admin/reports",
+            adminOnly: false,
+          },
+          {
+            icon: FileSpreadsheet,
+            labelKey: "Standard reports / التقارير القياسية",
+            path: "/admin/standard-reports",
+            adminOnly: false,
+          },
         ]
       : [];
   const dcsItems =
@@ -542,7 +560,9 @@ function DashboardLayoutContent({
             {/* Main Navigation */}
             <nav aria-label={t("accessibility.mainNavigation")}>
               <SidebarMenu className="px-2 py-1 space-y-0.5">
-                {menuItems.map(renderMenuItem)}
+                {[...menuItems, ...airlineItems, ...dcsItems].map(
+                  renderMenuItem
+                )}
               </SidebarMenu>
             </nav>
 

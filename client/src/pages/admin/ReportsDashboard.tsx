@@ -1,11 +1,13 @@
 /**
- * Reports Dashboard - Admin Panel
+ * Scoped reports dashboard
  *
- * Allows admins to generate and export various reports
+ * Allows authorized airline staff and global admins to export reports
  * Supports CSV, PDF, and Excel formats
  */
 
 import { useState } from "react";
+import { Link, Redirect } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -44,8 +46,24 @@ type ReportType = "bookings" | "revenue" | "flights" | "refunds";
 type ExportFormat = "csv" | "pdf" | "excel";
 
 export default function ReportsDashboard() {
-  const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<ReportType>("bookings");
+  const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+  const canFinance = Boolean(
+    user &&
+    ["admin", "super_admin", "airline_admin", "finance"].includes(user.role)
+  );
+  const canOperations = Boolean(
+    user && ["admin", "super_admin", "airline_admin", "ops"].includes(user.role)
+  );
+  const reportTypes: ReportType[] = [
+    ...(canFinance ? (["bookings", "revenue"] as const) : []),
+    ...(canOperations ? (["flights"] as const) : []),
+    ...(canFinance ? (["refunds"] as const) : []),
+  ];
+  const [selectedTab, setActiveTab] = useState<ReportType>("bookings");
+  const activeTab = reportTypes.includes(selectedTab)
+    ? selectedTab
+    : reportTypes[0];
   const [startDate, setStartDate] = useState(
     format(subDays(new Date(), 30), "yyyy-MM-dd")
   );
@@ -183,12 +201,22 @@ export default function ReportsDashboard() {
     }
   };
 
+  if (reportTypes.length === 0) return <Redirect to="/" />;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">{t("reports.title")}</h1>
         <p className="text-muted-foreground">{t("reports.description")}</p>
+        <Button asChild variant="outline" className="mt-3">
+          <Link href="/admin/standard-reports">
+            <FileText className="size-4" aria-hidden="true" />
+            {i18n?.language?.startsWith("ar")
+              ? "التقارير القياسية والقوالب"
+              : "Standard reports and templates"}
+          </Link>
+        </Button>
       </div>
 
       {/* Filters */}
@@ -273,23 +301,25 @@ export default function ReportsDashboard() {
         value={activeTab}
         onValueChange={value => setActiveTab(value as ReportType)}
       >
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="bookings" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            {t("reports.bookings")}
-          </TabsTrigger>
-          <TabsTrigger value="revenue" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            {t("reports.revenue")}
-          </TabsTrigger>
-          <TabsTrigger value="flights" className="flex items-center gap-2">
-            <Plane className="h-4 w-4" />
-            {t("reports.flights")}
-          </TabsTrigger>
-          <TabsTrigger value="refunds" className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4" />
-            {t("reports.refunds")}
-          </TabsTrigger>
+        <TabsList className="flex w-full">
+          {reportTypes.map(type => {
+            const Icon = {
+              bookings: Users,
+              revenue: TrendingUp,
+              flights: Plane,
+              refunds: RefreshCw,
+            }[type];
+            return (
+              <TabsTrigger
+                key={type}
+                value={type}
+                className="flex flex-1 items-center gap-2"
+              >
+                <Icon className="h-4 w-4" />
+                {t(`reports.${type}`)}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
 
         <TabsContent value="bookings">
@@ -450,34 +480,22 @@ export default function ReportsDashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <ExportReportButton
-              reportType="bookings"
-              filters={bookingFilters}
-              showLabel={true}
-              variant="outline"
-              className="w-full justify-start"
-            />
-            <ExportReportButton
-              reportType="revenue"
-              filters={filters}
-              showLabel={true}
-              variant="outline"
-              className="w-full justify-start"
-            />
-            <ExportReportButton
-              reportType="flights"
-              filters={flightFilters}
-              showLabel={true}
-              variant="outline"
-              className="w-full justify-start"
-            />
-            <ExportReportButton
-              reportType="refunds"
-              filters={filters}
-              showLabel={true}
-              variant="outline"
-              className="w-full justify-start"
-            />
+            {reportTypes.map(type => (
+              <ExportReportButton
+                key={type}
+                reportType={type}
+                filters={
+                  type === "bookings"
+                    ? bookingFilters
+                    : type === "flights"
+                      ? flightFilters
+                      : filters
+                }
+                showLabel={true}
+                variant="outline"
+                className="w-full justify-start"
+              />
+            ))}
           </div>
         </CardContent>
       </Card>

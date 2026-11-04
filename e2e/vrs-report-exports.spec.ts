@@ -1,6 +1,11 @@
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
 import { fixtureFlight, reportBooking, rpc } from "./fixtures/hardening";
+import {
+  createReportingStaff,
+  createReportingTenants,
+  useReportingStaff,
+} from "./fixtures/reporting-tenants";
 import { testUsers } from "./fixtures/test-data";
 import { disposableDatabaseUrl } from "./disposable-database";
 import mysql, {
@@ -16,6 +21,15 @@ import ExcelJS from "exceljs";
 
 async function openReport(page: Page, tab: string, start: string, end: string) {
   await useBrowserSession(page, "admin");
+  await selectReport(page, tab, start, end);
+}
+
+async function selectReport(
+  page: Page,
+  tab: string,
+  start: string,
+  end: string
+) {
   await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
   await page.goto("/admin/reports");
   await page.getByRole("tab", { name: tab, exact: true }).click();
@@ -38,6 +52,21 @@ async function workbookAt(path: string) {
   const book = new ExcelJS.Workbook();
   await book.xlsx.readFile(path);
   return book;
+}
+
+async function pdfTextAt(path: string) {
+  return (await promisify(execFile)("pdftotext", [path, "-"])).stdout.replace(
+    /\s+/g,
+    " "
+  );
+}
+
+function summaryValue(book: ExcelJS.Workbook, label: string) {
+  const summary = book.getWorksheet("Summary")!;
+  return summary
+    .getRows(1, summary.rowCount)
+    ?.find(row => row.getCell(1).value === label)
+    ?.getCell(2).value;
 }
 
 test("booking downloads include the whole UTC creation day and only the selected status", async ({
@@ -311,5 +340,304 @@ test("revenue downloads reconcile a paid ticket and a later partial refund by UT
         [entry.postedAt, entry.id]
       );
     await db.end();
+  }
+});
+
+test("refund downloads report posted partial settlements at both UTC day boundaries after full cancellation", async ({
+  page,
+}, info) => {
+  const { booking, userId } = await reportBooking(page);
+  const passenger = rpc(page);
+  const customer = await passenger.auth.me.query();
+  if (!customer?.tenantId) throw new Error("Scoped refund customer required");
+  const finance = await createReportingStaff(customer.tenantId, "finance");
+  const db = await mysql.createConnection(disposableDatabaseUrl());
+  const day =
+    "2035-01-" + String(2 + (info.parallelIndex % 26)).padStart(2, "0");
+  const originalTimes: { id: number; postedAt: string }[] = [];
+  const settlements: {
+    id: number;
+    amount: number;
+    offset: number;
+    time: string;
+  }[] = [];
+  try {
+    await db.query("SET SESSION time_zone = '+00:00'");
+    await passenger.wallet.balance.query();
+    await db.execute("UPDATE wallets SET balance=balance+? WHERE userId=?", [
+      booking.totalAmount,
+      userId,
+    ]);
+    await passenger.wallet.pay.mutate({
+      bookingId: booking.bookingId,
+      expectedAmount: booking.totalAmount,
+    });
+    await useReportingStaff(page, finance.staff);
+    const operator = rpc(page);
+    expect(booking.totalAmount).toBeGreaterThan(3680);
+    // The last refund cancels the booking. Its current state and creation day
+    // must not replace the immutable settlement date/amount in these exports.
+    for (const [amount, offset, time, cancelItinerary] of [
+      [101, -1, "23:59:59", false],
+      [2345, 0, "00:00:00", false],
+      [1234, 0, "23:59:59", false],
+      [booking.totalAmount - 3680, 1, "00:00:00", true],
+    ] as const) {
+      const refund = await operator.refunds.refundInternalFunding.mutate({
+        bookingId: booking.bookingId,
+        amount,
+        requestId: randomUUID(),
+        approvalReference: "Synthetic refund export acceptance",
+        reason: "Verify posted refund export boundaries",
+        cancelItinerary,
+      });
+      expect(refund).toMatchObject({
+        tender: "wallet",
+        amount,
+        cancelled: cancelItinerary,
+      });
+      settlements.push({ id: refund.ledgerId, amount, offset, time });
+    }
+    const [state] = await db.execute<RowDataPacket[]>(
+      "SELECT status,paymentStatus FROM bookings WHERE id=?",
+      [booking.bookingId]
+    );
+    expect(state).toMatchObject([
+      { status: "cancelled", paymentStatus: "refunded" },
+    ]);
+    for (const entry of settlements) {
+      const [[original]] = await db.execute<RowDataPacket[]>(
+        "SELECT DATE_FORMAT(transactionDate,'%Y-%m-%d %H:%i:%s') AS postedAt FROM financial_ledger WHERE id=?",
+        [entry.id]
+      );
+      originalTimes.push({ id: entry.id, postedAt: original.postedAt });
+      await db.execute(
+        "UPDATE financial_ledger SET transactionDate=DATE_ADD(CAST(? AS DATETIME), INTERVAL ? DAY) WHERE id=?",
+        [day + " " + entry.time, entry.offset, entry.id]
+      );
+    }
+    await selectReport(page, "Refunds", day, day);
+    const expected = [settlements[2], settlements[1]];
+    const csv = await readFile(await download(page, "CSV"), "utf8");
+    const rows = csv
+      .trimEnd()
+      .split("\n")
+      .slice(1)
+      .map(row => row.split(","));
+    expect(rows).toHaveLength(2);
+    for (const [index, entry] of expected.entries()) {
+      expect([0, 1, 2, 7, 8, 9].map(column => rows[index][column])).toEqual([
+        String(entry.id),
+        String(booking.bookingId),
+        booking.bookingReference,
+        (entry.amount / 100).toFixed(2),
+        "settled",
+        day + "T" + entry.time + ".000Z",
+      ]);
+    }
+    const book = await workbookAt(await download(page, "Excel"));
+    const detail = book.getWorksheet("Refunds")!;
+    expect(detail.actualRowCount).toBe(3);
+    for (const [index, row] of rows.entries())
+      expect((detail.getRow(index + 2).values as unknown[]).slice(1)).toEqual(
+        row
+      );
+    expect(summaryValue(book, "Settlement Entries")).toBe(2);
+    expect(summaryValue(book, "Refunded Bookings")).toBe(1);
+    expect(summaryValue(book, "Total Refunded Amount (SAR)")).toBe("35.79");
+    const pdf = await pdfTextAt(await download(page, "PDF"));
+    expect(pdf).toContain("Settlement Entries: 2 ");
+    expect(pdf).toContain("Refunded Bookings: 1 ");
+    expect(pdf).toContain("Total Refunded Amount: 35.79 SAR");
+    expect(pdf).toContain(day + ": 2 entries - 35.79 SAR");
+  } finally {
+    try {
+      for (const entry of originalTimes)
+        await db.execute(
+          "UPDATE financial_ledger SET transactionDate=? WHERE id=?",
+          [entry.postedAt, entry.id]
+        );
+    } finally {
+      try {
+        await page.context().clearCookies();
+      } finally {
+        try {
+          await finance.cleanup();
+        } finally {
+          await db.end();
+        }
+      }
+    }
+  }
+});
+
+test("finance browser downloads isolate both tenants in CSV, Excel and PDF summaries", async ({
+  page,
+}, info) => {
+  const day =
+    "2035-04-" + String(1 + (info.parallelIndex % 28)).padStart(2, "0");
+  const fixture = await createReportingTenants(day);
+  try {
+    for (const [index, tenant] of fixture.tenants.entries()) {
+      const foreign = fixture.tenants[1 - index];
+      await useReportingStaff(page, tenant.finance);
+      for (const tab of ["Bookings", "Revenue", "Refunds"] as const) {
+        await selectReport(page, tab, day, day);
+        await expect(
+          page.getByRole("tab", { name: "Flights", exact: true })
+        ).toHaveCount(0);
+        const csv = await readFile(await download(page, "CSV"), "utf8");
+        const rows = csv.trimEnd().split("\n").slice(1);
+        const book = await workbookAt(await download(page, "Excel"));
+        const cells = JSON.stringify(
+          book.worksheets.map(sheet => sheet.getSheetValues())
+        );
+        const pdf = await pdfTextAt(await download(page, "PDF"));
+        const amount = (tenant.amount / 100).toFixed(2);
+        const refund = (tenant.refund / 100).toFixed(2);
+        expect(rows).toHaveLength(1);
+        // Financial labels/units keep generated timestamps out of money checks.
+        if (tab === "Bookings") {
+          expect(rows[0].split(",")[0]).toBe(tenant.reference);
+          expect(book.getWorksheet("Bookings")!.actualRowCount).toBe(2);
+          expect(summaryValue(book, "Total Bookings:")).toBe(1);
+          expect(summaryValue(book, "Total Booking Amount (SAR):")).toBe(
+            amount
+          );
+          expect(pdf).toContain("Total Bookings: 1 ");
+          expect(pdf).toContain("Total Booking Amount (SAR): " + amount + " ");
+          expect(pdf).not.toContain(
+            "Total Booking Amount (SAR): " +
+              (foreign.amount / 100).toFixed(2) +
+              " "
+          );
+        } else if (tab === "Revenue") {
+          const values = [
+            day,
+            1,
+            amount,
+            amount,
+            refund,
+            ((tenant.amount - tenant.refund) / 100).toFixed(2),
+            "0.00",
+            "0.00",
+            0,
+            0,
+          ];
+          expect(rows[0]).toBe(values.join(","));
+          expect(
+            (
+              book.getWorksheet("Daily Revenue")!.getRow(2).values as unknown[]
+            ).slice(1)
+          ).toEqual(values);
+          expect(book.getWorksheet("Daily Revenue")!.actualRowCount).toBe(2);
+          expect(pdf).toContain("Cash collected (SAR): " + amount);
+          expect(pdf).toContain("Cash refunded (SAR): " + refund);
+          expect(pdf).toContain(
+            "Net cash collected (SAR): " +
+              ((tenant.amount - tenant.refund) / 100).toFixed(2)
+          );
+          expect(pdf).not.toContain(
+            "(SAR): " + (foreign.amount / 100).toFixed(2) + " "
+          );
+          expect(pdf).not.toContain(
+            "(SAR): " + (foreign.refund / 100).toFixed(2) + " "
+          );
+        } else {
+          const data = rows[0].split(",");
+          expect([data[1], data[2], data[7], data[8]]).toEqual([
+            String(tenant.bookingId),
+            tenant.reference,
+            refund,
+            "settled",
+          ]);
+          expect(book.getWorksheet("Refunds")!.actualRowCount).toBe(2);
+          expect(summaryValue(book, "Settlement Entries")).toBe(1);
+          expect(summaryValue(book, "Total Refunded Amount (SAR)")).toBe(
+            refund
+          );
+          expect(pdf).toContain("Settlement Entries: 1 ");
+          expect(pdf).toContain("Total Refunded Amount: " + refund + " SAR");
+          expect(pdf).not.toContain(
+            " " + (foreign.refund / 100).toFixed(2) + " SAR"
+          );
+        }
+        if (tab !== "Revenue") {
+          expect(csv).toContain(tenant.reference);
+          expect(cells).toContain(tenant.reference);
+        }
+        // A PDF summary has no booking rows; assert its tenant-specific amounts
+        // and counts above, as well as excluding foreign identifiers everywhere.
+        for (const content of [csv, cells, pdf]) {
+          expect(content).not.toContain(foreign.reference);
+          expect(content).not.toContain(foreign.flightNumber);
+        }
+      }
+      await expect(
+        rpc(page).reports.exportFlightPerformanceCSV.mutate({
+          startDate: day,
+          endDate: day,
+        })
+      ).rejects.toMatchObject({ data: { code: "FORBIDDEN" } });
+    }
+  } finally {
+    await page.context().clearCookies();
+    await fixture.cleanup();
+  }
+});
+
+test("operations browser downloads isolate both tenants including PDF flight identities", async ({
+  page,
+}, info) => {
+  const day =
+    "2035-07-" + String(1 + (info.parallelIndex % 28)).padStart(2, "0");
+  const fixture = await createReportingTenants(day);
+  try {
+    for (const [index, tenant] of fixture.tenants.entries()) {
+      const foreign = fixture.tenants[1 - index];
+      await useReportingStaff(page, tenant.ops);
+      await selectReport(page, "Flights", day, day);
+      await expect(page.getByRole("tab")).toHaveCount(1);
+      const csv = await readFile(await download(page, "CSV"), "utf8");
+      const rows = csv.trimEnd().split("\n").slice(1);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].split(",").slice(0, 2)).toEqual([
+        String(tenant.flightId),
+        tenant.flightNumber,
+      ]);
+      const book = await workbookAt(await download(page, "Excel"));
+      const sheet = book.getWorksheet("Flights")!;
+      expect(sheet.actualRowCount).toBe(2);
+      expect(
+        [1, 2, 9].map(column => sheet.getRow(2).getCell(column).value)
+      ).toEqual([tenant.flightId, tenant.flightNumber, tenant.bookedSeats]);
+      expect(summaryValue(book, "Total flights")).toBe(1);
+      expect(summaryValue(book, "Total booked")).toBe(tenant.bookedSeats);
+      const pdf = await pdfTextAt(await download(page, "PDF"));
+      expect(pdf).toContain("Total flights: 1 ");
+      expect(pdf).toContain("Total booked: " + tenant.bookedSeats + " ");
+      expect(pdf).toContain("Flight ID: " + tenant.flightId + " ");
+      expect(pdf).toContain("Flight Number: " + tenant.flightNumber + " ");
+      expect(pdf).toContain(
+        "Estimated Revenue (SAR): " +
+          ((tenant.amount * tenant.bookedSeats) / 100).toFixed(2)
+      );
+      expect(pdf).not.toContain("Flight ID: " + foreign.flightId + " ");
+      for (const content of [
+        csv,
+        JSON.stringify(book.worksheets.map(value => value.getSheetValues())),
+        pdf,
+      ])
+        expect(content).not.toContain(foreign.flightNumber);
+      await expect(
+        rpc(page).reports.exportRevenueCSV.mutate({
+          startDate: day,
+          endDate: day,
+        })
+      ).rejects.toMatchObject({ data: { code: "FORBIDDEN" } });
+    }
+  } finally {
+    await page.context().clearCookies();
+    await fixture.cleanup();
   }
 });

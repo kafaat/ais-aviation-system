@@ -437,7 +437,11 @@ export async function redeemMiles(
 /**
  * Get user's miles transactions history
  */
-export async function getMilesTransactions(userId: number, limit: number = 50) {
+export async function getMilesTransactions(
+  userId: number,
+  limit: number = 50,
+  offset: number = 0
+) {
   try {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
@@ -446,8 +450,9 @@ export async function getMilesTransactions(userId: number, limit: number = 50) {
       .select()
       .from(milesTransactions)
       .where(eq(milesTransactions.userId, userId))
-      .orderBy(desc(milesTransactions.createdAt))
-      .limit(limit);
+      .orderBy(desc(milesTransactions.createdAt), desc(milesTransactions.id))
+      .limit(limit)
+      .offset(offset);
 
     return transactions;
   } catch (error) {

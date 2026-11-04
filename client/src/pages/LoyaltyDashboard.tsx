@@ -141,6 +141,9 @@ const allBenefits = [
   "partnerBenefits",
 ];
 
+const TRANSACTIONS_PAGE_SIZE = 50;
+const MAX_TRANSACTION_OFFSET = 1_000_000;
+
 // Animated Progress Bar Component
 function AnimatedProgressBar({
   value,
@@ -275,6 +278,8 @@ export default function LoyaltyDashboard() {
   const { t, i18n } = useTranslation();
   const { user, loading: authLoading } = useAuth();
   const [milesToRedeem, setMilesToRedeem] = useState("");
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [transactionOffset, setTransactionOffset] = useState(0);
 
   const utils = trpc.useUtils();
   const [mfaToken, setMfaToken] = useState("");
@@ -282,11 +287,30 @@ export default function LoyaltyDashboard() {
 
   const dateLocale = i18n.language === "ar" ? ar : enUS;
 
-  const { data: account, isLoading: accountLoading } =
-    trpc.loyalty.myAccount.useQuery(undefined, { enabled: !!user });
+  const accountQuery = trpc.loyalty.myAccount.useQuery(undefined, {
+    enabled: !!user,
+  });
+  const { data: account, isLoading: accountLoading } = accountQuery;
 
-  const { data: transactions, isLoading: transactionsLoading } =
-    trpc.loyalty.myTransactions.useQuery({ limit: 50 }, { enabled: !!user });
+  // Keep the recent summary stable while the member browses older history.
+  const recentTransactionsQuery = trpc.loyalty.myTransactions.useQuery(
+    { limit: TRANSACTIONS_PAGE_SIZE, offset: 0 },
+    { enabled: !!user }
+  );
+  const pagedTransactionsQuery = trpc.loyalty.myTransactions.useQuery(
+    { limit: TRANSACTIONS_PAGE_SIZE, offset: transactionOffset },
+    { enabled: !!user && showAllTransactions }
+  );
+  const transactionsQuery = showAllTransactions
+    ? pagedTransactionsQuery
+    : recentTransactionsQuery;
+  const transactions = transactionsQuery.isError
+    ? undefined
+    : transactionsQuery.data;
+  const transactionsLoading = transactionsQuery.isLoading;
+  const recentTransactions = recentTransactionsQuery.isError
+    ? undefined
+    : recentTransactionsQuery.data;
 
   const redeemMiles = trpc.loyalty.redeemMiles.useMutation();
 
@@ -300,9 +324,9 @@ export default function LoyaltyDashboard() {
     description: string;
   };
 
-  // Generate chart data from transactions
+  // This is a bounded recent-activity view, not a complete six-month report.
   const chartData = useMemo(() => {
-    if (!transactions) return [];
+    if (!recentTransactions) return [];
 
     const months: { [key: string]: { earned: number; redeemed: number } } = {};
     const now = new Date();
@@ -315,7 +339,7 @@ export default function LoyaltyDashboard() {
     }
 
     // Aggregate transactions
-    (transactions as Transaction[]).forEach(tx => {
+    recentTransactions.forEach(tx => {
       const txDate = new Date(tx.createdAt);
       const sixMonthsAgo = subMonths(now, 6);
       if (txDate >= sixMonthsAgo) {
@@ -335,34 +359,22 @@ export default function LoyaltyDashboard() {
       earned: data.earned,
       redeemed: data.redeemed,
     }));
-  }, [transactions, dateLocale]);
+  }, [recentTransactions, dateLocale]);
 
-  // Calculate monthly stats
-  const monthlyStats = useMemo(() => {
-    if (!transactions) return { earned: 0, redeemed: 0 };
-
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    return (transactions as Transaction[]).reduce(
+  const recentStats = useMemo(() => {
+    if (!recentTransactions) return null;
+    return recentTransactions.reduce(
       (acc, tx) => {
-        const txDate = new Date(tx.createdAt);
-        if (
-          txDate.getMonth() === currentMonth &&
-          txDate.getFullYear() === currentYear
-        ) {
-          if (tx.type === "earn" || tx.type === "bonus") {
-            acc.earned += tx.amount;
-          } else if (tx.type === "redeem") {
-            acc.redeemed += tx.amount;
-          }
+        if (tx.type === "earn" || tx.type === "bonus") {
+          acc.earned += tx.amount;
+        } else if (tx.type === "redeem") {
+          acc.redeemed += tx.amount;
         }
         return acc;
       },
       { earned: 0, redeemed: 0 }
     );
-  }, [transactions]);
+  }, [recentTransactions]);
 
   if (authLoading || accountLoading) {
     return <DashboardSkeleton />;
@@ -391,6 +403,20 @@ export default function LoyaltyDashboard() {
           </Card>
         </motion.div>
       </div>
+    );
+  }
+
+  if (accountQuery.isError || !account) {
+    return (
+      <Card role="alert" className="container my-8 p-6 space-y-4">
+        <p>{t("loyalty.accountUnavailable")}</p>
+        <Button
+          disabled={accountQuery.isFetching}
+          onClick={() => void accountQuery.refetch()}
+        >
+          {t("common.retry")}
+        </Button>
+      </Card>
     );
   }
 
@@ -553,17 +579,28 @@ export default function LoyaltyDashboard() {
             </CardContent>
           </Card>
 
-          {/* Earned This Month */}
+          {/* Earned in the latest transactions */}
           <Card className="relative overflow-hidden group hover:shadow-lg transition-shadow">
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-purple-600 opacity-0 group-hover:opacity-5 transition-opacity" />
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {t("loyalty.earnedThisMonth")}
+                    {t("loyalty.earnedRecent")}
                   </p>
-                  <p className="text-3xl font-bold text-purple-600">
-                    +{monthlyStats.earned.toLocaleString()}
+                  {recentTransactionsQuery.isLoading ? (
+                    <Skeleton className="h-9 w-24" />
+                  ) : (
+                    <p className="text-3xl font-bold text-purple-600">
+                      {recentStats
+                        ? `+${recentStats.earned.toLocaleString()}`
+                        : "—"}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("loyalty.recentScope", {
+                      count: TRANSACTIONS_PAGE_SIZE,
+                    })}
                   </p>
                 </div>
                 <div className="p-3 rounded-full bg-purple-100">
@@ -573,17 +610,28 @@ export default function LoyaltyDashboard() {
             </CardContent>
           </Card>
 
-          {/* Redeemed This Month */}
+          {/* Redeemed in the latest transactions */}
           <Card className="relative overflow-hidden group hover:shadow-lg transition-shadow">
             <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-orange-600 opacity-0 group-hover:opacity-5 transition-opacity" />
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {t("loyalty.redeemedThisMonth")}
+                    {t("loyalty.redeemedRecent")}
                   </p>
-                  <p className="text-3xl font-bold text-orange-600">
-                    -{monthlyStats.redeemed.toLocaleString()}
+                  {recentTransactionsQuery.isLoading ? (
+                    <Skeleton className="h-9 w-24" />
+                  ) : (
+                    <p className="text-3xl font-bold text-orange-600">
+                      {recentStats
+                        ? `-${recentStats.redeemed.toLocaleString()}`
+                        : "—"}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("loyalty.recentScope", {
+                      count: TRANSACTIONS_PAGE_SIZE,
+                    })}
                   </p>
                 </div>
                 <div className="p-3 rounded-full bg-orange-100">
@@ -674,11 +722,30 @@ export default function LoyaltyDashboard() {
                     <TrendingUp className="h-5 w-5 text-primary" />
                     {t("loyalty.milesHistory")}
                   </CardTitle>
-                  <CardDescription>{t("loyalty.last6Months")}</CardDescription>
+                  <CardDescription>
+                    {t("loyalty.recentChartScope", {
+                      count: TRANSACTIONS_PAGE_SIZE,
+                    })}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {transactionsLoading ? (
+                  {recentTransactionsQuery.isError ? (
+                    <div role="alert" className="space-y-3">
+                      <p>{t("loyalty.transactionsUnavailable")}</p>
+                      <Button
+                        variant="outline"
+                        disabled={recentTransactionsQuery.isFetching}
+                        onClick={() => void recentTransactionsQuery.refetch()}
+                      >
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  ) : recentTransactionsQuery.isLoading ? (
                     <Skeleton className="h-64" />
+                  ) : !recentTransactions?.length ? (
+                    <p className="text-muted-foreground">
+                      {t("loyalty.noTransactions")}
+                    </p>
                   ) : (
                     <ResponsiveContainer width="100%" height={280}>
                       <AreaChart data={chartData}>
@@ -774,7 +841,18 @@ export default function LoyaltyDashboard() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {transactionsLoading ? (
+                  {transactionsQuery.isError ? (
+                    <div role="alert" className="space-y-3">
+                      <p>{t("loyalty.transactionsUnavailable")}</p>
+                      <Button
+                        variant="outline"
+                        disabled={transactionsQuery.isFetching}
+                        onClick={() => void transactionsQuery.refetch()}
+                      >
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  ) : transactionsLoading ? (
                     <div className="space-y-3">
                       {[1, 2, 3, 4, 5].map(i => (
                         <Skeleton key={i} className="h-16" />
@@ -814,7 +892,12 @@ export default function LoyaltyDashboard() {
                         <TableBody>
                           <AnimatePresence>
                             {(transactions as Transaction[])
-                              .slice(0, 10)
+                              .slice(
+                                0,
+                                showAllTransactions
+                                  ? TRANSACTIONS_PAGE_SIZE
+                                  : 10
+                              )
                               .map((tx, index) => {
                                 const isEarning =
                                   tx.type === "earn" || tx.type === "bonus";
@@ -886,15 +969,65 @@ export default function LoyaltyDashboard() {
                           </AnimatePresence>
                         </TableBody>
                       </Table>
-                      {transactions.length > 10 && (
+                      {!showAllTransactions && transactions.length > 10 && (
                         <div className="mt-4 text-center">
-                          <Button variant="ghost" size="sm">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowAllTransactions(true)}
+                          >
                             {t("loyalty.viewAll")}
                             <ChevronRight className="h-4 w-4 ml-1" />
                           </Button>
                         </div>
                       )}
                     </div>
+                  )}
+                  {showAllTransactions && (
+                    <nav
+                      aria-label={t("loyalty.historyPagination")}
+                      className="mt-4 flex items-center justify-between gap-3"
+                    >
+                      <Button
+                        variant="outline"
+                        disabled={
+                          transactionOffset === 0 ||
+                          transactionsQuery.isFetching
+                        }
+                        onClick={() =>
+                          setTransactionOffset(offset =>
+                            Math.max(0, offset - TRANSACTIONS_PAGE_SIZE)
+                          )
+                        }
+                      >
+                        {t("loyalty.previousPage")}
+                      </Button>
+                      <span
+                        aria-live="polite"
+                        className="text-sm text-muted-foreground"
+                      >
+                        {t("loyalty.historyPage", {
+                          page: transactionOffset / TRANSACTIONS_PAGE_SIZE + 1,
+                        })}
+                      </span>
+                      <Button
+                        variant="outline"
+                        disabled={
+                          transactionsQuery.isError ||
+                          transactionsQuery.isFetching ||
+                          transactions?.length !== TRANSACTIONS_PAGE_SIZE ||
+                          transactionOffset + TRANSACTIONS_PAGE_SIZE >
+                            MAX_TRANSACTION_OFFSET
+                        }
+                        onClick={() =>
+                          setTransactionOffset(
+                            offset => offset + TRANSACTIONS_PAGE_SIZE
+                          )
+                        }
+                      >
+                        {t("loyalty.nextPage")}
+                      </Button>
+                    </nav>
                   )}
                 </CardContent>
               </Card>

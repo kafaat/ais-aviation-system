@@ -255,7 +255,9 @@ function ManifestTab() {
                     "Departure UTC",
                     "Manifest generated UTC",
                     "Name",
+                    "Booking reference",
                     "PNR",
+                    "Passenger type",
                     "Class",
                     "Seat",
                   ],
@@ -266,7 +268,9 @@ function ManifestTab() {
                     new Date(manifest.flight.departureTime).toISOString(),
                     manifest.generatedAt,
                     p.name,
+                    p.bookingRef,
                     p.pnr,
+                    p.type,
                     p.cabinClass,
                     p.seat ?? "",
                   ]),
@@ -393,6 +397,9 @@ function ManifestTab() {
                       {t("dcs.manifest.name", "Name")}
                     </th>
                     <th className="p-2 text-start">
+                      {t("reports.bookingReference", "Booking reference")}
+                    </th>
+                    <th className="p-2 text-start">
                       {t("dcs.manifest.pnr", "PNR")}
                     </th>
                     <th className="p-2 text-start">
@@ -410,6 +417,7 @@ function ManifestTab() {
                   {manifest.passengers.list.map(p => (
                     <tr key={p.id} className="border-t">
                       <td className="p-2">{p.name}</td>
+                      <td className="p-2 font-mono">{p.bookingRef}</td>
                       <td className="p-2 font-mono">{p.pnr}</td>
                       <td className="p-2">{p.type}</td>
                       <td className="p-2">{p.cabinClass}</td>

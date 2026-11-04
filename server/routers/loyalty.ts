@@ -3,6 +3,23 @@ import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import * as loyaltyService from "../services/loyalty.service";
 
+const transactionPaginationInput = z.object({
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(50)
+    .describe("Maximum transactions to return"),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000)
+    .default(0)
+    .describe("Number of transactions to skip, newest first"),
+});
+
 /**
  * Loyalty Router
  * Handles loyalty program operations
@@ -43,22 +60,13 @@ export const loyaltyRouter = router({
         protect: true,
       },
     })
-    .input(
-      z.object({
-        limit: z
-          .number()
-          .min(1)
-          .max(100)
-          .optional()
-          .default(50)
-          .describe("Maximum transactions to return"),
-      })
-    )
+    .input(transactionPaginationInput)
     .output(responseContracts["myTransactions"])
     .query(async ({ ctx, input }) => {
       return await loyaltyService.getMilesTransactions(
         ctx.user.id,
-        input.limit
+        input.limit,
+        input.offset
       );
     }),
 
@@ -238,22 +246,16 @@ export const loyaltyRouter = router({
       },
     })
     .input(
-      z.object({
+      transactionPaginationInput.extend({
         userId: z.number().describe("User ID"),
-        limit: z
-          .number()
-          .min(1)
-          .max(100)
-          .optional()
-          .default(50)
-          .describe("Maximum transactions to return"),
       })
     )
     .output(responseContracts["getUserTransactions"])
     .query(async ({ input }) => {
       return await loyaltyService.getMilesTransactions(
         input.userId,
-        input.limit
+        input.limit,
+        input.offset
       );
     }),
 });

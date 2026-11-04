@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { useOperationalLabels } from "@/components/OperationalReadState";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -260,6 +261,7 @@ function formatFileSize(bytes: number): string {
 
 export default function DataWarehouse() {
   const { t: _t } = useTranslation();
+  const l = useOperationalLabels();
   const { user, loading: authLoading } = useAuth();
 
   const [activeTab, setActiveTab] = useState("exports");
@@ -273,34 +275,43 @@ export default function DataWarehouse() {
 
   // ---------- Queries ----------
 
+  const exportsQuery = trpc.dataWarehouse.getExports.useQuery({
+    page: currentPage,
+    limit: 10,
+  });
+  const schedulesQuery = trpc.dataWarehouse.getSchedules.useQuery();
+  const etlQuery = trpc.dataWarehouse.getETLStatus.useQuery();
   const {
     data: exportsData,
     isLoading: exportsLoading,
     refetch: refetchExports,
-  } = trpc.dataWarehouse.getExports.useQuery({
-    page: currentPage,
-    limit: 10,
-  });
-
+  } = exportsQuery;
   const {
     data: schedules,
     isLoading: schedulesLoading,
     refetch: refetchSchedules,
-  } = trpc.dataWarehouse.getSchedules.useQuery();
-
-  const { data: etlStatus, isLoading: etlLoading } =
-    trpc.dataWarehouse.getETLStatus.useQuery();
+  } = schedulesQuery;
+  const { data: etlStatus, isLoading: etlLoading } = etlQuery;
+  const failedQueries = [exportsQuery, schedulesQuery, etlQuery].filter(
+    query => query.isError
+  );
 
   // ---------- Mutations ----------
 
   const createExportMutation = trpc.dataWarehouse.createExport.useMutation({
-    onSuccess: (data: { recordCount: number }) => {
+    onSuccess: data => {
+      void refetchExports();
+      if (data.status !== "completed") {
+        toast.error(
+          `Export failed: ${data.errorMessage ?? "Export did not complete"}`
+        );
+        return;
+      }
       toast.success(
         `Export created: ${data.recordCount.toLocaleString()} records exported`
       );
       setIsExportDialogOpen(false);
       setExportForm(initialExportForm);
-      refetchExports();
     },
     onError: (error: { message: string }) => {
       toast.error(`Export failed: ${error.message}`);
@@ -360,6 +371,30 @@ export default function DataWarehouse() {
 
   if (!user || !["admin", "super_admin"].includes(user.role)) {
     return <Redirect to="/" />;
+  }
+
+  if (failedQueries.length > 0) {
+    return (
+      <div className="container py-8">
+        <h1 className="text-3xl font-bold mb-4">
+          {l("مستودع البيانات", "Data Warehouse")}
+        </h1>
+        <Card role="alert" className="p-6 space-y-4">
+          <p>
+            {l(
+              "تعذّر تحميل بيانات التصدير أو الجدولة أو حالة المعالجة. أعد المحاولة للتحقق من البيانات.",
+              "Export history, schedules or pipeline status could not be loaded. Retry to verify the data."
+            )}
+          </p>
+          <Button
+            disabled={failedQueries.some(query => query.isFetching)}
+            onClick={() => failedQueries.forEach(query => void query.refetch())}
+          >
+            {l("إعادة المحاولة", "Retry")}
+          </Button>
+        </Card>
+      </div>
+    );
   }
 
   // ---------- Handlers ----------
@@ -496,7 +531,7 @@ export default function DataWarehouse() {
             {etlLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <ETLStatusIndicator status={etlStatus?.status ?? "healthy"} />
+              <ETLStatusIndicator status={etlStatus?.status ?? "unknown"} />
             )}
           </CardContent>
         </Card>
@@ -645,9 +680,18 @@ export default function DataWarehouse() {
                             {format(new Date(exp.createdAt), "MMM dd, HH:mm")}
                           </TableCell>
                           <TableCell>
-                            {exp.status === "completed" && (
-                              <Button variant="ghost" size="sm">
-                                <Download className="h-4 w-4" />
+                            {exp.status === "completed" && exp.filePath && (
+                              <Button asChild variant="ghost" size="sm">
+                                <a
+                                  href={`/api/data-warehouse/download/${exp.id}`}
+                                  download
+                                  aria-label={l(
+                                    `تنزيل التصدير ${exp.id}`,
+                                    `Download export ${exp.id}`
+                                  )}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </a>
                               </Button>
                             )}
                           </TableCell>
@@ -847,7 +891,7 @@ export default function DataWarehouse() {
                         Status
                       </span>
                       <ETLStatusIndicator
-                        status={etlStatus?.status ?? "healthy"}
+                        status={etlStatus?.status ?? "unknown"}
                       />
                     </div>
                     <div className="flex items-center justify-between py-2 border-b">

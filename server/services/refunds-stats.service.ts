@@ -41,6 +41,7 @@ export interface RefundHistoryItem {
   destination?: string;
 }
 export interface RefundReportPeriod {
+  tenantId?: number;
   startDate?: Date;
   endDate?: Date;
 }
@@ -104,6 +105,9 @@ function bounds(period: RefundReportPeriod) {
 function settledWhere(period: RefundReportPeriod = {}) {
   bounds(period);
   return and(
+    period.tenantId === undefined
+      ? undefined
+      : eq(bookings.tenantId, period.tenantId),
     inArray(financialLedger.type, ["refund", "partial_refund"]),
     eq(financialLedger.currency, "SAR"),
     sql`NOT (${nonCashFundingCondition()})`,

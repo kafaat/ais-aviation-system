@@ -501,7 +501,7 @@ jobs:
           CI: true
           E2E_BASE_URL: http://localhost:3000
           AIS_DISPOSABLE_DATABASE: true
-        run: pnpm exec playwright test e2e/ci-smoke.spec.ts e2e/hardening-journeys.spec.ts e2e/agency-owner.spec.ts e2e/vrs-report-exports.spec.ts e2e/vrs-kiosk-tags.spec.ts e2e/extra-seat.spec.ts e2e/agency-commissions.spec.ts e2e/multi-city-fare.spec.ts e2e/vrs-baggage-admission.spec.ts e2e/agency-credit.spec.ts e2e/local-ticket-revalidation.spec.ts --project=chromium
+        run: pnpm exec playwright test e2e/ci-smoke.spec.ts e2e/hardening-journeys.spec.ts e2e/agency-owner.spec.ts e2e/vrs-report-exports.spec.ts e2e/standard-reports.spec.ts e2e/vrs-kiosk-tags.spec.ts e2e/extra-seat.spec.ts e2e/agency-commissions.spec.ts e2e/multi-city-fare.spec.ts e2e/vrs-baggage-admission.spec.ts e2e/agency-credit.spec.ts e2e/local-ticket-revalidation.spec.ts --project=chromium
 
       - name: Upload E2E test results
         if: always()
@@ -527,15 +527,17 @@ jobs:
           echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f test-results/results.json ]; then
-            TOTAL=$(cat test-results/results.json | jq -r '.stats.total // 0')
-            PASSED=$(cat test-results/results.json | jq -r '.stats.expected // 0')
-            FAILED=$(cat test-results/results.json | jq -r '.stats.unexpected // 0')
-            SKIPPED=$(cat test-results/results.json | jq -r '.stats.skipped // 0')
+            TOTAL=$(jq -r '[(.stats.expected // 0), (.stats.unexpected // 0), (.stats.flaky // 0), (.stats.skipped // 0)] | add' test-results/results.json)
+            PASSED=$(jq -r '.stats.expected // 0' test-results/results.json)
+            FAILED=$(jq -r '.stats.unexpected // 0' test-results/results.json)
+            FLAKY=$(jq -r '.stats.flaky // 0' test-results/results.json)
+            SKIPPED=$(jq -r '.stats.skipped // 0' test-results/results.json)
             echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
             echo "| Total | ${TOTAL} |" >> $GITHUB_STEP_SUMMARY
             echo "| Passed | ${PASSED} |" >> $GITHUB_STEP_SUMMARY
             echo "| Failed | ${FAILED} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Flaky | ${FLAKY} |" >> $GITHUB_STEP_SUMMARY
             echo "| Skipped | ${SKIPPED} |" >> $GITHUB_STEP_SUMMARY
           else
             echo "E2E test results not available" >> $GITHUB_STEP_SUMMARY

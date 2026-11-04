@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -73,7 +81,7 @@ type DatePreset = "today" | "7d" | "30d" | "90d" | "year" | "all";
 function getDateRange(preset: DatePreset): {
   startDate?: Date;
   endDate?: Date;
-  days: number;
+  allTime?: boolean;
 } {
   const now = new Date();
   const endDate = now;
@@ -81,30 +89,30 @@ function getDateRange(preset: DatePreset): {
   switch (preset) {
     case "today": {
       const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      return { startDate: start, endDate, days: 1 };
+      start.setUTCHours(0, 0, 0, 0);
+      return { startDate: start, endDate };
     }
     case "7d": {
       const start = new Date(now);
-      start.setDate(start.getDate() - 7);
-      return { startDate: start, endDate, days: 7 };
+      start.setUTCDate(start.getUTCDate() - 7);
+      return { startDate: start, endDate };
     }
     case "30d": {
       const start = new Date(now);
-      start.setDate(start.getDate() - 30);
-      return { startDate: start, endDate, days: 30 };
+      start.setUTCDate(start.getUTCDate() - 30);
+      return { startDate: start, endDate };
     }
     case "90d": {
       const start = new Date(now);
-      start.setDate(start.getDate() - 90);
-      return { startDate: start, endDate, days: 90 };
+      start.setUTCDate(start.getUTCDate() - 90);
+      return { startDate: start, endDate };
     }
     case "year": {
-      const start = new Date(now.getFullYear(), 0, 1);
-      return { startDate: start, endDate, days: 365 };
+      const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+      return { startDate: start, endDate };
     }
     case "all":
-      return { days: 365 };
+      return { allTime: true };
   }
 }
 
@@ -142,28 +150,65 @@ export default function AnalyticsDashboard() {
   const [exporting, setExporting] = useState(false);
 
   const dateRange = useMemo(() => getDateRange(datePreset), [datePreset]);
+  const queryOptions = {
+    enabled:
+      isAuthenticated &&
+      (user?.role === "admin" || user?.role === "super_admin"),
+  };
 
-  const kpiInput =
-    dateRange.startDate && dateRange.endDate
-      ? { startDate: dateRange.startDate, endDate: dateRange.endDate }
-      : undefined;
-
-  const { data: kpis, isLoading: loadingKPIs } =
-    trpc.analytics.getKPIs.useQuery(kpiInput);
-  const { data: revenueData, isLoading: loadingRevenue } =
-    trpc.analytics.getRevenueOverTime.useQuery({ days: dateRange.days });
+  const kpiQuery = trpc.analytics.getKPIs.useQuery(dateRange, queryOptions);
+  const revenueQuery = trpc.analytics.getRevenueOverTime.useQuery(
+    dateRange,
+    queryOptions
+  );
+  const destinationsQuery = trpc.analytics.getPopularDestinations.useQuery(
+    { ...dateRange, limit: 5 },
+    queryOptions
+  );
+  const trendsQuery = trpc.analytics.getBookingTrends.useQuery(
+    dateRange,
+    queryOptions
+  );
+  const ancillaryQuery = trpc.analytics.getAncillaryMetrics.useQuery(
+    dateRange,
+    queryOptions
+  );
+  const categoryQuery = trpc.analytics.getAncillaryRevenueByCategory.useQuery(
+    dateRange,
+    queryOptions
+  );
+  const popularAncillariesQuery = trpc.analytics.getPopularAncillaries.useQuery(
+    {
+      ...dateRange,
+      limit: 5,
+    },
+    queryOptions
+  );
+  // This endpoint describes upcoming flights, independently of the period filter.
+  const occupancyQuery = trpc.analytics.getFlightOccupancy.useQuery(
+    undefined,
+    queryOptions
+  );
+  const { data: kpis, isLoading: loadingKPIs } = kpiQuery;
+  const { data: revenueData, isLoading: loadingRevenue } = revenueQuery;
   const { data: popularDestinations, isLoading: loadingDestinations } =
-    trpc.analytics.getPopularDestinations.useQuery({ limit: 5 });
-  const { data: bookingTrends, isLoading: loadingTrends } =
-    trpc.analytics.getBookingTrends.useQuery({ days: dateRange.days });
-
-  // Ancillary Analytics
+    destinationsQuery;
+  const { data: bookingTrends, isLoading: loadingTrends } = trendsQuery;
   const { data: ancillaryMetrics, isLoading: loadingAncillaryMetrics } =
-    trpc.analytics.getAncillaryMetrics.useQuery(kpiInput);
+    ancillaryQuery;
   const { data: ancillaryByCategory, isLoading: loadingAncillaryCategory } =
-    trpc.analytics.getAncillaryRevenueByCategory.useQuery();
+    categoryQuery;
   const { data: popularAncillaries, isLoading: loadingPopularAncillaries } =
-    trpc.analytics.getPopularAncillaries.useQuery({ limit: 5 });
+    popularAncillariesQuery;
+  const failedQueries = [
+    kpiQuery,
+    revenueQuery,
+    destinationsQuery,
+    trendsQuery,
+    ancillaryQuery,
+    categoryQuery,
+    popularAncillariesQuery,
+  ].filter(query => query.isError);
 
   // Export mutations
   const exportBookingsCSV = trpc.reports.exportBookingsCSV.useMutation();
@@ -242,6 +287,23 @@ export default function AnalyticsDashboard() {
     );
   }
 
+  if (failedQueries.length > 0) {
+    return (
+      <div className="container py-8">
+        <h1 className="text-xl font-bold mb-4">{t("admin.analytics.title")}</h1>
+        <Card role="alert" className="p-6 space-y-4">
+          <p>{t("admin.analytics.loadError")}</p>
+          <Button
+            disabled={failedQueries.some(query => query.isFetching)}
+            onClick={() => failedQueries.forEach(query => void query.refetch())}
+          >
+            {t("common.retry")}
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
@@ -272,7 +334,10 @@ export default function AnalyticsDashboard() {
                   value={datePreset}
                   onValueChange={v => setDatePreset(v as DatePreset)}
                 >
-                  <SelectTrigger className="w-[160px]">
+                  <SelectTrigger
+                    className="w-[160px]"
+                    aria-label={t("admin.analytics.dateFilter")}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -389,11 +454,76 @@ export default function AnalyticsDashboard() {
           </div>
         </div>
 
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-2">
+            {t("admin.analytics.flightOccupancy")}
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            {t("admin.analytics.upcomingOccupancyScope")}
+          </p>
+          {occupancyQuery.isError ? (
+            <div role="alert" className="space-y-3">
+              <p>{t("admin.analytics.occupancyLoadError")}</p>
+              <Button
+                variant="outline"
+                disabled={occupancyQuery.isFetching}
+                onClick={() => void occupancyQuery.refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : occupancyQuery.isLoading ? (
+            <Skeleton className="h-48" />
+          ) : !occupancyQuery.data?.length ? (
+            <p className="text-muted-foreground">
+              {t("admin.analytics.noUpcomingFlights")}
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("admin.analytics.flightNumber")}</TableHead>
+                  <TableHead>{t("admin.analytics.departureUTC")}</TableHead>
+                  <TableHead>{t("admin.analytics.bookedCapacity")}</TableHead>
+                  <TableHead>{t("admin.analytics.occupancy")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {occupancyQuery.data.map(flight => (
+                  <TableRow key={flight.flightId}>
+                    <TableCell className="font-medium">
+                      {flight.flightNumber}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(flight.departureTime)
+                        .toISOString()
+                        .slice(0, 16)
+                        .replace("T", " ")}{" "}
+                      UTC
+                    </TableCell>
+                    <TableCell>
+                      {flight.bookedSeats} / {flight.totalSeats}
+                    </TableCell>
+                    <TableCell>
+                      {flight.totalSeats > 0
+                        ? `${flight.occupancyRate}%`
+                        : t("admin.analytics.occupancyUnavailable")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+
         {/* Ancillary KPIs */}
         <div>
           <h2 className="text-lg font-semibold mb-4">
             {t("admin.analytics.ancillaryTitle")}
           </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            {t("admin.analytics.ancillaryBasis")}
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {loadingAncillaryMetrics ? (
               <>
@@ -482,7 +612,12 @@ export default function AnalyticsDashboard() {
               <Skeleton className="h-64" />
             ) : (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={revenueData}>
+                <LineChart
+                  data={revenueData?.map(row => ({
+                    ...row,
+                    revenue: row.revenue / 100,
+                  }))}
+                >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
@@ -604,7 +739,8 @@ export default function AnalyticsDashboard() {
                         {dest.bookingCount} {t("admin.analytics.bookings")}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {(dest.revenue / 100).toFixed(0)} SAR
+                        {t("admin.analytics.destinationValue")}:{" "}
+                        {(dest.revenue / 100).toFixed(2)} SAR
                       </p>
                     </div>
                   </div>

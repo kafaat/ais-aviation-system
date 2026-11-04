@@ -8,6 +8,7 @@ import { requireDemoCapability } from "./demo-capability";
  */
 
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { getDb } from "../db";
 import {
   gdsConnections,
@@ -2016,7 +2017,7 @@ export async function getMessageLog(
     .select()
     .from(gdsMessages)
     .where(whereClause)
-    .orderBy(desc(gdsMessages.createdAt))
+    .orderBy(desc(gdsMessages.createdAt), desc(gdsMessages.id))
     .limit(limit)
     .offset(offset);
 
@@ -2031,9 +2032,48 @@ export async function getMessageLog(
 /**
  * Get performance and reliability statistics for a GDS connection.
  */
+const statisticsPeriodSchema = z
+  .object({
+    dateFrom: z.iso.date().optional(),
+    dateTo: z.iso.date().optional(),
+  })
+  .refine(
+    period =>
+      !period.dateFrom || !period.dateTo || period.dateFrom <= period.dateTo,
+    {
+      message: "dateFrom must not be after dateTo",
+    }
+  );
+
 export async function getProviderStatistics(
-  connectionId: number
+  connectionId: number,
+  period: { dateFrom?: string; dateTo?: string } = {}
 ): Promise<ProviderStatistics> {
+  const parsedPeriod = statisticsPeriodSchema.safeParse(period);
+  if (!parsedPeriod.success) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Statistics dates must be valid YYYY-MM-DD UTC days in ascending order",
+    });
+  }
+  const conditions = [eq(gdsMessages.connectionId, connectionId)];
+  if (parsedPeriod.data.dateFrom) {
+    conditions.push(
+      gte(
+        gdsMessages.createdAt,
+        new Date(`${parsedPeriod.data.dateFrom}T00:00:00.000Z`)
+      )
+    );
+  }
+  if (parsedPeriod.data.dateTo) {
+    conditions.push(
+      lte(
+        gdsMessages.createdAt,
+        new Date(`${parsedPeriod.data.dateTo}T23:59:59.999Z`)
+      )
+    );
+  }
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -2056,14 +2096,14 @@ export async function getProviderStatistics(
     });
   }
 
-  // Overall message counts by status
+  // Selected UTC civil days, or all time when no period was supplied.
   const statusCounts = await db
     .select({
       status: gdsMessages.status,
       total: count(),
     })
     .from(gdsMessages)
-    .where(eq(gdsMessages.connectionId, connectionId))
+    .where(and(...conditions))
     .groupBy(gdsMessages.status);
 
   let totalMessages = 0;
@@ -2087,12 +2127,7 @@ export async function getProviderStatistics(
       maxMs: sql<number>`COALESCE(MAX(${gdsMessages.responseTimeMs}), 0)`,
     })
     .from(gdsMessages)
-    .where(
-      and(
-        eq(gdsMessages.connectionId, connectionId),
-        sql`${gdsMessages.responseTimeMs} IS NOT NULL`
-      )
-    );
+    .where(and(...conditions, sql`${gdsMessages.responseTimeMs} IS NOT NULL`));
 
   const avgResponseTimeMs = Math.round(
     Number(responseTimeStats[0]?.avgMs ?? 0)
@@ -2107,7 +2142,7 @@ export async function getProviderStatistics(
       total: count(),
     })
     .from(gdsMessages)
-    .where(eq(gdsMessages.connectionId, connectionId))
+    .where(and(...conditions))
     .groupBy(gdsMessages.messageType);
 
   const messagesByType: Record<string, number> = {};
@@ -2115,7 +2150,8 @@ export async function getProviderStatistics(
     messagesByType[row.messageType] = Number(row.total);
   }
 
-  // Last 24h volume and error rate
+  // Keep explicitly named live-health metrics on their rolling 24h window,
+  // independent of the historical period used for the aggregates above.
   const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const last24hCounts = await db
@@ -2235,5 +2271,5 @@ export async function getStatistics(params: {
   dateFrom?: string;
   dateTo?: string;
 }): Promise<ProviderStatistics> {
-  return await getProviderStatistics(params.connectionId);
+  return await getProviderStatistics(params.connectionId, params);
 }

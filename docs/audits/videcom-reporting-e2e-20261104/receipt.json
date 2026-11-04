@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+  "result": "PASS",
+  "evidence_status": "FRESH_EXECUTION",
+  "repository": "kafaat/ais-aviation-system",
+  "branch": "main",
+  "source_sha": "76e03ba89dfc354bbc62736dd45548e52c0e557f",
+  "requested_audit": "docs/audits/videcom-reporting-integration-20261104.md",
+  "source_changes": [],
+  "execution": {
+    "provider": "GitHub Actions",
+    "workflow": "CI/CD Pipeline",
+    "run_id": 41751398669,
+    "attempt": 2,
+    "job_id": 126457348369,
+    "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/41751398669/job/126457348369",
+    "started_at_utc": "2026-11-04T07:51:16Z",
+    "completed_at_utc": "2026-11-04T07:54:42Z",
+    "started_at_aden": "2026-11-04T10:51:16+03:00",
+    "completed_at_aden": "2026-11-04T10:54:42+03:00",
+    "job_duration_seconds": 206,
+    "playwright_version": "1.63.0",
+    "browser": "chromium",
+    "workers": 2,
+    "duration_seconds": 94.119252,
+    "total": 54,
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0,
+    "retried_tests": 0,
+    "global_errors": 0
+  },
+  "environment": {
+    "database": "MySQL 8.0 disposable loopback ais_test",
+    "cache": "Redis 7",
+    "authentication": "Real local FastAPI auth service",
+    "application": "Built production bundle served locally under NODE_ENV=test",
+    "production_traffic": false,
+    "external_provider_acceptance": false
+  },
+  "reporting": {
+    "browser_cases": 3,
+    "download_files_checked": 15,
+    "formats": ["CSV", "XLSX", "PDF text"],
+    "families": ["Bookings", "Flights", "Revenue"],
+    "refund_ui_export_covered": false,
+    "cases": [
+      {
+        "name": "Bookings UTC day and status filters",
+        "downloads": 9,
+        "assertions": "Full UTC creation day, previous/next day exclusion, all/confirmed/cancelled statuses, exact CSV/XLSX rows and PDF totals"
+      },
+      {
+        "name": "Flight departure day and status",
+        "downloads": 3,
+        "assertions": "Same flight IDs, departure day, selected status, seat totals and estimated revenue"
+      },
+      {
+        "name": "Revenue and later partial refund",
+        "downloads": 3,
+        "assertions": "Real wallet charge, ticket creation and partial refund APIs; ledger posting day, credit funding separation and CSV/XLSX/PDF reconciliation"
+      }
+    ]
+  },
+  "upstream_artifact": {
+    "id": 13304947963,
+    "name": "e2e-test-results",
+    "size_in_bytes": 317772,
+    "sha256": "c0a2c643fbfa7fc6a5c5775959f9350174a51b4e06a7d6ee6581cd65103aa510",
+    "created_at": "2026-11-04T07:54:36Z",
+    "expires_at": "2026-11-11T07:54:35Z",
+    "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/41751398669/artifacts/13304947963",
+    "local_copy": "playwright-results.zip"
+  },
+  "prior_acceptance": {
+    "evidence_status": "REUSED_NOT_REEXECUTED",
+    "source_sha": "76e03ba89dfc354bbc62736dd45548e52c0e557f",
+    "details_file": "prior-acceptance.json",
+    "databases": ["MySQL 8.0", "MySQL 9.7"],
+    "reporting_checks": ["REPORT-LINKAGE-01", "REPORT-ANALYTICS-01"],
+    "report_procedure_exports_per_database": 24,
+    "note": "Direct tRPC createCaller against real SQL; distinct from browser E2E. PDF tenant isolation validation checks header only."
+  },
+  "coverage_limits": [
+    "This is the repository's selected CI E2E suite, not every test across all configured browsers.",
+    "Dedicated browser download tests cover three report families; Refunds download still lacks a dedicated browser case.",
+    "Tenant/finance/ops export isolation is demonstrated by prior SQL/tRPC acceptance, not by all browser download paths.",
+    "The report linkage test validates PDF headers, not absence of another tenant's PDF content.",
+    "No claim of all 99 public Videcom examples, 200 vendor reports, or external airline-provider certification."
+  ],
+  "cleanup": {
+    "ci_containers_stopped": true
+  },
+  "evidence_files": {
+    "archive": "playwright-results.zip",
+    "playwright_json_in_archive": "test-results/results.json",
+    "playwright_html_in_archive": "playwright-report/index.html",
+    "test_catalog": "test-catalog.json",
+    "prior_acceptance": "prior-acceptance.json",
+    "source_binding": "workflow-job.json",
+    "job_log_url": "https://github.com/kafaat/ais-aviation-system/actions/runs/41751398669/job/126457348369"
+  },
+  "publication_note": "This receipt describes execution on source_sha. The later documentation commit is not the tested source commit. The ZIP is the unchanged GitHub Actions artifact; JSON sidecars are readable summaries."
+}

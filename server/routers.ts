@@ -26,6 +26,7 @@ import { favoritesRouter } from "./routers/favorites";
 import { priceAlertsRouter } from "./routers/price-alerts";
 import { aiChatRouter } from "./routers/ai-chat";
 import { reportsRouter } from "./routers/reports";
+import { standardReportsRouter } from "./routers/standard-reports";
 import { gdprRouter } from "./routers/gdpr";
 import { rateLimitRouter } from "./routers/rate-limit";
 import { metricsRouter } from "./routers/metrics";
@@ -154,6 +155,7 @@ export const appRouter = router({
   priceAlerts: priceAlertsRouter,
   aiChat: aiChatRouter,
   reports: reportsRouter,
+  standardReports: standardReportsRouter,
   gdpr: gdprRouter,
   rateLimit: rateLimitRouter,
   metrics: metricsRouter,

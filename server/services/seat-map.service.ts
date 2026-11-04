@@ -1,4 +1,5 @@
 import { setCouponCheckIn } from "./ticket-coupons.service";
+import { manifestBookingCondition } from "./flight-state.service";
 import type { SettlementTx } from "./booking-settlement.service";
 import { randomUUID } from "node:crypto";
 import {
@@ -1598,7 +1599,15 @@ export async function getCheckInStatus(
   flightId: number
 ): Promise<CheckInStats> {
   const db = await requireDb();
+  return await db.transaction(tx => readCheckInStatus(tx, flightId), {
+    isolationLevel: "repeatable read",
+  });
+}
 
+async function readCheckInStatus(
+  db: SettlementTx,
+  flightId: number
+): Promise<CheckInStats> {
   // Verify flight exists
   const [flight] = await db
     .select({ id: flights.id })
@@ -1613,72 +1622,71 @@ export async function getCheckInStatus(
     });
   }
 
-  // Total passengers booked on this flight (from confirmed/completed bookings)
-  const confirmedBookings = await db
+  // Use the same sector membership as the manifest, including completed legs.
+  // Read real passenger identities on the same snapshot as their seat evidence.
+  const membership = manifestBookingCondition(flightId);
+  const confirmedPassengers = await db
     .select({
-      id: bookings.id,
-      numberOfPassengers: bookings.numberOfPassengers,
+      id: passengers.id,
     })
     .from(bookings)
-    .where(
-      and(
-        sql`((NOT EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id}) AND ${bookings.flightId} = ${flightId}) OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.flightId = ${flightId} AND bs.status = 'confirmed' AND bs.seatsReserved = true))`,
-        inArray(bookings.status, ["confirmed", "completed"]),
-        isNull(bookings.deletedAt)
-      )
-    );
+    .innerJoin(passengers, eq(passengers.bookingId, bookings.id))
+    .where(membership);
+  const totalPassengers = confirmedPassengers.length;
 
-  const totalPassengers = confirmedBookings.reduce(
-    (sum, b) => sum + b.numberOfPassengers,
-    0
-  );
-
-  // Get seat status breakdown
-  const seatStats = await db
+  // An orphan, canceled booking or released seat is not evidence of check-in.
+  const assignedSeats = await db
     .select({
+      passengerId: passengers.id,
       status: seatInventory.status,
       cabinClass: seatInventory.cabinClass,
-      cnt: count(),
+      checkInNonce: seatInventory.checkInNonce,
+      boardingPassIssued: seatInventory.boardingPassIssued,
     })
     .from(seatInventory)
-    .where(eq(seatInventory.flightId, flightId))
-    .groupBy(seatInventory.status, seatInventory.cabinClass);
-
-  // Count checked-in passengers
-  let checkedIn = 0;
-  let boardingPassesIssued = 0;
-
-  // Get boarding pass count
-  const [bpCount] = await db
-    .select({ cnt: count() })
-    .from(seatInventory)
+    .innerJoin(bookings, eq(seatInventory.bookingId, bookings.id))
+    .innerJoin(
+      passengers,
+      and(
+        eq(seatInventory.passengerId, passengers.id),
+        eq(passengers.bookingId, bookings.id)
+      )
+    )
     .where(
       and(
         eq(seatInventory.flightId, flightId),
-        eq(seatInventory.boardingPassIssued, true)
+        membership,
+        inArray(seatInventory.status, ["occupied", "checked_in"])
       )
     );
 
-  boardingPassesIssued = Number(bpCount?.cnt ?? 0);
+  let checkedIn = 0;
+  let boardingPassesIssued = 0;
+  const assignedPassengers = new Set<number>();
 
   // Build by-class breakdown
   const classTotals = new Map<string, { total: number; checkedIn: number }>();
 
-  for (const stat of seatStats) {
-    const cls = stat.cabinClass;
+  for (const seat of assignedSeats) {
+    if (assignedPassengers.has(seat.passengerId))
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Check-in reconciliation is required: a passenger has multiple active seat assignments",
+      });
+    assignedPassengers.add(seat.passengerId);
+    const cls = seat.cabinClass;
     if (!classTotals.has(cls)) {
       classTotals.set(cls, { total: 0, checkedIn: 0 });
     }
     const entry = classTotals.get(cls);
     if (!entry) continue;
 
-    const statCount = Number(stat.cnt);
-    if (stat.status === "occupied" || stat.status === "checked_in") {
-      entry.total += statCount;
-    }
-    if (stat.status === "checked_in") {
-      entry.checkedIn += statCount;
-      checkedIn += statCount;
+    entry.total++;
+    if (seat.status === "checked_in" && seat.checkInNonce) {
+      entry.checkedIn++;
+      checkedIn++;
+      if (seat.boardingPassIssued) boardingPassesIssued++;
     }
   }
 
