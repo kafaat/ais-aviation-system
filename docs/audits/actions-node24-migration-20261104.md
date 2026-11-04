@@ -2,6 +2,8 @@
 
 ## Scope and provenance
 
+This audit records the initial compatible-pin migration and the subsequent Codecov/Slack compatibility work. The follow-up below starts from merged main `e80d8790fba2a30e3164322e0fe40ed5a62bb553` and resolves the two families deferred by the initial migration.
+
 This change starts from `dbf179516c5f91d423e6f6c2893cb95f862f6f08` (main after #268). It changes action execution runtimes while preserving the application runtime selections, workflow permissions, triggers, conditions, timeouts, job dependencies, command bodies, and coverage gates. Open-PR inspection found only #269 and the unrelated release #262; no competing Actions migration was open.
 
 The inventory covers all 118 action invocations in 11 workflow files, representing 24 distinct pinned references. Exact pinned action manifests identify 18 Node 20 families. This patch migrates 90 invocations across 16 families to verified Node 24 manifests. The 12 existing Node 24 checkout pins are retained and their version comments corrected.
@@ -47,16 +49,16 @@ GitHub’s [Node 20 deprecation notice](https://github.blog/changelog/2025-09-19
 
 - **pnpm and repository-dispatch:** pnpm stays on the v4 release line; v4.4.0 declares Node 24 and retains existing input defaults. Repository-dispatch v4.0.1 declares Node 24 and retains the token, event type, and client-payload inputs used here. No dispatch or notification is sent by this migration work.
 
-## Remaining Node 20 dependencies
+## Dependencies deferred by the initial migration
 
 | Action                         | Current pin                                | Invocations | Reason retained                                                                                      |
 | ------------------------------ | ------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------- |
 | `codecov/codecov-action`       | `b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238` | 1           | Separate Codecov CLI/action-major migration; preserve the existing #268 coverage upload integration. |
 | `slackapi/slack-github-action` | `70cd7be8e40a46e8b0eced40b0de447bdb42f68e` | 5           | Separate notification input/API migration; preserve current Slack webhook behavior.                  |
 
-These two third-party families were audited and are explicitly outside this compatible-pin patch. The patch does not claim that every future workflow warning is eliminated. Semantic-PR, SBOM, and CodeQL pins already declare Node 24 and remain unchanged. PR-size-labeler uses Docker; Trivy uses a composite action and is unchanged.
+These two third-party families were outside the initial compatible-pin patch. They are migrated in the follow-up below. Semantic-PR, SBOM, and CodeQL pins already declare Node 24 and remain unchanged. PR-size-labeler uses Docker; Trivy uses a composite action and is unchanged.
 
-## Validation and limits
+## Initial migration validation and limits
 
 - All 11 workflows parse with duplicate-key rejection and GitHub-compatible boolean handling.
 - Full YAML structure comparison against the exact main base permits only the verified `uses` replacements and `package-manager-cache: false` additions. This protects #268 coverage gates and all existing workflow behavior settings.
@@ -64,3 +66,39 @@ These two third-party families were audited and are explicitly outside this comp
 - Prettier checks and `git diff --check` pass.
 - `actionlint` was not installed on PATH or found in the checked tool caches; no actionlint success is claimed.
 - No Actions run, deployment, Slack send, repository dispatch, branch push, or PR write was performed. Deployment-only steps have static contract/release-note verification; they were not executed locally.
+
+## Follow-up: Codecov and Slack compatibility
+
+All six deferred invocations now use the following full commit pins. These were the latest stable releases returned by the owning repositories on 4 November 2026. The Codecov annotated tag was peeled to its commit before inspecting the manifest.
+
+| Action                         | Release  | Full commit SHA                            | Runtime evidence                                                                                                                                                                                                                                         |
+| ------------------------------ | -------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codecov/codecov-action`       | `v7.1.1` | `303a32d7a59b442fa8d48b6a1cc6825c09c847a5` | [Tag object](https://api.github.com/repos/codecov/codecov-action/git/tags/2320916714171c258d01dbd81040d64d798c6f8e) · [Composite manifest](https://raw.githubusercontent.com/codecov/codecov-action/303a32d7a59b442fa8d48b6a1cc6825c09c847a5/action.yml) |
+| `slackapi/slack-github-action` | `v4.0.0` | `dcb1066f776dd043e64d0e8ba94ca15cc7e1875d` | [Tag](https://api.github.com/repos/slackapi/slack-github-action/git/ref/tags/v4.0.0) · [Node 24 manifest](https://raw.githubusercontent.com/slackapi/slack-github-action/dcb1066f776dd043e64d0e8ba94ca15cc7e1875d/action.yml)                            |
+
+### Codecov
+
+The new Codecov action is **composite**, not itself a Node action. Its only nested JavaScript action is the fully pinned `actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd`, whose [manifest selects Node 24](https://raw.githubusercontent.com/actions/github-script/ed597411d8f924073f98dfc5c65a23a2325f34cd/action.yml). The wrapper runs through Bash on the existing Ubuntu runner.
+
+The existing upload token, exact `lcov.info` evidence path, pull-request exclusion and `fail_ci_if_error: false` are unchanged. The action still uses the default coverage upload command and token authentication; no OIDC permission is added. The [v5 migration guide](https://github.com/codecov/codecov-action/blob/303a32d7a59b442fa8d48b6a1cc6825c09c847a5/README.md#v5-release) changes singular `file`/`plugin` inputs, neither of which this workflow used. The [v7 release](https://github.com/codecov/codecov-action/releases/tag/v7.0.0) moves the uploader verification-key lookup to `codecovsecops`; signature validation remains enabled. The previous CLI version-selection policy is unchanged.
+
+### Slack
+
+The five existing incoming-webhook steps now pass `webhook` and `webhook-type: incoming-webhook` as inputs. This follows the [v2 migration contract](https://github.com/slackapi/slack-github-action/releases/tag/v2.0.0); the old `SLACK_WEBHOOK_TYPE` environment variable is no longer used. All five payload strings, destination expressions and step conditions remain identical.
+
+Two explicit inputs preserve the previous delivery behavior: `errors: true` makes a failed delivery fail the step, and `retries: "0"` retains a single request attempt. The new defaults would otherwise swallow delivery errors and permit five retries. No token/API technique, second template substitution or payload flattening is enabled. GitHub already expands the inline workflow expressions. The existing JSON payloads also satisfy [v4's stricter YAML parsing](https://github.com/slackapi/slack-github-action/releases/tag/v4.0.0). Changed output formats do not affect these workflows because none of the five steps' outputs is consumed.
+
+### Required native Redis acceptance
+
+Both the full coverage job and the MySQL 8.0/9.7 native matrix run `scripts/ci/provision-test-redis.sh` before testing. It fetches [Redis 7.4.5 commit `7e0f53393290f7c1f35596117b67748efad16580`](https://github.com/redis/redis/commit/7e0f53393290f7c1f35596117b67748efad16580), verifies the checkout SHA, builds a local binary below `RUNNER_TEMP`, checks its version, and records its binary SHA-256. Only then does it export `AIS_TEST_REDIS_SERVER_BIN` through `GITHUB_ENV`. The step has a five-minute bound, performs no global installation and refuses a temporary directory inside the tested checkout.
+
+The existing native matrix now explicitly includes `cache-recovery-mysql.test.ts`, `cache-rate-limit-native.test.ts`, `redis-cache-native.test.ts` and the integrated authority workstream's `booking-purge-mysql.test.ts`; the coverage collection includes them automatically. Each Redis subprocess test owns its server. The separate cross-process cache suite uses the matrix's existing disposable MySQL/Redis services. The purge suite creates an owned schema from migrated table definitions. A preparation failure fails the required job instead of allowing a missing binary to silently skip the six native Redis cases. The existing matrix artifact retains its name and paths and adds `native-redis-tool.json` for tool provenance.
+
+### Follow-up validation and limits
+
+- **All 11 workflows pass actionlint 1.7.12.** The Linux amd64 release archive was checked against both the official release digest and published checksum: `8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8`. The tool is kept outside the checkout.
+- **All 9 existing workflow-hardening tests pass.** Duplicate-key-rejecting YAML parsing and full structure comparison against `e80d879` allow only the six action references, five Slack input mappings, two required native-tool preparation steps, four added native suites and the tool-receipt artifact entry. The coordinator repeated the exact comparison after adding the purge suite. All other triggers, permissions, conditions, runtime selections, job dependencies, commands and gates are equal to the base.
+- **Eight pinned Slack bundle cases pass against an owned loopback HTTP fixture:** all five current payloads remain structurally identical and exit 0 after one successful request; the old action also succeeds with the representative payload; both old and new actions exit 1 after exactly one HTTP 503 response. A child-process socket guard rejects destinations outside the fixture, and the child environment contains only synthetic context and runner input defaults. No Slack service or real webhook was contacted. Initial harness attempts that omitted runner-created output files or default inputs remain recorded separately; these were corrected in the fixture, without changing upstream bundles.
+- **The new provisioner completed an actual fresh pinned build** and wrote the checked source/version/binary receipt before exporting the absolute binary. Missing, relative, multiline and in-checkout temporary-directory cases fail before publishing an environment value. This establishes tool provisioning, not application acceptance; integrated native MySQL/Redis results belong to the subsequent CI receipts.
+- Bash syntax, Prettier and `git diff --check` pass. TypeScript and the combined application tests remain part of the coordinator's integration check.
+- No Codecov upload, real Slack delivery, repository dispatch, deployment, Railway configuration change, branch-protection change or release publication was performed by this workstream. Live service acceptance is separate from action input/runtime compatibility.

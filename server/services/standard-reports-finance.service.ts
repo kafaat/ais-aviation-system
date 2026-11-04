@@ -682,6 +682,21 @@ async function loadComponents(
         and(
           scopeCondition(bookings.tenantId, scope),
           ownedNullableTenant(bookingFareComponents.tenantId),
+          or(
+            isNull(bookingFareComponents.passengerId),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(passengers)
+                .where(
+                  and(
+                    eq(passengers.id, bookingFareComponents.passengerId),
+                    eq(passengers.bookingId, bookings.id),
+                    ownedNullableTenant(passengers.tenantId)
+                  )
+                )
+            )
+          ),
           referenceFilter(filters),
           routeFilter(filters),
           bookingIds ? inArray(bookings.id, bookingIds) : undefined,

@@ -15,6 +15,21 @@ import {
 } from "drizzle-orm/mysql-core";
 
 /**
+ * Durable cache generations. Rows must survive Redis eviction and restarts;
+ * deleting a generation can make an older cached generation reachable again.
+ * The primary key hashes [cache prefix, namespace], with null for the global
+ * generation, so prefixes and namespace names cannot alias each other.
+ */
+export const cacheNamespaceGenerations = mysqlTable(
+  "cache_namespace_generations",
+  {
+    scopeHash: varchar("scopeHash", { length: 64 }).primaryKey(),
+    generation: varchar("generation", { length: 36 }).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  }
+);
+
+/**
  * Tenants = the airlines onboarded onto the AIS SaaS platform. This is the
  * foundation of multi-tenancy: every user (and, progressively, every
  * transactional row) is scoped to a tenant. Nullable links keep the system

@@ -85,6 +85,9 @@ jobs:
         run: node --import tsx scripts/generate-event-contracts.ts --check
       - name: Verify service producers, consumers and retired modules
         run: node --import tsx scripts/generate-service-catalog.ts --check
+      - name: Prepare isolated native Redis test binary
+        timeout-minutes: 5
+        run: bash scripts/ci/provision-test-redis.sh
       - name: Verify native service boundaries
         env:
           NODE_ENV: test
@@ -102,6 +105,10 @@ jobs:
           server/__tests__/operations-inventory-mysql.test.ts
           server/__tests__/flight-delivery-mysql.test.ts
           server/__tests__/api-process-mysql.test.ts
+          server/__tests__/cache-recovery-mysql.test.ts
+          server/__tests__/cache-rate-limit-native.test.ts
+          server/services/redis-cache-native.test.ts
+          server/__tests__/booking-purge-mysql.test.ts
           --reporter=default
           --reporter=json
           --reporter=junit
@@ -154,6 +161,7 @@ jobs:
           path: |
             ${{ runner.temp }}/native-service-boundaries.json
             ${{ runner.temp }}/native-service-boundaries.xml
+            ${{ runner.temp }}/native-redis-tool.json
             ${{ runner.temp }}/integration-remediation.json
             ${{ runner.temp }}/live-acceptance.json
             ${{ runner.temp }}/backup-restore.json

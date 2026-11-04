@@ -1096,6 +1096,9 @@ test.describe("Funded journeys and truthful operational reads", () => {
         "closeLogger:start",
         "closeLogger:return",
         "closeLogger:error",
+        "supervisor:deadline",
+        "supervisor:signal",
+        "supervisor:error",
       ]);
       const resourceTypes = new Set([
         "PipeWrap",

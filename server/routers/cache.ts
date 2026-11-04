@@ -177,7 +177,7 @@ export const cacheRouter = router({
       await redisCacheService.clearAll();
       return {
         success: true,
-        message: "All caches cleared",
+        message: "Versioned caches invalidated and raw Redis keys cleared",
       };
     }),
 

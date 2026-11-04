@@ -580,8 +580,12 @@ jobs:
 
       - name: Notify release
         if: vars.SLACK_WEBHOOK_URL != ''
-        uses: slackapi/slack-github-action@70cd7be8e40a46e8b0eced40b0de447bdb42f68e # v1.26.0
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
+          webhook: ${{ vars.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          errors: true
+          retries: "0"
           payload: |
             {
               "text": "New Release Published",
@@ -595,9 +599,6 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
   resume-publication:
     name: Resume Existing Release Publication

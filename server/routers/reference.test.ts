@@ -7,7 +7,9 @@ const cache = vi.hoisted(() => ({ values: {} as Record<string, unknown> }));
 vi.mock("../db", () => ({ getAllAirports: vi.fn(), getAllAirlines: vi.fn() }));
 vi.mock("../services/redis-cache.service", () => ({
   CacheTTL: { AIRPORTS: 3600, AIRLINES: 3600 },
+  CacheNamespace: { AIRPORTS: "airports", AIRLINES: "airlines" },
   redisCacheService: {
+    captureGeneration: async () => ({ version: 0, epoch: 0 }),
     getCachedAirports: async () => cache.values.airports ?? null,
     getCachedAirlines: async () => cache.values.airlines ?? null,
     cacheAirports: async (value: unknown) => {
