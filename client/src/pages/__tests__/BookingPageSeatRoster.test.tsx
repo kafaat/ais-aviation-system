@@ -11,7 +11,13 @@ import { memoryLocation } from "wouter/memory-location";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import BookingPage from "../BookingPage";
 
-const calls = vi.hoisted(() => ({ create: vi.fn(), offer: vi.fn() }));
+const calls = vi.hoisted(() => ({
+  create: vi.fn(),
+  offer: vi.fn(),
+  allocation: undefined as
+    | undefined
+    | { passengers: number; totalAmount: number },
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
@@ -30,10 +36,6 @@ vi.mock("@/components/TravelRequirements", () => ({
   TravelRequirements: () => null,
 }));
 vi.mock("@/components/CarbonOffset", () => ({ CarbonOffset: () => null }));
-vi.mock("@/components/AncillarySelection", () => ({
-  default: () => null,
-  ancillaryCommandLines: () => [],
-}));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     ibePublic: {
@@ -43,9 +45,28 @@ vi.mock("@/lib/trpc", () => ({
       ancillary: { getAvailable: { invalidate: vi.fn() } },
     }),
     bookings: {
-      getAllocation: { useQuery: () => ({}) },
+      getAllocation: { useQuery: () => ({ data: calls.allocation }) },
       create: {
         useMutation: () => ({ mutateAsync: calls.create, isPending: false }),
+      },
+    },
+    ancillary: {
+      getAvailable: {
+        useQuery: () => ({
+          data: [
+            {
+              id: 11,
+              name: "Extra bag",
+              category: "baggage",
+              weightGrams: 20000,
+              available: true,
+              currency: "SAR",
+              price: 1500,
+              applicableCabinClasses: null,
+              applicableAirlines: null,
+            },
+          ],
+        }),
       },
     },
     priceQuote: {
@@ -122,6 +143,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 beforeEach(() => {
+  calls.allocation = undefined;
   calls.create.mockReset().mockResolvedValue({ bookingId: 700 });
   calls.offer.mockReset().mockResolvedValue({
     offerId: "synthetic-offer",
@@ -130,8 +152,8 @@ beforeEach(() => {
   });
 });
 
-function prepare() {
-  const location = memoryLocation({ path: "/booking/42?adults=2" });
+function prepare(path = "/booking/42?adults=2", names = ["Aisha", "Yara"]) {
+  const location = memoryLocation({ path, record: true });
   render(
     <Router hook={location.hook}>
       <TooltipProvider>
@@ -146,7 +168,7 @@ function prepare() {
       </TooltipProvider>
     </Router>
   );
-  for (const [index, firstName] of ["Aisha", "Yara"].entries()) {
+  for (const [index, firstName] of names.entries()) {
     fireEvent.change(screen.getAllByLabelText(/booking.firstName/)[index], {
       target: { value: firstName },
     });
@@ -154,6 +176,7 @@ function prepare() {
       target: { value: "Journey" },
     });
   }
+  return location;
 }
 
 const seat = (number: string) =>
@@ -226,3 +249,123 @@ it("keeps the first passenger's seat when an unassigned passenger is removed", a
     },
   ]);
 });
+
+it("reuses the booking intent after a lost response and changes it when the passenger changes", async () => {
+  calls.create
+    .mockRejectedValueOnce(new Error("Lost response"))
+    .mockRejectedValueOnce(new Error("Still unknown"));
+  prepare();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh fare offer" }));
+  const complete = screen.getByRole("button", {
+    name: "booking.completeBooking",
+  });
+  await waitFor(() => expect(complete).not.toBeDisabled());
+  fireEvent.click(complete);
+  await waitFor(() => expect(calls.create).toHaveBeenCalledTimes(1));
+  fireEvent.click(complete);
+  await waitFor(() => expect(calls.create).toHaveBeenCalledTimes(2));
+  const first = calls.create.mock.calls[0][0];
+  const retry = calls.create.mock.calls[1][0];
+  expect(first.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+  expect(retry).toEqual(first);
+  fireEvent.change(screen.getAllByLabelText(/booking.firstName/)[0], {
+    target: { value: "Sara" },
+  });
+  fireEvent.click(complete);
+  await screen.findByText("Owned checkout");
+  const amended = calls.create.mock.calls[2][0];
+  expect(amended.idempotencyKey).not.toBe(first.idempotencyKey);
+  expect(amended.sessionId).toBe(amended.idempotencyKey);
+  expect(amended.passengers[0].firstName).toBe("Sara");
+  expect(amended.offerId).toBe(first.offerId);
+});
+
+it.each([
+  ["wallet", "Pay with wallet"],
+  ["split", "splitPayment.splitWithOthers"],
+])(
+  "prepares one booking before handing the %s choice to owned checkout",
+  async (method, button) => {
+    const route = prepare();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh fare offer" }));
+    const payment = screen.getByRole("button", { name: button });
+    await waitFor(() => expect(payment).not.toBeDisabled());
+    fireEvent.click(payment);
+    await screen.findByText("Owned checkout");
+    expect(calls.create).toHaveBeenCalledTimes(1);
+    expect(calls.create.mock.calls[0][0]).toMatchObject({
+      flightId: 42,
+      cabinClass: "economy",
+      offerId: "synthetic-offer",
+    });
+    const destination = new URL(route.history.at(-1)!, "https://fixture.test");
+    expect(destination.pathname).toBe("/checkout/700");
+    expect(destination.searchParams.get("method")).toBe(method);
+    expect(destination.searchParams.get("adults")).toBe("2");
+  }
+);
+
+it("removes a deleted passenger's extras and reindexes the remaining purchased quantities", async () => {
+  prepare();
+  for (const passengerIndex of [0, 1]) {
+    fireEvent.change(screen.getByTestId("ancillary-passenger"), {
+      target: { value: String(passengerIndex) },
+    });
+    fireEvent.change(screen.getByTestId("ancillary-product"), {
+      target: { value: "11" },
+    });
+    fireEvent.change(screen.getByTestId("ancillary-quantity"), {
+      target: { value: String(passengerIndex + 1) },
+    });
+    fireEvent.click(screen.getByTestId("ancillary-add"));
+  }
+  expect(
+    within(screen.getByTestId("ancillary-review")).getAllByRole("listitem")
+  ).toHaveLength(2);
+  remove(1);
+  expect(screen.getByTestId("ancillary-review")).toHaveTextContent(
+    "Yara Journey"
+  );
+  expect(screen.getByTestId("ancillary-review")).not.toHaveTextContent("Aisha");
+  await submit();
+  expect(calls.create.mock.calls[0][0].ancillaries).toEqual([
+    {
+      passengerIndex: 0,
+      segmentIndex: 0,
+      ancillaryServiceId: 11,
+      quantity: 2,
+      unitPrice: 1500,
+      totalPrice: 3000,
+    },
+  ]);
+});
+
+it.each(["waitlistId", "groupBookingId"])(
+  "loads the server allocated roster for %s and keeps the allocation in the booking command",
+  async allocation => {
+    calls.allocation = { passengers: 3, totalAmount: 18000 };
+    prepare(`/booking/42?adults=1&${allocation}=5`, ["Aisha", "Yara", "Sara"]);
+    expect(screen.getAllByLabelText(/booking.firstName/)).toHaveLength(3);
+    fireEvent.click(
+      screen.getByRole("button", { name: "booking.addPassenger" })
+    );
+    expect(screen.getAllByLabelText(/booking.firstName/)).toHaveLength(3);
+    if (allocation === "waitlistId")
+      fireEvent.click(
+        screen.getByRole("button", { name: "Refresh fare offer" })
+      );
+    const complete = screen.getByRole("button", {
+      name: "booking.completeBooking",
+    });
+    await waitFor(() => expect(complete).not.toBeDisabled());
+    fireEvent.click(complete);
+    await screen.findByText("Owned checkout");
+    const command = calls.create.mock.calls[0][0];
+    expect(command[allocation]).toBe(5);
+    expect(command.passengers).toHaveLength(3);
+    if (allocation === "groupBookingId") {
+      expect(command.offerId).toBeUndefined();
+      expect(command.priceLockId).toBeUndefined();
+    }
+  }
+);

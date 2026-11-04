@@ -493,7 +493,8 @@ export async function upsertMfaSetup(
 async function changeMfa(
   userId: number,
   expectedSecret: string,
-  enabled: boolean
+  enabled: boolean,
+  token: string
 ): Promise<void> {
   const db = await getDb();
   if (!db)
@@ -513,6 +514,19 @@ async function changeMfa(
         code: "CONFLICT",
         message: "MFA setup changed; retry verification",
       });
+    if (settings.isEnabled === enabled)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "MFA state changed; retry verification",
+      });
+    // Bind verification, possible key migration and the enrollment change to
+    // one locked transaction. Comparing a pre-migration ciphertext in a later
+    // transaction would reject a valid code after consuming it.
+    if (!(await consumeActionTotp(tx, userId, token, "required")))
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid verification code.",
+      });
     if (enabled)
       await tx
         .update(mfaSettings)
@@ -530,10 +544,16 @@ async function changeMfa(
   });
   log.info({ userId, enabled }, "MFA changed; sessions revoked");
 }
-export const enableMfa = (userId: number, expectedSecret: string) =>
-  changeMfa(userId, expectedSecret, true);
-export const disableMfa = (userId: number, expectedSecret: string) =>
-  changeMfa(userId, expectedSecret, false);
+export const enableMfa = (
+  userId: number,
+  expectedSecret: string,
+  token: string
+) => changeMfa(userId, expectedSecret, true, token);
+export const disableMfa = (
+  userId: number,
+  expectedSecret: string,
+  token: string
+) => changeMfa(userId, expectedSecret, false, token);
 
 /**
  * Update last used timestamp for MFA
@@ -755,7 +775,12 @@ export async function completeMfaChallenge(
       .update(mfaSettings)
       .set({ ...factorUpdate, lastUsedAt: new Date(), updatedAt: new Date() })
       .where(eq(mfaSettings.id, settings.id));
-    return { userId: challenge.userId, secret: settings.secret };
+    // Session issuance compares this proof with the current enrollment. A
+    // successful legacy-key migration has already changed its ciphertext.
+    return {
+      userId: challenge.userId,
+      secret: factorUpdate.secret ?? settings.secret,
+    };
   });
   // Throw after committing the failed-attempt counter.
   if (result === null)

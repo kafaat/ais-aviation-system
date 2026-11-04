@@ -84,7 +84,7 @@ jobs:
         run: node --import tsx scripts/generate-event-contracts.ts --check
       - name: Verify service producers, consumers and retired modules
         run: node --import tsx scripts/generate-service-catalog.ts --check
-      - name: Verify native reporting readers and recovery access paths
+      - name: Verify native authentication, financial and reporting boundaries
         env:
           NODE_ENV: test
           AIS_DISPOSABLE_DATABASE: "true"
@@ -96,6 +96,8 @@ jobs:
           server/__tests__/standard-reports-ops-mysql.test.ts
           server/__tests__/standard-reports-finance-mysql.test.ts
           server/__tests__/standard-report-schedules-mysql.test.ts
+          server/__tests__/auth-session-mysql.test.ts
+          server/__tests__/financial-authority-mysql.test.ts
       - name: Verify backup failure boundaries and worker liveness
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
       - name: Verify baggage entitlement mutation sensitivity

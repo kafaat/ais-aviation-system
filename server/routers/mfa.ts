@@ -135,19 +135,8 @@ export const mfaRouter = router({
         });
       }
 
-      // Decrypt and verify the token
-      const isValid = await consumeTotpStep(userId, input.token);
-
-      if (!isValid) {
-        logger.warn({ userId }, "MFA verification failed - invalid token");
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Invalid verification code. Please try again.",
-        });
-      }
-
-      // Enable MFA
-      await enableMfa(userId, settings.secret);
+      // Consume the factor and enable the same enrollment atomically.
+      await enableMfa(userId, settings.secret, input.token);
 
       logger.info({ userId }, "MFA verified and enabled");
 
@@ -186,18 +175,7 @@ export const mfaRouter = router({
         });
       }
 
-      // Verify the token before disabling
-      const isValid = await consumeTotpStep(userId, input.token);
-
-      if (!isValid) {
-        logger.warn({ userId }, "MFA disable attempt failed - invalid token");
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Invalid verification code. MFA was not disabled.",
-        });
-      }
-
-      await disableMfa(userId, settings.secret);
+      await disableMfa(userId, settings.secret, input.token);
 
       logger.info({ userId }, "MFA disabled by user");
 

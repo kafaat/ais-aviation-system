@@ -94,6 +94,23 @@ export interface RefreshResult {
 }
 type DeviceInfo = { userAgent?: string; ipAddress?: string; deviceId?: string };
 
+async function revokeRefreshFamily(
+  tx: SettlementTx,
+  familyId: string,
+  userId: number
+): Promise<void> {
+  await tx
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(refreshTokens.familyId, familyId),
+        eq(refreshTokens.userId, userId),
+        isNull(refreshTokens.revokedAt)
+      )
+    );
+}
+
 /** A family of rotating refresh records is the shared authority for cookie and Bearer sessions. */
 export const mobileAuthServiceV2 = {
   generateAccessToken(
@@ -269,17 +286,18 @@ export const mobileAuthServiceV2 = {
         const reused = await tx.query.refreshTokens.findFirst({
           where: (t, { eq }) => eq(t.token, hashToken(token)),
         });
-        if (reused?.familyId)
+        if (reused?.familyId) {
+          // Use the same first lock as login/rotation so a successor cannot
+          // be inserted after replay revocation has scanned the family.
           await tx
-            .update(refreshTokens)
-            .set({ revokedAt: new Date() })
-            .where(
-              and(
-                eq(refreshTokens.familyId, reused.familyId),
-                isNull(refreshTokens.revokedAt)
-              )
-            );
-        throw unauthorized("Invalid or expired refresh token");
+            .select()
+            .from(users)
+            .where(eq(users.id, reused.userId))
+            .for("update");
+          await revokeRefreshFamily(tx, reused.familyId, reused.userId);
+        }
+        // Reject outside the transaction: throwing here rolls back revocation.
+        return { error: "Invalid or expired refresh token" } as const;
       }
       const [user] = await tx
         .select()
@@ -296,7 +314,8 @@ export const mobileAuthServiceV2 = {
       if (mfa?.isEnabled && !record.mfaVerified)
         throw unauthorized("MFA_REQUIRED");
       // The current read performed by UPDATE rechecks revokedAt after row-lock waits.
-      // Exactly one concurrent request can claim the old token; a loser inserts nothing.
+      // Exactly one request can claim the old token. A concurrent loser is
+      // also a replay: it inserts nothing and commits revocation of the family.
       const [claimed] = await tx
         .update(refreshTokens)
         .set({ revokedAt: new Date(), lastUsedAt: new Date() })
@@ -307,8 +326,10 @@ export const mobileAuthServiceV2 = {
             gt(refreshTokens.expiresAt, new Date())
           )
         );
-      if (claimed.affectedRows !== 1)
-        throw unauthorized("Refresh token already used");
+      if (claimed.affectedRows !== 1) {
+        await revokeRefreshFamily(tx, record.familyId, record.userId);
+        return { error: "Refresh token already used" } as const;
+      }
       const nextToken = randomToken();
       await tx.insert(refreshTokens).values({
         userId: user.id,
@@ -321,6 +342,7 @@ export const mobileAuthServiceV2 = {
       });
       return { user, nextToken, sessionId: record.familyId };
     });
+    if ("error" in result) throw unauthorized(result.error);
     return {
       accessToken: this.generateAccessToken(result.user, result.sessionId),
       refreshToken: result.nextToken,
