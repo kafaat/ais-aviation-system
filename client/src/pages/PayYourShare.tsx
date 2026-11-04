@@ -179,10 +179,19 @@ export function PayYourShare() {
     { paymentToken },
     {
       enabled: !!paymentToken && paymentToken.length === 64,
-      // After the provider redirect the webhook may not have landed yet:
-      // poll until the server says the share is paid.
-      refetchInterval: query =>
-        successStatus && query.state.data?.status !== "paid" ? 3000 : false,
+      // Only a pending provider return can still settle. Terminal results,
+      // missing links and failed queries must not keep verification polling.
+      refetchInterval: query => {
+        const details = query.state.data;
+        return successStatus &&
+          sessionId &&
+          query.state.status === "success" &&
+          details?.status === "pending" &&
+          !details.cancellation &&
+          (!details.expiresAt || new Date(details.expiresAt) > new Date())
+          ? 3000
+          : false;
+      },
     }
   );
 
@@ -240,24 +249,6 @@ export function PayYourShare() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <PaymentSuccess bookingReference={paymentDetails.bookingReference} />
-      </div>
-    );
-  }
-  if (successStatus && sessionId && paymentDetails) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div
-          className="max-w-md w-full rounded-lg border bg-card p-8 text-center"
-          role="status"
-          aria-live="polite"
-        >
-          <h2 className="text-xl font-semibold mb-2">
-            {t("splitPayment.verifyingPayment")}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t("splitPayment.verifyingPaymentHint")}
-          </p>
-        </div>
       </div>
     );
   }
@@ -321,6 +312,26 @@ export function PayYourShare() {
             </div>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  // Resolve cancellation and expiry before the transient provider-return view.
+  if (successStatus && sessionId && paymentDetails.status === "pending") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div
+          className="max-w-md w-full rounded-lg border bg-card p-8 text-center"
+          role="status"
+          aria-live="polite"
+        >
+          <h2 className="text-xl font-semibold mb-2">
+            {t("splitPayment.verifyingPayment")}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t("splitPayment.verifyingPaymentHint")}
+          </p>
+        </div>
       </div>
     );
   }

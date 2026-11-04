@@ -2753,6 +2753,7 @@
       ],
       "dependencies": [
         "server/_core/logger.ts",
+        "server/_core/stripe-transport.ts",
         "server/db.ts",
         "server/services/redis-cache.service.ts"
       ],
@@ -6541,7 +6542,7 @@
         "server/services/stripe/stripe-reconciliation.service.ts",
         "server/stripe.ts"
       ],
-      "dependencies": ["server/_core/provider-boundary.ts"],
+      "dependencies": ["server/_core/stripe-transport.ts"],
       "tableExpressions": {
         "reads": [],
         "writes": []

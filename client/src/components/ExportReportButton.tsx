@@ -6,7 +6,8 @@ import { downloadFile } from "@/lib/downloadFile";
  * Handles file download from base64 or text content
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +44,23 @@ interface ExportReportButtonProps {
   showLabel?: boolean;
 }
 
-export function ExportReportButton({
+export function ExportReportButton(props: ExportReportButtonProps) {
+  const { user } = useAuth();
+  const scope = JSON.stringify([
+    user?.id,
+    user?.role,
+    user?.tenantId,
+    props.reportType,
+    props.filters?.startDate,
+    props.filters?.endDate,
+    props.filters?.status,
+  ]);
+  // A response belongs to the account and filters that requested it. A fresh
+  // workspace also lets the new context export while an old request finishes.
+  return <ScopedExportReportButton key={scope} {...props} />;
+}
+
+function ScopedExportReportButton({
   reportType,
   filters = {},
   variant = "outline",
@@ -56,6 +73,13 @@ export function ExportReportButton({
   const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(
     null
   );
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   // Mutations for bookings reports
   const exportBookingsCSV = trpc.reports.exportBookingsCSV.useMutation();
@@ -137,6 +161,7 @@ export function ExportReportButton({
           throw new Error("Invalid report type");
       }
 
+      if (!mounted.current) return;
       downloadFile(
         result.content,
         result.filename,
@@ -145,11 +170,14 @@ export function ExportReportButton({
       );
       toast.success(t("reports.exportSuccess"));
     } catch (error) {
+      if (!mounted.current) return;
       console.error("Export error:", error);
       toast.error(t("reports.exportError"));
     } finally {
-      setIsExporting(false);
-      setExportingFormat(null);
+      if (mounted.current) {
+        setIsExporting(false);
+        setExportingFormat(null);
+      }
     }
   };
 

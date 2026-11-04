@@ -90,6 +90,14 @@ nativeDescribe("native report templates, leases and delivery receipts", () => {
 
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
+    if (
+      !url.pathname.endsWith("_test") ||
+      !["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname)
+    ) {
+      throw new Error(
+        "Native schedule fixtures require a disposable loopback _test database"
+      );
+    }
     const options = {
       host: url.hostname,
       port: Number(url.port || 3306),
@@ -542,5 +550,384 @@ nativeDescribe("native report templates, leases and delivery receipts", () => {
     await expect(downloadStandardReportRun(owner, 101, run.id)).rejects.toThrow(
       "not ready"
     );
+  });
+
+  it("deletes the owner's template in native SQL while preserving historical output", async () => {
+    const saved = await saveStandardReportTemplate(owner, 101, input());
+    const run = await runStandardReportTemplate(
+      owner,
+      101,
+      saved.id,
+      randomUUID()
+    );
+    expect(await deleteStandardReportTemplate(owner, 101, saved.id)).toEqual({
+      deleted: true,
+    });
+    expect(await listStandardReportTemplates(owner, 101)).toEqual([]);
+    await expect(
+      deleteStandardReportTemplate(owner, 101, saved.id)
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(
+      (await downloadStandardReportRun(owner, 101, run.id)).content
+    ).toContain("tenant-101,0");
+  });
+
+  it("does not start a stale due occurrence after the owner pauses the schedule", async () => {
+    const saved = await saveStandardReportTemplate(owner, 101, {
+      ...input(),
+      cadence: "daily",
+    });
+    const due = saved.nextRunAt!;
+    await setStandardReportTemplateEnabled(owner, 101, saved.id, false);
+    state.read.mockClear();
+    await expect(
+      runStandardReportTemplate(owner, 101, saved.id, "scheduled", due)
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await listStandardReportRuns(owner, 101)).toEqual([]);
+    expect(state.read).not.toHaveBeenCalled();
+  });
+
+  it("fences an old generator after a competing worker takes its lease", async () => {
+    const saved = await saveStandardReportTemplate(owner, 101, input());
+    const read = state.read.getMockImplementation()!;
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>(resolve => {
+      entered = resolve;
+    });
+    const blocked = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    state.read.mockImplementationOnce(async (...args) => {
+      entered();
+      await blocked;
+      return read(...args);
+    });
+    const key = randomUUID();
+    const oldWorker = runStandardReportTemplate(owner, 101, saved.id, key);
+    await started;
+    let runId!: number;
+    const replacement = randomUUID();
+    try {
+      const [claims] = await pool.query<mysql.RowDataPacket[]>(
+        "SELECT id,leaseToken FROM standard_report_runs"
+      );
+      expect(claims).toHaveLength(1);
+      runId = claims[0].id;
+      await pool.execute(
+        "UPDATE standard_report_runs SET leaseToken=? WHERE id=?",
+        [replacement, runId]
+      );
+    } finally {
+      release();
+    }
+    expect((await oldWorker).status).toBe("generating");
+    const [after] = await pool.query<mysql.RowDataPacket[]>(
+      "SELECT status,leaseToken,content,checksum FROM standard_report_runs WHERE id=?",
+      [runId]
+    );
+    expect(after[0]).toMatchObject({
+      status: "generating",
+      leaseToken: replacement,
+      content: null,
+      checksum: null,
+    });
+    expect(state.email).not.toHaveBeenCalled();
+    await pool.execute(
+      "UPDATE standard_report_runs SET leaseUntil=? WHERE id=?",
+      [new Date(Date.now() - 1000), runId]
+    );
+    const recovered = await runStandardReportTemplate(
+      owner,
+      101,
+      saved.id,
+      key
+    );
+    expect(recovered.status).toBe("ready");
+    expect(
+      (await downloadStandardReportRun(owner, 101, recovered.id)).checksum
+    ).toBe(recovered.checksum);
+  });
+
+  it("leaves a due occurrence pending while another generator still holds its lease", async () => {
+    const saved = await saveStandardReportTemplate(owner, 101, {
+      ...input(),
+      cadence: "daily",
+      hourUtc: 8,
+    });
+    const due = new Date("2026-11-04T08:00:00Z");
+    await pool.execute(
+      "UPDATE standard_report_templates SET nextRunAt=? WHERE id=?",
+      [due, saved.id]
+    );
+    const read = state.read.getMockImplementation()!;
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>(resolve => {
+      entered = resolve;
+    });
+    const blocked = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    state.read.mockImplementationOnce(async (...args) => {
+      entered();
+      await blocked;
+      return read(...args);
+    });
+    const active = runStandardReportTemplate(
+      owner,
+      101,
+      saved.id,
+      "scheduled",
+      due
+    );
+    await started;
+    const now = new Date("2026-11-04T08:01:00Z");
+    try {
+      await processStandardReportSchedules(now);
+      const [before] = await pool.query<mysql.RowDataPacket[]>(
+        "SELECT nextRunAt FROM standard_report_templates WHERE id=?",
+        [saved.id]
+      );
+      expect(before[0].nextRunAt.toISOString()).toBe(due.toISOString());
+    } finally {
+      release();
+    }
+    expect((await active).status).toBe("ready");
+    await processStandardReportSchedules(now);
+    const [after] = await pool.query<mysql.RowDataPacket[]>(
+      "SELECT nextRunAt FROM standard_report_templates WHERE id=?",
+      [saved.id]
+    );
+    expect(after[0].nextRunAt.toISOString()).toBe("2026-11-05T08:00:00.000Z");
+  });
+
+  it.each(["deleted", "unassigned", "suspended"])(
+    "withholds a newly generated email after the owner becomes %s",
+    async change => {
+      vi.stubEnv("RESEND_API_KEY", "unit-test-provider-placeholder");
+      vi.stubEnv("EMAIL_FROM", "test@example.test");
+      const saved = await saveStandardReportTemplate(owner, 101, {
+        ...input(),
+        emailToOwner: true,
+      });
+      const read = state.read.getMockImplementation()!;
+      state.read.mockImplementationOnce(async (...args) => {
+        if (change === "deleted")
+          await pool.query("DELETE FROM users WHERE id=11");
+        else if (change === "unassigned")
+          await pool.query("UPDATE users SET tenantId=NULL WHERE id=11");
+        else
+          await pool.query(
+            "UPDATE tenants SET status='suspended' WHERE id=101"
+          );
+        return read(...args);
+      });
+      const run = await runStandardReportTemplate(
+        owner,
+        101,
+        saved.id,
+        randomUUID()
+      );
+      expect(run).toMatchObject({
+        status: "ready",
+        deliveryStatus: "failed",
+        emailReceiptId: null,
+      });
+      expect(state.email).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["deleted", "unassigned", "suspended"])(
+    "recovers pending delivery without exposing data for a %s owner",
+    async change => {
+      const saved = await saveStandardReportTemplate(owner, 101, {
+        ...input(),
+        emailToOwner: true,
+      });
+      const run = await runStandardReportTemplate(
+        owner,
+        101,
+        saved.id,
+        randomUUID()
+      );
+      await pool.execute(
+        "UPDATE standard_report_runs SET deliveryStatus='pending' WHERE id=?",
+        [run.id]
+      );
+      if (change === "deleted")
+        await pool.query("DELETE FROM users WHERE id=11");
+      else if (change === "unassigned")
+        await pool.query("UPDATE users SET tenantId=NULL WHERE id=11");
+      else
+        await pool.query("UPDATE tenants SET status='suspended' WHERE id=101");
+      vi.stubEnv("RESEND_API_KEY", "unit-test-provider-placeholder");
+      vi.stubEnv("EMAIL_FROM", "test@example.test");
+      await processStandardReportSchedules();
+      const [rows] = await pool.query<mysql.RowDataPacket[]>(
+        "SELECT deliveryStatus,errorMessage FROM standard_report_runs WHERE id=?",
+        [run.id]
+      );
+      expect(rows[0].deliveryStatus).toBe("failed");
+      expect(rows[0].errorMessage).toContain("no longer authorized");
+      expect(state.email).not.toHaveBeenCalled();
+    }
+  );
+
+  it("allows only one native delivery claimant across simultaneous replays", async () => {
+    const saved = await saveStandardReportTemplate(owner, 101, {
+      ...input(),
+      emailToOwner: true,
+    });
+    const key = randomUUID();
+    const first = await runStandardReportTemplate(owner, 101, saved.id, key);
+    await pool.execute(
+      "UPDATE standard_report_runs SET deliveryStatus='pending' WHERE id=?",
+      [first.id]
+    );
+    vi.stubEnv("RESEND_API_KEY", "unit-test-provider-placeholder");
+    vi.stubEnv("EMAIL_FROM", "test@example.test");
+    await Promise.all(
+      Array.from({ length: 4 }, () =>
+        runStandardReportTemplate(owner, 101, saved.id, key)
+      )
+    );
+    expect(state.email).toHaveBeenCalledTimes(1);
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      "SELECT deliveryStatus,emailReceiptId FROM standard_report_runs WHERE id=?",
+      [first.id]
+    );
+    expect(rows[0]).toMatchObject({
+      deliveryStatus: "accepted",
+      emailReceiptId: "provider-acceptance-test",
+    });
+  });
+
+  it("propagates a recovery database outage and retains the pending receipt for a later attempt", async () => {
+    const saved = await saveStandardReportTemplate(owner, 101, {
+      ...input(),
+      emailToOwner: true,
+    });
+    const run = await runStandardReportTemplate(
+      owner,
+      101,
+      saved.id,
+      randomUUID()
+    );
+    await pool.execute(
+      "UPDATE standard_report_runs SET deliveryStatus='pending' WHERE id=?",
+      [run.id]
+    );
+    await pool.query("RENAME TABLE tenants TO unavailable_tenants");
+    try {
+      await expect(processStandardReportSchedules()).rejects.toThrow();
+    } finally {
+      await pool.query("RENAME TABLE unavailable_tenants TO tenants");
+    }
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      "SELECT deliveryStatus FROM standard_report_runs WHERE id=?",
+      [run.id]
+    );
+    expect(rows[0].deliveryStatus).toBe("pending");
+    expect(state.email).not.toHaveBeenCalled();
+  });
+
+  it("marks an expired sending receipt unknown during manual replay without resending", async () => {
+    const saved = await saveStandardReportTemplate(owner, 101, {
+      ...input(),
+      emailToOwner: true,
+    });
+    const key = randomUUID();
+    const generated = await runStandardReportTemplate(
+      owner,
+      101,
+      saved.id,
+      key
+    );
+    await pool.execute(
+      "UPDATE standard_report_runs SET deliveryStatus='sending',deliveryStartedAt=?,emailReceiptId=NULL,emailAcceptedAt=NULL WHERE id=?",
+      [new Date(Date.now() - 16 * 60_000), generated.id]
+    );
+    vi.stubEnv("RESEND_API_KEY", "unit-test-provider-placeholder");
+    vi.stubEnv("EMAIL_FROM", "test@example.test");
+    state.read.mockClear();
+    const recovered = await runStandardReportTemplate(
+      owner,
+      101,
+      saved.id,
+      key
+    );
+    expect(recovered).toMatchObject({
+      id: generated.id,
+      status: "ready",
+      checksum: generated.checksum,
+      deliveryStatus: "unknown",
+      emailReceiptId: null,
+    });
+    expect(recovered.errorMessage).toContain("interrupted attempt");
+    expect(
+      (await runStandardReportTemplate(owner, 101, saved.id, key))
+        .deliveryStatus
+    ).toBe("unknown");
+    expect(state.read).not.toHaveBeenCalled();
+    expect(state.email).not.toHaveBeenCalled();
+  });
+
+  it("propagates a delivery-authority read outage without advancing or disabling the schedule", async () => {
+    vi.stubEnv("RESEND_API_KEY", "unit-test-provider-placeholder");
+    vi.stubEnv("EMAIL_FROM", "test@example.test");
+    const saved = await saveStandardReportTemplate(owner, 101, {
+      ...input(),
+      cadence: "daily",
+      hourUtc: 8,
+      emailToOwner: true,
+    });
+    const due = new Date("2026-11-04T08:00:00Z");
+    const now = new Date("2026-11-04T08:01:00Z");
+    await pool.execute(
+      "UPDATE standard_report_templates SET nextRunAt=? WHERE id=?",
+      [due, saved.id]
+    );
+    const read = state.read.getMockImplementation()!;
+    let unavailable = false;
+    state.read.mockImplementationOnce(async (...args) => {
+      await pool.query(
+        "RENAME TABLE tenants TO tenants_temporarily_unavailable"
+      );
+      unavailable = true;
+      return read(...args);
+    });
+    try {
+      await expect(processStandardReportSchedules(now)).rejects.toThrow();
+    } finally {
+      if (unavailable)
+        await pool.query(
+          "RENAME TABLE tenants_temporarily_unavailable TO tenants"
+        );
+    }
+    const [before] = await pool.execute<mysql.RowDataPacket[]>(
+      "SELECT enabled,nextRunAt FROM standard_report_templates WHERE id=?",
+      [saved.id]
+    );
+    expect(before[0].enabled).toBe(1);
+    expect(before[0].nextRunAt.toISOString()).toBe(due.toISOString());
+    const pending = (await listStandardReportRuns(owner, 101))[0];
+    expect(pending).toMatchObject({
+      status: "ready",
+      deliveryStatus: "pending",
+      emailReceiptId: null,
+    });
+    expect(state.email).not.toHaveBeenCalled();
+    await processStandardReportSchedules(now);
+    expect((await listStandardReportRuns(owner, 101))[0]).toMatchObject({
+      id: pending.id,
+      deliveryStatus: "accepted",
+    });
+    expect(state.email).toHaveBeenCalledTimes(1);
+    const [after] = await pool.execute<mysql.RowDataPacket[]>(
+      "SELECT nextRunAt FROM standard_report_templates WHERE id=?",
+      [saved.id]
+    );
+    expect(after[0].nextRunAt.toISOString()).toBe("2026-11-05T08:00:00.000Z");
   });
 });

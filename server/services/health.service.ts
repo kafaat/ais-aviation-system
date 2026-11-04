@@ -1,6 +1,10 @@
 import { getDb } from "../db";
 import { redisCacheService } from "./redis-cache.service";
 import { logger } from "../_core/logger";
+import {
+  resolveStripeTransport,
+  StripeConfigurationError,
+} from "../_core/stripe-transport";
 
 export interface HealthStatus {
   status: "healthy" | "unhealthy" | "degraded";
@@ -14,6 +18,7 @@ export interface HealthStatus {
 
 export interface CheckResult {
   status: "pass" | "fail";
+  mode?: "configuration" | "mock";
   responseTime?: number;
   error?: string;
 }
@@ -49,15 +54,102 @@ export async function checkDatabase(): Promise<CheckResult> {
 }
 
 /**
- * Check Stripe API connectivity
+ * Check the selected Stripe transport. Open mode retains configuration-only
+ * validation; isolated mode probes the same validated internal mock origin
+ * used by the SDK. A mock pass is not acceptance of the real Stripe provider.
  */
-export function checkStripe(): CheckResult {
+export const STRIPE_MOCK_HEALTH_TIMEOUT_MS = 1500;
+const STRIPE_MOCK_HEALTH_MAX_BYTES = 64 * 1024;
+
+export async function checkStripe(): Promise<CheckResult> {
   const startTime = Date.now();
+  const mode =
+    process.env.AIS_PROVIDER_BOUNDARY?.trim() === "isolated"
+      ? "mock"
+      : "configuration";
   try {
+    const key = process.env.STRIPE_SECRET_KEY;
+    const transport = resolveStripeTransport(key);
+    if (transport.mode === "mock") {
+      const controller = new AbortController();
+      const timer = setTimeout(
+        () => controller.abort(),
+        STRIPE_MOCK_HEALTH_TIMEOUT_MS
+      );
+      try {
+        const response = await fetch(`${transport.origin}/v1/balance`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${key?.trim() ?? ""}` },
+          redirect: "error",
+          signal: controller.signal,
+        });
+        if (response.status !== 200 || !response.body)
+          return {
+            status: "fail",
+            mode,
+            error: "STRIPE_MOCK_INVALID_RESPONSE",
+          };
+
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let bytes = 0;
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            bytes += value.byteLength;
+            if (bytes > STRIPE_MOCK_HEALTH_MAX_BYTES)
+              return {
+                status: "fail",
+                mode,
+                error: "STRIPE_MOCK_RESPONSE_TOO_LARGE",
+              };
+            chunks.push(value);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        const balance: unknown = JSON.parse(
+          Buffer.concat(chunks).toString("utf8")
+        );
+        if (
+          !balance ||
+          typeof balance !== "object" ||
+          !("object" in balance) ||
+          balance.object !== "balance" ||
+          !("livemode" in balance) ||
+          balance.livemode !== false ||
+          !("available" in balance) ||
+          !Array.isArray(balance.available) ||
+          !("pending" in balance) ||
+          !Array.isArray(balance.pending)
+        )
+          return {
+            status: "fail",
+            mode,
+            error: "STRIPE_MOCK_INVALID_RESPONSE",
+          };
+        return { status: "pass", mode, responseTime: Date.now() - startTime };
+      } catch {
+        return {
+          status: "fail",
+          mode,
+          responseTime: Date.now() - startTime,
+          error: controller.signal.aborted
+            ? "STRIPE_MOCK_TIMEOUT"
+            : "STRIPE_MOCK_UNAVAILABLE",
+        };
+      } finally {
+        clearTimeout(timer);
+        // Cancel any unread body on non-200, oversized or malformed responses.
+        controller.abort();
+      }
+    }
     // Check if Stripe key is configured
-    if (!process.env.STRIPE_SECRET_KEY) {
+    if (!key) {
       return {
         status: "fail",
+        mode,
         error: "Stripe API key not configured",
       };
     }
@@ -65,22 +157,28 @@ export function checkStripe(): CheckResult {
     // We don't actually call Stripe API to avoid rate limits
     // Just verify the key format
     const keyFormat = /^sk_(test|live)_[a-zA-Z0-9]{24,}$/;
-    if (!keyFormat.test(process.env.STRIPE_SECRET_KEY)) {
+    if (!keyFormat.test(key)) {
       return {
         status: "fail",
+        mode,
         error: "Invalid Stripe API key format",
       };
     }
 
     return {
       status: "pass",
+      mode,
       responseTime: Date.now() - startTime,
     };
   } catch (error) {
     return {
       status: "fail",
+      mode,
       responseTime: Date.now() - startTime,
-      error: error instanceof Error ? error.message : "Unknown Stripe error",
+      error:
+        error instanceof StripeConfigurationError
+          ? error.reason
+          : "STRIPE_CONFIGURATION_INVALID",
     };
   }
 }

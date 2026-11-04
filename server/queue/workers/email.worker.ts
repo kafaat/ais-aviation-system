@@ -11,6 +11,7 @@
  * 4. Job progress tracking
  */
 
+import { createHash } from "node:crypto";
 import { Worker, Job } from "bullmq";
 import { getRedisConnection, emailQueue } from "../queues";
 import {
@@ -107,6 +108,15 @@ async function processEmailJob(
 ): Promise<{ success: boolean; sentAt: string }> {
   const { type, to, templateData, correlationId } = job.data;
 
+  if (!job.id)
+    throw new Error("Email job ID is required for retry-safe delivery");
+  // The same queued job must reuse its provider identity after a response is
+  // lost. Content and enqueue time separate changed messages or reused queue
+  // IDs; hashing keeps recipient and template data out of the key and logs.
+  const idempotencyKey = `ais-email-${createHash("sha256")
+    .update(JSON.stringify([job.id, job.timestamp, job.data]))
+    .digest("hex")}`;
+
   // Redact email address in logs to protect PII
   const redactedTo = redactEmail(to);
 
@@ -123,6 +133,7 @@ async function processEmailJob(
     switch (type) {
       case "booking_confirmation": {
         const data: BookingConfirmationData = {
+          idempotencyKey,
           passengerName: templateData.passengerName as string,
           passengerEmail: to,
           bookingReference: templateData.bookingReference as string,
@@ -138,7 +149,8 @@ async function processEmailJob(
           ),
           arrivalTime: new Date(
             (templateData.arrivalTime as string) ||
-              (templateData.departureTime as string)
+              (templateData.departureTime as string) ||
+              (templateData.departureDate as string)
           ),
           cabinClass: (templateData.cabinClass as string) || "economy",
           numberOfPassengers: (templateData.numberOfPassengers as number) || 1,
@@ -152,6 +164,7 @@ async function processEmailJob(
 
       case "flight_status_change": {
         const data: FlightStatusChangeData = {
+          idempotencyKey,
           passengerName: templateData.passengerName as string,
           passengerEmail: to,
           bookingReference: templateData.bookingReference as string,
@@ -171,6 +184,7 @@ async function processEmailJob(
       case "refund_confirmation":
       case "booking_cancellation": {
         const data: RefundConfirmationData = {
+          idempotencyKey,
           passengerName: templateData.passengerName as string,
           passengerEmail: to,
           bookingReference: templateData.bookingReference as string,
@@ -185,6 +199,7 @@ async function processEmailJob(
 
       case "flight_reminder": {
         const reminderData: BookingConfirmationData = {
+          idempotencyKey,
           passengerName: templateData.passengerName as string,
           passengerEmail: to,
           bookingReference: (templateData.bookingReference as string) || "",
@@ -207,6 +222,7 @@ async function processEmailJob(
 
       case "payment_receipt": {
         const receiptData: BookingConfirmationData = {
+          idempotencyKey,
           passengerName: templateData.passengerName as string,
           passengerEmail: to,
           bookingReference: (templateData.bookingReference as string) || "",
@@ -218,12 +234,12 @@ async function processEmailJob(
           origin: (templateData.origin as string) || "",
           destination: (templateData.destination as string) || "",
           departureTime: new Date(
-            (templateData.departureTime as string) || new Date()
+            (templateData.departureTime as string) || job.timestamp
           ),
           arrivalTime: new Date(
             (templateData.arrivalTime as string) ||
               (templateData.departureTime as string) ||
-              new Date()
+              job.timestamp
           ),
           cabinClass: (templateData.cabinClass as string) || "economy",
           numberOfPassengers: (templateData.numberOfPassengers as number) || 1,
@@ -247,7 +263,13 @@ async function processEmailJob(
           (templateData.message as string) ||
           (templateData.body as string) ||
           job.data.subject;
-        success = await sendNotificationEmail(to, job.data.subject, message);
+        success = await sendNotificationEmail(
+          to,
+          job.data.subject,
+          message,
+          "ar",
+          idempotencyKey
+        );
         break;
       }
     }

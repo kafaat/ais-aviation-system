@@ -1,4 +1,5 @@
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
+import { assertProviderBoundary } from "./provider-boundary";
 import { timingSafeEqual } from "node:crypto";
 import { initTracing, stopTracing } from "./telemetry";
 import { privacyDownload } from "../routes/privacy-download";
@@ -47,6 +48,8 @@ import { getPrometheusMetrics } from "../services/apm.service";
 import { createServiceLogger } from "./logger";
 import { getOpenApiDocument } from "../openapi";
 import { createRestMiddleware } from "./rest";
+import { closePool } from "../db";
+import { createApiShutdown } from "./api-shutdown";
 
 // Create server-specific logger
 const log = createServiceLogger("server");
@@ -72,6 +75,11 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   assertIntegrationConfiguration();
+  const providerBoundary = assertProviderBoundary();
+  log.info(
+    { event: "provider_boundary_verified", providerBoundary },
+    "Web provider boundary verified"
+  );
   initTracing("api");
   // Initialize Sentry for error tracking
   initSentry();
@@ -283,72 +291,18 @@ async function startServer() {
     );
   });
 
-  // Graceful shutdown
-  const gracefulShutdown = (signal: string) => {
-    log.info(
-      { event: "shutdown_initiated", signal },
-      `${signal} received. Starting graceful shutdown...`
-    );
-
-    server.close(async () => {
-      log.info({ event: "http_server_closed" }, "HTTP server closed.");
-
-      try {
-        await stopOperationalObservations();
-      } catch (err) {
-        log.error({ err }, "Final observation flush failed");
-      }
-      // Stop APM metrics collection
-      stopSystemMetricsCollection();
-      log.info({ event: "apm_stopped" }, "APM metrics collection stopped.");
-
-      // Flush Sentry events before shutdown
-      try {
-        await flushSentry(2000);
-        await stopTracing();
-        log.info({ event: "sentry_flushed" }, "Sentry events flushed.");
-      } catch (error) {
-        log.error(
-          { event: "sentry_flush_error", error },
-          "Error flushing Sentry"
-        );
-      }
-
-      // Close database connections
-      try {
-        const { getDb } = await import("../db.js");
-        const db = await getDb();
-        if (db) {
-          log.info(
-            { event: "database_closed" },
-            "Database connections closed."
-          );
-        }
-      } catch (error) {
-        log.error(
-          { event: "database_close_error", error },
-          "Error closing database"
-        );
-      }
-
-      log.info({ event: "shutdown_completed" }, "Graceful shutdown completed.");
-      process.exit(0);
-    });
-
-    // Force shutdown after 10 seconds
-    setTimeout(() => {
-      log.error(
-        { event: "forced_shutdown" },
-        "Forceful shutdown after timeout."
-      );
-      process.exit(1);
-    }, 10000);
-  };
-
-  process.on("SIGTERM", () => {
-    stopSLAMonitoring();
-    return gracefulShutdown("SIGTERM");
+  const gracefulShutdown = createApiShutdown({
+    server,
+    log,
+    stopSLAMonitoring,
+    stopOperationalObservations,
+    stopSystemMetricsCollection,
+    flushSentry: () => flushSentry(2000),
+    stopTracing,
+    closePool,
+    exit: code => process.exit(code),
   });
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
   process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 

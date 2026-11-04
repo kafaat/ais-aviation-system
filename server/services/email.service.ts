@@ -157,6 +157,7 @@ export interface FlightStatusChangeData {
 }
 
 export interface RefundConfirmationData {
+  idempotencyKey?: string;
   passengerName: string;
   passengerEmail: string;
   bookingReference: string;
@@ -838,6 +839,7 @@ export async function sendRefundConfirmation(
     const lang = data.language || "ar";
     const _dir = lang === "ar" ? "rtl" : "ltr";
     const template: EmailTemplate = {
+      idempotencyKey: data.idempotencyKey,
       to: data.passengerEmail,
       subject: `${t("refundConfirmation", lang)} - ${data.bookingReference}`,
       text: `
@@ -1292,11 +1294,13 @@ export async function sendNotificationEmail(
   to: string,
   subject: string,
   message: string,
-  language: EmailLanguage = "ar"
+  language: EmailLanguage = "ar",
+  idempotencyKey?: string
 ): Promise<boolean> {
   try {
     const dir = language === "ar" ? "rtl" : "ltr";
     const template: EmailTemplate = {
+      idempotencyKey,
       to,
       subject,
       text: message,

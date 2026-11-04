@@ -7,11 +7,13 @@ on:
     branches: [main, develop]
     paths:
       - Dockerfile.prod
+      - auth-service/**
       - package.json
       - pnpm-lock.yaml
       - .npmrc
       - server/_core/**
       - scripts/ci/docker-image-smoke.sh
+      - scripts/ci/docker-auth-smoke.sh
       - .github/workflows/docker-image-validation.yml
   workflow_dispatch:
 
@@ -31,7 +33,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       - name: Build, validate and boot the production-only images
@@ -54,10 +56,32 @@ jobs:
           output: /tmp/ais-docker-build-evidence/trivy-migrator.json
           exit-code: "1"
           severity: "CRITICAL,HIGH"
+      - name: Build auth service image (no push)
+        id: auth_image
+        if: ${{ !cancelled() && steps.images.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          docker build --pull --progress=plain --file auth-service/Dockerfile \
+            --tag ais-build-check:auth auth-service \
+            2>&1 | tee /tmp/ais-docker-build-evidence/build-auth.log
+          docker image inspect ais-build-check:auth \
+            > /tmp/ais-docker-build-evidence/image-auth.json
+      - name: Verify auth service tests and isolated image boot
+        if: ${{ !cancelled() && steps.auth_image.outcome == 'success' }}
+        run: bash scripts/ci/docker-auth-smoke.sh
+      - name: Reject high or critical vulnerabilities in the auth service image
+        if: ${{ !cancelled() && steps.auth_image.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297
+        with:
+          image-ref: ais-build-check:auth
+          format: json
+          output: /tmp/ais-docker-build-evidence/trivy-auth.json
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
       - name: Summarize image security findings
         if: ${{ !cancelled() && steps.images.outcome == 'success' }}
         run: |
-          for target in runner migrator; do
+          for target in runner migrator auth; do
             report="/tmp/ais-docker-build-evidence/trivy-$target.json"
             echo "Image: $target"
             jq -r '.Results[] | .Target as $target | .Vulnerabilities[]? |
@@ -66,7 +90,7 @@ jobs:
           done
       - name: Upload build evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: docker-build-evidence
           path: /tmp/ais-docker-build-evidence/

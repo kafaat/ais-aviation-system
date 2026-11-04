@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const spies = vi.hoisted(() => ({
+  generation: { version: 0, epoch: 0 },
   get: vi.fn(),
   set: vi.fn(),
   search: vi.fn(),
@@ -18,8 +19,10 @@ vi.mock("../services/pricing/dynamic-pricing.service", () => ({
   DynamicPricingService: {},
 }));
 vi.mock("../services/redis-cache.service", () => ({
+  CacheNamespace: { SEARCH: "search" },
   CacheTTL: { FLIGHT_SEARCH: 120, FLIGHT_DETAILS: 300 },
   redisCacheService: {
+    captureGeneration: async () => spies.generation,
     getCachedFlightSearch: spies.get,
     cacheFlightSearch: spies.set,
   },
@@ -42,15 +45,15 @@ describe("search cache key", () => {
     ["legacy ISO instant string", "2026-11-14T21:00:00.000Z"],
   ])("keys %s for 15 Nov 2026 as 2026-11-15", async (_label, departureDate) => {
     await searchFlights({ originId: 1, destinationId: 2, departureDate });
-    expect(spies.get).toHaveBeenCalledWith({
-      originId: 1,
-      destinationId: 2,
-      departureDate: "2026-11-15",
-    });
+    expect(spies.get).toHaveBeenCalledWith(
+      { originId: 1, destinationId: 2, departureDate: "2026-11-15" },
+      spies.generation
+    );
     expect(spies.set).toHaveBeenCalledWith(
       { originId: 1, destinationId: 2, departureDate: "2026-11-15" },
       [],
-      120
+      120,
+      spies.generation
     );
     // The source query receives the caller's value untouched; it resolves
     // the day in the origin airport's zone itself.

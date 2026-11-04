@@ -4,6 +4,7 @@
  * Handles user registration and password verification.
  */
 import axios, { AxiosInstance } from "axios";
+import { z } from "zod";
 import { createServiceLogger } from "../_core/logger";
 import { withCircuitBreaker } from "./production.service";
 
@@ -27,6 +28,21 @@ interface AuthServiceResponse {
   user?: AuthServiceUser;
   message?: string;
 }
+
+const authResponseSchema = z.discriminatedUnion("success", [
+  z.object({
+    success: z.literal(true),
+    user: z.object({
+      id: z.number().int().positive(),
+      openId: z.string().min(1),
+      name: z.string().nullable(),
+      email: z.string().nullable(),
+      role: z.string().min(1),
+    }),
+    message: z.string().nullish(),
+  }),
+  z.object({ success: z.literal(false), message: z.string().nullish() }),
+]);
 
 class AuthServiceClient {
   private client: AxiosInstance;
@@ -60,18 +76,33 @@ class AuthServiceClient {
    */
   private async call(
     op: string,
-    request: () => Promise<{ data: AuthServiceResponse }>
+    request: () => Promise<{ data: unknown }>
   ): Promise<AuthServiceResponse> {
     try {
       return await withCircuitBreaker(CIRCUIT_NAME, async () => {
         try {
           const { data } = await request();
-          return data;
+          const response = authResponseSchema.safeParse(data);
+          if (!response.success)
+            return { success: false, message: "Invalid auth service response" };
+          return {
+            ...response.data,
+            message: response.data.message ?? undefined,
+          };
         } catch (error) {
           // The service answers failures with a structured body; anything
           // without one is a network/timeout error the breaker should count.
-          if (axios.isAxiosError(error) && error.response?.data) {
-            return error.response.data as AuthServiceResponse;
+          if (axios.isAxiosError(error) && error.response) {
+            // An HTTP error can never authenticate, even if its body contains
+            // a stale or malformed success response.
+            const response = authResponseSchema.safeParse(error.response.data);
+            return {
+              success: false,
+              message:
+                response.success && !response.data.success
+                  ? (response.data.message ?? "Authentication failed")
+                  : "Auth service unavailable",
+            };
           }
           throw error;
         }
@@ -94,7 +125,7 @@ class AuthServiceClient {
     name?: string
   ): Promise<AuthServiceResponse> {
     return this.call("register", () =>
-      this.client.post<AuthServiceResponse>("/auth/register", {
+      this.client.post<unknown>("/auth/register", {
         email,
         password,
         name,
@@ -107,7 +138,7 @@ class AuthServiceClient {
    */
   login(email: string, password: string): Promise<AuthServiceResponse> {
     return this.call("login", () =>
-      this.client.post<AuthServiceResponse>("/auth/login", { email, password })
+      this.client.post<unknown>("/auth/login", { email, password })
     );
   }
 
@@ -119,7 +150,7 @@ class AuthServiceClient {
     password: string
   ): Promise<AuthServiceResponse> {
     return this.call("verifyPassword", () =>
-      this.client.post<AuthServiceResponse>("/auth/verify-password", {
+      this.client.post<unknown>("/auth/verify-password", {
         email,
         password,
       })

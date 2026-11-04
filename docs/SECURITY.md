@@ -1,7 +1,21 @@
 # AIS Aviation System - Security Guide
 
 **Version:** 3.0
-**Last Updated:** February 2026
+**Last Updated:** November 2026 (disclosure and dependency maintenance)
+
+## Reporting a Vulnerability
+
+Use this repository's [private vulnerability reporting form](https://github.com/kafaat/ais-aviation-system/security/advisories) and select **Report a vulnerability**. Private vulnerability reporting is enabled for this repository. Maintainers see advisory-management controls on the same page.
+
+Include the affected release or commit, component, reproduction steps, expected and observed behavior, and security impact. Use synthetic accounts and redacted evidence; do not include live credentials, passenger records, or payment data. Keep vulnerability details in the private report while maintainers assess the issue and coordinate a fix.
+
+For ordinary bugs without security impact, use the repository's issue tracker. For an incident in a deployed airline environment, also contact that deployment's established incident-response team through its internal escalation channel.
+
+## Dependency Maintenance
+
+Dependabot checks npm, the auth service's Python packages and container base, contract-test Python packages, and GitHub Actions weekly. Routine update pull requests are bounded and require the normal review and CI checks. Security alerts and security update pull requests remain enabled separately in repository settings.
+
+Security changes must be verified against the resolved dependency graph and the affected runtime. A clean package audit describes the advisories known to that audit at the time; it does not replace application tests or container scans. Any false-positive classification must identify the exact advisory and dependency version and preserve its supporting evidence.
 
 ---
 
@@ -613,12 +627,7 @@ pnpm update
 
 ### Emergency Contacts
 
-| Role           | Contact          | Availability   |
-| -------------- | ---------------- | -------------- |
-| Security Lead  | security@ais.com | 24/7           |
-| DevOps Team    | devops@ais.com   | 24/7           |
-| Database Admin | dba@ais.com      | Business hours |
-| Legal Team     | legal@ais.com    | Business hours |
+Deployment owners must keep their security, operations, database, and legal escalation contacts in their internal incident-response runbook. This repository does not verify or publish those deployment-specific contacts. Repository vulnerability reports should use the private reporting route above.
 
 ### Data Breach Response
 

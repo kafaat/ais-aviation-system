@@ -86,6 +86,119 @@ beforeEach(() => {
 });
 
 describe("Stripe webhook redelivery", () => {
+  it("returns a retryable failure when the database is unavailable without settling", async () => {
+    state.db = null;
+    const result = await deliver();
+    expect(result.statusCode).toBe(500);
+    expect(result.body).toEqual({
+      error: "Database not available",
+      retryable: true,
+    });
+    expect(state.settle).not.toHaveBeenCalled();
+  });
+
+  it.each(["ER_DUP_ENTRY", "23505", "23000"])(
+    "acknowledges an already processed insert-race winner (%s)",
+    async code => {
+      const insert = fixture.db.insert.bind(fixture.db);
+      vi.spyOn(fixture.db, "insert").mockImplementationOnce(
+        (table: unknown) => ({
+          values: async (values: Record<string, unknown>) => {
+            await insert(table).values({ ...values, processed: true });
+            throw Object.assign(new Error("duplicate"), { code });
+          },
+        })
+      );
+      const result = await deliver();
+      expect(result.statusCode).toBe(200);
+      expect(result.body).toEqual({ received: true, deduplicated: true });
+      expect(state.settle).not.toHaveBeenCalled();
+      expect(fixture.rows("stripe_events")[0].processed).toBe(true);
+    }
+  );
+
+  it("processes an unprocessed insert-race winner once", async () => {
+    const insert = fixture.db.insert.bind(fixture.db);
+    vi.spyOn(fixture.db, "insert").mockImplementationOnce((table: unknown) => ({
+      values: async (values: Record<string, unknown>) => {
+        await insert(table).values(values);
+        throw Object.assign(new Error("duplicate"), { code: "ER_DUP_ENTRY" });
+      },
+    }));
+    expect((await deliver()).statusCode).toBe(200);
+    expect(state.settle).toHaveBeenCalledTimes(1);
+    expect(fixture.rows("stripe_events")).toHaveLength(1);
+    expect(fixture.rows("stripe_events")[0].processed).toBe(true);
+  });
+
+  it("rechecks processed status after the transaction acquires the row lock", async () => {
+    const transaction = fixture.db.transaction.bind(fixture.db);
+    vi.spyOn(fixture.db, "transaction").mockImplementationOnce(
+      async (run: (db: unknown) => Promise<unknown>) => {
+        // Deterministic competing-commit fixture, not a native lock simulation.
+        fixture.rows("stripe_events")[0].processed = true;
+        return transaction(run);
+      }
+    );
+    expect((await deliver()).statusCode).toBe(200);
+    expect(state.settle).not.toHaveBeenCalled();
+    expect(fixture.rows("stripe_events")[0].processed).toBe(true);
+  });
+
+  it("keeps an unrelated insert failure retryable instead of treating it as a duplicate", async () => {
+    fixture.failInsert("stripe_events");
+    const result = await deliver();
+    expect(result.statusCode).toBe(500);
+    expect(result.body).toEqual({
+      error: "Webhook processing failed",
+      retryable: true,
+    });
+    expect(state.settle).not.toHaveBeenCalled();
+    expect(fixture.rows("stripe_events")).toHaveLength(0);
+  });
+
+  it("does not overwrite a successful competing delivery while recording a failure", async () => {
+    state.settle.mockRejectedValueOnce(new Error("transient failure"));
+    const transaction = fixture.db.transaction.bind(fixture.db);
+    vi.spyOn(fixture.db, "transaction").mockImplementationOnce(
+      async (run: (db: unknown) => Promise<unknown>) => {
+        try {
+          return await transaction(run);
+        } catch (error) {
+          // The failed transaction has rolled back; a different worker commits.
+          Object.assign(fixture.rows("stripe_events")[0], {
+            processed: true,
+            processedAt: new Date(),
+            error: null,
+          });
+          throw error;
+        }
+      }
+    );
+    expect((await deliver()).statusCode).toBe(500);
+    expect(fixture.rows("stripe_events")[0]).toMatchObject({
+      processed: true,
+      error: null,
+      retryCount: 0,
+    });
+    expect((await deliver()).body).toEqual({
+      received: true,
+      deduplicated: true,
+    });
+    expect(state.settle).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a retryable response even when recording failure metadata also fails", async () => {
+    state.settle.mockRejectedValueOnce(new Error("settlement unavailable"));
+    vi.spyOn(fixture.db, "update").mockImplementation(() => ({
+      set: () => ({ where: async () => Promise.reject(new Error("offline")) }),
+    }));
+    const result = await deliver();
+    expect(result.statusCode).toBe(500);
+    expect(result.body).toMatchObject({ retryable: true });
+    expect(fixture.rows("stripe_events")[0].processed).toBe(false);
+  });
+
   it("settles once for the same event id and acknowledges the redelivery", async () => {
     const first = await deliver();
     const second = await deliver();

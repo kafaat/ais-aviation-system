@@ -881,7 +881,8 @@ test.describe("Funded journeys and truthful operational reads", () => {
     page,
   }) => {
     await useBrowserSession(page, "regular");
-    const flightId = await fixtureFlight();
+    // Own this search day; parallel journeys create flights on the default day.
+    const flightId = await fixtureFlight(null, 60);
     const client = rpc(page);
     const cold = await client.flights.getById.query({ id: flightId });
     expect(cold).toBeTruthy();
@@ -895,19 +896,25 @@ test.describe("Funded journeys and truthful operational reads", () => {
       destinationId: cold.destination.id,
       // The search day is a civil date in the origin airport's zone. The
       // fixture departs at 12:00 UTC, which is the same civil day in UTC and
-      // in any inhabited zone, so the UTC calendar day is the right one.
+      // the seeded origin's Asia/Riyadh zone.
       departureDate: cold.departureTime.toISOString().slice(0, 10),
     };
     const firstSearch = await client.flights.search.query(query);
     const secondSearch = await client.flights.search.query(query);
-    expect(firstSearch.some(flight => flight.id === flightId)).toBe(true);
-    expect(secondSearch).toEqual(firstSearch);
-    expect(
-      secondSearch.find(flight => flight.id === flightId)?.departureTime
-    ).toBeInstanceOf(Date);
-    expect(
-      secondSearch.find(flight => flight.id === flightId)?.arrivalTime
-    ).toBeInstanceOf(Date);
+    for (const [label, rows] of [
+      ["first", firstSearch],
+      ["second", secondSearch],
+    ] as const) {
+      expect(
+        rows.some(flight => flight.id === flightId),
+        `${label} search contains the fixture flight`
+      ).toBe(true);
+      const target = rows.find(flight => flight.id === flightId);
+      expect(target?.departureTime).toBeInstanceOf(Date);
+      expect(target?.arrivalTime).toBeInstanceOf(Date);
+      expect(target?.departureTime).toEqual(cold.departureTime);
+      expect(target?.arrivalTime).toEqual(cold.arrivalTime);
+    }
     await page.goto(`/booking/${flightId}`);
     await expect(page.locator("#pax-firstname-0")).toBeVisible();
   });
@@ -1086,6 +1093,9 @@ test.describe("Funded journeys and truthful operational reads", () => {
         "processPrivacyRequests:return",
         "closePool:start",
         "closePool:return",
+        "closeLogger:start",
+        "closeLogger:return",
+        "closeLogger:error",
       ]);
       const resourceTypes = new Set([
         "PipeWrap",
@@ -1127,7 +1137,13 @@ test.describe("Funded journeys and truthful operational reads", () => {
                   {
                     phase: phase.phase,
                     elapsedMs: phase.elapsedMs,
-                    ...(phase.phase === "closePool:return" &&
+                    ...(phase.phase === "closeLogger:error" &&
+                      (phase.failure === "timeout" ||
+                        phase.failure === "transport") && {
+                        failure: phase.failure,
+                      }),
+                    ...((phase.phase === "closePool:return" ||
+                      phase.phase === "closeLogger:return") &&
                       Array.isArray(phase.resourceTypes) && {
                         resourceTypes: [
                           ...new Set(

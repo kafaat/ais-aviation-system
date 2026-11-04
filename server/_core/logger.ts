@@ -41,6 +41,7 @@ export {
   // Utility functions
   redactFromString,
   sanitize,
+  closeLogger,
 
   // Advanced/internal
   pinoLogger,
