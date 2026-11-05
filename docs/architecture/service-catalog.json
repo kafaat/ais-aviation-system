@@ -16,6 +16,7 @@
         "server/routers/baggage.ts",
         "server/routers/emd.ts",
         "server/routers/emergency-hotel.ts",
+        "server/routers/eticket.ts",
         "server/routers/modifications.ts",
         "server/routers/multi-city.ts",
         "server/routers/payments.ts",

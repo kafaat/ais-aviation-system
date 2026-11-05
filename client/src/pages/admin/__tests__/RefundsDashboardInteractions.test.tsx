@@ -201,7 +201,9 @@ describe("refund dashboard interactions through real tRPC hooks", () => {
       },
     };
     const expectDisplayedStats = (expectedPhase: PlanStatus) => {
-      for (const [label, values] of Object.entries(displayedStats[expectedPhase])) {
+      for (const [label, values] of Object.entries(
+        displayedStats[expectedPhase]
+      )) {
         const card = screen
           .getByText(`admin.refunds.${label}`)
           .closest<HTMLElement>('[data-slot="card"]');
