@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.37.1
+
+<!-- ais-release-source: 146a88db5b0cd31d3309274c5cdb516ec917b838 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(ci): refresh release proposals and verify tag deployment (#282) (146a88d)
+
+### Other Changes
+
+- test(ci): gate 38 gap closures and 99 report classifications on evidence (#281) (0eb7bc5)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.37.0...v1.37.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.37.0
 
 ### Features
