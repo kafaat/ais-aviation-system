@@ -118,7 +118,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
-  server.closeAllConnections();
+  // The loopback fixture is shared for the whole suite. Closing every
+  // connection between cases races Axios/Node's pooled HTTP sockets and can
+  // turn an expected 4xx response into ECONNRESET before the next request
+  // reaches this server. The final afterAll server.close() owns teardown.
 });
 afterAll(async () => {
   await new Promise<void>((resolve, reject) =>
