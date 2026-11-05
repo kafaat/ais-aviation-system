@@ -283,6 +283,9 @@ async function getRateSnapshot(
     const rate = first.quote.rate * second.quote.rate;
     if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(1 / rate))
       throw new Error("Invalid cross exchange rate");
+    const usesFallback = [first.quote.source, second.quote.source].some(s =>
+      s.includes("fallback")
+    );
     const cross: RateSnapshot = {
       version: 2,
       quote: {
@@ -290,11 +293,7 @@ async function getRateSnapshot(
         toCurrency,
         rate,
         inverseRate: 1 / rate,
-        source: [first.quote.source, second.quote.source].some(s =>
-          s.includes("fallback")
-        )
-          ? "cross_rate_fallback"
-          : "cross_rate",
+        source: usesFallback ? "cross_rate_fallback" : "cross_rate",
         updatedAt: new Date(
           Math.min(
             first.quote.updatedAt.getTime(),
@@ -311,7 +310,7 @@ async function getRateSnapshot(
     };
     if (cross.expiresAt.getTime() <= Date.now())
       throw new Error("Exchange rate expired during conversion");
-    if (!cross.quote.source.includes("fallback")) await cacheRate(key, cross);
+    if (!usesFallback) await cacheRate(key, cross);
     return cross;
   }
   // These constants remain explicitly labelled estimates, not provider observations.
@@ -455,17 +454,17 @@ function decimalRatio(value: number): [bigint, bigint] {
   const [whole, fraction = ""] = unsigned.split(".");
   const scale = fraction.length - Number(exponentText);
   const digits = sign * BigInt(whole + fraction);
-  return scale >= 0
-    ? [digits, 10n ** BigInt(scale)]
-    : [digits * 10n ** BigInt(-scale), 1n];
+  if (scale >= 0) return [digits, 10n ** BigInt(scale)];
+  const factor = 10n ** BigInt(-scale);
+  return [digits * factor, 1n];
 }
 
 function roundedMinor(amount: number, rate: number, currency: string): number {
   const [a, ad] = decimalRatio(amount);
   const [r, rd] = decimalRatio(rate);
   const denominator = ad * rd;
-  const numerator =
-    a * r * 10n ** BigInt(getCurrencyInfo(currency).decimalPlaces);
+  const scale = 10n ** BigInt(getCurrencyInfo(currency).decimalPlaces);
+  const numerator = a * r * scale;
   const magnitude = numerator < 0n ? -numerator : numerator;
   // Half away from zero, once, at the target currency's minor-unit boundary.
   const rounded = (magnitude + denominator / 2n) / denominator;
@@ -481,7 +480,8 @@ export function toMinorUnits(amount: number, currency: string): number {
 export function fromMinorUnits(amount: number, currency: string): number {
   if (!Number.isSafeInteger(amount))
     throw new Error("Invalid minor-unit amount");
-  const major = amount / 10 ** getCurrencyInfo(currency).decimalPlaces;
+  const scale = 10 ** getCurrencyInfo(currency).decimalPlaces;
+  const major = amount / scale;
   if (roundedMinor(major, 1, currency) !== amount)
     throw new Error(
       "Minor units cannot be represented by the public amount type"
