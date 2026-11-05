@@ -218,6 +218,11 @@ export async function runCoverage({
     wrapperExitCode: exitCode,
   };
   save();
+  if (evidenceErrors.length) {
+    console.error(
+      `Coverage evidence rejected: ${evidenceErrors.join(", ")}. See ${reportPath("execution-manifest.json")}`
+    );
+  }
   return exitCode;
 }
 

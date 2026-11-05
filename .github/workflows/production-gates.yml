@@ -95,18 +95,27 @@ jobs:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
           REDIS_URL: redis://127.0.0.1:6379/3
           JWT_SECRET: acceptance-only-signing-key-not-for-production
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+          AIS_TEST_PROCESS_ARTIFACT_DIR: ${{ runner.temp }}/native-process-artifacts
         run: >-
           pnpm exec vitest run
           server/__tests__/standard-reports-ops-mysql.test.ts
           server/__tests__/standard-reports-finance-mysql.test.ts
+          server/__tests__/standard-reports-available-mysql.test.ts
           server/__tests__/standard-report-schedules-mysql.test.ts
           server/__tests__/auth-session-mysql.test.ts
           server/__tests__/financial-authority-mysql.test.ts
+          server/__tests__/wallet-crossing-acceptance-mysql.test.ts
+          server/__tests__/ticket-revalidation-acceptance-mysql.test.ts
+          server/__tests__/stripe-paid-webhook-mysql.test.ts
+          server/__tests__/booking-confirmation-mysql.test.ts
           server/__tests__/fare-rules-acceptance-mysql.test.ts
           server/__tests__/apis-seats-acceptance-mysql.test.ts
           server/__tests__/operations-inventory-mysql.test.ts
           server/__tests__/flight-delivery-mysql.test.ts
           server/__tests__/api-process-mysql.test.ts
+          server/__tests__/worker-process-mysql.test.ts
           server/__tests__/cache-recovery-mysql.test.ts
           server/__tests__/cache-rate-limit-native.test.ts
           server/services/redis-cache-native.test.ts
@@ -165,6 +174,7 @@ jobs:
             ${{ runner.temp }}/native-service-boundaries.json
             ${{ runner.temp }}/native-service-boundaries.xml
             ${{ runner.temp }}/native-redis-tool.json
+            ${{ runner.temp }}/native-process-artifacts/
             ${{ runner.temp }}/integration-remediation.json
             ${{ runner.temp }}/live-acceptance.json
             ${{ runner.temp }}/backup-restore.json

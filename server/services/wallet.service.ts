@@ -11,6 +11,7 @@ import {
   walletTransactions,
   bookings,
   financialLedger,
+  users,
 } from "../../drizzle/schema";
 import { stripe } from "../stripe";
 import {
@@ -215,6 +216,14 @@ export async function payFromWallet(
     const amount = booking.totalAmount;
     if (!Number.isSafeInteger(amount) || amount <= 0)
       throw new Error("Invalid booking amount");
+    // Internal refunds lock the same owner before inventory and then the
+    // wallet. Serialize this owner's funding before taking the wallet so a
+    // refund for another booking cannot invert the wallet/inventory locks.
+    await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for("update");
     const [wallet] = await tx
       .select()
       .from(wallets)

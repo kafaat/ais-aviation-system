@@ -44,7 +44,7 @@ export interface TicketData {
   totalAmount: number;
   currency: string;
 
-  // Dates
+  // First recorded local coupon issuance, not external carrier issuance.
   issueDate: Date;
 }
 
@@ -109,7 +109,16 @@ export async function generateETicketPDF(
 
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      const doc = new PDFDocument({
+        size: "A4",
+        margin: 50,
+        // PDFKit derives its file identity from creation metadata. Keep the
+        // persisted local issue time so a provider retry has identical bytes.
+        info: {
+          CreationDate: ticketData.issueDate,
+          ModDate: ticketData.issueDate,
+        },
+      });
       const buffers: Buffer[] = [];
 
       doc.on("data", buffers.push.bind(buffers));

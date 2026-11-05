@@ -896,15 +896,16 @@ export async function applyPaidOrderModification(
           )
         );
     }
-    const retainedDocuments =
-      Boolean(plan.revalidation) ||
-      (await exchangeLocalCoupons(
+    let retainedDocuments = Boolean(plan.revalidation);
+    if (!retainedDocuments) {
+      retainedDocuments = await exchangeLocalCoupons(
         tx,
         booking.id,
         old.map(l => l.flightId),
         plan.segments.map(l => l.flightId),
         booking.cabinClass === cabin
-      ));
+      );
+    }
     if (plan.seatExchange)
       await transferExchangeSeats(tx, booking, plan.seatExchange).catch(
         error => {

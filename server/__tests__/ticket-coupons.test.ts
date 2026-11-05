@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { ticketCoupons } from "../../drizzle/schema";
 import { transactionMemory } from "./helpers/transaction-memory";
 const state = vi.hoisted(() => ({ db: undefined as any }));
 vi.mock("../db", () => ({ getDb: () => state.db }));
@@ -16,7 +17,9 @@ import {
 } from "../services/ticket-coupons.service";
 
 let fixture: ReturnType<typeof transactionMemory>;
+let couponCreatedAt: Date;
 beforeEach(() => {
+  couponCreatedAt = new Date("2026-10-27T09:12:30Z");
   fixture = transactionMemory({
     ancillary_services: [],
     booking_ancillaries: [],
@@ -86,17 +89,40 @@ beforeEach(() => {
       },
     ],
   });
+  // This boundary double does not apply schema defaults. Model only the
+  // ticket_coupons creation timestamp that MySQL persists on each insertion.
+  const insert = fixture.db.insert;
+  fixture.db.insert = (table: unknown) => {
+    const statement = insert(table);
+    if (table !== ticketCoupons) return statement;
+    type CouponInsert = typeof ticketCoupons.$inferInsert;
+    return {
+      values: (values: CouponInsert | CouponInsert[]) =>
+        statement.values(
+          (Array.isArray(values) ? values : [values]).map(value => ({
+            createdAt: new Date(couponCreatedAt),
+            ...value,
+          }))
+        ),
+    };
+  };
   state.db = fixture.db;
 });
 
 it("issues local coupons in itinerary order, supports legacy references and replays without duplicates", async () => {
   fixture.rows("passengers")[0].ticketNumber = "0010000000099";
   const issued = await readTicketDocument(2, 5, 3);
+  expect(issued.data.issueDate).toEqual(couponCreatedAt);
   expect(issued.legs.map(l => l.localCoupon)).toEqual([
     { number: 1, status: "O" },
     { number: 2, status: "C" },
   ]);
-  await readTicketDocument(2, 5, 3);
+  couponCreatedAt = new Date("2026-11-01T15:00:00Z");
+  const replay = await readTicketDocument(2, 5, 3);
+  expect(replay.legs.map(leg => leg.issueDate)).toEqual([
+    issued.data.issueDate,
+    issued.data.issueDate,
+  ]);
   expect(
     fixture.rows("ticket_coupons").map(c => [c.ticketNumber, c.flightId])
   ).toEqual([
@@ -248,10 +274,12 @@ it("retains the untouched coupon and allocates a new identity even when exchangi
   fixture.rows("flights").push({ ...fixture.rows("flights")[1], id: 9 });
   const before = await readTicketDocument(2, 5, 3);
   const number = before.data.ticketNumber;
+  expect(before.data.issueDate).toEqual(couponCreatedAt);
   for (const [oldId, newId, expectedNumber] of [
     [8, 9, 3],
     [9, 8, 4],
   ]) {
+    couponCreatedAt = new Date(couponCreatedAt.getTime() + 86400000);
     await fixture.db.transaction(async (tx: any) => {
       expect(await exchangeLocalCoupons(tx, 2, [4, oldId], [4, newId])).toBe(
         true
@@ -260,6 +288,15 @@ it("retains the untouched coupon and allocates a new identity even when exchangi
     fixture.rows("booking_segments")[1].flightId = newId;
     const after = await readTicketDocument(2, 5, 3);
     expect(after.data.ticketNumber).toBe(number);
+    expect(after.legs.map(leg => leg.issueDate)).toEqual([
+      before.data.issueDate,
+      before.data.issueDate,
+    ]);
+    expect(
+      fixture
+        .rows("ticket_coupons")
+        .find(c => c.couponNumber === expectedNumber)?.createdAt
+    ).toEqual(couponCreatedAt);
     expect(after.legs.map(l => l.localCoupon)).toEqual([
       { number: 1, status: "O" },
       { number: expectedNumber, status: "O" },
