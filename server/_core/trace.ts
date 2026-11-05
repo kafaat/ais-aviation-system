@@ -63,6 +63,7 @@ export const traceMiddleware: RequestHandler = (req, res, next) => {
       "DELETE",
       "OPTIONS",
       "HEAD",
+      "QUERY",
     ].includes(req.method)
       ? req.method
       : "OTHER";

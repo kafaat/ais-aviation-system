@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import mysql from "mysql2/promise";
 import type { Page } from "@playwright/test";
+import { REPORT_PREVIEW_PATH } from "../shared/report-preview";
+import { disposableDatabaseUrl } from "./disposable-database";
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
 import { rpc } from "./fixtures/rpc";
@@ -225,6 +228,125 @@ async function expectThreeFormats(
     }
   }
 }
+
+test("load-factor QUERY preview preserves native tenant isolation, POST parity and business state", async ({
+  page,
+}) => {
+  const day = "2035-10-22";
+  const fixture = await createStandardReportingTenants(day);
+  const db = await mysql.createConnection(disposableDatabaseUrl());
+  const tenantIds = fixture.tenants.map(tenant => tenant.tenantId);
+  const flightIds = fixture.tenants.map(tenant => tenant.flightId);
+  const staffIds = fixture.tenants.map(tenant => tenant.ops.id);
+  const snapshot = async () => {
+    const selections = [
+      [
+        "SELECT * FROM bookings WHERE tenantId IN (?, ?) ORDER BY id",
+        tenantIds,
+      ],
+      [
+        "SELECT * FROM payments WHERE tenantId IN (?, ?) ORDER BY id",
+        tenantIds,
+      ],
+      ["SELECT * FROM flights WHERE id IN (?, ?) ORDER BY id", flightIds],
+      [
+        "SELECT * FROM inventory_locks WHERE flightId IN (?, ?) ORDER BY id",
+        flightIds,
+      ],
+      [
+        "SELECT * FROM standard_report_runs WHERE createdBy IN (?, ?) ORDER BY id",
+        staffIds,
+      ],
+      [
+        "SELECT * FROM standard_report_templates WHERE createdBy IN (?, ?) ORDER BY id",
+        staffIds,
+      ],
+    ] as const;
+    const rows: unknown[] = [];
+    for (const [sql, values] of selections) {
+      const [records] = await db.execute(sql, values);
+      rows.push(records);
+    }
+    return rows;
+  };
+  try {
+    const before = await snapshot();
+    for (const [index, owner] of fixture.tenants.entries()) {
+      const other = fixture.tenants[1 - index];
+      await useReportingStaff(page, owner.ops);
+      await openCatalog(page, 44);
+      await page.getByLabel("Start date (UTC)", { exact: true }).fill(day);
+      await page.getByLabel("End date (UTC)", { exact: true }).fill(day);
+      const pending = page.waitForResponse(
+        response =>
+          new URL(response.url()).pathname === REPORT_PREVIEW_PATH &&
+          response.request().method() === "QUERY"
+      );
+      await page.getByTestId("standard-run-report").click();
+      const queryResponse = await pending;
+      expect(queryResponse.status()).toBe(200);
+      expect(queryResponse.headers()["accept-query"]).toBe("application/json");
+      expect(queryResponse.headers()["cache-control"]).toBe("no-store");
+      const queryResult = await queryResponse.json();
+      expect(queryResult.rows).toHaveLength(1);
+      expect(queryResult.rows[0]).toMatchObject({
+        flightId: owner.flightId,
+        capacity: 10,
+        sold: owner.bookedSeats,
+        loadFactorPercent: owner.bookedSeats * 10,
+      });
+      expect(JSON.stringify(queryResult)).not.toContain(other.flightNumber);
+      await expect(page.getByTestId("standard-report-table")).toContainText(
+        owner.flightNumber
+      );
+
+      const post = await page.evaluate(
+        async ({ path, body }) => {
+          const response = await fetch(path, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          return { status: response.status, result: await response.json() };
+        },
+        {
+          path: REPORT_PREVIEW_PATH,
+          body: queryResponse.request().postDataJSON(),
+        }
+      );
+      expect(post.status).toBe(200);
+      expect({ ...post.result, generatedAt: null }).toEqual({
+        ...queryResult,
+        generatedAt: null,
+      });
+    }
+    expect(await snapshot()).toEqual(before);
+
+    // A gateway that rejects the new method must preserve the existing UI via
+    // the established tRPC POST transport, rather than hiding the preview.
+    await page.route(`**${REPORT_PREVIEW_PATH}`, async route => {
+      if (route.request().method() === "QUERY") {
+        await route.fulfill({ status: 405, body: "Method not supported" });
+      } else await route.continue();
+    });
+    const fallback = page.waitForResponse(
+      response =>
+        response.url().includes("/api/trpc/standardReports.run") &&
+        response.request().method() === "POST"
+    );
+    await page.getByTestId("standard-run-report").click();
+    expect((await fallback).status()).toBe(200);
+    await expect(page.getByTestId("standard-report-table")).toContainText(
+      fixture.tenants[1].flightNumber
+    );
+    expect(await snapshot()).toEqual(before);
+  } finally {
+    await page.unroute(`**${REPORT_PREVIEW_PATH}`);
+    await db.end();
+    await fixture.cleanup();
+  }
+});
 
 test("standard financial reports preserve tenant scope, UTC boundaries, unknowns and escaped values in three export formats", async ({
   page,

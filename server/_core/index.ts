@@ -48,6 +48,8 @@ import { getPrometheusMetrics } from "../services/apm.service";
 import { createServiceLogger } from "./logger";
 import { getOpenApiDocument } from "../openapi";
 import { createRestMiddleware } from "./rest";
+import { createReportPreviewRouter } from "../routes/report-preview";
+import { REPORT_PREVIEW_PATH } from "../../shared/report-preview";
 import { closePool } from "../db";
 import { createApiShutdown } from "./api-shutdown";
 
@@ -173,6 +175,25 @@ async function startServer() {
 
   // Public search has an explicit, optional frame-ancestor policy.
   app.use(createSecurityHeaders());
+
+  // The QUERY pilot keeps the existing API limiter and protected report caller.
+  // Register before the general parser so invalid/oversized JSON also receives
+  // the endpoint's format-discovery headers and bounded JSON error response.
+  app.use(
+    "/api/rest",
+    createReportPreviewRouter({
+      createContext,
+      rateLimit: createUserRateLimitMiddleware({
+        scope: "api",
+        skipInDevelopment: true,
+        authenticateUser: true,
+      }),
+      runReport: (input, ctx) =>
+        appRouter.createCaller(ctx).standardReports.run(input),
+      onError: error =>
+        log.error({ error, path: REPORT_PREVIEW_PATH }, "Report preview error"),
+    })
+  );
 
   // No route accepts uploads through these parsers (documents are returned
   // base64, never received), and they run before any rate limiter, so a
