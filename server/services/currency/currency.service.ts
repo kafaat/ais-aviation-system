@@ -317,9 +317,7 @@ async function getRateSnapshot(
   // These constants remain explicitly labelled estimates, not provider observations.
   const rate = FALLBACK_RATES[`${fromCurrency}_${toCurrency}`];
   if (!rate)
-    throw new Error(
-      `Exchange rate not found: ${fromCurrency} to ${toCurrency}`
-    );
+    throw new Error(`Exchange rate not found: ${fromCurrency} to ${toCurrency}`);
   const fallback: RateSnapshot = {
     version: 2,
     quote: {
@@ -364,10 +362,6 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
         eq(exchangeRates.toCurrency, currency),
         inArray(exchangeRates.source, [...DISPLAY_RATE_SOURCES]),
         gt(exchangeRates.rate, "0"),
-        gt(
-          exchangeRates.rate,
-          "0"
-        ),
         gt(
           exchangeRates.validFrom,
           new Date(now.getTime() - DISPLAY_RATE_MAX_AGE_MS)
@@ -483,13 +477,10 @@ export function toMinorUnits(amount: number, currency: string): number {
   return roundedMinor(amount, 1, currency);
 }
 export function fromMinorUnits(amount: number, currency: string): number {
-  if (!Number.isSafeInteger(amount))
-    throw new Error("Invalid minor-unit amount");
+  if (!Number.isSafeInteger(amount)) throw new Error("Invalid minor-unit amount");
   const major = amount / 10 ** getCurrencyInfo(currency).decimalPlaces;
   if (roundedMinor(major, 1, currency) !== amount)
-    throw new Error(
-      "Minor units cannot be represented by the public amount type"
-    );
+    throw new Error("Minor units cannot be represented by the public amount type");
   return major;
 }
 
