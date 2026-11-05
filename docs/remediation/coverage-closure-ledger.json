@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "baseline": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
-  "source_revision": "d399331f1d21a80e5ab6cac3d79e8bc25064b883",
-  "policy": "Documented or locally passing tests are not a verified closure. source_revision identifies the committed implementation and acceptance tests. Verify only after original acceptance is met and passing required CI is bound to the actual committed/merge source; accepted_sha and acceptance_run remain null until then.",
+  "source_revision": "328888c81a22459450d9c3990c3ecf67ee835d42",
+  "policy": "The source_revision identifies the published implementation under review. Thirty-three functional findings have locally complete original acceptance, META-01 still requires final same-source CI and its scope inventory, and four original findings remain partial for explicit policy, physical or source conditions. accepted_sha and acceptance_run stay null until the original criteria and required CI are verified on the actual tested source.",
   "findings": [
     {
       "id": "BE-01",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -19,18 +19,19 @@
         "server/__tests__/auth-session-regression.test.ts",
         "scripts/verify-transaction-boundaries.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "BE-02",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -40,18 +41,19 @@
         "server/__tests__/auth-session-mysql.test.ts",
         "server/__tests__/session-mfa-boundary.test.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-C01",
       "priority": "P2",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -72,17 +74,18 @@
       ],
       "local_observation": "32-case payer UI suite and two native browser cases prove unpaid cancellation without a refund item, success-link terminal state and polling stop; an expired native link resolves to null and stops repeated reads.",
       "remaining_acceptance": [
-        "Run current-source CI with the payer component and browser cases."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "No payment-provider settlement is exercised by these terminal-state cases."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "SRC-API-SHUTDOWN",
       "priority": "P2",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -92,18 +95,26 @@
         "server/__tests__/api-shutdown-wiring.test.ts",
         "server/__tests__/api-shutdown.test.ts",
         "server/__tests__/database-pool-shutdown.test.ts",
-        "server/__tests__/api-process-mysql.test.ts"
+        "server/__tests__/api-process-mysql.test.ts",
+        "server/__tests__/operational-observations-shutdown.test.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "Workbook asks actual SIGTERM and SIGINT process acceptance; actual child covers SIGTERM only. Uninitialized-pool and close-failure exit/log/deadline cases are boundary/wiring doubles rather than observed real process cases."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": [
+        "api-process-followup/handoff.json",
+        "observation-drain-followup/handoff.json"
+      ],
+      "local_observation": "Actual API child-process acceptance passed 16/16, including SIGTERM/SIGINT, initialized and unused pool, close rejection/hang, deadline and exit/log evidence. A separate observation-drain regression passed 4/4 units after 2 failures. Pool close failure/hang is an explicitly controlled driver outcome in the real process.",
+      "followup_wave": "native_acceptance"
     },
     {
       "id": "META-01",
       "priority": "P1",
       "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -111,18 +122,22 @@
       "original_acceptance": "1. إرفاق manifest من CI يتضمن Git SHA وrun ID والأمر وإصدارات runtime وcoverage provider وإعداد النطاق ووقت البداية والنهاية وexit code.\n2. إرفاق نتائج الوحدة والتكامل والمتصفح لكل suite على الالتزام نفسه؛ دمج التغطية القابلة للدمج فقط وإبقاء نتائج الخدمات الخارجية مستقلة.\n3. ربط المتطلبات والرحلات الحرجة بمعرفات اختبارات وإيصالات قبول، مع حفظ الملفات المستثناة وأسبابها.",
       "tests": [
         "scripts/ci/run-coverage-evidence.mjs",
-        "scripts/ci/test_coverage_evidence.py"
+        "scripts/ci/test_coverage_evidence.py",
+        "scripts/ci/coverage-scope-inventory.mjs",
+        "scripts/ci/coverage-scope-inventory.test.mjs"
       ],
-      "followup_state": "awaiting_current_ci_manifest",
+      "followup_state": "awaiting_current_ci_manifest_and_scope_inventory",
       "remaining_acceptance": [
-        "Create the final code commit/merge tree and attach source-bound CI manifests/results for all required suites at that same source; local dirty-worktree receipts cannot fill accepted_sha or acceptance_run."
-      ]
+        "Publish the source-bound excluded-file inventory with reasons and verify its eligible file set against measured coverage.",
+        "Accept the final same-source CI manifest, unit/native results and browser results with actual synthetic merge SHA/tree, commands, runtime/provider versions, timestamps and exit codes. PR284 evidence is historical for this wave."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "BE-03",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -133,18 +148,19 @@
         "server/__tests__/financial-authority-mysql.test.ts",
         "scripts/acceptance/project-hardening.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "BE-04",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -154,34 +170,42 @@
         "server/__tests__/financial-authority-mysql.test.ts",
         "e2e/agency-credit.spec.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "BE-05",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "ضوابط إعادة اعتماد التذكرة عند تغيير التاريخ غير منفذة",
       "original_acceptance": "1. نفّذ رحلة قبول كاملة لتغيير التاريخ بتمويل داخلي وأجرة ثابتة، مع الحفاظ على رقم التذكرة وهوية القسيمة وكل مكونات الأجرة.\n2. ارفض تغير fare digest أو الشروط، والمستأجر أو المستخدم الخاطئ، ووجود أمتعة أو مقعد مسجل للصعود أو إيصال خارجي، ونقص مكونات الأجرة، والقطاع المنفذ، وعدم تطابق أوقات المغادرة والوصول المحلية بما فيها حدود المنطقة الزمنية.\n3. غيّر الأجرة أو العرض أو القسيمة بين المعاينة وcommit؛ يجب إعادة التحقق عند التنفيذ والتراجع عن جميع التغييرات إذا تبدلت الأدلة.",
-      "tests": ["e2e/local-ticket-revalidation.spec.ts"],
-      "followup_state": "original_acceptance_incomplete",
+      "tests": [
+        "e2e/local-ticket-revalidation.spec.ts",
+        "server/__tests__/ticket-revalidation-acceptance-mysql.test.ts"
+      ],
+      "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "Explicit cases for changed fare digest or offer between preview and commit, other tenant, baggage/check-in/external receipt, incomplete fare components, completed sector and local departure/arrival timezone boundaries are not demonstrated by the current dedicated acceptance suite. Guard code exists; these are acceptance gaps, not newly observed runtime failures."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": ["ticket-revalidation-followup/handoff.json"],
+      "local_observation": "Native original-criteria matrix had 47 successes and two assertion-text failures in its first run; the two corrected assertions passed in a targeted run. Production rejection and 182-table rollback snapshots were already correct. These are separate attempts, not a single 49-case green run.",
+      "followup_wave": "native_acceptance"
     },
     {
       "id": "BE-06",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -193,7 +217,7 @@
       ],
       "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "Pass required native and integrated CI on the final committed/merge source and bind the accepted revision/run."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "proof_boundaries": [
         "native_mysql_router_service",
@@ -212,13 +236,14 @@
       "limitations": [
         "The focused unit correction is one new pass with 73 tests not selected; it is not a fresh 74-case green suite.",
         "These are local fare-rule authorities and configured rules; no external tariff or operator policy approval is manufactured."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "BE-07",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -228,20 +253,29 @@
         "server/__tests__/webhooks/stripe-redelivery-dedupe.test.ts",
         "server/__tests__/webhooks/stripe-signature-http.test.ts",
         "server/__tests__/api-process-mysql.test.ts",
-        "scripts/acceptance/paid-sector-exchange.ts"
+        "scripts/acceptance/paid-sector-exchange.ts",
+        "server/__tests__/stripe-paid-webhook-mysql.test.ts",
+        "server/__tests__/booking-confirmation-mysql.test.ts",
+        "server/__tests__/eticket-renderer-retry.test.ts",
+        "server/__tests__/ticket-coupons.test.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "No demonstrated two concurrently signed paid webhooks on native DB asserting one settlement+ledger+outbox through the whole path.",
-        "DB outage→provider redelivery success is tested with boundary doubles rather than that full paid native chain.",
-        "Tenant-safe confirmation with per-passenger attachments, absent recipient, changed/cancelled booking and PDF/email failure with replay not reissuing tickets is not completed by the cited tests."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": [
+        "stripe-delivery/handoff.json",
+        "pdf-retry-followup/handoff.json"
+      ],
+      "local_observation": "Three real signed paid webhook HTTP/concurrency/outage cases passed. Six mail regressions and then two additional regressions were reproduced. Final native mail14 plus coupon12 passed 26/26; renderer2 plus coupon12 separately passed 14/14. Strict provider-contract replay after a lost acceptance response retained one accepted payload and unchanged ticket/money identities. Provider fetch is a controlled contract boundary, not live Resend delivery.",
+      "followup_wave": "native_acceptance"
     },
     {
       "id": "BE-08",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -251,36 +285,38 @@
         "server/__tests__/auth-service-http.test.ts",
         "server/__tests__/auth-session-mysql.test.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "BE-09",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "مدخل اقتصاديات الحجز الذي يفرض المستأجر غير منفذ",
       "original_acceptance": "1. ليطلب مستأجر A حجزه وحجز مستأجر B ومعرف حجز غير موجود؛ يجب ألا تكشف حالتا B والحجز الغائب تفاصيل مالية أو وجود الحجز.\n2. يجب أن يفشل غياب المستأجر null أو undefined وغياب قاعدة البيانات بأمان؛ وأثبت عدم استدعاء getBookingSeatEconomics للمعرفات غير المصرح بها.\n3. كرر التحقق عبر router وmiddleware الفعليين، وليس اختبارات الدالة المساعدة وحدها؛ واختبر سياسة airline-admin وglobal-admin وفق توثيقها.",
       "tests": ["server/__tests__/seat-economics-tenant-boundary.test.ts"],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "BE-10",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -290,18 +326,23 @@
         "server/__tests__/payment-router-authority.test.ts",
         "scripts/verify-transaction-boundaries.ts",
         "scripts/acceptance/split-lifecycle.ts",
-        "scripts/acceptance/split-refunds.ts"
+        "scripts/acceptance/split-refunds.ts",
+        "server/__tests__/wallet-crossing-acceptance-mysql.test.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "Workbook criterion 2 specifically requires wallet payment concurrent with wallet refund or top-up plus invoice/ledger conservation and failure/replay; current wallet native check races two spends, and refund native checks race refunds separately. The combined wallet crossing is not demonstrated."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": ["wallet/handoff.json"],
+      "local_observation": "Seven native crossing/rollback/replay cases plus 83 related units passed 90/90 after reproducing an actual refund/payment deadlock. Owner-row serialization aligns wallet payment with the internal-refund lock order. Top-up proof starts at the already verified settlement boundary.",
+      "followup_wave": "native_acceptance"
     },
     {
       "id": "OPS-01",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -312,36 +353,38 @@
         "server/__tests__/standard-report-schedules-mysql.test.ts",
         "e2e/standard-reports.spec.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "OPS-02",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "تغطية كل دوال جدولة التقارير تخفي مسارات تعافٍ وحذف وصلاحيات غير مجرّبة",
       "original_acceptance": "1. محاكاة عاملين يدّعيان نفس run: لا نشر بواسطة lease قديم ولا إرسال من العامل الذي لم يملك claim.\n2. قطع العملية بعد وضع sending وقبل حفظ إيصال البريد؛ بعد الاستئناف تتحول الحالة إلى unknown ولا يعاد الإرسال تلقائياً.\n3. حذف المالك أو تعطيل مستأجره أو تغيير نطاقه بين توليد التقرير وتسليمه؛ لا خروج للبيانات ويحفظ سبب الرفض.\n4. حذف قالب صالح يملكه الممثل ثم التحقق من affectedRows؛ وفشل مخزن البيانات أثناء recovery لا ينتج نجاحاً وهمياً.",
       "tests": ["server/__tests__/standard-report-schedules-mysql.test.ts"],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "OPS-03",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -365,17 +408,18 @@
       ],
       "local_observation": "41-case shared native suite covers actual APIS collection/update/ownership, malformed stored civil dates, UTC date boundaries, failed validation without a validated write, mixed-sector PAXLST/PNRGOV counts, refused authority submission and concurrent validation/update locking.",
       "remaining_acceptance": [
-        "Run the native suite and required integrated gates on the final committed/merge source before formal acceptance."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "External authority transmission and acknowledgments remain intentionally unavailable; the original local criterion requires explicit refusal rather than a fabricated external ACK."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "OPS-04",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -387,17 +431,23 @@
         "server/__tests__/baggage-sector-scope.test.ts",
         "server/__tests__/dcs-operations.test.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "Workbook explicitly requires refund concurrent with manifest reading; current native assertions perform refund then read serially. No executed concurrent snapshot test found.",
-        "Successful manifest through its actual route plus foreign-tenant closeout refusal should be linked as one route acceptance; current strongest sources call service directly and DCS-desk authority separately."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": [
+        "dcs-bsp/handoff.json",
+        "dcs-bsp/attempt-20261105T115234715053Z/acceptance.json"
+      ],
+      "local_observation": "DCS acceptance passed 38 cases, including a repeatable native manifest snapshot during a scheduled concurrent real refund, post-refund reconciliation refusal and tenant-safe router access. The same suite also supplements OPS-06; it is not counted as a second independent run.",
+      "followup_wave": "native_acceptance"
     },
     {
       "id": "OPS-05",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -419,17 +469,18 @@
       ],
       "local_observation": "The same native suite covers repeat seat initialization, operational blocks, gate/seat/document changes, nonce/sequence consistency after concurrent undo/check-in, locked tenant checks, and owner-only PDF behavior for admin/super_admin with a null tenant context.",
       "remaining_acceptance": [
-        "Run the native suite and required integrated gates on the final committed/merge source before formal acceptance."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "No physical printer or carrier certification is claimed; those are outside this ID's local acceptance criterion."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "OPS-06",
       "priority": "P1",
       "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -439,17 +490,19 @@
         "scripts/acceptance/dcs-counter-lifecycle.ts",
         "client/src/components/__tests__/DcsStationActions.test.tsx"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "native_cases_passed_policy_conflict_remains",
       "remaining_acceptance": [
-        "Native remap negatives (unauthorized staff, wrong aircraft/airline, checked-in/issued pass, altered paid seat features), remap replay event uniqueness, stale/foreign quote, and injected middle-of-downgrade rollback are not demonstrated.",
-        "Original acceptance says reject operational block remap; current documented implementation and acceptance intentionally allow compatible remap preserving the block. This criterion needs reconciliation with the approved intended behavior; do not mark blanket literal compliance."
-      ]
+        "Resolve the original blanket operational-block remap refusal requirement against the implemented policy that permits a compatible remap preserving the block. Do not claim literal compliance or change operator policy solely to close the test row."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": ["dcs-bsp/handoff.json"],
+      "local_observation": "The 38-case DCS group covers the missing authorization, remap, quote/replay and transaction-failure cells. It preserves the existing compatible operational-block remap policy."
     },
     {
       "id": "OPS-07",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -460,18 +513,19 @@
         "server/__tests__/inventory-allocation-boundary.test.ts",
         "scripts/acceptance/integration-remediation.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "OPS-08",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -482,17 +536,23 @@
         "server/__tests__/bsp-local-evidence.test.ts",
         "scripts/acceptance/bsp-local-evidence.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "Original criterion requires simultaneous same-reference imports including changed contents. Native check races stageDailyRet only; HOT/bank imports and changed-content conflict are serial. No competing import evidence found.",
-        "External BSP settlement is intentionally outside the local acceptance criterion and should not be counted as a reason to fail this ID."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": [
+        "dcs-bsp/handoff.json",
+        "dcs-bsp/attempt-20261105T115740480782Z/acceptance.json"
+      ],
+      "local_observation": "Four native BSP import races passed: HOT and bank, each with matching and conflicting content. The fixture observes actual InnoDB waiting on the unique evidence identity, preserves the first receipt and confirms replay/conflict behavior. Evidence remains local_evidence_only.",
+      "followup_wave": "native_acceptance"
     },
     {
       "id": "OPS-09",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -503,20 +563,23 @@
         "server/__tests__/scheduled-task-lifecycle.test.ts",
         "server/__tests__/worker-shutdown.test.ts",
         "scripts/acceptance/forensic.ts",
-        "scripts/acceptance/r2-transport.ts"
+        "scripts/acceptance/r2-transport.ts",
+        "server/__tests__/worker-process-mysql.test.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "No demonstrated real server/worker.ts with native DB+Redis executing standardReports tick and saving receipt.",
-        "No native long (>30 s) scheduler lease-renewal test or SIGTERM during that real tick with readiness removal and final receipt before DB close.",
-        "Component Labs r2-transport child handles outbox claim/publish and SIGKILL, so it cannot stand in for those scheduler/drain criteria."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": ["worker-process/handoff.json"],
+      "local_observation": "Three real-worker cases passed, plus 37 compatibility units separately. Native minute cron, two-process claim, 30-second renewal, lease replacement, SIGTERM drain, failed independent work and restart replay execute without timer or SQL-result mocks. Configurable readiness keeps the deployed default unchanged.",
+      "followup_wave": "native_acceptance"
     },
     {
       "id": "OPS-11",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -528,17 +591,20 @@
         "server/services/health-readiness.test.ts",
         "scripts/contracts/rest-host.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "candidate_pending_ci",
       "remaining_acceptance": [
-        "Full API-process readiness under provider unready/configuration and Redis outage/fallback policy is not demonstrated by the separately scoped health/client/cache tests.",
-        "Actual process entry rate-limit enforcement (429/recovery) is not exercised by the 5 API-process cases. Component REST host serves only notification contracts and omits the API middleware stack."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": ["api-process-followup/handoff.json"],
+      "local_observation": "The shared 16-case API process run covers actual HTTP liveness/readiness, database and Redis outage/recovery, configured provider refusal/timeouts/recovery, REST/tRPC limits, raw webhook and body-size boundaries. These are the same 16 cases linked by SRC-API-SHUTDOWN, not 16 additional cases.",
+      "followup_wave": "native_acceptance"
     },
     {
       "id": "UI-01",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -563,17 +629,18 @@
       ],
       "local_observation": "Logout success, explicit UNAUTHORIZED and a lost reply clear private UI/cache/persistence and the actual installed service-worker cache; back navigation and another account do not reveal the previous marker. Protected query/mutation expiry keeps a safe return URL.",
       "remaining_acceptance": [
-        "Run the isolated logout phase and the built-browser recovery suite on the final source in CI."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "The logout 401 response is injected because the public expired-session endpoint normally succeeds. The lost-response case forwards the real logout before aborting its browser reply."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-02",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -594,17 +661,18 @@
       ],
       "local_observation": "15 BookingPage cases cover unchanged retry identity, extras-only key changes, middle-passenger seats/extras reindexing and delayed waitlist/group roster resets. Native wallet and split buttons use server-issued invoice totals and the correct method.",
       "remaining_acceptance": [
-        "Run the component and browser cases on the final source in CI."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "BookingPage roster tests mock tRPC hooks. Native method/amount journeys stop before wallet spending or split settlement."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-03",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -614,18 +682,19 @@
         "client/src/pages/__tests__/MultiCityResults.test.tsx",
         "e2e/multi-city-fare.spec.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-04",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -646,17 +715,18 @@
       ],
       "local_observation": "32 real-client UI cases cover invalid/missing tokens, pending-to-paid server responses, already paid, expiry/cancellation, checkout refusal/retry/pending double-submit guards and terminal polling. Two native browser cases supply the cancellation/expired-link proof shared with UI-C01.",
       "remaining_acceptance": [
-        "Run the component and native terminal browser cases on the final source in CI."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "The pending-to-paid transition and successful checkout URL in the component suite use substituted HTTP responses, not a real payment provider."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-05",
       "priority": "P1",
       "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -664,9 +734,10 @@
       "original_acceptance": "1. تغيير قطاع واحد في حجز متعدد القطاعات مع إبقاء بقية القطاعات دون تغيير.\n2. عرض تعديل ينتهي بعد فتح النافذة؛ التأكيد يتوقف عند الحدود الزمنية وينتظر موافقة على العرض الحالي.\n3. فقد استجابة requestChangeDate ثم refresh قبل إعادة المحاولة؛ المحافظة على مفتاح العملية عندما لم يتغير الطلب.\n4. رفض بسبب مقعد مدفوع وإظهار مراجعة المقعد، ثم نجاح تعديل مجاني وتعديل مدفوع.\n5. إلغاء حجز غير قابل للاسترداد وتمويل نقدي وتمويل مجزأ، مع عرض رسوم الاسترداد وإيصال العملية.",
       "tests": [
         "client/src/components/__tests__/BookingServiceDialogs.test.tsx",
-        "e2e/booking-dialog-acceptance.spec.ts"
+        "e2e/booking-dialog-acceptance.spec.ts",
+        "browser-acceptance/ui05-financial-dialogs.spec.ts"
       ],
-      "followup_state": "ui_layer_passed_original_partial",
+      "followup_state": "paid_cash_split_passed_nonrefundable_policy_remaining",
       "proof_boundaries": [
         "actual_react_trpc_http_fixture",
         "native_browser_api_mysql",
@@ -675,24 +746,25 @@
       "local_receipts": [
         "booking-dialogs/verification.json",
         "runtime/20261105T103907817601Z/receipt.json",
-        "runtime/20261105T104154332209Z/receipt.json"
+        "runtime/20261105T104154332209Z/receipt.json",
+        "ui05-financial/handoff.json"
       ],
-      "local_observation": "18 dialog cases cover quote consent/expiry boundary, current identity, unknown result retry/remount, changed-input key replacement, corrupt storage refusal, free confirmation and failure states. Native reload preserves the same request key after two pre-server aborted attempts and creates one real modification on the third attempt.",
+      "local_observation": "The 29-case actual-client suite passed after three UI regressions. Paid servicing, cash cancellation and split cancellation passed native browser acceptance; DCS-closed refusal passed separately after correcting its fixture. There is no single new four-case green attempt. The launcher uses the real Stripe SDK against an owned HTTP provider and sends a signed webhook to the actual API.",
       "remaining_acceptance": [
-        "Link current-source native financial acceptance for paid fulfillment and original nonrefundable/cash/split cancellation fees and receipts; a mocked checkout URL is not that evidence.",
-        "Run all relevant dialog/browser/financial cases on the final source in CI."
+        "Original criterion 5 still requires nonrefundable-fare cancellation with a fee/operation receipt. Current cancellation policy is time-based; fare refundable/nonRefundable attributes are not applied and cash/split paths reject a zero refund. A DCS-closed refusal does not establish that financial policy or acceptance."
       ],
       "limitations": [
         "payments.createModificationCheckout is mocked in the paid-navigation browser case: only consent, quote identity and navigation are proved. The reload case aborts the first two requests before server execution; it does not simulate a lost post-commit response.",
         "Three browser successes are reused from the first four-case attempt; the corrected reload case passes separately. This is not a new four-case full-suite run."
       ],
-      "test_ci_state": "pending_ci"
+      "test_ci_state": "pending_ci",
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-06",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -714,18 +786,19 @@
       ],
       "local_observation": "66-case shared UI group exercises real DCS tabs, crew/aircraft table updates, case open/link/close, identity changes during pending proposals, declined downgrade/remap, stale aircraft/layout responses, decimal/zero input, limits, current validation and rejected finalization. The demonstrated regressions fail before the fix.",
       "remaining_acceptance": [
-        "Run the actual-component UI suite and required integrated CI on the final committed/merge source before formal acceptance."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "HTTP endpoints are fixtures. The four original workbook criteria concern UI interactions, current identity/input state and server-rejection handling; these tests do not independently prove native service authorization or financial calculations.",
         "Training load-planning/weight-balance services remain capability-gated outside production and no operational dispatch capability is promoted. Operator-approved policy and dispatch acceptance are separate capability boundaries, not additional closure criteria invented for the original UI-06 row."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-07",
       "priority": "P1",
       "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -735,17 +808,17 @@
         "client/src/pages/__tests__/KioskBagTag.test.tsx",
         "e2e/vrs-kiosk-tags.spec.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "physical_printer_acceptance_required",
       "remaining_acceptance": [
-        "Existing browser tests substitute window.print; target-printer barcode/margin and actual physical output acceptance required by the original criterion is still not supplied.",
-        "Re-run UI privacy/version/pending-request behavior on the final source in CI."
-      ]
+        "Supply the separate target-printer test required by the original criterion, including physical barcode and margin acceptance. Browser print substitution and print preview do not establish physical output."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-08",
       "priority": "P1",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -755,18 +828,19 @@
         "client/src/components/__tests__/ExportReportButton.test.tsx",
         "e2e/vrs-report-exports.spec.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-09",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -783,17 +857,18 @@
       ],
       "local_observation": "Nine refund interaction cases include visible row and statistics changes across review_required, processing and completed, pagination/filter reset, failed reads/retry and polling stop. Assertions check displayed totals, not only refetch call counts.",
       "remaining_acceptance": [
-        "Run the updated refund interaction cases on the final source in CI; server financial conservation remains a separate gate."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "Phase-dependent HTTP statistics fixtures validate presentation; they do not independently establish server financial calculations."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-10",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -816,17 +891,18 @@
       ],
       "local_observation": "17 built-browser cases cover direct URLs/reloads with and without a session, rejected built chunk retry/home, real unauthorized query/mutation, safe returnTo and embedded-search language/account isolation. Actual React boundary tests separately execute render-error handlers.",
       "remaining_acceptance": [
-        "Run a fresh build and the built-browser recovery suite on the final committed/merge source in CI."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "The asset failure is deliberately injected into the real built page. React fixture boundary execution alone would not prove chunk recovery."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-11",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -847,17 +923,18 @@
       ],
       "local_observation": "The final 37-case shared group includes 18 MFASetup and four MFAVerify cases for recovery challenge modes, rejected/consumed codes, pending controls, reset/focus, setup completion, acknowledgment, copy/download and clipboard failure.",
       "remaining_acceptance": [
-        "Run these UI cases and the existing native MFA/session authority tests on the final source in CI."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "The new UI run substitutes HTTP; native code consumption and enrollment/session invariants are established by the separate BE-02 suites, not by these fixture replies. OS clipboard contents previously copied by the user are not revoked."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "OPS-10",
       "priority": "P2",
       "status": "needs_current_sha_verification",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -869,18 +946,19 @@
         "server/__tests__/email-worker.test.ts",
         "server/__tests__/email-worker-provider.test.ts"
       ],
-      "followup_state": "baseline_eligible_pending_ci",
+      "followup_state": "candidate_pending_ci",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
       "remaining_acceptance": [
-        "Re-run the applicable original acceptance and required integrated gates on the final committed/merge source before setting verified."
-      ]
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-12",
       "priority": "P2",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -902,17 +980,18 @@
       ],
       "local_observation": "33 standard-report UI cases cover validation and mutations, generating/ready identity reuse, download errors and stale-context isolation. Two real-client deferred rejection regressions fail before the catch revision guard and pass after it; a current download error remains visible.",
       "remaining_acceptance": [
-        "Run the updated UI cases plus the actual report generation/download browser suite on the final source in CI."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "Native time/number controls normalize 24:00 and nonnumeric text to empty. The tests prove no mutation, not direct coverage of an internal hour > 23 or NaN branch. Report UI evidence does not close CAP-01."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "CAP-01",
       "priority": "P1",
       "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -923,20 +1002,23 @@
         "server/__tests__/standard-report-independent-review.test.ts",
         "server/__tests__/standard-reports-ops-mysql.test.ts",
         "server/__tests__/standard-reports-finance-mysql.test.ts",
-        "e2e/standard-reports.spec.ts"
+        "e2e/standard-reports.spec.ts",
+        "server/__tests__/standard-reports-available-mysql.test.ts"
       ],
-      "followup_state": "original_acceptance_incomplete",
+      "followup_state": "available_36_matrix_passed_nonavailable_sources_remaining",
       "remaining_acceptance": [
-        "Provide per-definition known-data totals, API/export, tenant and period-boundary acceptance for all 36 available reports; catalog enumeration alone is insufficient.",
-        "The 35 partial reports require their documented source/dimension/history conditions before promotion.",
-        "The 28 blocked reports require the missing authoritative source or acceptance receipt and then implementation/tests; keep explicit refusal until then."
-      ]
+        "The 35 partial reports still require their documented missing data, dimensions or history and independent closure conditions before promotion.",
+        "The 28 blocked reports still require authoritative sources or external acceptance receipts, followed by implementation and acceptance. Preserve explicit refusal until then."
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": ["cap/handoff.json", "cap/executed-matrix.json"],
+      "local_observation": "109/109 native cases passed: 36 reports times golden API/CSV, tenant, period-or-refusal cells, plus one catalog-match assertion. API is the actual tRPC createCaller rather than HTTP transport; CSV is independently parsed. Twenty-two definitions support period boundaries and fourteen reject unsupported period input; the currency catalog retains its documented shared scope."
     },
     {
       "id": "UI-M01",
       "priority": "P2",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
@@ -955,11 +1037,12 @@
       ],
       "local_observation": "Same-run V8 evidence records executed return/catch statements in both actual ErrorBoundary implementations: standalone return line 38 count 14 and catch line 43 count 7; App return line 155 count 6 and catch line 159 count 3.",
       "remaining_acceptance": [
-        "Publish current-source CI/provider/config identity and same-run statement/function/branch comparison before formal acceptance."
+        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
       ],
       "limitations": [
         "Nonzero behavior and differing counters do not establish a coverage-provider/source-map defect fix."
-      ]
+      ],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     }
   ],
   "report_catalog": {
@@ -969,11 +1052,127 @@
     "partial": 35,
     "blocked": 28,
     "promotions_verified": 0,
-    "acceptance_note": "99 definitions remain 36 available, 35 partial and 28 blocked. Available means documented local capability; it is not blanket per-report semantic or external acceptance. No promotions are made by this follow-up."
+    "acceptance_note": "99 definitions remain 36 available, 35 partial and 28 blocked, with zero promotions. The 36 available definitions now have a 109-case local native API/CSV/tenant/period-or-refusal matrix; this does not fulfill the missing source and capability conditions of the other 63 definitions. Final-source CI is pending."
   },
-  "source_revision_role": "committed_code_awaiting_ci",
-  "worktree_state": "code_committed_documentation_followup",
+  "source_revision_role": "published_implementation_awaiting_final_source_ci",
+  "worktree_state": "implementation_committed_final_source_ci_pending",
   "followup": {
+    "date": "2026-11-05",
+    "document": "docs/remediation/2026-11-05-native-gap-acceptance.md",
+    "original_workbook": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
+    "original_criteria_field": "findings[].original_acceptance copied verbatim from original-gap-workbook-rows.json",
+    "audit_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
+    "local_evidence_root": "../ais-evidence (workspace artifacts; not a GitHub acceptance run)",
+    "code_revision": "328888c81a22459450d9c3990c3ecf67ee835d42",
+    "baseline_revision": "d68881c2128267cee31c7ebbca4a4e3eaeff5b14",
+    "source_identity_note": "code_revision identifies the published implementation under review. The actual CI acceptance source may be a synthetic PR merge commit and must be taken from its execution manifest, not inferred from the implementation or branch head.",
+    "formal_status_counts": {
+      "needs_current_sha_verification": 33,
+      "partial": 5
+    },
+    "acceptance_group_counts": {
+      "candidate_pending_ci": 33,
+      "metadata_acceptance_pending": 1,
+      "original_acceptance_incomplete": 4,
+      "total": 38
+    },
+    "candidate_pending_ci": [
+      "BE-01",
+      "BE-02",
+      "UI-C01",
+      "SRC-API-SHUTDOWN",
+      "BE-03",
+      "BE-04",
+      "BE-05",
+      "BE-06",
+      "BE-07",
+      "BE-08",
+      "BE-09",
+      "BE-10",
+      "OPS-01",
+      "OPS-02",
+      "OPS-03",
+      "OPS-04",
+      "OPS-05",
+      "OPS-07",
+      "OPS-08",
+      "OPS-09",
+      "OPS-11",
+      "UI-01",
+      "UI-02",
+      "UI-03",
+      "UI-04",
+      "UI-06",
+      "UI-08",
+      "UI-09",
+      "UI-10",
+      "UI-11",
+      "OPS-10",
+      "UI-12",
+      "UI-M01"
+    ],
+    "candidate_groups": {
+      "baseline": [
+        "BE-01",
+        "BE-02",
+        "BE-03",
+        "BE-04",
+        "BE-08",
+        "BE-09",
+        "OPS-01",
+        "OPS-02",
+        "OPS-07",
+        "OPS-10",
+        "UI-03",
+        "UI-08"
+      ],
+      "previous_followup": [
+        "BE-06",
+        "OPS-03",
+        "OPS-05",
+        "UI-01",
+        "UI-02",
+        "UI-04",
+        "UI-06",
+        "UI-09",
+        "UI-10",
+        "UI-11",
+        "UI-12",
+        "UI-C01",
+        "UI-M01"
+      ],
+      "native_acceptance": [
+        "SRC-API-SHUTDOWN",
+        "BE-05",
+        "BE-07",
+        "BE-10",
+        "OPS-04",
+        "OPS-08",
+        "OPS-09",
+        "OPS-11"
+      ]
+    },
+    "candidate_group_counts": {
+      "baseline": 12,
+      "previous_followup": 13,
+      "native_acceptance": 8
+    },
+    "candidate_semantics": "The 33 candidates have locally documented coverage of their entire original acceptance, subject to the stated test boundaries. They await all applicable original-criteria tests and required gates on the final committed/merge source. This is not verified closure or an integrated CI success claim.",
+    "metadata_acceptance_pending": ["META-01"],
+    "original_acceptance_incomplete": ["OPS-06", "UI-05", "UI-07", "CAP-01"],
+    "remaining_acceptance": {
+      "META-01": "Final same-source CI manifest, excluded-file inventory with reasons, and matching unit/native/browser evidence remain required. Historical CI and the locally derived historical inventory do not constitute acceptance of this implementation.",
+      "OPS-06": "The original blanket refusal of operational-block remap conflicts with existing compatible-remap preservation behavior. Native checks do not resolve that policy requirement.",
+      "UI-05": "Paid modification and cash/split cancellation receipts have local acceptance. Nonrefundable-fare cancellation with fees and an operation receipt remains unproved; DCS-closed refusal does not satisfy it.",
+      "UI-07": "Separate target-printer barcode, margin and physical-output acceptance remains required.",
+      "CAP-01": "The 36 available reports have a local native matrix. The 35 partial and 28 blocked definitions retain their source and acceptance conditions, with zero promotions."
+    },
+    "no_current_acceptance_sha_or_run": true,
+    "test_count_policy": "Counts belong to individual attempts. Shared suites, targeted reruns and overlapping unit groups are not summed into a new whole-repository result. Historical full_unit_attempt and local_checks are retained only in previous_followup.",
+    "historical_followup_field": "previous_followup"
+  },
+  "implementation_commit": "328888c81a22459450d9c3990c3ecf67ee835d42",
+  "previous_followup": {
     "date": "2026-11-05",
     "document": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
     "original_workbook": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
