@@ -180,76 +180,169 @@ const FALLBACK_RATES: Record<string, number> = {
 // Main Currency Service
 // ============================================================================
 
-/**
- * Get exchange rate between two currencies
- */
+/** The cache envelope is internal; the public ExchangeRate DTO is unchanged. */
+interface RateSnapshot {
+  version: 2;
+  quote: ExchangeRate;
+  validFrom: Date;
+  expiresAt: Date;
+}
+
+function cacheDate(value: unknown): Date | null {
+  if (!(value instanceof Date) && typeof value !== "string") return null;
+  const date = new Date(value instanceof Date ? value.getTime() : value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function decodeRateSnapshot(
+  value: unknown,
+  fromCurrency: string,
+  toCurrency: string,
+  now: Date
+): RateSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Partial<RateSnapshot>;
+  const quote = record.quote;
+  const validFrom = cacheDate(record.validFrom);
+  const expiresAt = cacheDate(record.expiresAt);
+  const updatedAt = cacheDate(quote?.updatedAt);
+  if (
+    record.version !== 2 ||
+    !quote ||
+    quote.fromCurrency !== fromCurrency ||
+    quote.toCurrency !== toCurrency ||
+    typeof quote.rate !== "number" ||
+    !Number.isFinite(quote.rate) ||
+    quote.rate <= 0 ||
+    !Number.isFinite(1 / quote.rate) ||
+    typeof quote.source !== "string" ||
+    !quote.source ||
+    !validFrom ||
+    !expiresAt ||
+    !updatedAt ||
+    validFrom > now ||
+    expiresAt <= now
+  )
+    return null;
+  return {
+    version: 2,
+    quote: { ...quote, inverseRate: 1 / quote.rate, updatedAt },
+    validFrom,
+    expiresAt,
+  };
+}
+
+async function cacheRate(key: string, snapshot: RateSnapshot) {
+  // Never extend a provider validity window, including across Redis round trips.
+  const ttl = Math.floor((snapshot.expiresAt.getTime() - Date.now()) / 1000);
+  if (ttl > 0)
+    await CacheService.set(key, snapshot, Math.min(ttl, RATE_CACHE_TTL));
+}
+
+async function getRateSnapshot(
+  fromCurrency: string,
+  toCurrency: string
+): Promise<RateSnapshot> {
+  getCurrencyInfo(fromCurrency);
+  getCurrencyInfo(toCurrency);
+  const now = new Date();
+  if (fromCurrency === toCurrency) {
+    return {
+      version: 2,
+      quote: {
+        fromCurrency,
+        toCurrency,
+        rate: 1,
+        inverseRate: 1,
+        source: "identity",
+        updatedAt: now,
+      },
+      validFrom: now,
+      expiresAt: new Date(now.getTime() + RATE_CACHE_TTL * 1000),
+    };
+  }
+  // The versioned key prevents a legacy JSON object without validity metadata
+  // from being accepted as a current observation after deployment.
+  const key = `exchange_rate:v2:${fromCurrency}_${toCurrency}`;
+  const cached = decodeRateSnapshot(
+    await CacheService.get<unknown>(key),
+    fromCurrency,
+    toCurrency,
+    now
+  );
+  if (cached) return cached;
+
+  const direct = await getDbExchangeRate(fromCurrency, toCurrency, now);
+  if (direct) {
+    await cacheRate(key, direct);
+    return direct;
+  }
+  if (fromCurrency !== BASE_CURRENCY && toCurrency !== BASE_CURRENCY) {
+    const first = await getRateSnapshot(fromCurrency, BASE_CURRENCY);
+    const second = await getRateSnapshot(BASE_CURRENCY, toCurrency);
+    const rate = first.quote.rate * second.quote.rate;
+    if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(1 / rate))
+      throw new Error("Invalid cross exchange rate");
+    const cross: RateSnapshot = {
+      version: 2,
+      quote: {
+        fromCurrency,
+        toCurrency,
+        rate,
+        inverseRate: 1 / rate,
+        source: [first.quote.source, second.quote.source].some(s =>
+          s.includes("fallback")
+        )
+          ? "cross_rate_fallback"
+          : "cross_rate",
+        updatedAt: new Date(
+          Math.min(
+            first.quote.updatedAt.getTime(),
+            second.quote.updatedAt.getTime()
+          )
+        ),
+      },
+      validFrom: new Date(
+        Math.max(first.validFrom.getTime(), second.validFrom.getTime())
+      ),
+      expiresAt: new Date(
+        Math.min(first.expiresAt.getTime(), second.expiresAt.getTime())
+      ),
+    };
+    if (cross.expiresAt.getTime() <= Date.now())
+      throw new Error("Exchange rate expired during conversion");
+    if (!cross.quote.source.includes("fallback")) await cacheRate(key, cross);
+    return cross;
+  }
+  // These constants remain explicitly labelled estimates, not provider observations.
+  const rate = FALLBACK_RATES[`${fromCurrency}_${toCurrency}`];
+  if (!rate)
+    throw new Error(
+      `Exchange rate not found: ${fromCurrency} to ${toCurrency}`
+    );
+  const fallback: RateSnapshot = {
+    version: 2,
+    quote: {
+      fromCurrency,
+      toCurrency,
+      rate,
+      inverseRate: 1 / rate,
+      source: "fallback",
+      updatedAt: now,
+    },
+    validFrom: now,
+    expiresAt: new Date(now.getTime() + RATE_CACHE_TTL * 1000),
+  };
+  // Do not cache a fallback: a newly supplied effective observation must win.
+  return fallback;
+}
+
+/** Get a currently effective rate, restoring the public Date contract on cache hits. */
 export async function getExchangeRate(
   fromCurrency: string,
   toCurrency: string
 ): Promise<ExchangeRate> {
-  // Same currency - no conversion needed
-  if (fromCurrency === toCurrency) {
-    return {
-      fromCurrency,
-      toCurrency,
-      rate: 1,
-      inverseRate: 1,
-      source: "identity",
-      updatedAt: new Date(),
-    };
-  }
-
-  // Try cache first
-  const cacheKey = `exchange_rate:${fromCurrency}_${toCurrency}`;
-  const cached = await CacheService.get<ExchangeRate>(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  // Try database
-  const dbRate = await getDbExchangeRate(fromCurrency, toCurrency);
-  if (dbRate) {
-    await CacheService.set(cacheKey, dbRate, RATE_CACHE_TTL);
-    return dbRate;
-  }
-
-  // Try to calculate through base currency
-  if (fromCurrency !== BASE_CURRENCY && toCurrency !== BASE_CURRENCY) {
-    const fromToBase = await getExchangeRate(fromCurrency, BASE_CURRENCY);
-    const baseToTarget = await getExchangeRate(BASE_CURRENCY, toCurrency);
-
-    const crossRate: ExchangeRate = {
-      fromCurrency,
-      toCurrency,
-      rate: fromToBase.rate * baseToTarget.rate,
-      inverseRate: 1 / (fromToBase.rate * baseToTarget.rate),
-      source: "cross_rate",
-      updatedAt: new Date(),
-    };
-
-    await CacheService.set(cacheKey, crossRate, RATE_CACHE_TTL);
-    return crossRate;
-  }
-
-  // Use fallback rates
-  const fallbackKey = `${fromCurrency}_${toCurrency}`;
-  const fallbackRate = FALLBACK_RATES[fallbackKey];
-
-  if (fallbackRate) {
-    const rate: ExchangeRate = {
-      fromCurrency,
-      toCurrency,
-      rate: fallbackRate,
-      inverseRate: 1 / fallbackRate,
-      source: "fallback",
-      updatedAt: new Date(),
-    };
-
-    await CacheService.set(cacheKey, rate, RATE_CACHE_TTL);
-    return rate;
-  }
-
-  throw new Error(`Exchange rate not found: ${fromCurrency} to ${toCurrency}`);
+  return (await getRateSnapshot(fromCurrency, toCurrency)).quote;
 }
 
 /** Public fare estimates read only direct, currently effective observations. */
@@ -271,6 +364,10 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
         eq(exchangeRates.toCurrency, currency),
         inArray(exchangeRates.source, [...DISPLAY_RATE_SOURCES]),
         gt(exchangeRates.rate, "0"),
+        gt(
+          exchangeRates.rate,
+          "0"
+        ),
         gt(
           exchangeRates.validFrom,
           new Date(now.getTime() - DISPLAY_RATE_MAX_AGE_MS)
@@ -300,48 +397,100 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
  */
 async function getDbExchangeRate(
   fromCurrency: string,
-  toCurrency: string
-): Promise<ExchangeRate | null> {
-  try {
-    const database = await getDb();
-    if (!database) {
-      return null;
-    }
-
-    const results = await database
-      .select()
-      .from(exchangeRates)
-      .where(
-        and(
-          eq(exchangeRates.fromCurrency, fromCurrency),
-          eq(exchangeRates.toCurrency, toCurrency)
-        )
+  toCurrency: string,
+  now: Date
+): Promise<RateSnapshot | null> {
+  const database = await getDb();
+  if (!database) return null;
+  const [result] = await database
+    .select()
+    .from(exchangeRates)
+    .where(
+      and(
+        eq(exchangeRates.fromCurrency, fromCurrency),
+        eq(exchangeRates.toCurrency, toCurrency),
+        gt(exchangeRates.rate, "0"),
+        lte(exchangeRates.validFrom, now),
+        or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now))
       )
-      .orderBy(desc(exchangeRates.updatedAt))
-      .limit(1);
+    )
+    .orderBy(desc(exchangeRates.validFrom), desc(exchangeRates.id))
+    .limit(1);
+  if (!result) return null;
+  const rate = Number(result.rate);
+  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(1 / rate))
+    throw new Error("Invalid exchange rate observation");
+  const snapshot: RateSnapshot = {
+    version: 2,
+    quote: {
+      fromCurrency: result.fromCurrency,
+      toCurrency: result.toCurrency,
+      rate,
+      inverseRate: 1 / rate,
+      source: result.source || "database",
+      updatedAt: result.updatedAt,
+    },
+    validFrom: result.validFrom,
+    expiresAt: new Date(
+      Math.min(
+        now.getTime() + RATE_CACHE_TTL * 1000,
+        result.validTo?.getTime() ?? Infinity
+      )
+    ),
+  };
+  // Defensive validation also applies to malformed dates from a storage adapter.
+  const validated = decodeRateSnapshot(
+    snapshot,
+    fromCurrency,
+    toCurrency,
+    new Date()
+  );
+  if (!validated)
+    throw new Error("Exchange rate observation is not currently valid");
+  return validated;
+}
 
-    const result = results[0];
-    if (result) {
-      return {
-        fromCurrency: result.fromCurrency,
-        toCurrency: result.toCurrency,
-        rate: parseFloat(result.rate),
-        inverseRate: 1 / parseFloat(result.rate),
-        source: result.source || "database",
-        updatedAt: result.updatedAt,
-      };
-    }
-  } catch (error) {
-    // Table might not exist yet
-    console.info(
-      JSON.stringify({
-        event: "exchange_rate_db_error",
-        error: error instanceof Error ? error.message : "Unknown error",
-      })
+/** Decimal arithmetic over the API number's decimal representation. */
+function decimalRatio(value: number): [bigint, bigint] {
+  if (!Number.isFinite(value)) throw new Error("Non-finite monetary amount");
+  const [mantissa, exponentText = "0"] = String(value).toLowerCase().split("e");
+  const sign = mantissa.startsWith("-") ? -1n : 1n;
+  const unsigned = mantissa.replace(/^[+-]/, "");
+  const [whole, fraction = ""] = unsigned.split(".");
+  const scale = fraction.length - Number(exponentText);
+  const digits = sign * BigInt(whole + fraction);
+  return scale >= 0
+    ? [digits, 10n ** BigInt(scale)]
+    : [digits * 10n ** BigInt(-scale), 1n];
+}
+
+function roundedMinor(amount: number, rate: number, currency: string): number {
+  const [a, ad] = decimalRatio(amount);
+  const [r, rd] = decimalRatio(rate);
+  const denominator = ad * rd;
+  const numerator =
+    a * r * 10n ** BigInt(getCurrencyInfo(currency).decimalPlaces);
+  const magnitude = numerator < 0n ? -numerator : numerator;
+  // Half away from zero, once, at the target currency's minor-unit boundary.
+  const rounded = (magnitude + denominator / 2n) / denominator;
+  const result = Number(numerator < 0n ? -rounded : rounded);
+  if (!Number.isSafeInteger(result))
+    throw new Error("Monetary amount exceeds safe minor units");
+  return result;
+}
+
+export function toMinorUnits(amount: number, currency: string): number {
+  return roundedMinor(amount, 1, currency);
+}
+export function fromMinorUnits(amount: number, currency: string): number {
+  if (!Number.isSafeInteger(amount))
+    throw new Error("Invalid minor-unit amount");
+  const major = amount / 10 ** getCurrencyInfo(currency).decimalPlaces;
+  if (roundedMinor(major, 1, currency) !== amount)
+    throw new Error(
+      "Minor units cannot be represented by the public amount type"
     );
-  }
-
-  return null;
+  return major;
 }
 
 /**
@@ -353,7 +502,10 @@ export async function convertCurrency(
   toCurrency: string
 ): Promise<ConversionResult> {
   const rate = await getExchangeRate(fromCurrency, toCurrency);
-  const convertedAmount = Math.round(amount * rate.rate * 100) / 100;
+  const convertedAmount = fromMinorUnits(
+    roundedMinor(amount, rate.rate, toCurrency),
+    toCurrency
+  );
 
   const fromCurrencyInfo = getCurrencyInfo(fromCurrency);
   const toCurrencyInfo = getCurrencyInfo(toCurrency);
@@ -500,6 +652,7 @@ export async function updateExchangeRates(): Promise<void> {
       // Invalidate cache
       const cacheKey = `exchange_rate:${from}_${to}`;
       await CacheService.del(cacheKey);
+      await CacheService.del(`exchange_rate:v2:${from}_${to}`);
     }
 
     console.info(
@@ -539,6 +692,8 @@ export function getHistoricalRates(
 
 export const CurrencyService = {
   getExchangeRate,
+  toMinorUnits,
+  fromMinorUnits,
   convertCurrency,
   convertPriceForDisplay,
   getCurrencyInfo,
