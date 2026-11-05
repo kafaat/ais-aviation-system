@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { setTimeout as delay } from "node:timers/promises";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import * as s from "../../drizzle/schema";
+import type { TrpcContext } from "../../server/_core/context";
+import { getPool } from "../../server/db";
+import { baggageRouter } from "../../server/routers/baggage";
+import { dcsRouter } from "../../server/routers/dcs";
 import {
   createInventoryLock,
   releaseInventoryLock,
@@ -45,6 +51,7 @@ import {
   resolveDeskCase,
 } from "../../server/services/dcs-station.service";
 import { calculateRequestHash } from "../../server/services/idempotency-v2.service";
+import { OrderServicingUnavailable } from "../../server/services/order-servicing.service";
 import type { EvidenceEnvelope } from "../../server/services/aviation-evidence.service";
 import {
   getFlightBaggageCloseout,
@@ -323,6 +330,110 @@ export async function verifyDcsCounterLifecycle(
     passengerId: number;
     flightId: number;
   }) => checkInDcsPassenger({ ...key, ...command() }, actor);
+
+  async function stationSnapshot(bookingIds: number[], flightIds: number[]) {
+    return {
+      bookings: await db
+        .select()
+        .from(s.bookings)
+        .where(inArray(s.bookings.id, bookingIds))
+        .orderBy(asc(s.bookings.id)),
+      segments: await db
+        .select()
+        .from(s.bookingSegments)
+        .where(inArray(s.bookingSegments.bookingId, bookingIds))
+        .orderBy(asc(s.bookingSegments.id)),
+      passengers: await db
+        .select()
+        .from(s.passengers)
+        .where(inArray(s.passengers.bookingId, bookingIds))
+        .orderBy(asc(s.passengers.id)),
+      coupons: await db
+        .select()
+        .from(s.ticketCoupons)
+        .where(inArray(s.ticketCoupons.bookingId, bookingIds))
+        .orderBy(asc(s.ticketCoupons.id)),
+      fareComponents: await db
+        .select()
+        .from(s.bookingFareComponents)
+        .where(inArray(s.bookingFareComponents.bookingId, bookingIds))
+        .orderBy(asc(s.bookingFareComponents.id)),
+      flights: await db
+        .select()
+        .from(s.flights)
+        .where(inArray(s.flights.id, flightIds))
+        .orderBy(asc(s.flights.id)),
+      seats: await db
+        .select()
+        .from(s.seatInventory)
+        .where(inArray(s.seatInventory.flightId, flightIds))
+        .orderBy(asc(s.seatInventory.id)),
+      holds: await db
+        .select()
+        .from(s.inventoryLocks)
+        .where(inArray(s.inventoryLocks.flightId, flightIds))
+        .orderBy(asc(s.inventoryLocks.id)),
+      modifications: await db
+        .select()
+        .from(s.bookingModifications)
+        .where(inArray(s.bookingModifications.bookingId, bookingIds))
+        .orderBy(asc(s.bookingModifications.id)),
+      offers: await db
+        .select()
+        .from(s.retailOffers)
+        .where(inArray(s.retailOffers.flightId, flightIds))
+        .orderBy(asc(s.retailOffers.id)),
+      receipts: await db
+        .select()
+        .from(s.paymentReceipts)
+        .where(inArray(s.paymentReceipts.bookingId, bookingIds))
+        .orderBy(asc(s.paymentReceipts.paymentIntentId)),
+      refundPlans: await db
+        .select()
+        .from(s.orderServiceRefunds)
+        .where(inArray(s.orderServiceRefunds.bookingId, bookingIds))
+        .orderBy(asc(s.orderServiceRefunds.id)),
+      ledger: await db
+        .select()
+        .from(s.financialLedger)
+        .where(inArray(s.financialLedger.bookingId, bookingIds))
+        .orderBy(asc(s.financialLedger.id)),
+      outbox: await db
+        .select()
+        .from(s.outbox)
+        .where(inArray(s.outbox.aggregateId, bookingIds.map(String)))
+        .orderBy(asc(s.outbox.id)),
+      events: await db
+        .select()
+        .from(s.dcsOperationEvents)
+        .where(inArray(s.dcsOperationEvents.flightId, flightIds))
+        .orderBy(asc(s.dcsOperationEvents.id)),
+      idempotency: await db
+        .select()
+        .from(s.idempotencyRequests)
+        .where(
+          inArray(s.idempotencyRequests.userId, [
+            ownerId,
+            operatorId,
+            otherOperatorId,
+          ])
+        )
+        .orderBy(asc(s.idempotencyRequests.id)),
+    };
+  }
+
+  async function waitForSql<T>(
+    read: () => Promise<T | undefined>,
+    label: string
+  ) {
+    const deadline = Date.now() + 5000;
+    do {
+      const result = await read();
+      if (result !== undefined) return result;
+      await delay(10);
+    } while (Date.now() < deadline);
+    throw new Error(`DCS native barrier did not observe ${label}`);
+  }
 
   await check(
     "DCS: same baggage key creates one physical counter receipt on MySQL",
@@ -918,6 +1029,203 @@ export async function verifyDcsCounterLifecycle(
   );
 
   await check(
+    "DCS: a concurrent refund cannot mix passenger, baggage and capacity snapshots in a manifest",
+    async () => {
+      const j = await journey();
+      await staffCheckIn(j.key());
+      const bag = await registerBaggage(j.bag(10), bagActor);
+      await transitionDcsPassenger(
+        { ...j.key(), action: "board", ...command() },
+        actor
+      );
+      const before = (await generateFlightManifest(j.key().flightId)).manifest;
+      assert.equal(before.passengers.total, 1);
+      assert.equal(before.baggage.pieces, 1);
+      const [funded] = await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, j.bookingId));
+      const pool = getPool();
+      assert(pool);
+      const control = await pool.getConnection();
+      const lockName = `dcs-manifest-${randomUUID()}`;
+      const originalGetConnection = pool.getConnection;
+      const wrappedConnections: Array<{
+        connection: PoolConnection;
+        query: PoolConnection["query"];
+      }> = [];
+      let pausedConnection: number | undefined;
+      let resumedConnection: number | undefined;
+      let reading: ReturnType<typeof generateFlightManifest> | undefined;
+      let refund: Promise<unknown> | undefined;
+      try {
+        const [locked] = await control.query<RowDataPacket[]>(
+          "SELECT GET_LOCK(?, 0) AS acquired",
+          [lockName]
+        );
+        assert.equal(Number(locked[0].acquired), 1);
+        // Test-only scheduling seam: the original SELECT has completed on the
+        // real transaction connection before a native GET_LOCK blocks it. The
+        // first non-locking SELECT establishes the repeatable-read snapshot.
+        pool.getConnection = async () => {
+          const connection = await originalGetConnection.call(pool);
+          if (pausedConnection !== undefined) return connection;
+          const originalQuery = connection.query;
+          const runQuery = originalQuery.bind(connection);
+          wrappedConnections.push({ connection, query: originalQuery });
+          connection.query = (async (
+            ...args: Parameters<PoolConnection["query"]>
+          ) => {
+            const result = await Reflect.apply(originalQuery, connection, args);
+            const statement =
+              typeof args[0] === "string" ? args[0] : args[0].sql;
+            const values: unknown[] = Array.isArray(args[1]) ? args[1] : [];
+            if (
+              pausedConnection === undefined &&
+              /from `flights` inner join `airlines`/i.test(statement) &&
+              values.includes(j.key().flightId)
+            ) {
+              assert(!/for update/i.test(statement));
+              const [identity] = await runQuery<RowDataPacket[]>(
+                "SELECT CONNECTION_ID() AS id"
+              );
+              pausedConnection = Number(identity[0].id);
+              const [gate] = await runQuery<RowDataPacket[]>(
+                "SELECT GET_LOCK(?, 10) AS acquired",
+                [lockName]
+              );
+              assert.equal(Number(gate[0].acquired), 1);
+              await runQuery("SELECT RELEASE_LOCK(?)", [lockName]);
+              const [resumed] = await runQuery<RowDataPacket[]>(
+                "SELECT CONNECTION_ID() AS id"
+              );
+              resumedConnection = Number(resumed[0].id);
+            }
+            return result;
+          }) as PoolConnection["query"];
+          return connection;
+        };
+        reading = generateFlightManifest(j.key().flightId);
+        void reading.catch(() => {});
+        await waitForSql(async () => {
+          if (pausedConnection === undefined) return undefined;
+          const [rows] = await control.query<RowDataPacket[]>(
+            "SELECT STATE AS state FROM information_schema.PROCESSLIST WHERE ID = ?",
+            [pausedConnection]
+          );
+          return rows[0]?.state === "User lock" ? true : undefined;
+        }, "the manifest's real connection waiting after its first SELECT");
+        pool.getConnection = originalGetConnection;
+        refund = db.transaction(tx =>
+          settleVerifiedRefund(tx, {
+            paymentIntentId: `pi_dcs_counter_${j.bookingId}`,
+            chargeId: `ch_manifest_race_${j.bookingId}`,
+            amount: funded.totalAmount,
+            amountRefunded: funded.totalAmount,
+            currency: "sar",
+            eventId: `evt_manifest_race_${randomUUID()}`,
+          })
+        );
+        await refund;
+        const [reversed] = await db
+          .select()
+          .from(s.bookings)
+          .where(eq(s.bookings.id, j.bookingId));
+        assert.equal(reversed.status, "cancelled");
+        assert.equal(reversed.paymentStatus, "refunded");
+        assert.equal(await storedSeat(j.key()), undefined);
+        assert.equal(
+          resumedConnection,
+          undefined,
+          "Refund must commit while the first manifest snapshot is still paused"
+        );
+        await control.query("SELECT RELEASE_LOCK(?)", [lockName]);
+        const during = (await reading).manifest;
+        assert.equal(resumedConnection, pausedConnection);
+        assert.deepEqual(during.passengers, before.passengers);
+        assert.deepEqual(during.baggage, before.baggage);
+        assert.deepEqual(during.capacity, before.capacity);
+        await assert.rejects(generateFlightManifest(j.key().flightId), {
+          code: "PRECONDITION_FAILED",
+          message: /reconciliation/i,
+        });
+        const closeout = await getFlightBaggageCloseout(
+          j.key().flightId,
+          tenantId
+        );
+        assert.equal(closeout.readyToClose, false);
+        assert(closeout.unresolvedRegistrations.includes(bag.tagNumber));
+      } finally {
+        pool.getConnection = originalGetConnection;
+        try {
+          await control.query("SELECT RELEASE_LOCK(?)", [lockName]);
+          await Promise.allSettled(
+            [reading, refund].filter(p => p !== undefined)
+          );
+        } finally {
+          for (const entry of wrappedConnections)
+            entry.connection.query = entry.query;
+          control.release();
+        }
+      }
+    }
+  );
+
+  await check(
+    "DCS: actual manifest and closeout routes preserve tenant authority",
+    async () => {
+      const j = await journey();
+      await staffCheckIn(j.key());
+      await registerBaggage(j.bag(10), bagActor);
+      await transitionDcsPassenger(
+        { ...j.key(), action: "board", ...command() },
+        actor
+      );
+      const [{ id: adminId }] = await db
+        .insert(s.users)
+        .values({
+          openId: `dcs-route-admin-${runId}`,
+          role: "admin",
+          name: "Synthetic manifest administrator",
+        })
+        .$returningId();
+      const context = async (id: number, operatingTenant: number | null) => {
+        const [user] = await db
+          .select()
+          .from(s.users)
+          .where(eq(s.users.id, id));
+        return {
+          user,
+          tenantId: operatingTenant,
+          authMethod: "cookie",
+        } as TrpcContext;
+      };
+      const manifest = await dcsRouter
+        .createCaller(await context(adminId, null))
+        .getFlightManifest({ flightId: j.key().flightId });
+      assert.deepEqual(
+        manifest.manifest.passengers.list.map(p => p.id),
+        [j.key().passengerId]
+      );
+      assert.equal(manifest.manifest.baggage.pieces, 1);
+      const closeout = await baggageRouter
+        .createCaller(await context(operatorId, tenantId))
+        .flightCloseout({ flightId: j.key().flightId });
+      assert.equal(closeout.expectedBags, 1);
+      assert.equal(
+        closeout.acceptanceState,
+        "operator_station_acceptance_required"
+      );
+      await assert.rejects(
+        baggageRouter
+          .createCaller(await context(otherOperatorId, otherTenantId))
+          .flightCloseout({ flightId: j.key().flightId }),
+        { code: "NOT_FOUND" }
+      );
+    }
+  );
+
+  await check(
     "DCS: a late full refund cannot erase unresolved physical baggage or recorded boarding",
     async () => {
       const j = await journey(1, 2);
@@ -1037,6 +1345,148 @@ export async function verifyDcsCounterLifecycle(
     }
   );
   const supervisor = { ...actor, role: "airline_admin" as const };
+  for (const scenario of [
+    "unauthorized staff",
+    "foreign tenant",
+    "wrong airline",
+    "wrong aircraft",
+    "checked-in seat",
+    "issued boarding pass",
+    "active check-in nonce",
+    "changed protected seat price",
+    "changed protected seat feature",
+    "incompatible operational block",
+  ] as const) {
+    await check(
+      `DCS remap: rejects ${scenario} without changing state`,
+      async () => {
+        const j = await journey();
+        const key = j.key();
+        await selectSeat(key.flightId, "1A", key.bookingId, key.passengerId);
+        if (scenario === "checked-in seat") await staffCheckIn(key);
+        if (
+          scenario === "issued boarding pass" ||
+          scenario === "active check-in nonce"
+        ) {
+          await db
+            .update(s.seatInventory)
+            .set(
+              scenario === "issued boarding pass"
+                ? { boardingPassIssued: true }
+                : { checkInNonce: randomUUID() }
+            )
+            .where(
+              and(
+                eq(s.seatInventory.flightId, key.flightId),
+                eq(s.seatInventory.seatNumber, "1A")
+              )
+            );
+        }
+        const priced =
+          scenario === "changed protected seat price" ||
+          scenario === "changed protected seat feature";
+        if (priced) {
+          // Persisted assigned-seat terms, including imported paid-seat terms,
+          // remain protected even before a boarding pass is issued.
+          await db
+            .update(s.seatInventory)
+            .set({ seatPrice: 500, priceTier: "preferred" })
+            .where(
+              and(
+                eq(s.seatInventory.flightId, key.flightId),
+                eq(s.seatInventory.seatNumber, "1A")
+              )
+            );
+        }
+        if (scenario === "incompatible operational block") {
+          const [flight] = await db
+            .select()
+            .from(s.flights)
+            .where(eq(s.flights.id, key.flightId));
+          const day = flight.departureTime.toISOString().slice(0, 10);
+          await blockDeskSeats(
+            {
+              flightId: key.flightId,
+              startDate: day,
+              endDate: day,
+              seatNumbers: ["2B"],
+              ...command(),
+            },
+            supervisor
+          );
+        }
+        const [{ id: replacement }] = await db
+          .insert(s.seatMaps)
+          .values({
+            aircraftType:
+              scenario === "wrong aircraft" ? "OTHER-EQUIPMENT" : "DCS-FIXTURE",
+            airlineId:
+              scenario === "wrong airline" ? airline.id + 1 : airline.id,
+            configName: `Native rejection ${scenario} ${runId}`,
+            totalSeats: 4,
+            economySeats: 4,
+            cabinLayout: JSON.stringify({
+              rows: [1, 2].map(row => ({
+                row,
+                cabinClass: "economy",
+                seats: ["A", "B"].map(column => ({
+                  column:
+                    scenario === "incompatible operational block" &&
+                    row === 2 &&
+                    column === "B"
+                      ? "C"
+                      : column,
+                  seatType: "window",
+                  priceTier:
+                    priced && row === 1 && column === "A"
+                      ? "preferred"
+                      : "free",
+                  seatPrice:
+                    priced && row === 1 && column === "A"
+                      ? scenario === "changed protected seat price"
+                        ? 600
+                        : 500
+                      : 0,
+                  hasExtraLegroom:
+                    scenario === "changed protected seat feature" &&
+                    row === 1 &&
+                    column === "A",
+                })),
+              })),
+            }),
+          })
+          .$returningId();
+        const before = await stationSnapshot([j.bookingId], j.flightIds);
+        const operator =
+          scenario === "unauthorized staff"
+            ? actor
+            : scenario === "foreign tenant"
+              ? { ...otherActor, role: "airline_admin" }
+              : supervisor;
+        await assert.rejects(
+          async () =>
+            remapDeskSeats(
+              {
+                flightId: key.flightId,
+                seatMapId: replacement,
+                ...command(),
+              },
+              operator
+            ),
+          {
+            code:
+              scenario === "unauthorized staff" || scenario === "foreign tenant"
+                ? "FORBIDDEN"
+                : "PRECONDITION_FAILED",
+          }
+        );
+        assert.deepEqual(
+          await stationSnapshot([j.bookingId], j.flightIds),
+          before
+        );
+      }
+    );
+  }
   await check(
     "DCS station: scoped APFAX, meal status and case resolution",
     async () => {
@@ -1695,6 +2145,8 @@ export async function verifyDcsCounterLifecycle(
           .where(eq(s.flights.id, id));
         assert.equal(f.economyAvailable, source.economyAvailable - 2);
       }
+      await selectSeat(idA, "1A", a.bookingId, a.key().passengerId);
+      const beforeRemap = await stationSnapshot([a.bookingId], [idA]);
       const [{ id: replacement }] = await db
         .insert(s.seatMaps)
         .values({
@@ -1716,9 +2168,34 @@ export async function verifyDcsCounterLifecycle(
           }),
         })
         .$returningId();
-      await remapDeskSeats(
-        { flightId: idA, seatMapId: replacement, ...command() },
-        supervisor
+      // Approved compatible remaps preserve operational blocks. The original
+      // workbook's blanket rejection wording remains a policy reconciliation
+      // item; this acceptance deliberately does not change that behavior.
+      const remap = { flightId: idA, seatMapId: replacement, ...command() };
+      const remapped = await remapDeskSeats(remap, supervisor);
+      const afterRemap = await stationSnapshot([a.bookingId], [idA]);
+      assert.deepEqual(await remapDeskSeats(remap, supervisor), remapped);
+      assert.deepEqual(await stationSnapshot([a.bookingId], [idA]), afterRemap);
+      assert.deepEqual(afterRemap.flights, beforeRemap.flights);
+      const seatOwnership = (rows: typeof beforeRemap.seats) =>
+        rows.map(seat => ({
+          id: seat.id,
+          seatNumber: seat.seatNumber,
+          cabin: seat.cabinClass,
+          bookingId: seat.bookingId,
+          passengerId: seat.passengerId,
+          status: seat.status,
+        }));
+      assert.deepEqual(
+        seatOwnership(afterRemap.seats),
+        seatOwnership(beforeRemap.seats)
+      );
+      assert(afterRemap.seats.every(seat => seat.seatMapId === replacement));
+      assert.deepEqual(
+        afterRemap.events
+          .filter(event => event.action === "remap_seats")
+          .map(event => event.id),
+        [remapped.eventId]
       );
       const [protectedSeat] = await db
         .select()
@@ -1738,6 +2215,7 @@ export async function verifyDcsCounterLifecycle(
         supervisor
       );
       assert(quote.refundDue > 0);
+      const beforeConfirm = await stationSnapshot([j.bookingId], j.flightIds);
       await assert.rejects(
         confirmDeskDowngrade(
           {
@@ -1750,6 +2228,10 @@ export async function verifyDcsCounterLifecycle(
         ),
         /quote/
       );
+      assert.deepEqual(
+        await stationSnapshot([j.bookingId], j.flightIds),
+        beforeConfirm
+      );
       const confirm = {
         ...key,
         ...command(),
@@ -1758,10 +2240,31 @@ export async function verifyDcsCounterLifecycle(
       };
       const receipt = await confirmDeskDowngrade(confirm, supervisor);
       assert.equal(receipt.refundDue, quote.refundDue);
+      const applied = await stationSnapshot([j.bookingId], j.flightIds);
       assert.deepEqual(
         await confirmDeskDowngrade(confirm, supervisor),
         receipt
       );
+      assert.deepEqual(
+        await stationSnapshot([j.bookingId], j.flightIds),
+        applied
+      );
+      assert.deepEqual(
+        applied.events
+          .filter(event => event.action === "downgrade")
+          .map(event => event.id),
+        [receipt.eventId]
+      );
+      assert.equal(
+        applied.outbox.filter(
+          event => event.eventType === "order.servicing_applied"
+        ).length,
+        1
+      );
+      assert.equal(applied.refundPlans.length, 1);
+      assert.equal(applied.refundPlans[0].amount, quote.refundDue);
+      assert.equal(applied.refundPlans[0].status, "queued");
+      assert.deepEqual(applied.ledger, beforeConfirm.ledger);
       const [changed] = await db
         .select()
         .from(s.bookings)
@@ -1774,6 +2277,187 @@ export async function verifyDcsCounterLifecycle(
           eq(s.paymentReceipts.paymentIntentId, `pi_dcs_counter_${j.bookingId}`)
         );
       assert.equal(paid.refundedAmount, 0);
+    }
+  );
+  for (const scenario of [
+    "stale quote",
+    "wrong passenger",
+    "foreign tenant",
+    "another booking's quote",
+  ] as const) {
+    await check(
+      `DCS downgrade: rejects ${scenario} without applying or refunding`,
+      async () => {
+        const j = await journey(1, 1, "business");
+        const other = await journey(1, 1, "business");
+        const quote = await quoteDeskDowngrade(
+          { ...j.key(), ...command() },
+          supervisor
+        );
+        const foreignQuote =
+          scenario === "another booking's quote"
+            ? await quoteDeskDowngrade(
+                { ...other.key(), ...command() },
+                supervisor
+              )
+            : undefined;
+        if (scenario === "stale quote") {
+          const [modification] = await db
+            .select()
+            .from(s.bookingModifications)
+            .where(eq(s.bookingModifications.id, quote.modificationId));
+          await db
+            .update(s.bookingModifications)
+            .set({
+              servicingPayload: {
+                ...modification.servicingPayload,
+                expiresAt: new Date(Date.now() - 1000).toISOString(),
+              },
+            })
+            .where(eq(s.bookingModifications.id, quote.modificationId));
+        }
+        const bookingIds = [j.bookingId, other.bookingId];
+        const flightIds = [...j.flightIds, ...other.flightIds];
+        const before = await stationSnapshot(bookingIds, flightIds);
+        await assert.rejects(
+          confirmDeskDowngrade(
+            {
+              ...j.key(),
+              ...command(),
+              passengerId:
+                scenario === "wrong passenger"
+                  ? other.key().passengerId
+                  : j.key().passengerId,
+              quoteEventId: foreignQuote?.eventId ?? quote.eventId,
+              expectedRefund: foreignQuote?.refundDue ?? quote.refundDue,
+            },
+            scenario === "foreign tenant"
+              ? { ...otherActor, role: "airline_admin" }
+              : supervisor
+          ),
+          scenario === "stale quote"
+            ? (error: unknown) => {
+                assert(error instanceof OrderServicingUnavailable);
+                assert.equal(
+                  error.message,
+                  "Servicing quote expired or booking changed"
+                );
+                return true;
+              }
+            : {
+                code:
+                  scenario === "foreign tenant"
+                    ? "FORBIDDEN"
+                    : scenario === "wrong passenger"
+                      ? "NOT_FOUND"
+                      : "PRECONDITION_FAILED",
+              }
+        );
+        assert.deepEqual(await stationSnapshot(bookingIds, flightIds), before);
+      }
+    );
+  }
+  await check(
+    "DCS downgrade: a native event failure rolls back the exchange and permits one clean replay",
+    async () => {
+      const j = await journey(1, 1, "business");
+      const quote = await quoteDeskDowngrade(
+        { ...j.key(), ...command() },
+        supervisor
+      );
+      const confirm = {
+        ...j.key(),
+        ...command(),
+        quoteEventId: quote.eventId,
+        expectedRefund: quote.refundDue,
+      };
+      const before = await stationSnapshot([j.bookingId], j.flightIds);
+      const pool = getPool();
+      assert(pool);
+      assert.equal(process.env.AIS_DISPOSABLE_DATABASE, "true");
+      assert(
+        /\/[a-z0-9_]+_test$/i.test(new URL(process.env.DATABASE_URL!).pathname)
+      );
+      const control = await pool.getConnection();
+      const trigger = `dcs_downgrade_fail_${randomUUID().replaceAll("-", "")}`;
+      let created = false;
+      try {
+        await control.query(`CREATE TRIGGER \`${trigger}\`
+          BEFORE INSERT ON dcs_operation_events FOR EACH ROW
+          BEGIN
+            IF NEW.action = 'downgrade' AND NEW.bookingId = ${j.bookingId}
+              AND NEW.flightId = ${j.key().flightId} THEN
+              SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Synthetic DCS downgrade event failure';
+            END IF;
+          END`);
+        created = true;
+        await assert.rejects(
+          confirmDeskDowngrade(confirm, supervisor),
+          error => {
+            let cause: unknown = error;
+            for (
+              let depth = 0;
+              depth < 6 && cause && typeof cause === "object";
+              depth++
+            ) {
+              if (
+                "sqlMessage" in cause &&
+                cause.sqlMessage === "Synthetic DCS downgrade event failure"
+              )
+                return true;
+              cause = "cause" in cause ? cause.cause : undefined;
+            }
+            return false;
+          }
+        );
+      } finally {
+        try {
+          if (created) await control.query(`DROP TRIGGER \`${trigger}\``);
+        } finally {
+          control.release();
+        }
+      }
+      assert.deepEqual(
+        await stationSnapshot([j.bookingId], j.flightIds),
+        before,
+        "Booking, coupons, fares, inventory, offers, financial effects and idempotency must all roll back"
+      );
+      const applied = await confirmDeskDowngrade(confirm, supervisor);
+      const after = await stationSnapshot([j.bookingId], j.flightIds);
+      assert.equal(after.bookings[0].cabinClass, "economy");
+      assert.equal(
+        after.flights[0].economyAvailable,
+        before.flights[0].economyAvailable - 1
+      );
+      assert.equal(
+        after.flights[0].businessAvailable,
+        before.flights[0].businessAvailable + 1
+      );
+      assert.deepEqual(after.ledger, before.ledger);
+      assert.equal(after.refundPlans.length, 1);
+      assert.equal(after.refundPlans[0].amount, quote.refundDue);
+      assert.equal(after.refundPlans[0].status, "queued");
+      assert.equal(after.receipts[0].refundedAmount, 0);
+      assert.equal(
+        after.outbox.filter(
+          event => event.eventType === "order.servicing_applied"
+        ).length,
+        1
+      );
+      assert.deepEqual(
+        after.events
+          .filter(event => event.action === "downgrade")
+          .map(event => event.id),
+        [applied.eventId]
+      );
+      assert.deepEqual(
+        await confirmDeskDowngrade(confirm, supervisor),
+        applied
+      );
+      assert.deepEqual(
+        await stationSnapshot([j.bookingId], j.flightIds),
+        after
+      );
     }
   );
   await check(

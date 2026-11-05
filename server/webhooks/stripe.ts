@@ -26,12 +26,14 @@ import {
   passengers,
   stripeEvents,
   bookingStatusHistory,
+  bookingSegments,
 } from "../../drizzle/schema";
 import {
   settleVerifiedPayment,
   settleVerifiedRefund,
 } from "../services/payment-settlement.service";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { recordVerifiedSplitRefund } from "../services/split-refund.service";
 import {
   disputeFromStripe,
@@ -524,7 +526,8 @@ export async function sendBookingConfirmationEmail(
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
-  try {
+  const destination = alias(airports, "confirmation_destination");
+  const readBooking = async () => {
     const [booking] = await db
       .select({
         tenantId: bookings.tenantId,
@@ -537,45 +540,103 @@ export async function sendBookingConfirmationEmail(
         numberOfPassengers: bookings.numberOfPassengers,
         userId: bookings.userId,
         flightId: bookings.flightId,
+        updatedAt: bookings.updatedAt,
         userName: users.name,
         userEmail: users.email,
+        flightTenantId: flights.tenantId,
+        flightStatus: flights.status,
         flightNumber: flights.flightNumber,
         departureTime: flights.departureTime,
         arrivalTime: flights.arrivalTime,
+        originId: flights.originId,
         originCode: airports.code,
         originCity: airports.city,
+        destinationId: flights.destinationId,
+        destinationCode: destination.code,
+        destinationCity: destination.city,
       })
       .from(bookings)
       .innerJoin(users, eq(bookings.userId, users.id))
       .innerJoin(flights, eq(bookings.flightId, flights.id))
       .innerJoin(airports, eq(flights.originId, airports.id))
+      .innerJoin(destination, eq(flights.destinationId, destination.id))
       .where(eq(bookings.id, bookingId))
       .limit(1);
+    return booking;
+  };
+  // Ticket issuance writes ticketNumber itself. Compare only the source
+  // passenger identity used by the document and attachment filename.
+  const readPassengers = () =>
+    db
+      .select({
+        id: passengers.id,
+        tenantId: passengers.tenantId,
+        bookingId: passengers.bookingId,
+        type: passengers.type,
+        firstName: passengers.firstName,
+        lastName: passengers.lastName,
+      })
+      .from(passengers)
+      .where(eq(passengers.bookingId, bookingId))
+      .orderBy(asc(passengers.id));
 
+  // A later sector can change without changing bookings.flightId or its total.
+  // Include each document sector and its current flight presentation source.
+  const readSegments = () =>
+    db
+      .select({
+        id: bookingSegments.id,
+        segmentOrder: bookingSegments.segmentOrder,
+        flightId: bookingSegments.flightId,
+        fareClassId: bookingSegments.fareClassId,
+        status: bookingSegments.status,
+        departureDate: bookingSegments.departureDate,
+        segmentAmount: bookingSegments.segmentAmount,
+        flightTenantId: flights.tenantId,
+        flightStatus: flights.status,
+        flightNumber: flights.flightNumber,
+        departureTime: flights.departureTime,
+        arrivalTime: flights.arrivalTime,
+        originId: flights.originId,
+        originCode: airports.code,
+        originCity: airports.city,
+        destinationId: flights.destinationId,
+        destinationCode: destination.code,
+        destinationCity: destination.city,
+      })
+      .from(bookingSegments)
+      .innerJoin(flights, eq(bookingSegments.flightId, flights.id))
+      .innerJoin(airports, eq(flights.originId, airports.id))
+      .innerJoin(destination, eq(flights.destinationId, destination.id))
+      .where(eq(bookingSegments.bookingId, bookingId))
+      .orderBy(asc(bookingSegments.segmentOrder), asc(bookingSegments.id));
+
+  try {
+    const booking = await readBooking();
     if (!booking || booking.tenantId !== expectedTenantId)
       throw new Error("Booking email tenant mismatch");
     if (
-      booking &&
-      (booking.bookingStatus !== "confirmed" ||
-        booking.paymentStatus !== "paid")
+      booking.bookingStatus !== "confirmed" ||
+      booking.paymentStatus !== "paid"
     )
       return;
-    if (!booking || !booking.userEmail)
+    if (!booking.userEmail)
       throw new Error("Booking confirmation recipient is unavailable");
 
-    // Get destination airport
-    const [flight] = await db
-      .select({ destinationId: flights.destinationId })
-      .from(flights)
-      .innerJoin(bookings, eq(bookings.flightId, flights.id))
-      .where(eq(bookings.id, bookingId))
-      .limit(1);
-
-    const [destAirport] = await db
-      .select({ code: airports.code, city: airports.city })
-      .from(airports)
-      .where(eq(airports.id, flight.destinationId))
-      .limit(1);
+    const [bookingPassengers, itinerarySegments] = await Promise.all([
+      readPassengers(),
+      readSegments(),
+    ]);
+    if (
+      booking.numberOfPassengers < 1 ||
+      bookingPassengers.length !== booking.numberOfPassengers
+    )
+      throw new Error("Booking confirmation passenger roster is incomplete");
+    const sourceSnapshot = JSON.stringify({
+      booking,
+      bookingPassengers,
+      itinerarySegments,
+    });
 
     // Generate e-tickets
     const eticketAttachments: Array<{
@@ -585,46 +646,39 @@ export async function sendBookingConfirmationEmail(
     }> = [];
 
     try {
-      const bookingPassengers = await db
-        .select()
-        .from(passengers)
-        .where(eq(passengers.bookingId, bookingId));
-
-      if (bookingPassengers.length > 0) {
-        const results = await Promise.allSettled(
-          bookingPassengers.map(async passenger => {
-            const pdf = await generateETicketForPassenger(
-              bookingId,
-              passenger.id
-            );
-            return {
-              filename: `eticket-${booking.bookingReference}-${passenger.firstName}.pdf`,
-              content: pdf,
-              contentType: "application/pdf",
-            };
-          })
-        );
-        for (const r of results) {
-          if (r.status === "fulfilled") {
-            eticketAttachments.push(r.value);
-          }
-        }
-        const failures = results.filter(r => r.status === "rejected");
-        if (failures.length > 0) {
-          throw new AggregateError(
-            failures.map(f => f.reason),
-            "Ticket documents incomplete"
-          );
-        }
-        log.info(
-          {
-            event: "etickets_generated",
+      const results = await Promise.allSettled(
+        bookingPassengers.map(async passenger => {
+          const pdf = await generateETicketForPassenger(
             bookingId,
-            count: eticketAttachments.length,
-          },
-          `Generated ${eticketAttachments.length} e-ticket PDFs`
+            passenger.id
+          );
+          return {
+            filename: `eticket-${booking.bookingReference}-${passenger.firstName}.pdf`,
+            content: pdf,
+            contentType: "application/pdf",
+          };
+        })
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled") {
+          eticketAttachments.push(r.value);
+        }
+      }
+      const failures = results.filter(r => r.status === "rejected");
+      if (failures.length > 0) {
+        throw new AggregateError(
+          failures.map(f => f.reason),
+          "Ticket documents incomplete"
         );
       }
+      log.info(
+        {
+          event: "etickets_generated",
+          bookingId,
+          count: eticketAttachments.length,
+        },
+        `Generated ${eticketAttachments.length} e-ticket PDFs`
+      );
     } catch (eticketError) {
       log.error(
         { event: "eticket_generation_failed", bookingId, error: eticketError },
@@ -633,7 +687,30 @@ export async function sendBookingConfirmationEmail(
       throw eticketError;
     }
 
-    // Send email
+    // Rendering can outlive a cancellation, recipient edit or itinerary change.
+    // Revalidate before provider handoff; a changed active source stays retryable
+    // so the next delivery renders its current data with the same ticket IDs.
+    const [currentBooking, currentPassengers, currentSegments] =
+      await Promise.all([readBooking(), readPassengers(), readSegments()]);
+    if (!currentBooking || currentBooking.tenantId !== expectedTenantId)
+      throw new Error("Booking email tenant mismatch");
+    if (
+      currentBooking.bookingStatus !== "confirmed" ||
+      currentBooking.paymentStatus !== "paid"
+    )
+      return;
+    if (
+      sourceSnapshot !==
+      JSON.stringify({
+        booking: currentBooking,
+        bookingPassengers: currentPassengers,
+        itinerarySegments: currentSegments,
+      })
+    )
+      throw new Error(
+        "Booking confirmation changed during document generation"
+      );
+
     const accepted = await sendBookingConfirmation({
       idempotencyKey: `booking-confirmed:${bookingId}`,
       passengerName: booking.userName || "Passenger",
@@ -642,7 +719,7 @@ export async function sendBookingConfirmationEmail(
       pnr: booking.pnr,
       flightNumber: booking.flightNumber,
       origin: `${booking.originCity} (${booking.originCode})`,
-      destination: `${destAirport.city} (${destAirport.code})`,
+      destination: `${booking.destinationCity} (${booking.destinationCode})`,
       departureTime: booking.departureTime,
       arrivalTime: booking.arrivalTime,
       cabinClass: booking.cabinClass,

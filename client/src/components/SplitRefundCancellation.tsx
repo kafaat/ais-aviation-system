@@ -55,6 +55,14 @@ export function SplitRefundCancellation({
         </p>
       )}
       <dl className="grid grid-cols-2 gap-2 text-sm">
+        {data.plan && (
+          <>
+            <dt>{t("cancelBooking.receipt.cancellationReference")}</dt>
+            <dd className="break-all">
+              <bdi>{data.plan.id}</bdi>
+            </dd>
+          </>
+        )}
         <dt>{t("cancelBooking.originalAmount")}</dt>
         <dd>
           {(summary.totalAmount / 100).toFixed(2)} {t("common.sar")}
@@ -114,6 +122,12 @@ export function SplitRefundCancellation({
                       <span>
                         {t(`cancelBooking.split.item.${progress.status}`)}
                       </span>
+                      {progress.refundId && (
+                        <p className="text-xs break-all">
+                          {t("cancelBooking.receipt.reference")}{" "}
+                          <bdi>{progress.refundId}</bdi>
+                        </p>
+                      )}
                       {progress.errorCode === "provider_action_required" && (
                         <p>{t("cancelBooking.split.actionRequired")}</p>
                       )}

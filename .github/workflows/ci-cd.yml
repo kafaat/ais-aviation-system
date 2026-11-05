@@ -651,6 +651,27 @@ jobs:
           AIS_E2E_HTML_REPORT_DIR: playwright-report/auth-logout
         run: pnpm exec playwright test e2e/auth-logout-acceptance.spec.ts --project=chromium
 
+      - name: Run native financial dialog acceptance
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+          REDIS_URL: redis://127.0.0.1:6379/5
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+          VITE_APP_ID: ais-aviation-system-test
+          OAUTH_SERVER_URL: http://localhost:3000
+          OWNER_OPEN_ID: test-owner-open-id
+          BUILT_IN_FORGE_API_URL: https://api.example.com
+          BUILT_IN_FORGE_API_KEY: test-forge-api-key
+          AUTH_SERVICE_URL: http://localhost:8000
+          CI: true
+          E2E_BASE_URL: http://localhost:3000
+          AIS_DISPOSABLE_DATABASE: true
+          AIS_E2E_REPORT_DIR: test-results/ui05
+          AIS_E2E_HTML_REPORT_DIR: playwright-report/ui05
+        run: pnpm exec playwright test --config playwright.ui05.config.ts --project=chromium
+
       - name: Upload E2E test results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -678,6 +699,9 @@ jobs:
             REPORTS=(test-results/results.json)
             if [ -f test-results/auth-logout/results.json ]; then
               REPORTS+=(test-results/auth-logout/results.json)
+            fi
+            if [ -f test-results/ui05/results.json ]; then
+              REPORTS+=(test-results/ui05/results.json)
             fi
             TOTAL=$(jq -sr '[.[] | (.stats.expected // 0), (.stats.unexpected // 0), (.stats.flaky // 0), (.stats.skipped // 0)] | add' "${REPORTS[@]}")
             PASSED=$(jq -sr '[.[] | .stats.expected // 0] | add' "${REPORTS[@]}")

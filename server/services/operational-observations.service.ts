@@ -95,6 +95,13 @@ export function startOperationalObservations() {
 export async function stopOperationalObservations() {
   clearInterval(timer);
   timer = undefined;
+  // The in-flight flush already captured its bucket. Responses completed while
+  // it was writing belong to current, so drain them after that write finishes.
+  if (flushing) await flushing;
+  // A process stopped before serving a request has no final observation to
+  // persist. Do not initialize a database pool merely to write an empty sample
+  // during shutdown. A previously failed sample still needs to be retried.
+  if (!pending && current.requests === 0) return;
   await flushApiObservations();
 }
 export async function readDurableHealth(now = new Date()) {

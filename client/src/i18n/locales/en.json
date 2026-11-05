@@ -2487,6 +2487,21 @@
     "policyHelp": "Passenger rights and refunds"
   },
   "cancelBooking": {
+    "receipt": {
+      "title": "Refund receipt",
+      "recorded": "Refund request recorded",
+      "reference": "Refund reference:",
+      "cancellationReference": "Cancellation reference:",
+      "close": "Close receipt",
+      "state": {
+        "succeeded": "Refund confirmed",
+        "pending": "Pending with provider",
+        "requires_action": "The payment provider requires further action. Contact support with this reference.",
+        "failed": "Refund failed. Contact support with this reference.",
+        "canceled": "Refund cancelled by the payment provider. Contact support with this reference.",
+        "unknown": "Refund status is not confirmed. Contact support with this reference."
+      }
+    },
     "split": {
       "track": "Track cancellation refunds",
       "more": "More cancellations",

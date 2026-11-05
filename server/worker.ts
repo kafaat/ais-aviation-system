@@ -50,7 +50,12 @@ import {
 import { startCronJobs, stopCronJobs } from "./services/cron.service";
 
 const log = createServiceLogger("worker");
-rmSync("/tmp/ais-worker-ready", { force: true });
+// Keep the deployed probe's default while allowing independently supervised
+// worker processes on the same host to own separate readiness files.
+const readinessPath =
+  process.env.AIS_WORKER_READY_PATH || "/tmp/ais-worker-ready";
+const nextReadinessPath = `${readinessPath}.next`;
+rmSync(readinessPath, { force: true });
 
 let isShuttingDown = false;
 let heartbeat: NodeJS.Timeout | undefined;
@@ -149,11 +154,11 @@ async function initialize(): Promise<void> {
         endedAt: new Date(),
       });
       if (!isShuttingDown) {
-        writeFileSync("/tmp/ais-worker-ready.next", String(Date.now()));
-        renameSync("/tmp/ais-worker-ready.next", "/tmp/ais-worker-ready");
+        writeFileSync(nextReadinessPath, String(Date.now()));
+        renameSync(nextReadinessPath, readinessPath);
       }
     } catch (error) {
-      rmSync("/tmp/ais-worker-ready", { force: true });
+      rmSync(readinessPath, { force: true });
       log.error({ error }, "Worker readiness lost");
       try {
         await recordOperationalSample({
@@ -192,7 +197,7 @@ async function shutdown(signal: string, exitCode = 0): Promise<void> {
 
   isShuttingDown = true;
   clearInterval(heartbeat);
-  rmSync("/tmp/ais-worker-ready", { force: true });
+  rmSync(readinessPath, { force: true });
   log.info({ signal }, `Received ${signal}, starting graceful shutdown...`);
 
   const shutdownTimeout = setTimeout(() => {

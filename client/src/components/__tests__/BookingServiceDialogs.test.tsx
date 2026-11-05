@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { CancelBookingDialog } from "../CancelBookingDialog";
@@ -70,8 +71,15 @@ async function cancellation(overrides: Handlers = {}) {
   return { ...fixture, success, close };
 }
 
-it("shows the server refund and retained fee, then waits for successful cancellation before closing", async () => {
-  const reply = deferred<{ success: boolean }>();
+it("keeps the returned refund receipt visible until the passenger closes it", async () => {
+  const reply = deferred<{
+    success: boolean;
+    refundId: string;
+    amount: number;
+    status: string;
+    cumulativeRefundedAmount: number;
+    remainingRefundableAmount: number;
+  }>();
   const { requests, success, close } = await cancellation({
     "refunds.create": () => reply.promise,
   });
@@ -92,13 +100,56 @@ it("shows the server refund and retained fee, then waits for successful cancella
   expect(
     screen.getByRole("button", { name: i18n.t("cancelBooking.processing") })
   ).toBeDisabled();
-  await act(async () => reply.resolve({ success: true }));
+  await act(async () =>
+    reply.resolve({
+      success: true,
+      refundId: "re_cash_007",
+      amount: 7500,
+      status: "succeeded",
+      cumulativeRefundedAmount: 7500,
+      remainingRefundableAmount: 2500,
+    })
+  );
   await elapse();
   expect(success).toHaveBeenCalledTimes(1);
-  expect(close).toHaveBeenCalledExactlyOnceWith(false);
+  expect(close).not.toHaveBeenCalled();
+  expect(screen.getByText("re_cash_007")).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("Refund confirmed");
+  expect(screen.getByText(/75\.00/)).toBeVisible();
+  expect(
+    screen.queryByRole("button", {
+      name: i18n.t("cancelBooking.confirmCancel"),
+    })
+  ).not.toBeInTheDocument();
   expect(notices.success).toHaveBeenCalledWith(
+    i18n.t("cancelBooking.receipt.recorded")
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Close receipt" }));
+  expect(close).toHaveBeenCalledExactlyOnceWith(false);
+});
+
+it("shows a pending refund receipt without claiming that the provider confirmed it", async () => {
+  const { close } = await cancellation({
+    "refunds.create": () => ({
+      success: true,
+      refundId: "re_pending_007",
+      amount: 7500,
+      status: "pending",
+      cumulativeRefundedAmount: 0,
+      remainingRefundableAmount: 2500,
+    }),
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: i18n.t("cancelBooking.confirmCancel") })
+  );
+  await elapse();
+  expect(screen.getByText("re_pending_007")).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("Pending with provider");
+  expect(screen.queryByText("Refund confirmed")).not.toBeInTheDocument();
+  expect(notices.success).not.toHaveBeenCalledWith(
     i18n.t("cancelBooking.successMessage")
   );
+  expect(close).not.toHaveBeenCalled();
 });
 
 it("retains the cancellation dialog and reports a refund failure without announcing success", async () => {
@@ -149,6 +200,61 @@ it("routes split funding to its own receipt review without requesting a regular 
   });
   expect(screen.getByRole("alert")).toHaveTextContent(
     "Split payer receipts require review"
+  );
+  expect(requests).toEqual([
+    { path: "refunds.splitCancellation", input: { bookingId: 7 } },
+  ]);
+});
+
+it("shows the split cancellation reference and each payer's confirmed refund reference", async () => {
+  const { requests } = await cancellation({
+    "refunds.splitCancellation": () => ({
+      splitFunded: true,
+      quote: null,
+      reason: null,
+      plan: {
+        id: "plan_007",
+        status: "completed",
+        totalAmount: 10000,
+        cancellationFee: 2500,
+        refundAmount: 7500,
+        items: [
+          {
+            splitId: 1,
+            payerName: "First payer",
+            paidAmount: 4000,
+            refundAmount: 3000,
+            refundedAmount: 3000,
+            status: "succeeded",
+            refundId: "re_first_payer",
+            errorCode: null,
+          },
+          {
+            splitId: 2,
+            payerName: "Second payer",
+            paidAmount: 6000,
+            refundAmount: 4500,
+            refundedAmount: 4500,
+            status: "succeeded",
+            refundId: "re_second_payer",
+            errorCode: null,
+          },
+        ],
+      },
+    }),
+  });
+  expect(screen.getByText("plan_007")).toBeVisible();
+  for (const [name, reference, amount] of [
+    ["First payer", "re_first_payer", "30.00"],
+    ["Second payer", "re_second_payer", "45.00"],
+  ]) {
+    const row = screen.getByRole("row", { name: new RegExp(name) });
+    expect(within(row).getByText(reference)).toBeVisible();
+    expect(within(row).getByText(amount)).toBeVisible();
+    expect(within(row).getByText("Refund confirmed")).toBeVisible();
+  }
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "All planned refunds are confirmed"
   );
   expect(requests).toEqual([
     { path: "refunds.splitCancellation", input: { bookingId: 7 } },

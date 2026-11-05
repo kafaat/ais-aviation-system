@@ -1262,6 +1262,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/__tests__/helpers/ticket-revalidation-fixture.ts",
         "server/_core/middleware/agent-api.middleware.ts",
         "server/services/currency/currency.service.ts",
         "server/services/intelligence/gateway.ts",
@@ -4367,6 +4368,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/__tests__/helpers/ticket-revalidation-fixture.ts",
         "server/routers/ndc.ts",
         "server/services/booking-modification.service.ts",
         "server/services/dcs-station.service.ts",
@@ -5616,6 +5618,7 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/__tests__/helpers/cache-process-worker.ts",
+        "server/__tests__/helpers/ticket-revalidation-fixture.ts",
         "server/routers/cache.ts",
         "server/routers/reference.ts",
         "server/services/flights.service.ts",
@@ -5772,6 +5775,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/__tests__/helpers/ticket-revalidation-fixture.ts",
         "server/routers/price-quote.ts",
         "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",
@@ -6750,7 +6754,8 @@
           "bookings",
           "flights",
           "passengers",
-          "seatInventory"
+          "seatInventory",
+          "ticketCoupons"
         ],
         "writes": ["passengers"]
       },
@@ -7070,7 +7075,7 @@
         "server/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "walletTransactions", "wallets"],
+        "reads": ["bookings", "users", "walletTransactions", "wallets"],
         "writes": ["financialLedger", "walletTransactions", "wallets"]
       },
       "replacement": null
