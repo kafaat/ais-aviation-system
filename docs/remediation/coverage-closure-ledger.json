@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
   "baseline": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
-  "source_revision": "7fe9fd9aab69d2f5ce35f39d06732b72e933a091",
-  "policy": "The source_revision identifies the published implementation under review. Thirty-three functional findings have locally complete original acceptance, META-01 still requires final same-source CI and its scope inventory, and four original findings remain partial for explicit policy, physical or source conditions. accepted_sha and acceptance_run stay null until the original criteria and required CI are verified on the actual tested source.",
+  "source_revision": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+  "policy": "source_revision is the actual accepted CI source; implementation_commit is separate. Thirty-four findings, including META-01, are verified by same-source evidence. OPS-06, UI-05, UI-07 and CAP-01 remain partial with null accepted fields.",
   "findings": [
     {
       "id": "BE-01",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "رفض إعادة استخدام رمز التحديث قد يتراجع عن إلغاء الجلسات داخل المعاملة",
       "original_acceptance": "1. بقاعدة بيانات فعلية: أصدر الرمز A ثم دوّره إلى B وأعد استعمال A؛ يجب رفض الطلب وحفظ revokedAt لكل سجلات العائلة، ثم رفض Access Token المرتبط بـB ورفض تحديث B.\n2. تحقق من بقاء عائلة جلسة أخرى صالحة، وأن استعمالين متزامنين ينتجان رمزاً جديداً واحداً فقط، مع عدم التراجع عن إلغاء العائلة عند اكتشاف إعادة الاستخدام لاحقاً.",
@@ -19,21 +19,27 @@
         "server/__tests__/auth-session-regression.test.ts",
         "scripts/verify-transaction-boundaries.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "BE-02",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "ترقية تشفير سر MFA قد تعيد إثباتاً قديماً يرفضه إصدار الجلسة",
       "original_acceptance": "1. اختبار تكامل بالخدمات الفعلية: فعّل المفتاح المخصص، وأنشئ إعداد MFA فعالاً بتشفير قديم، وأكمل تحدي TOTP صحيحاً ثم نفّذ issueSession مباشرة؛ يجب نجاح الدخول وحفظ التشفير الجديد.\n2. تحقق من استخدام التحدي ورمز TOTP مرة واحدة، ومن صحة السلوك مع السر المشفر بالمفتاح الحالي ورمز الاستعادة وTOTP الخاطئ والتحدي المنتهي وإعادة الاستخدام.\n3. نفّذ setup ثم verify ثم disable، وتجديد رموز الاستعادة، عبر router والخدمة الفعلية؛ وأثبت إلغاء الجلسات والتحديات السابقة عند تغيير إعدادات MFA.",
@@ -41,21 +47,27 @@
         "server/__tests__/auth-session-mysql.test.ts",
         "server/__tests__/session-mfa-boundary.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-C01",
       "priority": "P2",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "حالة الحصة الملغاة قد تبقى في شاشة التحقق عند فتح رابط success",
       "original_acceptance": "1. اختبار تكاملي ينشئ حصة غير مدفوعة ثم يلغيها بلا refund item، يفتح رابط success مع session_id ويتحقق من ظهور الإلغاء وإيقاف polling. اختبار منفصل يعيد null لرابط منتهٍ ويثبت إيقاف الاستعلام المتكرر. لم ينفذ اختبار تشغيل في هذا التحليل.",
@@ -63,7 +75,7 @@
         "client/src/pages/__tests__/PayYourShare.test.tsx",
         "e2e/payer-terminal-acceptance.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": [
         "actual_react_trpc_http_fixture",
         "native_browser_api_mysql"
@@ -73,21 +85,27 @@
         "runtime/20261105T101757602881Z/receipt.json"
       ],
       "local_observation": "32-case payer UI suite and two native browser cases prove unpaid cancellation without a refund item, success-link terminal state and polling stop; an expired native link resolves to null and stops repeated reads.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "No payment-provider settlement is exercised by these terminal-state cases."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "SRC-API-SHUTDOWN",
       "priority": "P2",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "مسار إيقاف API يسجل إغلاق قاعدة البيانات دون إغلاق pool",
       "original_acceptance": "1. اختبار SIGTERM/SIGINT للعملية الفعلية وإثبات استدعاء إغلاق pool قبل exit مرة واحدة دون إنشاء اتصال جديد.\n2. حالة وجود pool وحالة عدم تهيئته وحالة فشل إغلاقه، مع فحص السجل ورمز الخروج والمهلة.",
@@ -98,25 +116,31 @@
         "server/__tests__/api-process-mysql.test.ts",
         "server/__tests__/operational-observations-shutdown.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": [
         "api-process-followup/handoff.json",
         "observation-drain-followup/handoff.json"
       ],
       "local_observation": "Actual API child-process acceptance passed 16/16, including SIGTERM/SIGINT, initialized and unused pool, close rejection/hang, deadline and exit/log evidence. A separate observation-drain regression passed 4/4 units after 2 failures. Pool close failure/hang is an explicitly controlled driver outcome in the real process.",
-      "followup_wave": "native_acceptance"
+      "followup_wave": "native_acceptance",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "META-01",
       "priority": "P1",
-      "status": "partial",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "هوية تشغيل الاختبارات ونتيجته غير مرفقتين",
       "original_acceptance": "1. إرفاق manifest من CI يتضمن Git SHA وrun ID والأمر وإصدارات runtime وcoverage provider وإعداد النطاق ووقت البداية والنهاية وexit code.\n2. إرفاق نتائج الوحدة والتكامل والمتصفح لكل suite على الالتزام نفسه؛ دمج التغطية القابلة للدمج فقط وإبقاء نتائج الخدمات الخارجية مستقلة.\n3. ربط المتطلبات والرحلات الحرجة بمعرفات اختبارات وإيصالات قبول، مع حفظ الملفات المستثناة وأسبابها.",
@@ -126,25 +150,32 @@
         "scripts/ci/coverage-scope-inventory.mjs",
         "scripts/ci/coverage-scope-inventory.test.mjs"
       ],
-      "followup_state": "awaiting_current_ci_manifest_and_scope_inventory",
-      "remaining_acceptance": [
-        "Publish the source-bound excluded-file inventory with reasons and verify its eligible file set against measured coverage.",
-        "Accept the final same-source CI manifest, unit/native results and browser results with actual synthetic merge SHA/tree, commands, runtime/provider versions, timestamps and exit codes. PR284 evidence is historical for this wave."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": [
         "pr285-ci-artifacts/coverage/artifact-inspection.json",
         "coverage-negative-repro/raw-v8/raw-inspector-coverage.json"
       ],
-      "local_observation": "PR285's first integrated runner passed 5297/5297, but the evidence wrapper correctly rejected a producer-generated negative branch count. Only seven base artifacts exist for that failed attempt; partitions and the inventory sidecar were not produced. The unchanged original artifact is retained, not repaired or relabeled as a pass. Corrected-source CI remains required."
+      "local_observation": "The failed first attempt remains preserved. Final-source CI, the strict eleven-artifact catalog, source-bound scope inventory, native matrices and browser evidence are now verified.",
+      "prior_acceptance_state": {
+        "status": "partial",
+        "followup_state": "awaiting_current_ci_manifest_and_scope_inventory",
+        "remaining_acceptance": [
+          "Publish the source-bound excluded-file inventory with reasons and verify its eligible file set against measured coverage.",
+          "Accept the final same-source CI manifest, unit/native results and browser results with actual synthetic merge SHA/tree, commands, runtime/provider versions, timestamps and exit codes. PR284 evidence is historical for this wave."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547",
+      "historical_local_observation": "PR285's first integrated runner passed 5297/5297, but the evidence wrapper correctly rejected a producer-generated negative branch count. Only seven base artifacts exist for that failed attempt; partitions and the inventory sidecar were not produced. The unchanged original artifact is retained, not repaired or relabeled as a pass. Corrected-source CI remains required."
     },
     {
       "id": "BE-03",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "استرداد التمويل الداخلي غير منفذ بالكامل رغم وجود مسار API فعال",
       "original_acceptance": "1. اختبر user_credit وwallet وcorporate_credit: الاسترداد الجزئي يحافظ على الرحلة، واسترداد الباقي يتطلب إلغاءً صريحاً ويحرر الموارد مرة واحدة.\n2. ارفض المستأجر أو الدور الخاطئ، والقطاع المنفذ أو المسجل للصعود، وإيصال الدفع الخارجي، والتمويل المعدل، وعدم تطابق الدفتر الأصلي، والاسترداد الزائد، والمحفظة المغلقة أو التي يتجاوز رصيدها الحد.\n3. بقاعدة بيانات فعلية: اختبر استردادات متزامنة، وتكرار الطلب نفسه، وتكرار المفتاح بحمولة مختلفة، وتغير الصلاحيات قبل الإعادة؛ وأثبت ذرية الرصيد والدفتر وoutbox والتراجع الكامل عند حقن خطأ.",
@@ -153,21 +184,27 @@
         "server/__tests__/financial-authority-mysql.test.ts",
         "scripts/acceptance/project-hardening.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "BE-04",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "اختبارات ائتمان الوكالات تمر بحالة عدم وجود شروط فقط",
       "original_acceptance": "1. اختبر شروط ائتمان معتمدة مع رصيد كافٍ، ومبلغ يساوي الحد، ومبلغ يتجاوزه؛ ويجب ألا يستطيع حجزان متزامنان تجاوز الائتمان المتاح.\n2. ارفض expectedTermsId القديم وخفض الحد دون المديونية القائمة؛ ويجب أن يبطل تغير المالك أو المستأجر الشروط السابقة وأن تُرفض فاتورة تخص مستأجراً آخر.\n3. يجب أن يمنع سحب الأموال منح ائتمان جديد حتى إعادة المبلغ للمنازعة وPaymentIntent نفسيهما، وألا تعوّضه منازعة أخرى؛ ويحرر الإلغاء الالتزام بينما لا يعيد الاسترداد فتح الدين.",
@@ -175,21 +212,27 @@
         "server/__tests__/financial-authority-mysql.test.ts",
         "e2e/agency-credit.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "BE-05",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "ضوابط إعادة اعتماد التذكرة عند تغيير التاريخ غير منفذة",
       "original_acceptance": "1. نفّذ رحلة قبول كاملة لتغيير التاريخ بتمويل داخلي وأجرة ثابتة، مع الحفاظ على رقم التذكرة وهوية القسيمة وكل مكونات الأجرة.\n2. ارفض تغير fare digest أو الشروط، والمستأجر أو المستخدم الخاطئ، ووجود أمتعة أو مقعد مسجل للصعود أو إيصال خارجي، ونقص مكونات الأجرة، والقطاع المنفذ، وعدم تطابق أوقات المغادرة والوصول المحلية بما فيها حدود المنطقة الزمنية.\n3. غيّر الأجرة أو العرض أو القسيمة بين المعاينة وcommit؛ يجب إعادة التحقق عند التنفيذ والتراجع عن جميع التغييرات إذا تبدلت الأدلة.",
@@ -197,22 +240,28 @@
         "e2e/local-ticket-revalidation.spec.ts",
         "server/__tests__/ticket-revalidation-acceptance-mysql.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": ["ticket-revalidation-followup/handoff.json"],
       "local_observation": "Native original-criteria matrix had 47 successes and two assertion-text failures in its first run; the two corrected assertions passed in a targeted run. Production rejection and 182-table rollback snapshots were already correct. These are separate attempts, not a single 49-case green run.",
-      "followup_wave": "native_acceptance"
+      "followup_wave": "native_acceptance",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "BE-06",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "محرك حساب الأجرة ورسوم التغيير يكاد يقتصر على تحميل القواعد",
       "original_acceptance": "1. أنشئ حالات حساب متوقعة لمضاعف السعر الأساسي والرسوم الإضافية وخصومات الطفل والرضيع والمجموعة، وحدود مدة الإقامة وليلة السبت وفترات المنع، وتقريب الوحدات النقدية الصغرى وغرامات التغيير.\n2. قارن ناتج توفر فئات الأجرة وواجهة المقارنة بحسابات الأجرة الفعلية؛ ويجب رفض القواعد المشوهة والفئات غير المدعومة بوضوح.\n3. تحقق من أثر تعديل القواعد إدارياً على التسعير والتحقق اللاحقين، عبر الربط الحقيقي بين router والخدمة، مع فحص الصلاحيات.",
@@ -220,10 +269,8 @@
         "server/__tests__/fare-rules-engine.test.ts",
         "server/__tests__/fare-rules-acceptance-mysql.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "proof_boundaries": [
         "native_mysql_router_service",
         "unit_rule_calculation"
@@ -242,15 +289,23 @@
         "The focused unit correction is one new pass with 73 tests not selected; it is not a fresh 74-case green suite.",
         "These are local fare-rule authorities and configured rules; no external tariff or operator policy approval is manufactured."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "BE-07",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "استقبال Stripe يفتقد تنفيذ حالات فشل وتزامن مهمة",
       "original_acceptance": "1. بقاعدة بيانات فعلية: أرسل webhook موقعاً مكرراً بالتزامن؛ يجب إنشاء أثر واحد فقط في التسوية والدفتر وoutbox، مع إنهاء الطلبين وفق سلوك الإعادة الصحيح.\n2. يجب أن يعيد غياب التوقيع أو تعطل قاعدة البيانات الحالة الصحيحة دون تغيير مالي؛ وبعد تعافي القاعدة وإعادة المزود للطلب يُنجز الحدث مرة واحدة.\n3. اختبر رسالة تأكيد آمنة للمستأجر مع مرفقات الركاب، وغياب المستلم، وتغير الحجز أو إلغائه، وفشل PDF أو البريد؛ وأثبت أن الإعادة لا تعيد الخصم أو إصدار التذاكر.",
@@ -264,25 +319,31 @@
         "server/__tests__/eticket-renderer-retry.test.ts",
         "server/__tests__/ticket-coupons.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": [
         "stripe-delivery/handoff.json",
         "pdf-retry-followup/handoff.json"
       ],
       "local_observation": "Three real signed paid webhook HTTP/concurrency/outage cases passed. Six mail regressions and then two additional regressions were reproduced. Final native mail14 plus coupon12 passed 26/26; renderer2 plus coupon12 separately passed 14/14. Strict provider-contract replay after a lost acceptance response retained one accepted payload and unchanged ticket/money identities. Provider fetch is a controlled contract boundary, not live Resend delivery.",
-      "followup_wave": "native_acceptance"
+      "followup_wave": "native_acceptance",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "BE-08",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "سلسلة المصادقة الحقيقية وإصدار الجلسة الناجح وإلغاؤها غير مثبتة",
       "original_acceptance": "1. اختبار HTTP متكامل: سجّل المستخدم وأدخله عبر auth-service client الفعلي مع خدمة اختبار مضبوطة، ثم أصدر جلسة وأثبت المصادقة عبر Cookie وBearer، وحدث الرمز وسجل الخروج وأثبت رفض الوصول بعده.\n2. كلمة مرور خاطئة، و503 أو Timeout من خدمة المصادقة، وفتح Circuit Breaker، واستجابة نجاح مشوهة، وغياب بيانات اعتماد الخدمة: يجب ألا تنشئ جلسة أو تتحول إلى دخول يعتمد على قاعدة البيانات وحدها.\n3. اختبر الخروج برمز سبق تدويره، والخروج من جميع الأجهزة، ومحاولة إلغاء session-ID لمستخدم آخر، وقفل الحساب أو محو بياناته، وتغير المستأجر أو الدور؛ مع بقاء المستخدمين غير المعنيين دون تأثر.",
@@ -290,40 +351,52 @@
         "server/__tests__/auth-service-http.test.ts",
         "server/__tests__/auth-session-mysql.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "BE-09",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "مدخل اقتصاديات الحجز الذي يفرض المستأجر غير منفذ",
       "original_acceptance": "1. ليطلب مستأجر A حجزه وحجز مستأجر B ومعرف حجز غير موجود؛ يجب ألا تكشف حالتا B والحجز الغائب تفاصيل مالية أو وجود الحجز.\n2. يجب أن يفشل غياب المستأجر null أو undefined وغياب قاعدة البيانات بأمان؛ وأثبت عدم استدعاء getBookingSeatEconomics للمعرفات غير المصرح بها.\n3. كرر التحقق عبر router وmiddleware الفعليين، وليس اختبارات الدالة المساعدة وحدها؛ واختبر سياسة airline-admin وglobal-admin وفق توثيقها.",
       "tests": ["server/__tests__/seat-economics-tenant-boundary.test.ts"],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "BE-10",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "واجهات المحفظة والدفع المجزأ بلا تنفيذ رغم تغطية جزء من الخدمات",
       "original_acceptance": "1. اختبار تكامل router للمالك الموثق والمستخدم غير المصرح له ومعرف حجز أو جزء دفع يخص غيره، وحدود المبلغ ومفتاح idempotency المشوه.\n2. اختبر دفع المحفظة بالتزامن مع استرداد أو شحن الرصيد: حركة رصيد وتمويل فاتورة واحدة فقط، ودون تجاوز الرصيد، مع التراجع عند الفشل والإعادة الآمنة.\n3. اختبر التحصيل الجزئي لأجزاء الدفع، وتكرار إشعار المزود، وإلغاء أحد المشاركين، ومطابقة الإلغاء والاسترداد؛ وتحقق من مجموع المبالغ المحصلة والمستردة وحالة الفاتورة.",
@@ -334,22 +407,28 @@
         "scripts/acceptance/split-refunds.ts",
         "server/__tests__/wallet-crossing-acceptance-mysql.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": ["wallet/handoff.json"],
       "local_observation": "Seven native crossing/rollback/replay cases plus 83 related units passed 90/90 after reproducing an actual refund/payment deadlock. Owner-row serialization aligns wallet payment with the internal-refund lock order. Top-up proof starts at the already verified settlement boundary.",
-      "followup_wave": "native_acceptance"
+      "followup_wave": "native_acceptance",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-01",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "خدمات التقارير مغطاة بدرجة جيدة لكن واجهتها البرمجية الجديدة لم تُنفّذ",
       "original_acceptance": "1. استدعاء createCaller أو HTTP حقيقي للكتالوج والتشغيل والتصدير بمستخدم مخوّل والتحقق من عقد المخرجات.\n2. مستخدم غير مسجل/مستخدم عادي/موظف عمليات/موظف مالية/مستأجر آخر: رفض القالب والإيصال الخارجين عن النطاق وعدم إرجاع المحتوى.\n3. حفظ→تشغيل بمفتاح ثابت→إعادة الطلب→قائمة الإيصالات→تنزيل والتحقق من checksum، ثم إيقاف وحذف القالب.",
@@ -358,40 +437,52 @@
         "server/__tests__/standard-report-schedules-mysql.test.ts",
         "e2e/standard-reports.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-02",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "تغطية كل دوال جدولة التقارير تخفي مسارات تعافٍ وحذف وصلاحيات غير مجرّبة",
       "original_acceptance": "1. محاكاة عاملين يدّعيان نفس run: لا نشر بواسطة lease قديم ولا إرسال من العامل الذي لم يملك claim.\n2. قطع العملية بعد وضع sending وقبل حفظ إيصال البريد؛ بعد الاستئناف تتحول الحالة إلى unknown ولا يعاد الإرسال تلقائياً.\n3. حذف المالك أو تعطيل مستأجره أو تغيير نطاقه بين توليد التقرير وتسليمه؛ لا خروج للبيانات ويحفظ سبب الرفض.\n4. حذف قالب صالح يملكه الممثل ثم التحقق من affectedRows؛ وفشل مخزن البيانات أثناء recovery لا ينتج نجاحاً وهمياً.",
       "tests": ["server/__tests__/standard-report-schedules-mysql.test.ts"],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-03",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "اختبارات صياغة APIS لا تثبت جمع الوثائق والتحقق منها واسترجاعها",
       "original_acceptance": "1. مستخدم يحدّث وثيقته ثم التحقق من التخزين والحالة؛ رفض وثيقة راكب من حجز أو مستأجر آخر عبر API.\n2. الوثيقة الناقصة والمنتهية، تاريخ ميلاد مستقبلي، حدود اليوم، رمز دولة/رقم وثيقة غير صحيح، وعدم تحديث validated عند وجود خطأ.\n3. رحلة متعددة القطاعات فيها راكب بلا وثيقة وآخر بوثيقة صالحة؛ العدد ومؤشرات النقص ومحتوى draft تتطابق.\n4. الضغط على submit أو طلبه مباشرة يعيد PRECONDITION_FAILED، وتظهر capability.available=false؛ لا تسجل حالة submitted أو acknowledgment وهمية.",
@@ -404,7 +495,7 @@
         "client/src/pages/__tests__/apis-journeys.test.tsx",
         "server/__tests__/apis-seats-acceptance-mysql.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": ["native_mysql_router_service"],
       "local_receipts": [
         "apis-seats/followup-summary.json",
@@ -412,21 +503,27 @@
         "runtime/20261105T103759875594Z/receipt.json"
       ],
       "local_observation": "41-case shared native suite covers actual APIS collection/update/ownership, malformed stored civil dates, UTC date boundaries, failed validation without a validated write, mixed-sector PAXLST/PNRGOV counts, refused authority submission and concurrent validation/update locking.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "External authority transmission and acknowledgments remain intentionally unavailable; the original local criterion requires explicit refusal rather than a fabricated external ACK."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-04",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "بيان المغادرة ومطابقة الأمتعة غير منفذين رغم وجود ضوابط جديدة في المصدر",
       "original_acceptance": "1. راكب صعد ثم حدث استرداد كامل/إلغاء: قراءة البيان ترفض النتيجة غير المتصالحة بدلاً من إسقاطه بصمت.\n2. حقيبة عبر عدة قطاعات، قطاع أول ملغى، حقيبة مرتجعة، حقيبة ذات تسجيل مادي غير محسوم، وراكب لم يصعد؛ التعداد والرفض صحيحان.\n3. استرداد متزامن مع البيان؛ النتيجة لقطة متسقة واحدة ومطابقة للركاب والأمتعة.\n4. رفض قراءة إغلاق رحلة لمستأجر آخر، وإثبات نجاح السيناريو السليم عبر route.",
@@ -436,25 +533,31 @@
         "server/__tests__/baggage-sector-scope.test.ts",
         "server/__tests__/dcs-operations.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": [
         "dcs-bsp/handoff.json",
         "dcs-bsp/attempt-20261105T115234715053Z/acceptance.json"
       ],
       "local_observation": "DCS acceptance passed 38 cases, including a repeatable native manifest snapshot during a scheduled concurrent real refund, post-refund reconciliation refusal and tenant-safe router access. The same suite also supplements OPS-06; it is not counted as a second independent run.",
-      "followup_wave": "native_acceptance"
+      "followup_wave": "native_acceptance",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-05",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "رحلة خريطة المقاعد إلى بطاقة الصعود غير مثبتة",
       "original_acceptance": "1. تهيئة layout مرة ثم محاولة ثانية؛ لا مقاعد مكررة، والمقاعد المحجوبة لا يمكن بيعها.\n2. check-in ثم getBoardingPass: مطابقة flight/passenger/seat والبيانات الموقعة؛ رفض المستخدم غير المالك أو الراكب غير المسجل.\n3. تغيير المقعد أو وثيقة الصعود بين القراءتين يجب أن يرفض البطاقة القديمة، مع سيناريو بوابة غير محددة.\n4. تسجيل الإلغاء/التراجع عن check-in وتحديث أعداد الحالة دون احتساب راكب مرتين.",
@@ -465,7 +568,7 @@
         "server/__tests__/dcs-operations.test.ts",
         "server/__tests__/apis-seats-acceptance-mysql.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": ["native_mysql_router_service"],
       "local_receipts": [
         "apis-seats/followup-summary.json",
@@ -473,13 +576,19 @@
         "runtime/20261105T103759875594Z/receipt.json"
       ],
       "local_observation": "The same native suite covers repeat seat initialization, operational blocks, gate/seat/document changes, nonce/sequence consistency after concurrent undo/check-in, locked tenant checks, and owner-only PDF behavior for admin/super_admin with a null tenant context.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "No physical printer or carrier certification is claimed; those are outside this ID's local acceptance criterion."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-06",
@@ -506,10 +615,10 @@
     {
       "id": "OPS-07",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "تخصيص المقاعد وتعديل السعة ووعود الحجز تحتاج اختبارات معاملات وتزامن",
       "original_acceptance": "1. اتصالان بقاعدة البيانات يحاولان حجز آخر مقعد؛ مجموع confirmed+active holds لا يتجاوز السعة، وrollback لا يترك hold منفرداً.\n2. تعديل السعة مع حجوزات متعددة القطاعات ومجموعات legacy وwaitlist عروض قائمة؛ رفض انتهاك الوعود والحفاظ على الأنواع المختلفة.\n3. انتهاء hold ثم تحويله أو إعادة الطلب بنفس المفتاح؛ لا خصم أو تحرير مرتين.\n4. فشل سجل outbox أو إدراج seatHold يرجع التعديل والـlock ضمن نفس المعاملة؛ اختبار التخصيص الجزئي وفشل إدراج waitlist يحدد السلوك المقبول.",
@@ -518,21 +627,27 @@
         "server/__tests__/inventory-allocation-boundary.test.ts",
         "scripts/acceptance/integration-remediation.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-08",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "مقارنة أدلة BSP اختُبرت حسابياً لكن دورة حفظها وقراءتها لم تُنفّذ",
       "original_acceptance": "1. stageRet ليوم UTC مكتمل ثم import HOT وbank normalized ثم reconcile من DB؛ تطابق الأرقام وbasis=local_evidence_only.\n2. نفس المرجع ونفس المحتوى يعيدان الإيصال؛ نفس المرجع ومحتوى مختلف ينتج CONFLICT، بما فيه طلبان متزامنان.\n3. منع قراءة/حفظ دليل لمستأجر آخر وحدود اليوم المفتوح والعملة غير المدعومة و1001 حركة.\n4. عمليات BSP المحجوبة تظل PRECONDITION_FAILED ولا تعلن قبولاً خارجياً أو توافقاً تنظيمياً.",
@@ -541,25 +656,31 @@
         "server/__tests__/bsp-local-evidence.test.ts",
         "scripts/acceptance/bsp-local-evidence.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": [
         "dcs-bsp/handoff.json",
         "dcs-bsp/attempt-20261105T115740480782Z/acceptance.json"
       ],
       "local_observation": "Four native BSP import races passed: HOT and bank, each with matching and conflicting content. The fixture observes actual InnoDB waiting on the unique evidence identity, preserves the first receipt and confirms replay/conflict behavior. Evidence remains local_evidence_only.",
-      "followup_wave": "native_acceptance"
+      "followup_wave": "native_acceptance",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-09",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "تسجيل الجدول لا يثبت تشغيل المهمة أو تجديد قفلها والإغلاق المنظم",
       "original_acceptance": "1. تشغيل العامل مع DB وRedis معزولين وإثبات أن tick يستدعي standardReports ويكتب receipt فعلياً.\n2. عاملان لنفس tick ينتجان claim واحدة؛ مهمة أطول من30 ثانية تجدّد lease، وعند فقدانها لا يسجل نجاح كاذب.\n3. SIGTERM أثناء tick ينتظر الإكمال أو يسجل الفشل قبل إغلاق DB ويزيل readiness.\n4. فشل مهمة لا يمنع بقية الجدول، ومهمة إعادة التشغيل لا تكرر الأثر المنفذ.",
@@ -571,22 +692,28 @@
         "scripts/acceptance/r2-transport.ts",
         "server/__tests__/worker-process-mysql.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": ["worker-process/handoff.json"],
       "local_observation": "Three real-worker cases passed, plus 37 compatibility units separately. Native minute cron, two-process claim, 30-second renewal, lease replacement, SIGTERM drain, failed independent work and restart replay execute without timer or SQL-result mocks. Configurable readiness keeps the deployed default unchanged.",
-      "followup_wave": "native_acceptance"
+      "followup_wave": "native_acceptance",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-11",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "تشغيل API وفحص الجاهزية يحتاجان قبولاً عبر العملية الحقيقية",
       "original_acceptance": "1. تشغيل API الفعلي في بيئة معزولة مع MySQL؛ استدعاء liveness/readiness عبر HTTP وإثبات انتقال not-ready إلى ready بعد عودة DB.\n2. اختبار عدم جاهزية المزود/تهيئته وحالة Redis والتخزين البديل وفق سياسة مكتوبة، دون جعل فحص الجاهزية وعداً بقبول مزود خارجي.\n3. اختبار Webhook بالـraw body قبل JSON parser، وREST/tRPC بعقودها ومحدد المعدل وحدود حجم الطلب من مدخل العملية.",
@@ -596,22 +723,28 @@
         "server/services/health-readiness.test.ts",
         "scripts/contracts/rest-host.ts"
       ],
-      "followup_state": "candidate_pending_ci",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "followup_state": "verified_on_recorded_ci_source",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": ["api-process-followup/handoff.json"],
       "local_observation": "The shared 16-case API process run covers actual HTTP liveness/readiness, database and Redis outage/recovery, configured provider refusal/timeouts/recovery, REST/tRPC limits, raw webhook and body-size boundaries. These are the same 16 cases linked by SRC-API-SHUTDOWN, not 16 additional cases.",
-      "followup_wave": "native_acceptance"
+      "followup_wave": "native_acceptance",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-01",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "تنظيف الجلسة والبيانات الخاصة عند تسجيل الخروج غير منفذ في التقرير",
       "original_acceptance": "1. تشغيل تسجيل خروج ناجح من صفحة تحتوي بيانات خاصة، ثم إثبات إفراغ ذاكرة الاستعلامات ومنع عرضها عند العودة أو تبديل الحساب.\n2. تكرار الاختبار عند UNAUTHORIZED وعند فشل الشبكة، مع فحص السلوك المعلن للمستخدم ورسالة تنظيف بيانات Service Worker.\n3. اختبار إعادة التوجيه من مسار محمي مع حفظ العودة ومنع الحلقة وإعادة التوجيه الخارجي.",
@@ -620,7 +753,7 @@
         "e2e/auth-logout-acceptance.spec.ts",
         "e2e/auth-recovery-acceptance.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": [
         "actual_react_trpc_http_fixture",
         "native_built_browser_api_mysql",
@@ -633,21 +766,27 @@
         "runtime/20261105T102827530878Z/receipt.json"
       ],
       "local_observation": "Logout success, explicit UNAUTHORIZED and a lost reply clear private UI/cache/persistence and the actual installed service-worker cache; back navigation and another account do not reveal the previous marker. Protected query/mutation expiry keeps a safe return URL.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "The logout 401 response is injected because the public expired-session endpoint normally succeeds. The lost-response case forwards the real logout before aborting its browser reply."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-02",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "مسارات الحجز البديلة وإعادة المحاولة والتخصيص لا تملك أدلة كافية",
       "original_acceptance": "1. فقد استجابة الإنشاء ثم إعادة المحاولة دون تعديل: يجب إرسال نفس المفتاح، ثم تعديل المسافرين/الإضافات وإثبات توليد مفتاح جديد.\n2. إنشاء حجز من زر المحفظة ومن زر الدفع المجزأ مع فحص سياق method والمبلغ المأخوذ من الخادم.\n3. حذف مسافر وسط ثلاثة مع مقاعد وإضافات وتحقق ارتباط كل إضافة وصاحب مقعد بعد إعادة الترقيم.\n4. تخصيص مجموعة/قائمة انتظار: منع تغيير العدد وعدم الاحتفاظ بإضافات تخص المسافرين السابقين.",
@@ -655,7 +794,7 @@
         "client/src/pages/__tests__/BookingPageSeatRoster.test.tsx",
         "e2e/booking-dialog-acceptance.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": [
         "actual_react_with_mocked_trpc_hooks",
         "native_browser_api_mysql"
@@ -665,21 +804,27 @@
         "runtime/20261105T103907817601Z/receipt.json"
       ],
       "local_observation": "15 BookingPage cases cover unchanged retry identity, extras-only key changes, middle-passenger seats/extras reindexing and delayed waitlist/group roster resets. Native wallet and split buttons use server-issued invoice totals and the correct method.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "BookingPage roster tests mock tRPC hooks. Native method/amount journeys stop before wallet spending or split settlement."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-03",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "رحلة البحث متعدد المدن غير مغطاة رغم التغطية القوية للدفع اللاحق",
       "original_acceptance": "1. رحلة من /multi-city لاختيار قطاعين/ثلاثة ثم فتح /booking/multi-city مع التحقق من ترتيب القطاعات وأنواع المسافرين وفئة الأجرة.\n2. تغيير المقصورة بعد اختيار قطاع، والتأكد من إسقاط الاختيارات غير المتوافقة ومنع المتابعة حتى اكتمال الاختيار.\n3. إبطاء عرض السعر أو رفضه ثم تغيير الاختيار: لا يمكن المتابعة بعرض قديم.\n4. مدخل itinerary غير صالح، عدم وجود نتائج، رحلة عابرة لمنتصف الليل وتاريخ المغادرة في بيانات الانتقال.",
@@ -687,21 +832,27 @@
         "client/src/pages/__tests__/MultiCityResults.test.tsx",
         "e2e/multi-city-fare.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-04",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "واجهة دفع الحصة كاملة بلا تغطية في اللقطة",
       "original_acceptance": "1. العودة برابط success وsession_id والخادم pending ثم paid؛ يمنع إظهار الدفع الناجح قبل paid.\n2. token مفقود/قصير/غير موجود، وحالة already paid، وحالات expired/cancelled مع وبدون معلمات العودة.\n3. فشل إنشاء checkout ثم إعادة المحاولة، ومنع تكرار الطلب أثناء الانتظار.\n4. فحص إيقاف polling على الحالات النهائية، خصوصا الحالة المرشحة UI-C01.",
@@ -709,7 +860,7 @@
         "client/src/pages/__tests__/PayYourShare.test.tsx",
         "e2e/payer-terminal-acceptance.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": [
         "actual_react_trpc_http_fixture",
         "native_browser_api_mysql"
@@ -719,13 +870,19 @@
         "runtime/20261105T101757602881Z/receipt.json"
       ],
       "local_observation": "32 real-client UI cases cover invalid/missing tokens, pending-to-paid server responses, already paid, expiry/cancellation, checkout refusal/retry/pending double-submit guards and terminal polling. Two native browser cases supply the cancellation/expired-link proof shared with UI-C01.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "The pending-to-paid transition and successful checkout URL in the component suite use substituted HTTP responses, not a real payment provider."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-05",
@@ -762,16 +919,16 @@
         "payments.createModificationCheckout is mocked in the paid-navigation browser case: only consent, quote identity and navigation are proved. The reload case aborts the first two requests before server execution; it does not simulate a lost post-commit response.",
         "Three browser successes are reused from the first four-case attempt; the corrected reload case passes separately. This is not a new four-case full-suite run."
       ],
-      "test_ci_state": "pending_ci",
+      "test_ci_state": "passed_applicable_cases_original_acceptance_partial",
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
     },
     {
       "id": "UI-06",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "قرارات المحطة وتبويبات التحميل والوزن تحتاج اختبارات واجهة مستقلة",
       "original_acceptance": "1. فتح حالة محطة ثم حلها وإغلاقها، مع actor/tenant مختلف أو صلاحية مسحوبة بين القراءة والأمر.\n2. خفض درجة يتطلب عرضا ثم قبول العرض نفسه، وفشل/تغير الاستحقاق قبل التأكيد.\n3. تبديل الطائرة ومخطط المقاعد بعد تحميل الصفحة، وفحص رفض البيانات القديمة وتجديدها.\n4. رحلة تحميل: إدخال غير صالح ثم تجاوز حدود ثم خطة صحيحة ثم تثبيت؛ إثبات عدم اعتماد حالة قديمة وعدم ظهور نجاح عند رفض الخادم.",
@@ -781,7 +938,7 @@
         "client/src/pages/admin/__tests__/LoadPlanningInteractions.test.tsx",
         "client/src/pages/admin/__tests__/WeightBalanceInteractions.test.tsx"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": ["actual_react_trpc_http_fixture"],
       "local_receipts": [
         "dcs-ui/verification.json",
@@ -790,14 +947,20 @@
         "dcs-ui/dcs-green-verified.json"
       ],
       "local_observation": "66-case shared UI group exercises real DCS tabs, crew/aircraft table updates, case open/link/close, identity changes during pending proposals, declined downgrade/remap, stale aircraft/layout responses, decimal/zero input, limits, current validation and rejected finalization. The demonstrated regressions fail before the fix.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "HTTP endpoints are fixtures. The four original workbook criteria concern UI interactions, current identity/input state and server-rejection handling; these tests do not independently prove native service authorization or financial calculations.",
         "Training load-planning/weight-balance services remain capability-gated outside production and no operational dispatch capability is promoted. Operator-approved policy and dispatch acceptance are separate capability boundaries, not additional closure criteria invented for the original UI-06 row."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-07",
@@ -822,10 +985,10 @@
     {
       "id": "UI-08",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "زر التصدير التقليدي يُرسم لكن معالج التصدير لم ينفذ",
       "original_acceptance": "1. من لوحة التقارير الموصولة، نفّذ أمثلة فعلية للحجوزات والإيرادات وأداء الرحلات والاسترداد بصيغ CSV/Excel/PDF وتحقق من محتوى الملف الناتج ومرشح التاريخ.\n2. فشل API ثم إعادة محاولة: يجب استعادة حالة الزر وعدم تنزيل ملف فارغ أو الإعلان عن نجاح.\n3. تحقق أن بيانات حساسة أو تقريرا مختلفا لا يظهران بعد تغير المرشح/السياق خلال التصدير.",
@@ -833,49 +996,61 @@
         "client/src/components/__tests__/ExportReportButton.test.tsx",
         "e2e/vrs-report-exports.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-09",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "قائمة متابعة الاسترداد تعرض الهيكل دون تغطية التفاعلات المهمة",
       "original_acceptance": "1. queue غير فارغة: فتح عنصر ومراجعة تفاصيله ثم التحويل من review_required إلى processing/completed وفحص تحديث الصف والإحصاءات.\n2. صفحتان أو أكثر ثم تغيير المرشح؛ يجب إعادة مؤشر الصفحة وعدم إسقاط عناصر أو خلط حالات.\n3. فشل استرجاع التفاصيل أو القائمة مع إعادة المحاولة ثم إغلاق النافذة ووقف polling.",
       "tests": [
         "client/src/pages/admin/__tests__/RefundsDashboardInteractions.test.tsx"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": ["actual_react_trpc_http_fixture"],
       "local_receipts": [
         "report-ui/verification.json",
         "report-ui/report-ui-green.json"
       ],
       "local_observation": "Nine refund interaction cases include visible row and statistics changes across review_required, processing and completed, pagination/filter reset, failed reads/retry and polling stop. Assertions check displayed totals, not only refetch call counts.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "Phase-dependent HTTP statistics fixtures validate presentation; they do not independently establish server financial calculations."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-10",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "التشغيل الفعلي والتحميل الكسول وحدود الأخطاء لا تثبتها تغطية App العالية",
       "original_acceptance": "1. اختبار متصفح مبني من المدخل الحقيقي يفتح المسارات الرئيسية عبر URL مباشر ويعيد التحميل مع/دون جلسة.\n2. رفض تحميل chunk أو رمي خطأ أثناء render ثم استخدام retry/home والتحقق من رسالة واضحة وغياب تسرب بيانات.\n3. إخفاق API بسبب جلسة منتهية على استعلام وعلى mutation؛ حفظ returnTo الصحيح وعدم تكرار إعادة التوجيه.\n4. فتح embedded-search والتأكد من عزل واجهة الحساب، وتحقق lang/dir عند العربية والإنجليزية.",
@@ -883,7 +1058,7 @@
         "client/src/__tests__/App-route-boundary.test.tsx",
         "e2e/auth-recovery-acceptance.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": [
         "actual_react_boundary",
         "native_built_browser_api_mysql",
@@ -895,21 +1070,27 @@
         "runtime/20261105T102827530878Z/receipt.json"
       ],
       "local_observation": "17 built-browser cases cover direct URLs/reloads with and without a session, rejected built chunk retry/home, real unauthorized query/mutation, safe returnTo and embedded-search language/account isolation. Actual React boundary tests separately execute render-error handlers.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "The asset failure is deliberately injected into the real built page. React fixture boundary execution alone would not prove chunk recovery."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-11",
       "priority": "P1",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "الاسترداد عبر رموز MFA وأخطاء التحقق لا تملك تغطية كافية",
       "original_acceptance": "1. تبديل TOTP إلى backup وإدخال رمز صحيح وخاطئ ومستهلك مع التحقق من تحدي الجلسة الصحيح ومنع النجاح قبل رد الخادم.\n2. فشل TOTP ثم إعادة المحاولة: مسح الرمز واستعادة التركيز وإظهار الرسالة وعدم تكرار الطلب أثناء انتظار الرد.\n3. إكمال إعداد MFA وتأكيد حصول المستخدم على رموز الاسترداد وتجربة النسخ/التنزيل وفشل صلاحية الحافظة.",
@@ -917,7 +1098,7 @@
         "client/src/components/__tests__/MFASetup.test.tsx",
         "client/src/components/__tests__/MFAVerify.test.tsx"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": [
         "actual_react_trpc_http_fixture",
         "existing_native_authentication_evidence"
@@ -927,21 +1108,27 @@
         "mfa-boundary/acceptance-summary.json"
       ],
       "local_observation": "The final 37-case shared group includes 18 MFASetup and four MFAVerify cases for recovery challenge modes, rejected/consumed codes, pending controls, reset/focus, setup completion, acknowledgment, copy/download and clipboard failure.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "The new UI run substitutes HTTP; native code consumption and enrollment/session invariants are established by the separate BE-02 suites, not by these fixture replies. OS clipboard contents previously copied by the user are not revoked."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "OPS-10",
       "priority": "P2",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "المسار الفعلي لتسليم إشعارات الرحلات والبريد بلا تغطية",
       "original_acceptance": "1. الحدث نفسه مرتان مع مزود بريد وهمي مضبوط: وصول واحد لكل حجز مع نفس idempotencyKey.\n2. نجاح بريد راكب وفشل آخر: إعادة المحاولة تستكمل الفشل وتحتفظ بإيصال النجاح دون تكراره.\n3. مستأجر مختلف، بريد مفقود، رحلة أو مطار غير موجود، ورفض/مهلة المزود: لا نجاح وهمي ولا كشف بيانات مستأجر آخر.",
@@ -951,21 +1138,27 @@
         "server/__tests__/email-worker.test.ts",
         "server/__tests__/email-worker-provider.test.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "baseline_assessment": "eligible_local_closure",
       "baseline_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "remaining_acceptance": [],
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "UI-12",
       "priority": "P2",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "التقارير القياسية جيدة نسبيا لكن حالات الإدخال الخاطئ والفشل ناقصة",
       "original_acceptance": "1. اسم فارغ ووقت 24:00 وlookback=0/367 ومدخل غير عددي، مع عدم إرسال mutation عند خطأ التحقق.\n2. رفض حفظ/تفعيل/حذف/تنزيل وفحص رسالة مفهومة وعدم استمرار حالة نجاح سابقة.\n3. مسار توليد template يبدأ generating ثم ready مع فقد الرد وإعادة نفس requestId؛ اختبار ملف الناتج لا مجرد إشعار الواجهة.\n4. تبديل التقرير أو الحساب أثناء حفظ/تنزيل معلق ثم اكتمال الرد القديم؛ التحقق من تجاهله.",
@@ -973,7 +1166,7 @@
         "client/src/pages/admin/__tests__/StandardReports.test.tsx",
         "e2e/standard-reports.spec.ts"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": [
         "actual_react_trpc_http_fixture",
         "existing_native_report_browser_evidence"
@@ -984,13 +1177,19 @@
         "report-ui/report-ui-green.json"
       ],
       "local_observation": "33 standard-report UI cases cover validation and mutations, generating/ready identity reuse, download errors and stale-context isolation. Two real-client deferred rejection regressions fail before the catch revision guard and pass after it; a current download error remains visible.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "Native time/number controls normalize 24:00 and nonnumeric text to empty. The tests prove no mutation, not direct coverage of an internal hour > 23 or NaN branch. Report UI evidence does not close CAP-01."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     },
     {
       "id": "CAP-01",
@@ -1022,10 +1221,10 @@
     {
       "id": "UI-M01",
       "priority": "P2",
-      "status": "needs_current_sha_verification",
+      "status": "verified",
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "accepted_sha": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "عداد وظيفة موجَب يقابله صفر في التعليمة الوحيدة داخلها",
       "original_acceptance": "1. بعد تحديد commit وأداة الجمع، تشغيل اختبار صغير يلزم ErrorBoundary بتلقي خطأ وفحص العداد عند السطر 38 ومعالج componentDidCatch؛ مقارنة تقرير الفرع والوظيفة في نفس التشغيل.",
@@ -1033,7 +1232,7 @@
         "client/src/components/__tests__/ErrorBoundary.test.tsx",
         "client/src/__tests__/App-route-boundary.test.tsx"
       ],
-      "followup_state": "candidate_pending_ci",
+      "followup_state": "verified_on_recorded_ci_source",
       "proof_boundaries": ["actual_react_boundary", "same_run_v8_coverage"],
       "local_receipts": [
         "mfa-boundary/green-receipt.json",
@@ -1041,13 +1240,19 @@
         "mfa-boundary/coverage/coverage-final.json"
       ],
       "local_observation": "Same-run V8 evidence records executed return/catch statements in both actual ErrorBoundary implementations: standalone return line 38 count 14 and catch line 43 count 7; App return line 155 count 6 and catch line 159 count 3.",
-      "remaining_acceptance": [
-        "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
-      ],
+      "remaining_acceptance": [],
       "limitations": [
         "Nonzero behavior and differing counters do not establish a coverage-provider/source-map defect fix."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "prior_acceptance_state": {
+        "status": "needs_current_sha_verification",
+        "followup_state": "candidate_pending_ci",
+        "remaining_acceptance": [
+          "Run all applicable original-criteria tests and required gates on the final committed/merge source, then bind accepted_sha and acceptance_run to the actual passing CI source."
+        ]
+      },
+      "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547"
     }
   ],
   "report_catalog": {
@@ -1057,10 +1262,10 @@
     "partial": 35,
     "blocked": 28,
     "promotions_verified": 0,
-    "acceptance_note": "99 definitions remain 36 available, 35 partial and 28 blocked, with zero promotions. The 36 available definitions now have a 109-case local native API/CSV/tenant/period-or-refusal matrix; this does not fulfill the missing source and capability conditions of the other 63 definitions. Final-source CI is pending."
+    "acceptance_note": "99 definitions remain 36 available, 35 partial and 28 blocked, with zero promotions. The 36 available definitions are verified on the accepted source; the other 63 definitions retain their missing-source and acceptance conditions."
   },
-  "source_revision_role": "published_implementation_awaiting_final_source_ci",
-  "worktree_state": "implementation_committed_final_source_ci_pending",
+  "source_revision_role": "actual_ci_tested_source",
+  "worktree_state": "accepted_ci_source_with_four_partial_findings",
   "followup": {
     "date": "2026-11-05",
     "document": "docs/remediation/2026-11-05-native-gap-acceptance.md",
@@ -1070,109 +1275,28 @@
     "local_evidence_root": "../ais-evidence (workspace artifacts; not a GitHub acceptance run)",
     "code_revision": "7fe9fd9aab69d2f5ce35f39d06732b72e933a091",
     "baseline_revision": "d68881c2128267cee31c7ebbca4a4e3eaeff5b14",
-    "source_identity_note": "code_revision identifies the published implementation under review. The actual CI acceptance source may be a synthetic PR merge commit and must be taken from its execution manifest, not inferred from the implementation or branch head.",
+    "source_identity_note": "Accepted source SHA/tree come from CI; implementation and PR head are retained separately.",
     "formal_status_counts": {
-      "needs_current_sha_verification": 33,
-      "partial": 5
+      "verified": 34,
+      "partial": 4
     },
     "acceptance_group_counts": {
-      "candidate_pending_ci": 33,
-      "metadata_acceptance_pending": 1,
+      "verified": 34,
+      "candidate_pending_ci": 0,
+      "metadata_acceptance_pending": 0,
       "original_acceptance_incomplete": 4,
       "total": 38
     },
-    "candidate_pending_ci": [
-      "BE-01",
-      "BE-02",
-      "UI-C01",
-      "SRC-API-SHUTDOWN",
-      "BE-03",
-      "BE-04",
-      "BE-05",
-      "BE-06",
-      "BE-07",
-      "BE-08",
-      "BE-09",
-      "BE-10",
-      "OPS-01",
-      "OPS-02",
-      "OPS-03",
-      "OPS-04",
-      "OPS-05",
-      "OPS-07",
-      "OPS-08",
-      "OPS-09",
-      "OPS-11",
-      "UI-01",
-      "UI-02",
-      "UI-03",
-      "UI-04",
-      "UI-06",
-      "UI-08",
-      "UI-09",
-      "UI-10",
-      "UI-11",
-      "OPS-10",
-      "UI-12",
-      "UI-M01"
-    ],
-    "candidate_groups": {
-      "baseline": [
-        "BE-01",
-        "BE-02",
-        "BE-03",
-        "BE-04",
-        "BE-08",
-        "BE-09",
-        "OPS-01",
-        "OPS-02",
-        "OPS-07",
-        "OPS-10",
-        "UI-03",
-        "UI-08"
-      ],
-      "previous_followup": [
-        "BE-06",
-        "OPS-03",
-        "OPS-05",
-        "UI-01",
-        "UI-02",
-        "UI-04",
-        "UI-06",
-        "UI-09",
-        "UI-10",
-        "UI-11",
-        "UI-12",
-        "UI-C01",
-        "UI-M01"
-      ],
-      "native_acceptance": [
-        "SRC-API-SHUTDOWN",
-        "BE-05",
-        "BE-07",
-        "BE-10",
-        "OPS-04",
-        "OPS-08",
-        "OPS-09",
-        "OPS-11"
-      ]
-    },
-    "candidate_group_counts": {
-      "baseline": 12,
-      "previous_followup": 13,
-      "native_acceptance": 8
-    },
-    "candidate_semantics": "The 33 candidates have locally documented coverage of their entire original acceptance, subject to the stated test boundaries. They await all applicable original-criteria tests and required gates on the final committed/merge source. This is not verified closure or an integrated CI success claim.",
-    "metadata_acceptance_pending": ["META-01"],
+    "candidate_pending_ci": [],
+    "metadata_acceptance_pending": [],
     "original_acceptance_incomplete": ["OPS-06", "UI-05", "UI-07", "CAP-01"],
     "remaining_acceptance": {
-      "META-01": "Final same-source CI manifest, excluded-file inventory with reasons, and matching unit/native/browser evidence remain required. Historical CI and the locally derived historical inventory do not constitute acceptance of this implementation.",
       "OPS-06": "The original blanket refusal of operational-block remap conflicts with existing compatible-remap preservation behavior. Native checks do not resolve that policy requirement.",
       "UI-05": "Paid modification and cash/split cancellation receipts have local acceptance. Nonrefundable-fare cancellation with fees and an operation receipt remains unproved; DCS-closed refusal does not satisfy it.",
       "UI-07": "Separate target-printer barcode, margin and physical-output acceptance remains required.",
       "CAP-01": "The 36 available reports have a local native matrix. The 35 partial and 28 blocked definitions retain their source and acceptance conditions, with zero promotions."
     },
-    "no_current_acceptance_sha_or_run": true,
+    "no_current_acceptance_sha_or_run": false,
     "test_count_policy": "Counts belong to individual attempts. Shared suites, targeted reruns and overlapping unit groups are not summed into a new whole-repository result. Historical full_unit_attempt and local_checks are retained only in previous_followup.",
     "historical_followup_field": "previous_followup",
     "previous_implementation_revision": "328888c81a22459450d9c3990c3ecf67ee835d42",
@@ -1213,8 +1337,515 @@
         "browser": "not_run_because_required_test_job_failed",
         "source_dirty": false,
         "correction": "Replace the short-circuited Boolean(revalidation) || await exchangeLocalCoupons expression with an equivalent explicit let/if. A real Vitest/V8 minimal reproduction and independent raw-inspector evidence locate the async continuation range causing a false implicit-else count. Preserve parser strictness, provider/configuration and all original artifact bytes. Add diagnostic logging of evidence error codes and the manifest path."
+      },
+      {
+        "pr": 285,
+        "head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "actual_source": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+        "tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547",
+        "run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674",
+        "status": "accepted",
+        "verified_at_utc": "2026-11-05T13:47:56.376972+00:00",
+        "required_checks": [
+          {
+            "name": "Lint Code",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127272670554"
+          },
+          {
+            "name": "Run Tests",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127274550600"
+          },
+          {
+            "name": "Security Scan",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127274550490"
+          },
+          {
+            "name": "E2E Tests",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127278735764"
+          },
+          {
+            "name": "Build Application",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127278735578"
+          },
+          {
+            "name": "Migration Replay and Live Transaction Acceptance",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272574466"
+          },
+          {
+            "name": "Migration Replay and Live Transaction Acceptance (MySQL 9.7)",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272574987"
+          },
+          {
+            "name": "Previous Release Upgrade Replay",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272574410"
+          },
+          {
+            "name": "Dependency Audit",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272574541"
+          },
+          {
+            "name": "Docker Production Contract",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272573979"
+          },
+          {
+            "name": "REST State Machine and Microcks Contracts",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532794/job/127272569880"
+          },
+          {
+            "name": "TCP Faults and Worker Recovery",
+            "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532794/job/127272570633"
+          }
+        ],
+        "evidence_summary": {
+          "coverage_manifest": {
+            "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/coverage/run-42035532674/downloaded/run-2mtgsq/execution-manifest.json",
+            "sha256": "1e8d2b89a16d52355c8bc69f1c1fb25d18afae0c8edc5495c47687de7dab0df6"
+          },
+          "coverage_inventory": {
+            "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/coverage/run-42035532674/downloaded/run-2mtgsq/coverage-scope-inventory.json",
+            "sha256": "d7ee753f151a17b8924eda472e186825fb61b82e869d265887d5e8f9c5f0821a"
+          },
+          "handoffs": [
+            {
+              "kind": "coverage",
+              "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/coverage/run-42035532674/handoff.json",
+              "sha256": "7a89fad6656d6e67970fc378a4c7708a7e65ec3b2c9606a4983210fdc986d2b4",
+              "counts": {
+                "tests": 5297,
+                "passed": 5297,
+                "failed": 0,
+                "pending": 0,
+                "todo": 0,
+                "files": 386,
+                "eligible": 805,
+                "measured": 805,
+                "excluded": 407
+              }
+            },
+            {
+              "kind": "native",
+              "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/native/run-42035533321/handoff.json",
+              "sha256": "c7c323b14eda0dd57894c6349de8776c7f53e2606321e40f20cdc5d71d248944",
+              "counts": {
+                "mysql_8_passed": 402,
+                "mysql_97_passed": 402,
+                "failed": 0,
+                "pending": 0,
+                "todo": 0,
+                "files_each": 21
+              }
+            },
+            {
+              "kind": "labs",
+              "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/native/run-42035532794/handoff.json",
+              "sha256": "69af1f602efda923c3239a0a8117685d8c4ced0c70c364be9e6eeed64b862604",
+              "counts": {
+                "jobs_passed": 2,
+                "failed": 0
+              }
+            },
+            {
+              "kind": "browser",
+              "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/browser/run-42035532674/handoff.json",
+              "sha256": "ebfd1eb6da302f52d2f82532e5a9dba952614daa8ff6f7e41ed4b125a4bc1e2f",
+              "counts": {
+                "main_passed": 85,
+                "logout_passed": 3,
+                "ui05_passed": 4,
+                "total": 92,
+                "passed": 92,
+                "failed": 0,
+                "flaky": 0,
+                "skipped": 0,
+                "attempts": 92,
+                "retriedTests": 0
+              }
+            }
+          ]
+        }
       }
-    ]
+    ],
+    "pre_acceptance_summary": {
+      "formal_status_counts": {
+        "needs_current_sha_verification": 33,
+        "partial": 5
+      },
+      "acceptance_group_counts": {
+        "candidate_pending_ci": 33,
+        "metadata_acceptance_pending": 1,
+        "original_acceptance_incomplete": 4,
+        "total": 38
+      },
+      "candidate_pending_ci": [
+        "BE-01",
+        "BE-02",
+        "UI-C01",
+        "SRC-API-SHUTDOWN",
+        "BE-03",
+        "BE-04",
+        "BE-05",
+        "BE-06",
+        "BE-07",
+        "BE-08",
+        "BE-09",
+        "BE-10",
+        "OPS-01",
+        "OPS-02",
+        "OPS-03",
+        "OPS-04",
+        "OPS-05",
+        "OPS-07",
+        "OPS-08",
+        "OPS-09",
+        "OPS-11",
+        "UI-01",
+        "UI-02",
+        "UI-03",
+        "UI-04",
+        "UI-06",
+        "UI-08",
+        "UI-09",
+        "UI-10",
+        "UI-11",
+        "OPS-10",
+        "UI-12",
+        "UI-M01"
+      ],
+      "candidate_groups": {
+        "baseline": [
+          "BE-01",
+          "BE-02",
+          "BE-03",
+          "BE-04",
+          "BE-08",
+          "BE-09",
+          "OPS-01",
+          "OPS-02",
+          "OPS-07",
+          "OPS-10",
+          "UI-03",
+          "UI-08"
+        ],
+        "previous_followup": [
+          "BE-06",
+          "OPS-03",
+          "OPS-05",
+          "UI-01",
+          "UI-02",
+          "UI-04",
+          "UI-06",
+          "UI-09",
+          "UI-10",
+          "UI-11",
+          "UI-12",
+          "UI-C01",
+          "UI-M01"
+        ],
+        "native_acceptance": [
+          "SRC-API-SHUTDOWN",
+          "BE-05",
+          "BE-07",
+          "BE-10",
+          "OPS-04",
+          "OPS-08",
+          "OPS-09",
+          "OPS-11"
+        ]
+      },
+      "candidate_group_counts": {
+        "baseline": 12,
+        "previous_followup": 13,
+        "native_acceptance": 8
+      },
+      "candidate_semantics": "The 33 candidates have locally documented coverage of their entire original acceptance, subject to the stated test boundaries. They await all applicable original-criteria tests and required gates on the final committed/merge source. This is not verified closure or an integrated CI success claim.",
+      "metadata_acceptance_pending": ["META-01"],
+      "remaining_acceptance": {
+        "META-01": "Final same-source CI manifest, excluded-file inventory with reasons, and matching unit/native/browser evidence remain required. Historical CI and the locally derived historical inventory do not constitute acceptance of this implementation.",
+        "OPS-06": "The original blanket refusal of operational-block remap conflicts with existing compatible-remap preservation behavior. Native checks do not resolve that policy requirement.",
+        "UI-05": "Paid modification and cash/split cancellation receipts have local acceptance. Nonrefundable-fare cancellation with fees and an operation receipt remains unproved; DCS-closed refusal does not satisfy it.",
+        "UI-07": "Separate target-printer barcode, margin and physical-output acceptance remains required.",
+        "CAP-01": "The 36 available reports have a local native matrix. The 35 partial and 28 blocked definitions retain their source and acceptance conditions, with zero promotions."
+      },
+      "no_current_acceptance_sha_or_run": true
+    },
+    "accepted_source_revision": "9929de4d1d246f748c467eecbf49ce6f452d60c5",
+    "accepted_tree": "4e7b369dc2330a3e61c36cb91b62f4ab98a6c547",
+    "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+    "verified_findings": [
+      "BE-01",
+      "BE-02",
+      "UI-C01",
+      "SRC-API-SHUTDOWN",
+      "META-01",
+      "BE-03",
+      "BE-04",
+      "BE-05",
+      "BE-06",
+      "BE-07",
+      "BE-08",
+      "BE-09",
+      "BE-10",
+      "OPS-01",
+      "OPS-02",
+      "OPS-03",
+      "OPS-04",
+      "OPS-05",
+      "OPS-07",
+      "OPS-08",
+      "OPS-09",
+      "OPS-11",
+      "UI-01",
+      "UI-02",
+      "UI-03",
+      "UI-04",
+      "UI-06",
+      "UI-08",
+      "UI-09",
+      "UI-10",
+      "UI-11",
+      "OPS-10",
+      "UI-12",
+      "UI-M01"
+    ],
+    "verified_groups": {
+      "baseline": [
+        "BE-01",
+        "BE-02",
+        "BE-03",
+        "BE-04",
+        "BE-08",
+        "BE-09",
+        "OPS-01",
+        "OPS-02",
+        "OPS-07",
+        "OPS-10",
+        "UI-03",
+        "UI-08"
+      ],
+      "previous_followup": [
+        "BE-06",
+        "OPS-03",
+        "OPS-05",
+        "UI-01",
+        "UI-02",
+        "UI-04",
+        "UI-06",
+        "UI-09",
+        "UI-10",
+        "UI-11",
+        "UI-12",
+        "UI-C01",
+        "UI-M01"
+      ],
+      "native_acceptance": [
+        "SRC-API-SHUTDOWN",
+        "BE-05",
+        "BE-07",
+        "BE-10",
+        "OPS-04",
+        "OPS-08",
+        "OPS-09",
+        "OPS-11"
+      ],
+      "metadata": ["META-01"]
+    },
+    "verified_group_counts": {
+      "baseline": 12,
+      "previous_followup": 13,
+      "native_acceptance": 8,
+      "metadata": 1
+    },
+    "verified_semantics": "Original criteria for 34 findings and required same-source CI are verified; four stated acceptance gaps remain.",
+    "required_checks": [
+      {
+        "name": "Lint Code",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127272670554"
+      },
+      {
+        "name": "Run Tests",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127274550600"
+      },
+      {
+        "name": "Security Scan",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127274550490"
+      },
+      {
+        "name": "E2E Tests",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127278735764"
+      },
+      {
+        "name": "Build Application",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127278735578"
+      },
+      {
+        "name": "Migration Replay and Live Transaction Acceptance",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272574466"
+      },
+      {
+        "name": "Migration Replay and Live Transaction Acceptance (MySQL 9.7)",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272574987"
+      },
+      {
+        "name": "Previous Release Upgrade Replay",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272574410"
+      },
+      {
+        "name": "Dependency Audit",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272574541"
+      },
+      {
+        "name": "Docker Production Contract",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321/job/127272573979"
+      },
+      {
+        "name": "REST State Machine and Microcks Contracts",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532794/job/127272569880"
+      },
+      {
+        "name": "TCP Faults and Worker Recovery",
+        "pr_head": "ce45adf957fdcb4ef63671a1e04067efecd9164c",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42035532794/job/127272570633"
+      }
+    ],
+    "verified_at_utc": "2026-11-05T13:47:56.376972+00:00",
+    "accepted_evidence_summary": {
+      "coverage_manifest": {
+        "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/coverage/run-42035532674/downloaded/run-2mtgsq/execution-manifest.json",
+        "sha256": "1e8d2b89a16d52355c8bc69f1c1fb25d18afae0c8edc5495c47687de7dab0df6"
+      },
+      "coverage_inventory": {
+        "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/coverage/run-42035532674/downloaded/run-2mtgsq/coverage-scope-inventory.json",
+        "sha256": "d7ee753f151a17b8924eda472e186825fb61b82e869d265887d5e8f9c5f0821a"
+      },
+      "handoffs": [
+        {
+          "kind": "coverage",
+          "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/coverage/run-42035532674/handoff.json",
+          "sha256": "7a89fad6656d6e67970fc378a4c7708a7e65ec3b2c9606a4983210fdc986d2b4",
+          "counts": {
+            "tests": 5297,
+            "passed": 5297,
+            "failed": 0,
+            "pending": 0,
+            "todo": 0,
+            "files": 386,
+            "eligible": 805,
+            "measured": 805,
+            "excluded": 407
+          }
+        },
+        {
+          "kind": "native",
+          "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/native/run-42035533321/handoff.json",
+          "sha256": "c7c323b14eda0dd57894c6349de8776c7f53e2606321e40f20cdc5d71d248944",
+          "counts": {
+            "mysql_8_passed": 402,
+            "mysql_97_passed": 402,
+            "failed": 0,
+            "pending": 0,
+            "todo": 0,
+            "files_each": 21
+          }
+        },
+        {
+          "kind": "labs",
+          "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/native/run-42035532794/handoff.json",
+          "sha256": "69af1f602efda923c3239a0a8117685d8c4ced0c70c364be9e6eeed64b862604",
+          "counts": {
+            "jobs_passed": 2,
+            "failed": 0
+          }
+        },
+        {
+          "kind": "browser",
+          "path": "/workspace/scratch/3e192a90de5d/ais-evidence/pr285-ci-artifacts/browser/run-42035532674/handoff.json",
+          "sha256": "ebfd1eb6da302f52d2f82532e5a9dba952614daa8ff6f7e41ed4b125a4bc1e2f",
+          "counts": {
+            "main_passed": 85,
+            "logout_passed": 3,
+            "ui05_passed": 4,
+            "total": 92,
+            "passed": 92,
+            "failed": 0,
+            "flaky": 0,
+            "skipped": 0,
+            "attempts": 92,
+            "retriedTests": 0
+          }
+        }
+      ]
+    }
   },
   "implementation_commit": "7fe9fd9aab69d2f5ce35f39d06732b72e933a091",
   "previous_followup": {

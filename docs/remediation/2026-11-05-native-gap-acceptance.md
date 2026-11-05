@@ -2,38 +2,42 @@
 
 ## Decision and source identity
 
-This follow-up assesses all **38 original workbook findings**. There are now
-**33 candidates awaiting final-source CI**: the 25 candidates identified in the
-[previous acceptance follow-up](2026-11-05-gap-acceptance-followup.md), plus
-eight findings whose missing local acceptance is supplied by this wave.
-**META-01 remains separate**, awaiting the final source manifest, coverage
-inventory sidecar and integrated CI. **Four findings remain partial:** OPS-06,
-UI-05, UI-07 and CAP-01.
+This follow-up assesses all **38 original workbook findings**. The corrected
+source's CI evidence now supports **34 verified findings: 33 functional
+findings plus META-01**. The functional group consists of the 25 candidates
+identified in the [previous acceptance follow-up](2026-11-05-gap-acceptance-followup.md)
+and eight findings whose missing acceptance is supplied by this wave.
+**Four findings remain partial:** OPS-06, UI-05, UI-07 and CAP-01. Their
+original unmet conditions are preserved below.
 
-| Assessment group                  | Findings | Meaning                                                                                                              |
-| --------------------------------- | -------: | -------------------------------------------------------------------------------------------------------------------- |
-| Previous candidates               |       25 | Twelve baseline candidates and thirteen candidates from the preceding follow-up; their earlier evidence is retained. |
-| New candidates                    |        8 | SRC-API-SHUTDOWN, BE-05, BE-07, BE-10, OPS-04, OPS-08, OPS-09 and OPS-11.                                            |
-| Evidence metadata pending         |        1 | META-01 requires the source-bound final manifest, exclusion inventory and CI evidence.                               |
-| Original acceptance still partial |        4 | OPS-06, UI-05, UI-07 and CAP-01 have the specific remaining conditions below.                                        |
-| Total                             |       38 | Candidate counts describe findings, not test cases or formally verified closures.                                    |
+| Assessment group                   | Findings | Meaning                                                                                                                                   |
+| ---------------------------------- | -------: | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Previous functional group verified |       25 | Twelve baseline findings and thirteen from the preceding follow-up, accepted with current-source CI; earlier evidence remains historical. |
+| New functional group verified      |        8 | SRC-API-SHUTDOWN, BE-05, BE-07, BE-10, OPS-04, OPS-08, OPS-09 and OPS-11.                                                                 |
+| Evidence metadata verified         |        1 | META-01: source-bound manifest, exclusion inventory and matching unit/native/browser evidence accepted.                                   |
+| Original acceptance still partial  |        4 | OPS-06, UI-05, UI-07 and CAP-01 have the specific remaining conditions below.                                                             |
+| Total                              |       38 | 34 verified findings on the accepted source and four partial findings; these are not test-case counts.                                    |
 
 **Implementation revision: `7fe9fd9aab69d2f5ce35f39d06732b72e933a091`.**
 
 The implementation revision is published on
 `codex/native-gap-acceptance-20261105`, based on main
 `d68881c2128267cee31c7ebbca4a4e3eaeff5b14`. It includes application changes,
-acceptance tests, CI wiring and the coverage scope inventory tool. The CI
-acceptance source may be a synthetic PR merge commit; it must be recorded
-from the actual execution manifest rather than inferred from the branch head.
+acceptance tests, CI wiring and the coverage scope inventory tool. The
+accepted run used PR head `ce45adf957fdcb4ef63671a1e04067efecd9164c` and
+**actual synthetic merge `9929de4d1d246f748c467eecbf49ce6f452d60c5`, tree
+`4e7b369dc2330a3e61c36cb91b62f4ab98a6c547`**. The execution manifest records
+the tested commit and tree. Native job evidence and all three original
+Playwright reports identify the same tested commit; the Git commit record
+independently binds it to that tree.
 
 The [closure ledger](coverage-closure-ledger.json) preserves the original 38
-acceptance texts and priorities. Thirty-three functional candidates are
-`needs_current_sha_verification`; META-01 and the four explicitly incomplete
-findings remain `partial`. All `accepted_sha` and `acceptance_run` values stay
-null until the original criterion and required gates pass on the recorded
-source. Local handoffs and historical CI establish the described scope, not
-a passing integrated run of this final revision.
+acceptance texts and priorities. Verified rows bind their accepted source and
+run to the evidence above; the four partial rows retain their unmet original
+criteria. This documentation update is written **after acceptance of that
+source**. It changes no application code, tests or configuration. It does not
+claim that a later documentation commit was already executed by these runs:
+required checks on the resulting new PR head must still pass before merge.
 
 ## Evidence conventions and limits
 
@@ -59,6 +63,64 @@ Counts belong to their individual attempts. Shared suites, targeted reruns,
 repeated scenarios and related unit cases overlap and must not be summed into
 a new whole-repository result. Failed harness assertions remain retained and
 classified; they are not relabeled as production defects.
+
+## Accepted corrected-source CI
+
+The following completed runs all identify actual checkout
+`9929de4d1d246f748c467eecbf49ce6f452d60c5`. Artifact ZIP digests were matched
+to GitHub's published digests before inspection; original reports are retained.
+
+| Scope                       | Accepted result                                                                                                                                                      | Hosted evidence                                                                                                                                                                                           |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Full Vitest and V8 coverage | **5,297/5,297 passed in 386 test files**, zero failed/pending/todo; both Vitest and evidence wrapper exited 0.                                                       | [CI/CD run 42035532674](https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674), [Run Tests job](https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127274550600) |
+| Native service matrix       | **402/402 passed in 21 files on each of MySQL 8.0 and 9.7**, zero failed/pending/todo. These are repeated executions of the same matrix, not 804 distinct tests.     | [Production Gates run 42035533321](https://github.com/kafaat/ais-aviation-system/actions/runs/42035533321)                                                                                                |
+| Chromium profiles           | **85 main + 3 isolated logout + 4 UI05 = 92 passed**, zero unexpected/flaky/skipped; all 92 passed on their first attempt.                                           | [E2E job 127278735764](https://github.com/kafaat/ais-aviation-system/actions/runs/42035532674/job/127278735764)                                                                                           |
+| Component labs              | Four REST cases and Microcks contracts passed; four actual TCP/worker fault checks passed over the 171-check live baseline. That baseline overlaps Production Gates. | [Aviation Component Labs run 42035532794](https://github.com/kafaat/ais-aviation-system/actions/runs/42035532794)                                                                                         |
+
+Both native matrix legs include the 49 ticket-revalidation cases, 109
+available-report cases, seven wallet crossings, three worker-process cases,
+three signed paid-webhook cases, 14 booking-confirmation cases and 16 API
+process cases. Their separate integration report records PASS with 42 observations,
+including the four controlled BSP import races; live acceptance has 171
+passing checks with no skips. Backup/restore passed seven checks over 182
+tables with matching before/after snapshot digests in each leg. These related
+scopes are reported separately and are not added to the 5,297-test count.
+
+The accepted coverage bundle preserves the strict **eleven-artifact manifest**
+and a separate source inventory. All recorded hashes verified; the unchanged
+parser recomputed the three partition files and reconciled their counters
+with the global summary. No invalid or negative hit count remains. The
+corrected retention conditional records `[4, 3]`, and the following seat
+conditional records `[7, 0]`, matching the reproduced execution distribution.
+
+The inventory records **805 eligible and measured files**, split into 495
+server, 288 client and 22 shared files. Of 1,212 files matching the configured
+includes, **407 are excluded with recorded reasons**; 613 other tracked files
+fall outside those includes. Source commit/tree/config hashes are bound to
+the inventory, and verification reports no missing or unexpected measured
+files. META-01 is accepted on this evidence. The historical PR284 count of
+394 exclusions below remains historical and is not substituted for 407.
+
+Coverage artifact `13419615153` has ZIP SHA-256
+`4327470e2f08001d16464247c17be3228c12f363965d6851d326d34b4ea1cae9`.
+Browser artifact `13420600013` has ZIP SHA-256
+`59bae6ec29b9f1b4df33487ea3461cfe8c1d9ac8b3541515055f280c1a07dd97`.
+Each of the three Playwright JSON reports independently records
+`metadata.ci.commitHash` and `metadata.gitCommit.hash` equal to the accepted
+synthetic merge. UI05 also retains four financial-operation attachments; its
+DCS-closed refusal attachment is explicitly not nonrefundable-fare acceptance.
+
+The final review handoffs, including per-file hashes and provider/fault
+boundaries, are:
+
+- `ais-evidence/pr285-ci-artifacts/coverage/run-42035532674/handoff.json`
+- `ais-evidence/pr285-ci-artifacts/native/run-42035533321/handoff.json`
+- `ais-evidence/pr285-ci-artifacts/native/run-42035532794/handoff.json`
+- `ais-evidence/pr285-ci-artifacts/browser/run-42035532674/handoff.json`
+
+Coverage and browser container cleanup completed successfully. This acceptance
+does not relabel the earlier failed coverage attempt below, certify external
+providers or satisfy the four original conditions that remain partial.
 
 ## First integrated CI attempt and coverage correction
 
@@ -110,65 +172,67 @@ The process still exited 1 because this selected-file run cannot meet the
 unchanged full-project and per-file coverage floors. It is targeted behavior
 and measurement evidence, not a passing full-coverage gate. Cleanup receipt
 `ais-evidence/runtime/20261105T131738507452Z/receipt.json` records MySQL and Redis
-exit 0. Acceptance still awaits the corrected source's complete CI and sidecar.
+exit 0. That targeted attempt did not close the full-coverage gate; the later
+complete CI and inventory acceptance is recorded above.
 
 ## All 38 findings mapped
 
-`B` means a baseline candidate from the original audit; `F` means a candidate
-from the preceding follow-up; `N` means a new candidate from this wave. All
-three labels mean **pending final-source CI**. `M` and `P` are excluded from
-the 33-candidate count. Repository paths below identify acceptance entry
-points; the previous follow-up and local handoffs distinguish their executed
-scope and source.
+`B`, `F` and `N` retain the provenance of the 33 now-verified functional
+findings: baseline audit, preceding follow-up and this native wave,
+respectively. `M` is the verified META-01 record. **All B/F/N/M rows are
+verified at the accepted source above; P rows remain partial.** Repository
+paths identify acceptance entry points; historical attempts and controlled
+boundaries remain distinguished in the accompanying evidence.
 
-| ID               | State | Acceptance mapping or remaining condition                                                                                                             |
-| ---------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BE-01            | B     | Refresh-token replay, durable session revocation and transaction refusal: `auth-session-mysql.test.ts`, `auth-session-regression.test.ts`.            |
-| BE-02            | B     | MFA secret migration and current session evidence: `auth-session-mysql.test.ts`, `session-mfa-boundary.test.ts`.                                      |
-| UI-C01           | F     | Unpaid share cancellation, no refund item and terminal provider return: `PayYourShare.test.tsx`, `e2e/payer-terminal-acceptance.spec.ts`.             |
-| SRC-API-SHUTDOWN | N     | Actual signals, unused/existing pool, close faults and deadline; final observation drain. Details below.                                              |
-| META-01          | M     | Final source/run/provider/config manifest and inventory of excluded files with reasons remain pending.                                                |
-| BE-03            | B     | Internal-funding refunds and conservation: `internal-refund-boundary.test.ts`, `financial-authority-mysql.test.ts`.                                   |
-| BE-04            | B     | Agency credit authority, limits, native funding and browser journey: `financial-authority-mysql.test.ts`, `e2e/agency-credit.spec.ts`.                |
-| BE-05            | N     | Native revalidation refusal, late evidence, timezone/DST boundaries and invariant replay. Details below.                                              |
-| BE-06            | F     | Fare applicability, arithmetic, malformed rules and full UTC date-only endpoints: `fare-rules-engine.test.ts`, `fare-rules-acceptance-mysql.test.ts`. |
-| BE-07            | N     | Signed paid HTTP races/redelivery and current-data confirmation with repeatable local PDF bytes. Details below.                                       |
-| BE-08            | B     | Actual auth-client/provider boundary and native session lifecycle: `auth-service-http.test.ts`, `auth-session-mysql.test.ts`.                         |
-| BE-09            | B     | Booking-economics role and tenant entry checks: `seat-economics-tenant-boundary.test.ts`.                                                             |
-| BE-10            | N     | Wallet payment crossing refund/top-up, native rollback and replay; existing payment/split router acceptance retained. Details below.                  |
-| OPS-01           | B     | Report router contracts, role/tenant scope and saved-run lifecycle: router, native schedules and `e2e/standard-reports.spec.ts`.                      |
-| OPS-02           | B     | Scheduled-run fencing, uncertain delivery, owner changes and deletion: `standard-report-schedules-mysql.test.ts`.                                     |
-| OPS-03           | F     | APIS document validation/update races, mixed-sector draft and explicit submission refusal: `apis-seats-acceptance-mysql.test.ts`.                     |
-| OPS-04           | N     | Concurrent refund/manifest snapshot and actual manifest/closeout route scope. Details below.                                                          |
-| OPS-05           | F     | Repeat seat initialization, signed document changes, ownership and tenant binding: `apis-seats-acceptance-mysql.test.ts`.                             |
-| OPS-06           | P     | Native remap/downgrade acceptance added; blanket operational-block refusal conflicts with the preserved compatible-remap policy.                      |
-| OPS-07           | B     | Capacity, holds, promises and native concurrency/rollback: `operations-inventory-mysql.test.ts` and acceptance scripts.                               |
-| OPS-08           | N     | Concurrent immutable HOT/bank imports and local-evidence reconciliation. Details below.                                                               |
-| OPS-09           | N     | Actual worker minute tick, renewal, fencing, shutdown and persisted report receipt. Details below.                                                    |
-| OPS-11           | N     | Actual API liveness/readiness, dependency recovery, raw body, transport limits and quotas. Details below.                                             |
-| UI-01            | F     | Logout/private-state cleanup and safe return paths: hook tests plus isolated logout/recovery browser phases.                                          |
-| UI-02            | F     | Retry identity, roster reindexing and wallet/split invoice handoff: roster tests and `e2e/booking-dialog-acceptance.spec.ts`.                         |
-| UI-03            | B     | Multi-city search and transition: `MultiCityResults.test.tsx`, `e2e/multi-city-fare.spec.ts`.                                                         |
-| UI-04            | F     | Payer state/return matrix, failed checkout retry and terminal polling: component and native payer browser tests.                                      |
-| UI-05            | P     | Paid servicing and cash/split cancellation receipts now exercised; original nonrefundable-fare cancellation remains missing.                          |
-| UI-06            | F     | Station, equipment, loading and weight interactions: the 66-case actual-component UI group. No dispatch-approval criterion is added.                  |
-| UI-07            | P     | Kiosk privacy/version/browser behavior exists; actual target-printer barcode, margins and physical output remain unaccepted.                          |
-| UI-08            | B     | Legacy CSV/Excel/PDF content and failure/context handling: `ExportReportButton.test.tsx`, `e2e/vrs-report-exports.spec.ts`.                           |
-| UI-09            | F     | Refund rows/statistics, pagination, failed reads and stopped polling: `RefundsDashboardInteractions.test.tsx`.                                        |
-| UI-10            | F     | Built entry/reload, lazy-chunk recovery, auth expiry and embedded isolation: boundary tests and recovery browser suite.                               |
-| UI-11            | F     | MFA setup/recovery, errors, focus and clipboard handling: `MFASetup.test.tsx`, `MFAVerify.test.tsx`.                                                  |
-| OPS-10           | B     | Scoped, idempotent flight/email delivery and failure replay: native flight delivery and email-worker suites.                                          |
-| UI-12            | F     | Report-input failures, current-context responses, stable generation identity and download: report UI and browser tests.                               |
-| CAP-01           | P     | All 36 available-report software matrices now pass locally; 35 partial and 28 blocked definitions retain their source/acceptance conditions.          |
-| UI-M01           | F     | Same-run actual ErrorBoundary statement/function/branch evidence; final source/provider/config identity still required.                               |
+| ID               | Group | Acceptance mapping or remaining condition                                                                                                                     |
+| ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BE-01            | B     | Refresh-token replay, durable session revocation and transaction refusal: `auth-session-mysql.test.ts`, `auth-session-regression.test.ts`.                    |
+| BE-02            | B     | MFA secret migration and current session evidence: `auth-session-mysql.test.ts`, `session-mfa-boundary.test.ts`.                                              |
+| UI-C01           | F     | Unpaid share cancellation, no refund item and terminal provider return: `PayYourShare.test.tsx`, `e2e/payer-terminal-acceptance.spec.ts`.                     |
+| SRC-API-SHUTDOWN | N     | Actual signals, unused/existing pool, close faults and deadline; final observation drain. Details below.                                                      |
+| META-01          | M     | Final source/run/provider/config manifest, strict artifact hashes and the 805-measured/407-excluded inventory verified with matching native/browser evidence. |
+| BE-03            | B     | Internal-funding refunds and conservation: `internal-refund-boundary.test.ts`, `financial-authority-mysql.test.ts`.                                           |
+| BE-04            | B     | Agency credit authority, limits, native funding and browser journey: `financial-authority-mysql.test.ts`, `e2e/agency-credit.spec.ts`.                        |
+| BE-05            | N     | Native revalidation refusal, late evidence, timezone/DST boundaries and invariant replay. Details below.                                                      |
+| BE-06            | F     | Fare applicability, arithmetic, malformed rules and full UTC date-only endpoints: `fare-rules-engine.test.ts`, `fare-rules-acceptance-mysql.test.ts`.         |
+| BE-07            | N     | Signed paid HTTP races/redelivery and current-data confirmation with repeatable local PDF bytes. Details below.                                               |
+| BE-08            | B     | Actual auth-client/provider boundary and native session lifecycle: `auth-service-http.test.ts`, `auth-session-mysql.test.ts`.                                 |
+| BE-09            | B     | Booking-economics role and tenant entry checks: `seat-economics-tenant-boundary.test.ts`.                                                                     |
+| BE-10            | N     | Wallet payment crossing refund/top-up, native rollback and replay; existing payment/split router acceptance retained. Details below.                          |
+| OPS-01           | B     | Report router contracts, role/tenant scope and saved-run lifecycle: router, native schedules and `e2e/standard-reports.spec.ts`.                              |
+| OPS-02           | B     | Scheduled-run fencing, uncertain delivery, owner changes and deletion: `standard-report-schedules-mysql.test.ts`.                                             |
+| OPS-03           | F     | APIS document validation/update races, mixed-sector draft and explicit submission refusal: `apis-seats-acceptance-mysql.test.ts`.                             |
+| OPS-04           | N     | Concurrent refund/manifest snapshot and actual manifest/closeout route scope. Details below.                                                                  |
+| OPS-05           | F     | Repeat seat initialization, signed document changes, ownership and tenant binding: `apis-seats-acceptance-mysql.test.ts`.                                     |
+| OPS-06           | P     | Native remap/downgrade acceptance added; blanket operational-block refusal conflicts with the preserved compatible-remap policy.                              |
+| OPS-07           | B     | Capacity, holds, promises and native concurrency/rollback: `operations-inventory-mysql.test.ts` and acceptance scripts.                                       |
+| OPS-08           | N     | Concurrent immutable HOT/bank imports and local-evidence reconciliation. Details below.                                                                       |
+| OPS-09           | N     | Actual worker minute tick, renewal, fencing, shutdown and persisted report receipt. Details below.                                                            |
+| OPS-11           | N     | Actual API liveness/readiness, dependency recovery, raw body, transport limits and quotas. Details below.                                                     |
+| UI-01            | F     | Logout/private-state cleanup and safe return paths: hook tests plus isolated logout/recovery browser phases.                                                  |
+| UI-02            | F     | Retry identity, roster reindexing and wallet/split invoice handoff: roster tests and `e2e/booking-dialog-acceptance.spec.ts`.                                 |
+| UI-03            | B     | Multi-city search and transition: `MultiCityResults.test.tsx`, `e2e/multi-city-fare.spec.ts`.                                                                 |
+| UI-04            | F     | Payer state/return matrix, failed checkout retry and terminal polling: component and native payer browser tests.                                              |
+| UI-05            | P     | Paid servicing and cash/split cancellation receipts now exercised; original nonrefundable-fare cancellation remains missing.                                  |
+| UI-06            | F     | Station, equipment, loading and weight interactions: the 66-case actual-component UI group. No dispatch-approval criterion is added.                          |
+| UI-07            | P     | Kiosk privacy/version/browser behavior exists; actual target-printer barcode, margins and physical output remain unaccepted.                                  |
+| UI-08            | B     | Legacy CSV/Excel/PDF content and failure/context handling: `ExportReportButton.test.tsx`, `e2e/vrs-report-exports.spec.ts`.                                   |
+| UI-09            | F     | Refund rows/statistics, pagination, failed reads and stopped polling: `RefundsDashboardInteractions.test.tsx`.                                                |
+| UI-10            | F     | Built entry/reload, lazy-chunk recovery, auth expiry and embedded isolation: boundary tests and recovery browser suite.                                       |
+| UI-11            | F     | MFA setup/recovery, errors, focus and clipboard handling: `MFASetup.test.tsx`, `MFAVerify.test.tsx`.                                                          |
+| OPS-10           | B     | Scoped, idempotent flight/email delivery and failure replay: native flight delivery and email-worker suites.                                                  |
+| UI-12            | F     | Report-input failures, current-context responses, stable generation identity and download: report UI and browser tests.                                       |
+| CAP-01           | P     | All 36 available-report software matrices pass in accepted native CI; 35 partial and 28 blocked definitions retain their source/acceptance conditions.        |
+| UI-M01           | F     | Same-run actual ErrorBoundary statement/function/branch evidence, with final source/provider/config identity in the accepted manifest.                        |
 
 The B/F assignments retain the previous audit's criteria. For example, UI-03
-and UI-08 have historical component/browser evidence; they were not newly
-executed by this documentation task. UI-M01's observed counter comparison
+and UI-08 retain historical component/browser evidence and are covered by the
+accepted integrated tests and browser suites; this documentation edit did not
+execute another test run. UI-M01's observed counter comparison
 does not assert that a coverage-provider or source-map implementation defect
 has been repaired.
 
-## Eight newly completed local acceptance gaps
+## Evidence behind the eight newly verified functional findings
 
 ### SRC-API-SHUTDOWN — actual process shutdown and final observations
 
@@ -223,7 +287,10 @@ The first 49-case attempt had **47 passed and 2 failed assertions**. Both
 registered-bag requests were correctly refused with unchanged snapshots;
 the expected error wording was wrong. After correcting those test-only
 expectations, the targeted run passed **2 cases with 47 deselected**. There
-is **no claim of a fresh 49/49 final-source run**.
+was no fresh 49/49 run in that local handoff. The later accepted CI now records
+**49/49 on the final tested source**, in full coverage and in each native
+MySQL matrix leg; those executions supersede the local acceptance limitation
+without changing the earlier attempt's result.
 
 Evidence: `ais-evidence/ticket-revalidation-followup/handoff.json`,
 `ais-evidence/ticket-revalidation-followup/attempt-1.json` and
@@ -269,7 +336,9 @@ The 26-case command also contained a selector named
 `eticket-pdf-determinism.test.ts`, which matched no file. It contributes no
 tests. The actual renderer evidence is the separate
 `eticket-renderer-retry.test.ts` run. The three earlier HTTP successes were
-not rerun solely to consolidate counts after mail-only changes.
+not rerun locally solely to consolidate counts after mail-only changes. The
+accepted integrated CI subsequently executed all three HTTP and all 14 mail
+cases successfully on the same source.
 
 Handoffs: `ais-evidence/stripe-delivery/handoff.json` and
 `ais-evidence/pdf-retry-followup/handoff.json`. The latest native cleanup
@@ -426,11 +495,17 @@ Component regression evidence had **3 failures, 2 selected passes and 15
 filtered cases**. The corrected related React group passed **29/29**.
 The first native browser run passed **3 scenarios and failed 1**. Paid
 modification, cash cancellation and split cancellation passed through the
-real browser/API/MySQL/Stripe SDK and a signed local-provider webhook. The
-fourth fixture moved scheduled times without recording final DCS closure.
+real browser/API/MySQL/Stripe SDK. Funding and paid modification use signed
+paid webhooks from the local provider; refunds use its SDK responses followed
+by application reconciliation. The fourth fixture moved scheduled times
+without recording final DCS closure.
 After correcting that fixture, **1 targeted scenario passed**; the three
-previous successes were reused. This is not a fresh four-case successful
-suite.
+previous successes were reused in that local handoff. The later accepted
+CI's dedicated `playwright.ui05.config.ts` profile now supplies a fresh
+**4/4 successful suite**, with no skips, retries or flaky outcomes and with
+the same source metadata as the other browser profiles. This adds final-source
+evidence for those four scenarios, while the original nonrefundable-fare
+criterion below remains incomplete.
 
 Evidence: `ais-evidence/ui05-financial/handoff.json`,
 `ais-evidence/ui05-financial/receipt-component-final.json`, and browser
@@ -453,8 +528,9 @@ Existing kiosk component and browser evidence covers document version,
 privacy timeout, abandoned requests and print failure/unknown state. Browser
 printing is substituted. The original requirement separately demands actual
 target-printer output, barcode readability and margins. No printer receipt
-or physical acceptance was supplied by this wave. Current-source UI/browser
-CI remains required, but cannot satisfy the physical-output condition alone.
+or physical acceptance was supplied by this wave. The accepted UI/browser
+CI covers the software paths and does not satisfy the physical-output
+condition alone.
 
 ### CAP-01 — available-report matrix complete, catalog unchanged
 
@@ -499,7 +575,7 @@ then implementation and tests. The
 [63-entry source/acceptance ledger](20261104-report-source-acceptance-ledger.md)
 continues to describe those conditions. The new matrix leaves those source and acceptance conditions, and the explicit refusal behavior, unchanged.
 
-## Final-source CI and META-01 handoff
+## Final-source wiring and META-01 provenance
 
 The integration review maps these six new native files to the unrestricted
 server test glob used by full coverage and to the MySQL 8.0/9.7 service gate:
@@ -516,8 +592,8 @@ and BSP extensions remain reached through `verify-transaction-boundaries.ts`
 and `acceptance/integration-remediation.ts`. The UI05 spec is outside the
 default E2E directory and requires its own
 `playwright.ui05.config.ts` invocation, a fresh built app, a separate Redis
-phase and preserved report directory. These are wiring requirements and
-review observations, **not evidence of a completed final-source CI run**.
+phase and preserved report directory. The accepted run executed that dedicated
+profile and preserved its results separately from main and isolated logout.
 
 A related recovery-browser synchronization correction is preserved in
 `ais-evidence/auth-recovery-flake/handoff.json`: the actual protected query
@@ -540,7 +616,11 @@ includes, 394 were excluded with reasons, and all 805 eligible names matched
 the measured partitions. This is a later local derivation from historical CI,
 not a new run or an original artifact of that historical execution.
 
-Formal acceptance still requires the integrated gates and this sidecar on the
-actual source of the new PR. Preserve that manifest and the matching
-unit/native/browser results before populating accepted fields. The four
-partial findings and unchanged report classification remain visible.
+The corrected-source runs above now provide the integrated gates, source-bound
+sidecar and matching unit/native/browser evidence. Acceptance is bound to
+`9929de4d1d246f748c467eecbf49ce6f452d60c5` and tree
+`4e7b369dc2330a3e61c36cb91b62f4ab98a6c547`, not an untested future commit.
+This subsequent documentation/ledger recording must retain the four partial
+findings and the unchanged 99/36/35/28 report classification. It changes no
+code, tests or configuration; the new PR head still requires its checks before
+merge, and release PR283 follows the accepted fix wave and its refreshed checks.
