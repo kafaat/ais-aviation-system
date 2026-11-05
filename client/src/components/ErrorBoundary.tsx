@@ -20,6 +20,7 @@ interface State {
   errorInfo: React.ErrorInfo | null;
   showDetails: boolean;
   eventId: string | null;
+  reportUnavailable: boolean;
 }
 
 class ErrorBoundary extends Component<Props, State> {
@@ -31,6 +32,7 @@ class ErrorBoundary extends Component<Props, State> {
       errorInfo: null,
       showDetails: false,
       eventId: null,
+      reportUnavailable: false,
     };
   }
 
@@ -70,6 +72,7 @@ class ErrorBoundary extends Component<Props, State> {
       errorInfo: null,
       showDetails: false,
       eventId: null,
+      reportUnavailable: false,
     });
   };
 
@@ -78,6 +81,7 @@ class ErrorBoundary extends Component<Props, State> {
 
     // If Sentry is initialized, show the Sentry report dialog
     if (isSentryInitialized() && eventId) {
+      this.setState({ reportUnavailable: false });
       showReportDialog(eventId);
       return;
     }
@@ -95,8 +99,8 @@ class ErrorBoundary extends Component<Props, State> {
     // Log the report
     console.info("Error Report:", errorReport);
 
-    // Show confirmation to user
-    alert(i18n.t("errors.reportConfirmation"));
+    // A console entry is local diagnostics, not a report sent to support.
+    this.setState({ reportUnavailable: true });
   };
 
   handleGoHome = () => {
@@ -178,6 +182,14 @@ class ErrorBoundary extends Component<Props, State> {
                   <Bug className="h-5 w-5" />
                   {i18n.t("errors.reportError")}
                 </button>
+                {this.state.reportUnavailable && (
+                  <p
+                    role="status"
+                    className="mt-3 text-sm text-muted-foreground"
+                  >
+                    {i18n.t("errors.reportUnavailable")}
+                  </p>
+                )}
               </div>
 
               {/* Error Details (collapsible) */}

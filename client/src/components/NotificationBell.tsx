@@ -66,7 +66,7 @@ export function NotificationBell({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[380px] p-0 shadow-xl border-slate-200 dark:border-slate-700"
+        className="w-[380px] max-w-[calc(100vw-2rem)] p-0 shadow-xl border-slate-200 dark:border-slate-700"
         align="end"
         sideOffset={8}
       >

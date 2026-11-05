@@ -1,6 +1,6 @@
 /**
  * Check-In Reminder Job
- * Sends email and SMS reminders to passengers 24 hours before their flight
+ * Sends email reminders to passengers before their flight.
  */
 
 import { getDb } from "../db";
@@ -13,6 +13,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, gte, lt, isNull } from "drizzle-orm";
 import { sendCheckInReminder } from "../services/email.service";
+import { checkInPath } from "../../shared/check-in-link";
 // SMS can be added when user preferences with phone numbers are integrated
 // import { sendTemplatedSMS } from "../services/sms.service";
 
@@ -143,7 +144,10 @@ export async function runCheckInReminderJob(): Promise<ReminderResult> {
           throw new Error(
             "FRONTEND_URL is not set; refusing to email a localhost check-in link"
           );
-        const checkInUrl = `${process.env.FRONTEND_URL || "http://localhost:3000"}/check-in?booking=${item.booking.bookingReference}`;
+        const checkInUrl = new URL(
+          checkInPath(item.booking.pnr),
+          process.env.FRONTEND_URL || "http://localhost:3000"
+        ).href;
 
         // Skip if user has no email
         if (!item.user.email) {

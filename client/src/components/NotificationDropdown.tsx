@@ -18,9 +18,24 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface NotificationDropdownProps {
   onClose?: () => void;
+}
+
+function ViewAllNotifications({ onClose }: NotificationDropdownProps) {
+  const { t } = useTranslation();
+  return (
+    <div className="p-3 border-t border-slate-100 dark:border-slate-800">
+      <Button variant="ghost" className="w-full justify-center text-sm" asChild>
+        <Link href="/notifications" onClick={onClose}>
+          {t("notifications.viewAll")}
+          <ChevronRight className="h-4 w-4 ms-1" />
+        </Link>
+      </Button>
+    </div>
+  );
 }
 
 // Notification type icons and colors
@@ -62,10 +77,16 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
   const utils = trpc.useUtils();
 
   // Fetch notifications
-  const { data: notifications, isLoading } = trpc.notifications.list.useQuery({
-    limit: 10,
-    unreadOnly: false,
-  });
+  const {
+    data: notifications,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = trpc.notifications.list.useQuery(
+    { limit: 10, unreadOnly: false },
+    { retry: false }
+  );
 
   // Mark as read mutation
   const markAsRead = trpc.notifications.markAsRead.useMutation({
@@ -73,6 +94,7 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
       utils.notifications.list.invalidate();
       utils.notifications.unreadCount.invalidate();
     },
+    onError: () => toast.error(t("notifications.actionError")),
   });
 
   // Mark all as read mutation
@@ -81,6 +103,7 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
       utils.notifications.list.invalidate();
       utils.notifications.unreadCount.invalidate();
     },
+    onError: () => toast.error(t("notifications.actionError")),
   });
 
   // Delete notification mutation
@@ -89,6 +112,7 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
       utils.notifications.list.invalidate();
       utils.notifications.unreadCount.invalidate();
     },
+    onError: () => toast.error(t("notifications.actionError")),
   });
 
   const handleNotificationClick = (notification: {
@@ -110,9 +134,28 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
   };
 
   const handleDelete = (e: React.MouseEvent, notificationId: number) => {
+    e.preventDefault();
     e.stopPropagation();
     deleteNotification.mutate({ id: notificationId });
   };
+
+  if (error) {
+    return (
+      <div>
+        <div className="p-6 space-y-3" role="alert">
+          <p>{t("notifications.loadError")}</p>
+          <Button
+            variant="outline"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+        <ViewAllNotifications onClose={onClose} />
+      </div>
+    );
+  }
 
   // Loading state
   if (isLoading) {
@@ -135,16 +178,19 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
   // Empty state
   if (!notifications || notifications.length === 0) {
     return (
-      <div className="p-8 text-center">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-          <Bell className="h-8 w-8 text-slate-400" />
+      <div>
+        <div className="p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            <Bell className="h-8 w-8 text-slate-400" />
+          </div>
+          <p className="text-sm font-medium text-slate-900 dark:text-white">
+            {t("notifications.empty")}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {t("notifications.emptyDesc")}
+          </p>
         </div>
-        <p className="text-sm font-medium text-slate-900 dark:text-white">
-          {t("notifications.empty")}
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          {t("notifications.emptyDesc")}
-        </p>
+        <ViewAllNotifications onClose={onClose} />
       </div>
     );
   }
@@ -241,6 +287,10 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
                           size="icon"
                           className="h-6 w-6 text-slate-400 hover:text-red-500"
                           onClick={e => handleDelete(e, notification.id)}
+                          aria-label={t("notifications.deleteNotification", {
+                            title: notification.title,
+                          })}
+                          disabled={deleteNotification.isPending}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -271,19 +321,7 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
       </ScrollArea>
 
       {/* Footer */}
-      <div className="p-3 border-t border-slate-100 dark:border-slate-800">
-        <Button
-          variant="ghost"
-          className="w-full justify-center text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
-          asChild
-          onClick={onClose}
-        >
-          <Link href="/notifications">
-            {t("notifications.viewAll")}
-            <ChevronRight className="h-4 w-4 ms-1" />
-          </Link>
-        </Button>
-      </div>
+      <ViewAllNotifications onClose={onClose} />
     </div>
   );
 }

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "status": "passed",
+  "checks": {
+    "procedure_count_844": true,
+    "domains_95": true,
+    "service_count_250": true,
+    "web_routes_70": true,
+    "auxiliary_and_catch_all_separate": true,
+    "journeys_14": true,
+    "candidates_23": true,
+    "reachable_frontend_procedures_418": true,
+    "all_frontend_procedure_names_resolve": true,
+    "all_baseline_calls_projected": true,
+    "all_reachable_calls_projected": true,
+    "all_procedures_classified": true,
+    "all_rest_entries_projected": true
+  },
+  "scope": "Count, identity and join invariants for the evidence projection only; not application tests, runtime acceptance or authorization proof."
+}

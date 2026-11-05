@@ -21,6 +21,7 @@ import {
   cancelAfterPartialRefund,
 } from "./payment-settlement.service";
 import { stripe } from "../stripe";
+import { isAdmin } from "./rbac.service";
 
 export interface CreateRefundInput {
   bookingId: number;
@@ -87,12 +88,12 @@ export async function createRefund(
   actor: RefundActor
 ) {
   try {
-    if (!actor || (actor.role !== "admin" && actor.id !== input.userId)) {
+    if (!actor || (!isAdmin(actor.role) && actor.id !== input.userId)) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
     }
 
     if (input.amount !== undefined) {
-      if (actor.role !== "admin") {
+      if (!isAdmin(actor.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Only admins can override the refund amount",
@@ -416,7 +417,7 @@ export async function getRefundDetails(refundId: string, actor: RefundActor) {
   try {
     const refund = await stripe.refunds.retrieve(refundId);
 
-    if (actor.role !== "admin") {
+    if (!isAdmin(actor.role)) {
       const paymentIntentId =
         typeof refund.payment_intent === "string"
           ? refund.payment_intent

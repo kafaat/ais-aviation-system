@@ -1,0 +1,3877 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "interpretation": "95 top-level mounted tRPC namespaces. Counts describe source linkage and deliberately have no completion percentage.",
+  "records": [
+    {
+      "id": "admin",
+      "mount_sources": [
+        {
+          "path": "server/routers/admin.ts",
+          "line": 34,
+          "end_line": 514,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/admin.ts#L34-L514"
+        }
+      ],
+      "counts": {
+        "procedures": 17,
+        "queries": 11,
+        "mutations": 6,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin": 1,
+        "admin/super_admin or tenant-scoped airline_admin/ops": 2,
+        "administrator": 14
+      },
+      "capability_categories": {
+        "human-domain-capability": 17
+      },
+      "procedure_ids": [
+        "admin.cancelFlightAndRefund",
+        "admin.createFlight",
+        "admin.flushMetrics",
+        "admin.getAllBookings",
+        "admin.getAuditLogById",
+        "admin.getAuditLogStats",
+        "admin.getAuditLogs",
+        "admin.getAuditLogsForResource",
+        "admin.getAuditLogsForUser",
+        "admin.getHighSeverityEvents",
+        "admin.getMetrics",
+        "admin.getMetricsInfo",
+        "admin.getMetricsSummary",
+        "admin.getRealTimeStats",
+        "admin.updateBookingStatus",
+        "admin.updateFlightAvailability",
+        "admin.updateFlightStatus"
+      ],
+      "direct_service_modules": [
+        "server/services/audit.service.ts",
+        "server/services/flight-status.service.ts",
+        "server/services/metrics.service.ts",
+        "server/services/rbac.service.ts",
+        "server/services/required-value.ts",
+        "server/services/tenant-scope.service.ts"
+      ],
+      "associated_web_routes": ["/admin", "/airline"]
+    },
+    {
+      "id": "agentGovernance",
+      "mount_sources": [
+        {
+          "path": "server/routers/agent-governance.ts",
+          "line": 14,
+          "end_line": 76,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/agent-governance.ts#L14-L76"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 1,
+        "mutations": 1,
+        "rest_mapped": 2,
+        "reachable_browser_references": 1
+      },
+      "authority_classes": {
+        "administrator": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 2
+      },
+      "procedure_ids": [
+        "agentGovernance.getAiCostBreakdown",
+        "agentGovernance.overrideDecision"
+      ],
+      "direct_service_modules": ["server/services/agent-governance.service.ts"],
+      "associated_web_routes": ["/admin/seat-economics"]
+    },
+    {
+      "id": "agentPortal",
+      "mount_sources": [
+        {
+          "path": "server/routers/agent-portal.ts",
+          "line": 34,
+          "end_line": 64,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/agent-portal.ts#L34-L64"
+        }
+      ],
+      "counts": {
+        "procedures": 4,
+        "queries": 2,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 4
+      },
+      "authority_classes": {
+        "authenticated": 4
+      },
+      "capability_categories": {
+        "human-domain-capability": 4
+      },
+      "procedure_ids": [
+        "agentPortal.agencies",
+        "agentPortal.createBooking",
+        "agentPortal.dashboard",
+        "agentPortal.search"
+      ],
+      "direct_service_modules": ["server/services/agent-portal.service.ts"],
+      "associated_web_routes": ["/agent"]
+    },
+    {
+      "id": "aiChat",
+      "mount_sources": [
+        {
+          "path": "server/routers/ai-chat.ts",
+          "line": 27,
+          "end_line": 190,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ai-chat.ts#L27-L190"
+        }
+      ],
+      "counts": {
+        "procedures": 8,
+        "queries": 5,
+        "mutations": 3,
+        "rest_mapped": 0,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "authenticated": 8
+      },
+      "capability_categories": {
+        "human-domain-capability": 8
+      },
+      "procedure_ids": [
+        "aiChat.getConfig",
+        "aiChat.getHistory",
+        "aiChat.getQuickReplies",
+        "aiChat.getSuggestions",
+        "aiChat.myConversations",
+        "aiChat.selectSuggestion",
+        "aiChat.sendMessage",
+        "aiChat.startConversation"
+      ],
+      "direct_service_modules": [
+        "server/services/ai-chat-booking.service.ts",
+        "server/services/ai-guardrails.service.ts"
+      ],
+      "associated_web_routes": ["/ai-chat"]
+    },
+    {
+      "id": "aiPricing",
+      "mount_sources": [
+        {
+          "path": "server/routers/ai-pricing.router.ts",
+          "line": 114,
+          "end_line": 580,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ai-pricing.router.ts#L114-L580"
+        }
+      ],
+      "counts": {
+        "procedures": 22,
+        "queries": 12,
+        "mutations": 10,
+        "rest_mapped": 0,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "administrator": 21,
+        "authenticated": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 22
+      },
+      "procedure_ids": [
+        "aiPricing.applyOptimization",
+        "aiPricing.approveOptimization",
+        "aiPricing.completeABTest",
+        "aiPricing.createABTest",
+        "aiPricing.forecastAccuracy",
+        "aiPricing.forecastDemand",
+        "aiPricing.forecastRoute",
+        "aiPricing.getABTestResults",
+        "aiPricing.getABTests",
+        "aiPricing.getCustomerProfile",
+        "aiPricing.getDashboard",
+        "aiPricing.getMyProfile",
+        "aiPricing.getRevenueMetrics",
+        "aiPricing.getSegments",
+        "aiPricing.optimizeFlight",
+        "aiPricing.optimizeUpcoming",
+        "aiPricing.pauseABTest",
+        "aiPricing.reconcileForecastOutcomes",
+        "aiPricing.runSegmentation",
+        "aiPricing.setEnabled",
+        "aiPricing.startABTest",
+        "aiPricing.upsertSegment"
+      ],
+      "direct_service_modules": [
+        "server/services/pricing-approval.service.ts",
+        "server/services/pricing/ab-testing.service.ts",
+        "server/services/pricing/ai-pricing.service.ts",
+        "server/services/pricing/customer-segmentation.service.ts",
+        "server/services/pricing/demand-forecasting.service.ts",
+        "server/services/pricing/revenue-optimization.service.ts"
+      ],
+      "associated_web_routes": ["/admin/ai-pricing"]
+    },
+    {
+      "id": "analytics",
+      "mount_sources": [
+        {
+          "path": "server/routers/analytics.ts",
+          "line": 52,
+          "end_line": 151,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/analytics.ts#L52-L151"
+        }
+      ],
+      "counts": {
+        "procedures": 8,
+        "queries": 8,
+        "mutations": 0,
+        "rest_mapped": 0,
+        "reachable_browser_references": 8
+      },
+      "authority_classes": {
+        "administrator": 8
+      },
+      "capability_categories": {
+        "human-domain-capability": 8
+      },
+      "procedure_ids": [
+        "analytics.getAncillaryMetrics",
+        "analytics.getAncillaryRevenueByCategory",
+        "analytics.getBookingTrends",
+        "analytics.getFlightOccupancy",
+        "analytics.getKPIs",
+        "analytics.getPopularAncillaries",
+        "analytics.getPopularDestinations",
+        "analytics.getRevenueOverTime"
+      ],
+      "direct_service_modules": ["server/services/analytics.service.ts"],
+      "associated_web_routes": ["/analytics"]
+    },
+    {
+      "id": "ancillary",
+      "mount_sources": [
+        {
+          "path": "server/routers/ancillary.ts",
+          "line": 19,
+          "end_line": 359,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ancillary.ts#L19-L359"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 5,
+        "mutations": 5,
+        "rest_mapped": 0,
+        "reachable_browser_references": 4
+      },
+      "authority_classes": {
+        "administrator": 3,
+        "authenticated": 4,
+        "public builder; body/service guards may further restrict": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 10
+      },
+      "procedure_ids": [
+        "ancillary.addToBooking",
+        "ancillary.adminCreate",
+        "ancillary.adminDeactivate",
+        "ancillary.adminUpdate",
+        "ancillary.calculateTotal",
+        "ancillary.getAvailable",
+        "ancillary.getBookingAncillaries",
+        "ancillary.getByCategory",
+        "ancillary.getById",
+        "ancillary.removeFromBooking"
+      ],
+      "direct_service_modules": [
+        "server/services/ancillary-services.service.ts"
+      ],
+      "associated_web_routes": [
+        "/admin/bag-drop",
+        "/booking/:id",
+        "/booking/multi-city",
+        "/check-in",
+        "/my-bookings"
+      ]
+    },
+    {
+      "id": "apis",
+      "mount_sources": [
+        {
+          "path": "server/routers/apis.ts",
+          "line": 26,
+          "end_line": 263,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/apis.ts#L26-L263"
+        }
+      ],
+      "counts": {
+        "procedures": 11,
+        "queries": 7,
+        "mutations": 4,
+        "rest_mapped": 0,
+        "reachable_browser_references": 11
+      },
+      "authority_classes": {
+        "administrator": 7,
+        "authenticated": 3,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "local-travel-document-processing-with-external-submission-blocked": 11
+      },
+      "procedure_ids": [
+        "apis.flagIncomplete",
+        "apis.generateMessage",
+        "apis.getFlightStatus",
+        "apis.getMyAPISStatus",
+        "apis.getMyJourneyStatus",
+        "apis.getRequirements",
+        "apis.getSubmissionCapability",
+        "apis.getSubmissions",
+        "apis.submitInfo",
+        "apis.submitToAuthorities",
+        "apis.validatePassenger"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/apis.service.ts",
+        "server/services/travel-clearance.service.ts"
+      ],
+      "associated_web_routes": ["/admin/apis", "/check-in"]
+    },
+    {
+      "id": "auth",
+      "mount_sources": [
+        {
+          "path": "server/routers/auth.ts",
+          "line": 162,
+          "end_line": 677,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L162-L677"
+        }
+      ],
+      "counts": {
+        "procedures": 11,
+        "queries": 3,
+        "mutations": 8,
+        "rest_mapped": 11,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "authenticated": 3,
+        "public builder; body/service guards may further restrict": 8
+      },
+      "capability_categories": {
+        "identity-protocol-and-account-security": 11
+      },
+      "procedure_ids": [
+        "auth.completeMfa",
+        "auth.getActiveSessions",
+        "auth.login",
+        "auth.logout",
+        "auth.logoutAllDevices",
+        "auth.logoutCookie",
+        "auth.me",
+        "auth.refreshToken",
+        "auth.register",
+        "auth.revokeSession",
+        "auth.verifyToken"
+      ],
+      "direct_service_modules": [
+        "server/services/account-lock.service.ts",
+        "server/services/mfa.service.ts",
+        "server/services/mobile-auth-v2.service.ts"
+      ],
+      "associated_web_routes": [
+        "/",
+        "/admin",
+        "/admin/apis",
+        "/admin/bag-drop",
+        "/admin/biometric",
+        "/admin/bsp-reporting",
+        "/admin/compensation",
+        "/admin/data-warehouse",
+        "/admin/emergency-hotel",
+        "/admin/gates",
+        "/admin/kiosk",
+        "/admin/operations",
+        "/admin/passenger-priority",
+        "/admin/refunds",
+        "/admin/reports",
+        "/admin/revenue-accounting",
+        "/admin/standard-reports",
+        "/admin/travel-agents",
+        "/admin/vouchers",
+        "/admin/weight-balance",
+        "/ai-chat",
+        "/airline",
+        "/airline/dcs",
+        "/analytics",
+        "/baggage",
+        "/booking/:id",
+        "/booking/multi-city",
+        "/check-in",
+        "/checkout/:bookingId",
+        "/corporate",
+        "/favorites",
+        "/login",
+        "/loyalty",
+        "/my-bookings",
+        "/my-waitlist",
+        "/notifications",
+        "/payment-history",
+        "/price-alerts",
+        "/privacy-policy",
+        "/profile",
+        "/rebook/:bookingId",
+        "/saved-passengers",
+        "/search"
+      ]
+    },
+    {
+      "id": "aviationIntegrations",
+      "mount_sources": [
+        {
+          "path": "server/routers/aviation-integrations.ts",
+          "line": 37,
+          "end_line": 242,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/aviation-integrations.ts#L37-L242"
+        }
+      ],
+      "counts": {
+        "procedures": 15,
+        "queries": 4,
+        "mutations": 11,
+        "rest_mapped": 0,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "administrator": 8,
+        "public builder; body/service guards may further restrict": 7
+      },
+      "capability_categories": {
+        "human-domain-capability": 15
+      },
+      "procedure_ids": [
+        "aviationIntegrations.acceptCrewRules",
+        "aviationIntegrations.acceptPremiumPolicy",
+        "aviationIntegrations.assignRotation",
+        "aviationIntegrations.clearanceContext",
+        "aviationIntegrations.departure",
+        "aviationIntegrations.flightEconomics",
+        "aviationIntegrations.ingestBaggage",
+        "aviationIntegrations.ingestCouponUplift",
+        "aviationIntegrations.ingestFlightCost",
+        "aviationIntegrations.ingestMaintenance",
+        "aviationIntegrations.ingestOperations",
+        "aviationIntegrations.ingestTravelClearance",
+        "aviationIntegrations.ingestTravelEvidence",
+        "aviationIntegrations.pausePremiumPolicy",
+        "aviationIntegrations.premiumResults"
+      ],
+      "direct_service_modules": [
+        "server/services/aircraft-rotation.service.ts",
+        "server/services/baggage-custody.service.ts",
+        "server/services/coupon-uplift.ts",
+        "server/services/crew-rule.service.ts",
+        "server/services/flight-economics-evidence.service.ts",
+        "server/services/operational-events.service.ts",
+        "server/services/premium-experiment.service.ts",
+        "server/services/travel-clearance.service.ts",
+        "server/services/travel-evidence.service.ts"
+      ],
+      "associated_web_routes": ["/admin/operations"]
+    },
+    {
+      "id": "bagDrop",
+      "mount_sources": [
+        {
+          "path": "server/routers/bag-drop.ts",
+          "line": 21,
+          "end_line": 215,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bag-drop.ts#L21-L215"
+        }
+      ],
+      "counts": {
+        "procedures": 12,
+        "queries": 5,
+        "mutations": 7,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "administrator": 4,
+        "public builder; body/service guards may further restrict": 8
+      },
+      "capability_categories": {
+        "digital-baggage-flow-with-device-boundary": 12
+      },
+      "procedure_ids": [
+        "bagDrop.calculateFee",
+        "bagDrop.checkAllowance",
+        "bagDrop.confirm",
+        "bagDrop.getAnalytics",
+        "bagDrop.getUnitStatus",
+        "bagDrop.getUnits",
+        "bagDrop.initiate",
+        "bagDrop.printTag",
+        "bagDrop.processPayment",
+        "bagDrop.registerUnit",
+        "bagDrop.scanPass",
+        "bagDrop.weighBag"
+      ],
+      "direct_service_modules": [
+        "server/services/bag-drop.service.ts",
+        "server/services/boarding-pass.service.ts",
+        "server/services/self-service-capability.service.ts"
+      ],
+      "associated_web_routes": ["/admin/bag-drop"]
+    },
+    {
+      "id": "baggage",
+      "mount_sources": [
+        {
+          "path": "server/routers/baggage.ts",
+          "line": 53,
+          "end_line": 487,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/baggage.ts#L53-L487"
+        }
+      ],
+      "counts": {
+        "procedures": 18,
+        "queries": 13,
+        "mutations": 5,
+        "rest_mapped": 0,
+        "reachable_browser_references": 12
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/ops": 4,
+        "administrator": 7,
+        "authenticated": 4,
+        "public builder; body/service guards may further restrict": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 18
+      },
+      "procedure_ids": [
+        "baggage.adminGetAll",
+        "baggage.adminGetByStatus",
+        "baggage.adminGetLost",
+        "baggage.adminGetStats",
+        "baggage.adminMarkFound",
+        "baggage.adminTrack",
+        "baggage.adminUpdateStatus",
+        "baggage.correctWeight",
+        "baggage.custody",
+        "baggage.flightCloseout",
+        "baggage.getBookingBaggage",
+        "baggage.getByTag",
+        "baggage.getPassengerBaggage",
+        "baggage.getStatusLabels",
+        "baggage.register",
+        "baggage.registrationSummary",
+        "baggage.reportLost",
+        "baggage.track"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/baggage-custody.service.ts",
+        "server/services/baggage-registration.service.ts",
+        "server/services/baggage.service.ts"
+      ],
+      "associated_web_routes": [
+        "/admin/baggage",
+        "/admin/dcs",
+        "/airline",
+        "/airline/dcs",
+        "/baggage"
+      ]
+    },
+    {
+      "id": "biometric",
+      "mount_sources": [
+        {
+          "path": "server/routers/biometric.ts",
+          "line": 16,
+          "end_line": 236,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/biometric.ts#L16-L236"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 5,
+        "mutations": 4,
+        "rest_mapped": 0,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "administrator": 4,
+        "authenticated": 5
+      },
+      "capability_categories": {
+        "biometric-demo-and-privacy": 9
+      },
+      "procedure_ids": [
+        "biometric.configureGate",
+        "biometric.enroll",
+        "biometric.getBoardingToken",
+        "biometric.getEvents",
+        "biometric.getFlightStats",
+        "biometric.getGateStatus",
+        "biometric.getMyEnrollment",
+        "biometric.revokeEnrollment",
+        "biometric.verify"
+      ],
+      "direct_service_modules": ["server/services/biometric.service.ts"],
+      "associated_web_routes": ["/admin/biometric"]
+    },
+    {
+      "id": "boardingPass",
+      "mount_sources": [
+        {
+          "path": "server/routers/boarding-pass.ts",
+          "line": 14,
+          "end_line": 59,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/boarding-pass.ts#L14-L59"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 1,
+        "mutations": 1,
+        "rest_mapped": 2,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "authenticated": 1,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "document-issuance-and-verification-with-alternative-callers": 2
+      },
+      "procedure_ids": ["boardingPass.issue", "boardingPass.verify"],
+      "direct_service_modules": ["server/services/boarding-pass.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "bookings",
+      "mount_sources": [
+        {
+          "path": "server/routers/bookings.ts",
+          "line": 28,
+          "end_line": 547,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bookings.ts#L28-L547"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 6,
+        "mutations": 3,
+        "rest_mapped": 6,
+        "reachable_browser_references": 8
+      },
+      "authority_classes": {
+        "authenticated": 9
+      },
+      "capability_categories": {
+        "human-domain-capability": 9
+      },
+      "procedure_ids": [
+        "bookings.baggageEntitlements",
+        "bookings.cancel",
+        "bookings.checkIn",
+        "bookings.create",
+        "bookings.getAllocation",
+        "bookings.getByPNR",
+        "bookings.getDepartureState",
+        "bookings.getPassengers",
+        "bookings.myBookings"
+      ],
+      "direct_service_modules": [
+        "server/services/audit.service.ts",
+        "server/services/baggage-entitlement.service.ts",
+        "server/services/bookings.service.ts",
+        "server/services/dcs-state.service.ts",
+        "server/services/departure-control.service.ts",
+        "server/services/initial-booking-ancillaries.ts",
+        "server/services/notification.service.ts"
+      ],
+      "associated_web_routes": [
+        "/admin/bag-drop",
+        "/booking/:id",
+        "/check-in",
+        "/my-bookings"
+      ]
+    },
+    {
+      "id": "bspReporting",
+      "mount_sources": [
+        {
+          "path": "server/routers/bsp-reporting.ts",
+          "line": 42,
+          "end_line": 432,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bsp-reporting.ts#L42-L432"
+        }
+      ],
+      "counts": {
+        "procedures": 13,
+        "queries": 6,
+        "mutations": 7,
+        "rest_mapped": 0,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/finance": 5,
+        "administrator": 8
+      },
+      "capability_categories": {
+        "human-domain-capability": 13
+      },
+      "procedure_ids": [
+        "bspReporting.comparePayout",
+        "bspReporting.exportHOT",
+        "bspReporting.generateReport",
+        "bspReporting.getAgentSettlements",
+        "bspReporting.getReportDetail",
+        "bspReporting.getReports",
+        "bspReporting.getSettlementCycles",
+        "bspReporting.importEvidence",
+        "bspReporting.ledgerDraft",
+        "bspReporting.reconcile",
+        "bspReporting.reconcileEvidence",
+        "bspReporting.stageDailyRet",
+        "bspReporting.validateCompliance"
+      ],
+      "direct_service_modules": [
+        "server/services/bsp-local-evidence.ts",
+        "server/services/bsp-reporting.service.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/payout-comparison.service.ts",
+        "server/services/rbac.service.ts",
+        "server/services/required-value.ts"
+      ],
+      "associated_web_routes": ["/admin/bsp-reporting", "/airline"]
+    },
+    {
+      "id": "cache",
+      "mount_sources": [
+        {
+          "path": "server/routers/cache.ts",
+          "line": 14,
+          "end_line": 210,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/cache.ts#L14-L210"
+        }
+      ],
+      "counts": {
+        "procedures": 12,
+        "queries": 4,
+        "mutations": 8,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 11,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "operator-maintenance": 12
+      },
+      "procedure_ids": [
+        "cache.clearAll",
+        "cache.config",
+        "cache.health",
+        "cache.invalidateFlightSearch",
+        "cache.invalidateNamespace",
+        "cache.invalidatePricing",
+        "cache.invalidateReferenceData",
+        "cache.invalidateUserSession",
+        "cache.reconnect",
+        "cache.redisInfo",
+        "cache.resetStats",
+        "cache.stats"
+      ],
+      "direct_service_modules": ["server/services/redis-cache.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "codeshare",
+      "mount_sources": [
+        {
+          "path": "server/routers/codeshare.ts",
+          "line": 11,
+          "end_line": 508,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L11-L508"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 3,
+        "mutations": 6,
+        "rest_mapped": 8,
+        "reachable_browser_references": 1
+      },
+      "authority_classes": {
+        "administrator": 8,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 9
+      },
+      "procedure_ids": [
+        "codeshare.activate",
+        "codeshare.calculateRevenue",
+        "codeshare.configureAllotment",
+        "codeshare.createAgreement",
+        "codeshare.getAgreement",
+        "codeshare.getCodeshareFlights",
+        "codeshare.listAgreements",
+        "codeshare.terminate",
+        "codeshare.updateAgreement"
+      ],
+      "direct_service_modules": [
+        "server/services/codeshare-allotment.service.ts",
+        "server/services/codeshare.service.ts"
+      ],
+      "associated_web_routes": ["/codeshare-flights"]
+    },
+    {
+      "id": "compensation",
+      "mount_sources": [
+        {
+          "path": "server/routers/compensation.ts",
+          "line": 31,
+          "end_line": 349,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/compensation.ts#L31-L349"
+        }
+      ],
+      "counts": {
+        "procedures": 12,
+        "queries": 9,
+        "mutations": 3,
+        "rest_mapped": 0,
+        "reachable_browser_references": 10
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/finance": 1,
+        "administrator": 6,
+        "authenticated": 5
+      },
+      "capability_categories": {
+        "human-domain-capability": 12
+      },
+      "procedure_ids": [
+        "compensation.checkEligibility",
+        "compensation.claimTargets",
+        "compensation.fileClaim",
+        "compensation.getAllClaims",
+        "compensation.getClaimDetail",
+        "compensation.getFlightLiability",
+        "compensation.getMyClaims",
+        "compensation.getRules",
+        "compensation.getStats",
+        "compensation.previewApprovedPolicy",
+        "compensation.processClaim",
+        "compensation.updateRule"
+      ],
+      "direct_service_modules": [
+        "server/services/booking-flight-membership.service.ts",
+        "server/services/compensation.service.ts",
+        "server/services/passenger-rights-policy-repository.ts",
+        "server/services/passenger-rights-policy.ts"
+      ],
+      "associated_web_routes": ["/admin/compensation", "/my-bookings"]
+    },
+    {
+      "id": "consent",
+      "mount_sources": [
+        {
+          "path": "server/routers/consent.ts",
+          "line": 20,
+          "end_line": 115,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/consent.ts#L20-L115"
+        }
+      ],
+      "counts": {
+        "procedures": 4,
+        "queries": 2,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "administrator": 1,
+        "authenticated": 2,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 4
+      },
+      "procedure_ids": [
+        "consent.getConsentStats",
+        "consent.getMyConsent",
+        "consent.recordConsent",
+        "consent.updateConsent"
+      ],
+      "direct_service_modules": ["server/services/consent.service.ts"],
+      "associated_web_routes": ["/privacy-policy"]
+    },
+    {
+      "id": "corporate",
+      "mount_sources": [
+        {
+          "path": "server/routers/corporate.ts",
+          "line": 23,
+          "end_line": 788,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L23-L788"
+        }
+      ],
+      "counts": {
+        "procedures": 21,
+        "queries": 8,
+        "mutations": 13,
+        "rest_mapped": 17,
+        "reachable_browser_references": 15
+      },
+      "authority_classes": {
+        "administrator": 6,
+        "authenticated": 14,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 21
+      },
+      "procedure_ids": [
+        "corporate.acceptInvitation",
+        "corporate.activateAccount",
+        "corporate.addUser",
+        "corporate.approveBooking",
+        "corporate.createAccount",
+        "corporate.createBooking",
+        "corporate.getAccountById",
+        "corporate.getAccountStats",
+        "corporate.getBookings",
+        "corporate.getMyAccount",
+        "corporate.getStats",
+        "corporate.getUsers",
+        "corporate.inviteUser",
+        "corporate.listAccounts",
+        "corporate.myInvitations",
+        "corporate.payInvoice",
+        "corporate.rejectBooking",
+        "corporate.removeUser",
+        "corporate.suspendAccount",
+        "corporate.updateAccount",
+        "corporate.updateUserRole"
+      ],
+      "direct_service_modules": [
+        "server/services/corporate-invitations.service.ts",
+        "server/services/corporate-settlement.service.ts",
+        "server/services/corporate.service.ts",
+        "server/services/rbac.service.ts"
+      ],
+      "associated_web_routes": [
+        "/admin/corporate",
+        "/corporate",
+        "/corporate/bookings"
+      ]
+    },
+    {
+      "id": "crew",
+      "mount_sources": [
+        {
+          "path": "server/routers/crew.ts",
+          "line": 20,
+          "end_line": 198,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/crew.ts#L20-L198"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 8,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 9
+      },
+      "authority_classes": {
+        "administrator": 10
+      },
+      "capability_categories": {
+        "human-domain-capability": 10
+      },
+      "procedure_ids": [
+        "crew.assignToFlight",
+        "crew.checkAvailability",
+        "crew.checkFTL",
+        "crew.findReplacement",
+        "crew.getFlightCrew",
+        "crew.getMember",
+        "crew.getMembers",
+        "crew.getSchedule",
+        "crew.removeFromFlight",
+        "crew.validateRequirements"
+      ],
+      "direct_service_modules": ["server/services/crew-assignment.service.ts"],
+      "associated_web_routes": ["/admin/crew-assignment"]
+    },
+    {
+      "id": "dataWarehouse",
+      "mount_sources": [
+        {
+          "path": "server/routers/data-warehouse.ts",
+          "line": 32,
+          "end_line": 296,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/data-warehouse.ts#L32-L296"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 5,
+        "mutations": 4,
+        "rest_mapped": 0,
+        "reachable_browser_references": 7
+      },
+      "authority_classes": {
+        "administrator": 9
+      },
+      "capability_categories": {
+        "human-domain-capability": 9
+      },
+      "procedure_ids": [
+        "dataWarehouse.createExport",
+        "dataWarehouse.createSchedule",
+        "dataWarehouse.deleteSchedule",
+        "dataWarehouse.downloadExport",
+        "dataWarehouse.getETLStatus",
+        "dataWarehouse.getExportStatus",
+        "dataWarehouse.getExports",
+        "dataWarehouse.getSchedules",
+        "dataWarehouse.updateSchedule"
+      ],
+      "direct_service_modules": ["server/services/data-warehouse.service.ts"],
+      "associated_web_routes": ["/admin/data-warehouse"]
+    },
+    {
+      "id": "dcs",
+      "mount_sources": [
+        {
+          "path": "server/routers/dcs.ts",
+          "line": 17,
+          "end_line": 219,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/dcs.ts#L17-L219"
+        }
+      ],
+      "counts": {
+        "procedures": 15,
+        "queries": 8,
+        "mutations": 7,
+        "rest_mapped": 0,
+        "reachable_browser_references": 9
+      },
+      "authority_classes": {
+        "administrator": 15
+      },
+      "capability_categories": {
+        "human-domain-capability": 15
+      },
+      "procedure_ids": [
+        "dcs.approveLoadPlan",
+        "dcs.assignCrew",
+        "dcs.calculateWeightBalance",
+        "dcs.createAircraftType",
+        "dcs.createCrewMember",
+        "dcs.createLoadPlan",
+        "dcs.finalizeLoadPlan",
+        "dcs.getAircraftType",
+        "dcs.getAircraftTypes",
+        "dcs.getCrewMembers",
+        "dcs.getFlightCrew",
+        "dcs.getFlightManifest",
+        "dcs.getLoadPlan",
+        "dcs.getStats",
+        "dcs.removeCrewAssignment"
+      ],
+      "direct_service_modules": ["server/services/dcs.service.ts"],
+      "associated_web_routes": [
+        "/admin/dcs",
+        "/admin/load-planning",
+        "/admin/weight-balance"
+      ]
+    },
+    {
+      "id": "dcsOperations",
+      "mount_sources": [
+        {
+          "path": "server/routers/dcs-operations.ts",
+          "line": 62,
+          "end_line": 127,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/dcs-operations.ts#L62-L127"
+        }
+      ],
+      "counts": {
+        "procedures": 16,
+        "queries": 2,
+        "mutations": 14,
+        "rest_mapped": 0,
+        "reachable_browser_references": 15
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin": 1,
+        "admin/super_admin or tenant-scoped airline_admin/ops": 15
+      },
+      "capability_categories": {
+        "human-domain-capability": 16
+      },
+      "procedure_ids": [
+        "dcsOperations.addOsi",
+        "dcsOperations.blockSeats",
+        "dcsOperations.changeFlightState",
+        "dcsOperations.checkIn",
+        "dcsOperations.confirmDowngrade",
+        "dcsOperations.dismissCase",
+        "dcsOperations.finalize",
+        "dcsOperations.getDesk",
+        "dcsOperations.openCase",
+        "dcsOperations.quoteDowngrade",
+        "dcsOperations.remapSeats",
+        "dcsOperations.resolveCase",
+        "dcsOperations.returnBag",
+        "dcsOperations.setBagReturnGrant",
+        "dcsOperations.stationReport",
+        "dcsOperations.transition"
+      ],
+      "direct_service_modules": [
+        "server/services/dcs-operations.service.ts",
+        "server/services/dcs-station.service.ts"
+      ],
+      "associated_web_routes": ["/airline/dcs"]
+    },
+    {
+      "id": "disasterRecovery",
+      "mount_sources": [
+        {
+          "path": "server/routers/disaster-recovery.ts",
+          "line": 17,
+          "end_line": 274,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/disaster-recovery.ts#L17-L274"
+        }
+      ],
+      "counts": {
+        "procedures": 15,
+        "queries": 10,
+        "mutations": 5,
+        "rest_mapped": 0,
+        "reachable_browser_references": 11
+      },
+      "authority_classes": {
+        "administrator": 15
+      },
+      "capability_categories": {
+        "infrastructure-demo": 15
+      },
+      "procedure_ids": [
+        "disasterRecovery.createIncident",
+        "disasterRecovery.getAllRunbooks",
+        "disasterRecovery.getBackupSchedule",
+        "disasterRecovery.getBackupStatus",
+        "disasterRecovery.getDashboard",
+        "disasterRecovery.getIncidents",
+        "disasterRecovery.getRPO",
+        "disasterRecovery.getRTO",
+        "disasterRecovery.getRecoveryPlan",
+        "disasterRecovery.getRunbook",
+        "disasterRecovery.getTestHistory",
+        "disasterRecovery.resolveIncident",
+        "disasterRecovery.testFailover",
+        "disasterRecovery.triggerBackup",
+        "disasterRecovery.updateRunbook"
+      ],
+      "direct_service_modules": [
+        "server/services/disaster-recovery.service.ts"
+      ],
+      "associated_web_routes": ["/admin/disaster-recovery"]
+    },
+    {
+      "id": "disruptions",
+      "mount_sources": [
+        {
+          "path": "server/routers/disruptions.ts",
+          "line": 17,
+          "end_line": 88,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/disruptions.ts#L17-L88"
+        }
+      ],
+      "counts": {
+        "procedures": 5,
+        "queries": 3,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "administrator": 3,
+        "authenticated": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 5
+      },
+      "procedure_ids": [
+        "disruptions.activeDisruptions",
+        "disruptions.create",
+        "disruptions.getAlternatives",
+        "disruptions.myDisruptions",
+        "disruptions.resolve"
+      ],
+      "direct_service_modules": ["server/services/disruption.service.ts"],
+      "associated_web_routes": ["/my-bookings"]
+    },
+    {
+      "id": "emd",
+      "mount_sources": [
+        {
+          "path": "server/routers/emd.ts",
+          "line": 67,
+          "end_line": 341,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/emd.ts#L67-L341"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 4,
+        "mutations": 5,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 7,
+        "authenticated": 2
+      },
+      "capability_categories": {
+        "local-document-servicing-with-external-fulfillment-boundary": 9
+      },
+      "procedure_ids": [
+        "emd.exchange",
+        "emd.get",
+        "emd.getByBooking",
+        "emd.issue",
+        "emd.list",
+        "emd.refund",
+        "emd.statistics",
+        "emd.use",
+        "emd.void"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/emd.service.ts",
+        "server/services/rbac.service.ts"
+      ],
+      "associated_web_routes": []
+    },
+    {
+      "id": "emergencyHotel",
+      "mount_sources": [
+        {
+          "path": "server/routers/emergency-hotel.ts",
+          "line": 30,
+          "end_line": 340,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/emergency-hotel.ts#L30-L340"
+        }
+      ],
+      "counts": {
+        "procedures": 13,
+        "queries": 6,
+        "mutations": 7,
+        "rest_mapped": 0,
+        "reachable_browser_references": 9
+      },
+      "authority_classes": {
+        "administrator": 10,
+        "authenticated": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 13
+      },
+      "procedure_ids": [
+        "emergencyHotel.addHotel",
+        "emergencyHotel.approveProviderQuote",
+        "emergencyHotel.assignTransport",
+        "emergencyHotel.bookRoom",
+        "emergencyHotel.cancelBooking",
+        "emergencyHotel.checkEntitlement",
+        "emergencyHotel.findHotels",
+        "emergencyHotel.getCosts",
+        "emergencyHotel.getFlightHotelBookings",
+        "emergencyHotel.getHotels",
+        "emergencyHotel.getMyHotelBookings",
+        "emergencyHotel.prepareProviderQuote",
+        "emergencyHotel.updateHotel"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/emergency-hotel.service.ts",
+        "server/services/hotel-fulfillment.service.ts"
+      ],
+      "associated_web_routes": ["/admin/emergency-hotel"]
+    },
+    {
+      "id": "eticket",
+      "mount_sources": [
+        {
+          "path": "server/routers/eticket.ts",
+          "line": 28,
+          "end_line": 132,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/eticket.ts#L28-L132"
+        }
+      ],
+      "counts": {
+        "procedures": 3,
+        "queries": 0,
+        "mutations": 3,
+        "rest_mapped": 0,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "authenticated": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 3
+      },
+      "procedure_ids": [
+        "eticket.generateBoardingPass",
+        "eticket.generateCalendarEvent",
+        "eticket.generateETicket"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/boarding-pass.service.ts",
+        "server/services/eticket.service.ts",
+        "server/services/ticket-documents.service.ts"
+      ],
+      "associated_web_routes": ["/my-bookings"]
+    },
+    {
+      "id": "familyPool",
+      "mount_sources": [
+        {
+          "path": "server/routers/family-pool.ts",
+          "line": 18,
+          "end_line": 152,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/family-pool.ts#L18-L152"
+        }
+      ],
+      "counts": {
+        "procedures": 6,
+        "queries": 1,
+        "mutations": 5,
+        "rest_mapped": 0,
+        "reachable_browser_references": 6
+      },
+      "authority_classes": {
+        "authenticated": 6
+      },
+      "capability_categories": {
+        "human-domain-capability": 6
+      },
+      "procedure_ids": [
+        "familyPool.addMember",
+        "familyPool.contributeMiles",
+        "familyPool.createGroup",
+        "familyPool.deleteGroup",
+        "familyPool.myGroup",
+        "familyPool.removeMember"
+      ],
+      "direct_service_modules": ["server/services/family-pool.service.ts"],
+      "associated_web_routes": ["/loyalty"]
+    },
+    {
+      "id": "fareRules",
+      "mount_sources": [
+        {
+          "path": "server/routers/fare-rules.ts",
+          "line": 54,
+          "end_line": 921,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L54-L921"
+        }
+      ],
+      "counts": {
+        "procedures": 13,
+        "queries": 9,
+        "mutations": 4,
+        "rest_mapped": 13,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 6,
+        "authenticated": 2,
+        "public builder; body/service guards may further restrict": 5
+      },
+      "capability_categories": {
+        "human-domain-capability": 13
+      },
+      "procedure_ids": [
+        "fareRules.calculateChangeFee",
+        "fareRules.calculateFare",
+        "fareRules.compareFareClasses",
+        "fareRules.createFareClass",
+        "fareRules.createFareRule",
+        "fareRules.getFareClass",
+        "fareRules.getFareClassAvailability",
+        "fareRules.getFareRule",
+        "fareRules.listFareClasses",
+        "fareRules.listFareRules",
+        "fareRules.updateFareClass",
+        "fareRules.updateFareRule",
+        "fareRules.validateRules"
+      ],
+      "direct_service_modules": ["server/services/fare-rules.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "favorites",
+      "mount_sources": [
+        {
+          "path": "server/routers/favorites.ts",
+          "line": 6,
+          "end_line": 208,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/favorites.ts#L6-L208"
+        }
+      ],
+      "counts": {
+        "procedures": 12,
+        "queries": 6,
+        "mutations": 6,
+        "rest_mapped": 0,
+        "reachable_browser_references": 6
+      },
+      "authority_classes": {
+        "administrator": 1,
+        "authenticated": 11
+      },
+      "capability_categories": {
+        "human-domain-capability": 12
+      },
+      "procedure_ids": [
+        "favorites.add",
+        "favorites.addFlight",
+        "favorites.checkPriceAlerts",
+        "favorites.delete",
+        "favorites.getAll",
+        "favorites.getBestPrices",
+        "favorites.getFlights",
+        "favorites.getPriceAlertHistory",
+        "favorites.isFavorited",
+        "favorites.isFlightFavorited",
+        "favorites.removeFlight",
+        "favorites.update"
+      ],
+      "direct_service_modules": ["server/services/favorites.service.ts"],
+      "associated_web_routes": ["/booking/:id", "/favorites", "/search"]
+    },
+    {
+      "id": "flightTracking",
+      "mount_sources": [
+        {
+          "path": "server/routers/flight-tracking.router.ts",
+          "line": 20,
+          "end_line": 110,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/flight-tracking.router.ts#L20-L110"
+        }
+      ],
+      "counts": {
+        "procedures": 4,
+        "queries": 3,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "administrator": 1,
+        "public builder; body/service guards may further restrict": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 4
+      },
+      "procedure_ids": [
+        "flightTracking.activeFlights",
+        "flightTracking.recordPosition",
+        "flightTracking.trackById",
+        "flightTracking.trackByNumber"
+      ],
+      "direct_service_modules": ["server/services/flight-tracking.service.ts"],
+      "associated_web_routes": ["/track-flight"]
+    },
+    {
+      "id": "flights",
+      "mount_sources": [
+        {
+          "path": "server/routers/flights.ts",
+          "line": 21,
+          "end_line": 220,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/flights.ts#L21-L220"
+        }
+      ],
+      "counts": {
+        "procedures": 6,
+        "queries": 6,
+        "mutations": 0,
+        "rest_mapped": 5,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "public builder; body/service guards may further restrict": 6
+      },
+      "capability_categories": {
+        "human-domain-capability": 6
+      },
+      "procedure_ids": [
+        "flights.getById",
+        "flights.getStatusHistory",
+        "flights.popularRoutes",
+        "flights.search",
+        "flights.statusBatch",
+        "flights.suggestedDestinations"
+      ],
+      "direct_service_modules": [
+        "server/services/flight-status.service.ts",
+        "server/services/flights.service.ts",
+        "server/services/metrics.service.ts",
+        "server/services/popular-routes.service.ts"
+      ],
+      "associated_web_routes": [
+        "/booking/:id",
+        "/booking/multi-city",
+        "/group-booking/:id",
+        "/my-bookings",
+        "/search"
+      ]
+    },
+    {
+      "id": "gates",
+      "mount_sources": [
+        {
+          "path": "server/routers/gates.ts",
+          "line": 11,
+          "end_line": 407,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L11-L407"
+        }
+      ],
+      "counts": {
+        "procedures": 13,
+        "queries": 5,
+        "mutations": 8,
+        "rest_mapped": 13,
+        "reachable_browser_references": 7
+      },
+      "authority_classes": {
+        "administrator": 11,
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 13
+      },
+      "procedure_ids": [
+        "gates.assignGate",
+        "gates.createGate",
+        "gates.deleteGate",
+        "gates.getAirportGates",
+        "gates.getAvailableGates",
+        "gates.getFlightGate",
+        "gates.getGateSchedule",
+        "gates.getStats",
+        "gates.notifyGateChange",
+        "gates.releaseGate",
+        "gates.updateGateAssignment",
+        "gates.updateGateCompatibility",
+        "gates.updateGateStatus"
+      ],
+      "direct_service_modules": [
+        "server/services/gate.service.ts",
+        "server/services/rbac.service.ts"
+      ],
+      "associated_web_routes": ["/admin/gates"]
+    },
+    {
+      "id": "gdpr",
+      "mount_sources": [
+        {
+          "path": "server/routers/gdpr.ts",
+          "line": 13,
+          "end_line": 262,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gdpr.ts#L13-L262"
+        }
+      ],
+      "counts": {
+        "procedures": 12,
+        "queries": 6,
+        "mutations": 6,
+        "rest_mapped": 0,
+        "reachable_browser_references": 6
+      },
+      "authority_classes": {
+        "authenticated": 12
+      },
+      "capability_categories": {
+        "human-domain-capability": 12
+      },
+      "procedure_ids": [
+        "gdpr.cancelDeletion",
+        "gdpr.confirmDeletion",
+        "gdpr.deleteAccount",
+        "gdpr.exportData",
+        "gdpr.getConsentHistory",
+        "gdpr.getConsentStatus",
+        "gdpr.getDeletionStatus",
+        "gdpr.getExportHistory",
+        "gdpr.getExportStatus",
+        "gdpr.getPrivacyDashboard",
+        "gdpr.updateConsent",
+        "gdpr.withdrawAllConsent"
+      ],
+      "direct_service_modules": ["server/services/gdpr.service.ts"],
+      "associated_web_routes": ["/profile"]
+    },
+    {
+      "id": "gds",
+      "mount_sources": [
+        {
+          "path": "server/routers/gds.ts",
+          "line": 207,
+          "end_line": 584,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L207-L584"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 5,
+        "mutations": 4,
+        "rest_mapped": 9,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 7,
+        "authenticated": 2
+      },
+      "capability_categories": {
+        "distribution-provider-demo-or-configuration": 9
+      },
+      "procedure_ids": [
+        "gds.createConnection",
+        "gds.createGdsBooking",
+        "gds.getConnection",
+        "gds.getMessageLog",
+        "gds.getStatistics",
+        "gds.listConnections",
+        "gds.searchAvailability",
+        "gds.testConnection",
+        "gds.updateConnection"
+      ],
+      "direct_service_modules": ["server/services/gds.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "groupBookings",
+      "mount_sources": [
+        {
+          "path": "server/routers/group-bookings.ts",
+          "line": 16,
+          "end_line": 362,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L16-L362"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 6,
+        "mutations": 3,
+        "rest_mapped": 8,
+        "reachable_browser_references": 8
+      },
+      "authority_classes": {
+        "administrator": 5,
+        "authenticated": 2,
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 9
+      },
+      "procedure_ids": [
+        "groupBookings.approve",
+        "groupBookings.calculateDiscount",
+        "groupBookings.getById",
+        "groupBookings.getDiscountTiers",
+        "groupBookings.getStats",
+        "groupBookings.list",
+        "groupBookings.myAllocations",
+        "groupBookings.reject",
+        "groupBookings.submitRequest"
+      ],
+      "direct_service_modules": ["server/services/group-booking.service.ts"],
+      "associated_web_routes": [
+        "/admin/group-bookings",
+        "/group-booking/:id",
+        "/my-groups"
+      ]
+    },
+    {
+      "id": "health",
+      "mount_sources": [
+        {
+          "path": "server/routers/health.ts",
+          "line": 15,
+          "end_line": 86,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/health.ts#L15-L86"
+        }
+      ],
+      "counts": {
+        "procedures": 3,
+        "queries": 3,
+        "mutations": 0,
+        "rest_mapped": 3,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 1,
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "machine-health": 3
+      },
+      "procedure_ids": ["health.check", "health.live", "health.ready"],
+      "direct_service_modules": ["server/services/health.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "ibePublic",
+      "mount_sources": [
+        {
+          "path": "server/routers/ibe-public.ts",
+          "line": 7,
+          "end_line": 32,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ibe-public.ts#L7-L32"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 2,
+        "mutations": 0,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 2
+      },
+      "procedure_ids": ["ibePublic.config", "ibePublic.displayRate"],
+      "direct_service_modules": [
+        "server/services/currency/currency.service.ts",
+        "server/services/ibe-public-config.service.ts"
+      ],
+      "associated_web_routes": [
+        "/",
+        "/accessibility",
+        "/booking/:id",
+        "/booking/multi-city",
+        "/checkout/:bookingId",
+        "/codeshare-flights",
+        "/embed/search",
+        "/multi-city",
+        "/privacy-policy",
+        "/search"
+      ]
+    },
+    {
+      "id": "intelligence",
+      "mount_sources": [
+        {
+          "path": "server/routers/intelligence.router.ts",
+          "line": 79,
+          "end_line": 241,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/intelligence.router.ts#L79-L241"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 8,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 8,
+        "authenticated": 1
+      },
+      "capability_categories": {
+        "operator-advisory-and-model-administration": 9
+      },
+      "procedure_ids": [
+        "intelligence.assessFraud",
+        "intelligence.getBriefing",
+        "intelligence.getDisruptionForecast",
+        "intelligence.getEconomics",
+        "intelligence.getGatewayStats",
+        "intelligence.getModels",
+        "intelligence.getStatus",
+        "intelligence.predictDelay",
+        "intelligence.updateConfig"
+      ],
+      "direct_service_modules": ["server/services/intelligence/index.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "interline",
+      "mount_sources": [
+        {
+          "path": "server/routers/interline.ts",
+          "line": 17,
+          "end_line": 490,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/interline.ts#L17-L490"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 5,
+        "mutations": 4,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 7,
+        "authenticated": 1,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "distribution-agreement-administration": 9
+      },
+      "procedure_ids": [
+        "interline.activate",
+        "interline.calculateProrate",
+        "interline.checkEligibility",
+        "interline.createAgreement",
+        "interline.getAgreement",
+        "interline.getPartners",
+        "interline.listAgreements",
+        "interline.terminate",
+        "interline.updateAgreement"
+      ],
+      "direct_service_modules": ["server/services/interline.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "inventory",
+      "mount_sources": [
+        {
+          "path": "server/routers/inventory.router.ts",
+          "line": 61,
+          "end_line": 487,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/inventory.router.ts#L61-L487"
+        }
+      ],
+      "counts": {
+        "procedures": 15,
+        "queries": 5,
+        "mutations": 10,
+        "rest_mapped": 0,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "administrator": 10,
+        "authenticated": 4,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 15
+      },
+      "procedure_ids": [
+        "inventory.addToWaitlist",
+        "inventory.allocateSeats",
+        "inventory.createOverbookingConfig",
+        "inventory.expireOldHolds",
+        "inventory.getDeniedBoardingRecords",
+        "inventory.getForecast",
+        "inventory.getOverbookingConfigs",
+        "inventory.getRecommendedOverbooking",
+        "inventory.getStatus",
+        "inventory.handleDeniedBoarding",
+        "inventory.processWaitlist",
+        "inventory.recordDeniedBoarding",
+        "inventory.releaseHold",
+        "inventory.removeFromWaitlist",
+        "inventory.updateDeniedBoardingStatus"
+      ],
+      "direct_service_modules": [
+        "server/services/inventory/inventory.service.ts"
+      ],
+      "associated_web_routes": ["/admin/overbooking"]
+    },
+    {
+      "id": "irops",
+      "mount_sources": [
+        {
+          "path": "server/routers/irops.ts",
+          "line": 31,
+          "end_line": 343,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/irops.ts#L31-L343"
+        }
+      ],
+      "counts": {
+        "procedures": 15,
+        "queries": 7,
+        "mutations": 8,
+        "rest_mapped": 0,
+        "reachable_browser_references": 13
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/ops": 4,
+        "administrator": 11
+      },
+      "capability_categories": {
+        "human-domain-capability": 15
+      },
+      "procedure_ids": [
+        "irops.approveRecovery",
+        "irops.createEvent",
+        "irops.escalate",
+        "irops.executeRecovery",
+        "irops.getActiveDisruptions",
+        "irops.getAffectedPassengers",
+        "irops.getConnectionsAtRisk",
+        "irops.getDashboard",
+        "irops.getEventDetail",
+        "irops.getRecoveryMetrics",
+        "irops.proposeRecovery",
+        "irops.recoveryPlans",
+        "irops.resolveEvent",
+        "irops.sendNotification",
+        "irops.triggerAutoProtection"
+      ],
+      "direct_service_modules": [
+        "server/services/irops-recovery.service.ts",
+        "server/services/irops.service.ts"
+      ],
+      "associated_web_routes": ["/admin/irops", "/admin/operations"]
+    },
+    {
+      "id": "kiosk",
+      "mount_sources": [
+        {
+          "path": "server/routers/kiosk.ts",
+          "line": 20,
+          "end_line": 255,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/kiosk.ts#L20-L255"
+        }
+      ],
+      "counts": {
+        "procedures": 12,
+        "queries": 4,
+        "mutations": 8,
+        "rest_mapped": 0,
+        "reachable_browser_references": 4
+      },
+      "authority_classes": {
+        "administrator": 4,
+        "public builder; body/service guards may further restrict": 8
+      },
+      "capability_categories": {
+        "passenger-digital-self-service-with-hardware-blocked": 12
+      },
+      "procedure_ids": [
+        "kiosk.addAncillary",
+        "kiosk.authenticate",
+        "kiosk.checkIn",
+        "kiosk.getAnalytics",
+        "kiosk.getCheckInData",
+        "kiosk.getDeviceStatus",
+        "kiosk.getDevices",
+        "kiosk.printBagTag",
+        "kiosk.printBoardingPass",
+        "kiosk.registerDevice",
+        "kiosk.reprintRegisteredTag",
+        "kiosk.selectSeat"
+      ],
+      "direct_service_modules": [
+        "server/services/kiosk.service.ts",
+        "server/services/self-service-capability.service.ts"
+      ],
+      "associated_web_routes": ["/admin/kiosk", "/kiosk"]
+    },
+    {
+      "id": "loadPlanning",
+      "mount_sources": [
+        {
+          "path": "server/routers/load-planning.ts",
+          "line": 19,
+          "end_line": 192,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/load-planning.ts#L19-L192"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 3,
+        "mutations": 6,
+        "rest_mapped": 0,
+        "reachable_browser_references": 9
+      },
+      "authority_classes": {
+        "administrator": 9
+      },
+      "capability_categories": {
+        "legacy-calculation-demo": 9
+      },
+      "procedure_ids": [
+        "loadPlanning.amend",
+        "loadPlanning.assignCompartment",
+        "loadPlanning.create",
+        "loadPlanning.finalize",
+        "loadPlanning.get",
+        "loadPlanning.getCompartments",
+        "loadPlanning.optimize",
+        "loadPlanning.updateBulk",
+        "loadPlanning.validate"
+      ],
+      "direct_service_modules": ["server/services/load-planning.service.ts"],
+      "associated_web_routes": ["/admin/load-planning"]
+    },
+    {
+      "id": "loyalty",
+      "mount_sources": [
+        {
+          "path": "server/routers/loyalty.ts",
+          "line": 27,
+          "end_line": 261,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L27-L261"
+        }
+      ],
+      "counts": {
+        "procedures": 8,
+        "queries": 4,
+        "mutations": 4,
+        "rest_mapped": 8,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "administrator": 5,
+        "authenticated": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 8
+      },
+      "procedure_ids": [
+        "loyalty.awardBonusMiles",
+        "loyalty.getUserAccount",
+        "loyalty.getUserTransactions",
+        "loyalty.myAccount",
+        "loyalty.myTransactions",
+        "loyalty.processExpiredMiles",
+        "loyalty.redeemMiles",
+        "loyalty.reverseMilesForBooking"
+      ],
+      "direct_service_modules": ["server/services/loyalty.service.ts"],
+      "associated_web_routes": ["/loyalty"]
+    },
+    {
+      "id": "manageBooking",
+      "mount_sources": [
+        {
+          "path": "server/routers/manage-booking.ts",
+          "line": 12,
+          "end_line": 51,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/manage-booking.ts#L12-L51"
+        }
+      ],
+      "counts": {
+        "procedures": 1,
+        "queries": 0,
+        "mutations": 1,
+        "rest_mapped": 1,
+        "reachable_browser_references": 1
+      },
+      "authority_classes": {
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 1
+      },
+      "procedure_ids": ["manageBooking.lookup"],
+      "direct_service_modules": [
+        "server/services/manage-booking.service.ts",
+        "server/services/rate-limit.service.ts"
+      ],
+      "associated_web_routes": ["/manage-booking"]
+    },
+    {
+      "id": "metrics",
+      "mount_sources": [
+        {
+          "path": "server/routers/metrics.ts",
+          "line": 28,
+          "end_line": 192,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/metrics.ts#L28-L192"
+        }
+      ],
+      "counts": {
+        "procedures": 5,
+        "queries": 4,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 5
+      },
+      "capability_categories": {
+        "operator-observability": 5
+      },
+      "procedure_ids": [
+        "metrics.category",
+        "metrics.json",
+        "metrics.prometheus",
+        "metrics.reset",
+        "metrics.summary"
+      ],
+      "direct_service_modules": ["server/services/apm.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "mfa",
+      "mount_sources": [
+        {
+          "path": "server/routers/mfa.ts",
+          "line": 48,
+          "end_line": 275,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/mfa.ts#L48-L275"
+        }
+      ],
+      "counts": {
+        "procedures": 5,
+        "queries": 1,
+        "mutations": 4,
+        "rest_mapped": 5,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "authenticated": 5
+      },
+      "capability_categories": {
+        "human-domain-capability": 5
+      },
+      "procedure_ids": [
+        "mfa.disable",
+        "mfa.getStatus",
+        "mfa.regenerateBackupCodes",
+        "mfa.setup",
+        "mfa.verify"
+      ],
+      "direct_service_modules": ["server/services/mfa.service.ts"],
+      "associated_web_routes": ["/loyalty", "/profile"]
+    },
+    {
+      "id": "modifications",
+      "mount_sources": [
+        {
+          "path": "server/routers/modifications.ts",
+          "line": 15,
+          "end_line": 99,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/modifications.ts#L15-L99"
+        }
+      ],
+      "counts": {
+        "procedures": 5,
+        "queries": 3,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "authenticated": 5
+      },
+      "capability_categories": {
+        "human-domain-capability": 5
+      },
+      "procedure_ids": [
+        "modifications.exchangeContext",
+        "modifications.getDetails",
+        "modifications.myModifications",
+        "modifications.requestChangeDate",
+        "modifications.requestUpgrade"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/booking-modification.service.ts",
+        "server/services/order-exchange-context.service.ts"
+      ],
+      "associated_web_routes": ["/my-bookings"]
+    },
+    {
+      "id": "multiCity",
+      "mount_sources": [
+        {
+          "path": "server/routers/multi-city.ts",
+          "line": 12,
+          "end_line": 252,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-city.ts#L12-L252"
+        }
+      ],
+      "counts": {
+        "procedures": 5,
+        "queries": 3,
+        "mutations": 2,
+        "rest_mapped": 5,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "authenticated": 3,
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 5
+      },
+      "procedure_ids": [
+        "multiCity.calculatePrice",
+        "multiCity.create",
+        "multiCity.getSegments",
+        "multiCity.isMultiCity",
+        "multiCity.search"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/initial-booking-ancillaries.ts",
+        "server/services/multi-city.service.ts"
+      ],
+      "associated_web_routes": ["/booking/multi-city", "/multi-city"]
+    },
+    {
+      "id": "multiRegion",
+      "mount_sources": [
+        {
+          "path": "server/routers/multi-region.ts",
+          "line": 11,
+          "end_line": 239,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L11-L239"
+        }
+      ],
+      "counts": {
+        "procedures": 8,
+        "queries": 5,
+        "mutations": 3,
+        "rest_mapped": 8,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 8
+      },
+      "capability_categories": {
+        "infrastructure-demo": 8
+      },
+      "procedure_ids": [
+        "multiRegion.getFailoverHistory",
+        "multiRegion.getLatencyMap",
+        "multiRegion.getRegionHealth",
+        "multiRegion.getRegions",
+        "multiRegion.getReplicationStatus",
+        "multiRegion.initiateFailover",
+        "multiRegion.triggerSync",
+        "multiRegion.updateRegion"
+      ],
+      "direct_service_modules": ["server/services/multi-region.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "ndc",
+      "mount_sources": [
+        {
+          "path": "server/routers/ndc.ts",
+          "line": 99,
+          "end_line": 807,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L99-L807"
+        }
+      ],
+      "counts": {
+        "procedures": 15,
+        "queries": 7,
+        "mutations": 8,
+        "rest_mapped": 11,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "administrator": 3,
+        "authenticated": 10,
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "distribution-and-order-servicing": 15
+      },
+      "procedure_ids": [
+        "ndc.addServices",
+        "ndc.airShopping",
+        "ndc.cancelOrder",
+        "ndc.cancelPaidService",
+        "ndc.changeOrder",
+        "ndc.confirmNoChargeService",
+        "ndc.createOrder",
+        "ndc.expireOffers",
+        "ndc.getOrderHistory",
+        "ndc.getStatistics",
+        "ndc.listOrders",
+        "ndc.lookupCapability",
+        "ndc.offerPrice",
+        "ndc.quotePaidService",
+        "ndc.retrieveOrder"
+      ],
+      "direct_service_modules": [
+        "server/services/ndc-capabilities.ts",
+        "server/services/ndc.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/seat-exchange.service.ts"
+      ],
+      "associated_web_routes": ["/my-bookings"]
+    },
+    {
+      "id": "notifications",
+      "mount_sources": [
+        {
+          "path": "server/routers/notifications.ts",
+          "line": 10,
+          "end_line": 328,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L10-L328"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 3,
+        "mutations": 7,
+        "rest_mapped": 10,
+        "reachable_browser_references": 6
+      },
+      "authority_classes": {
+        "administrator": 4,
+        "authenticated": 6
+      },
+      "capability_categories": {
+        "background-or-operator-maintenance": 3,
+        "human-domain-capability": 7
+      },
+      "procedure_ids": [
+        "notifications.cleanup",
+        "notifications.create",
+        "notifications.createBulk",
+        "notifications.delete",
+        "notifications.deleteAll",
+        "notifications.getUserNotifications",
+        "notifications.list",
+        "notifications.markAllAsRead",
+        "notifications.markAsRead",
+        "notifications.unreadCount"
+      ],
+      "direct_service_modules": ["server/services/notification.service.ts"],
+      "associated_web_routes": ["/notifications"]
+    },
+    {
+      "id": "operations",
+      "mount_sources": [
+        {
+          "path": "server/routers/operations.ts",
+          "line": 18,
+          "end_line": 216,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/operations.ts#L18-L216"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 7,
+        "mutations": 3,
+        "rest_mapped": 0,
+        "reachable_browser_references": 8
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/ops": 1,
+        "administrator": 9
+      },
+      "capability_categories": {
+        "human-domain-capability": 10
+      },
+      "procedure_ids": [
+        "operations.acknowledgeAlert",
+        "operations.airlineFlights",
+        "operations.alertDispatches",
+        "operations.capabilities",
+        "operations.dashboard",
+        "operations.integrationConfiguration",
+        "operations.lineageRuns",
+        "operations.replayEvent",
+        "operations.retryCancellation",
+        "operations.scheduledTasks"
+      ],
+      "direct_service_modules": [
+        "server/services/integration-config.service.ts",
+        "server/services/lineage.service.ts",
+        "server/services/on-call.service.ts",
+        "server/services/operational-observations.service.ts",
+        "server/services/operations-dashboard.service.ts",
+        "server/services/rbac.service.ts",
+        "server/services/required-value.ts"
+      ],
+      "associated_web_routes": ["/admin/operations", "/airline", "/airline/dcs"]
+    },
+    {
+      "id": "passengerPriority",
+      "mount_sources": [
+        {
+          "path": "server/routers/passenger-priority.ts",
+          "line": 23,
+          "end_line": 120,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/passenger-priority.ts#L23-L120"
+        }
+      ],
+      "counts": {
+        "procedures": 8,
+        "queries": 7,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "administrator": 8
+      },
+      "capability_categories": {
+        "human-domain-capability": 8
+      },
+      "procedure_ids": [
+        "passengerPriority.calculateScore",
+        "passengerPriority.getPassengerProfile",
+        "passengerPriority.getProtectionOptions",
+        "passengerPriority.getRebookingOrder",
+        "passengerPriority.getRules",
+        "passengerPriority.rankPassengers",
+        "passengerPriority.reaccommodationAdvisory",
+        "passengerPriority.updateRule"
+      ],
+      "direct_service_modules": [
+        "server/services/passenger-priority.service.ts",
+        "server/services/reaccommodation-advisory.service.ts"
+      ],
+      "associated_web_routes": ["/admin/passenger-priority"]
+    },
+    {
+      "id": "paymentHistory",
+      "mount_sources": [
+        {
+          "path": "server/routers/payment-history.ts",
+          "line": 10,
+          "end_line": 68,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payment-history.ts#L10-L68"
+        }
+      ],
+      "counts": {
+        "procedures": 4,
+        "queries": 4,
+        "mutations": 0,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 2,
+        "authenticated": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 4
+      },
+      "procedure_ids": [
+        "paymentHistory.adminHistory",
+        "paymentHistory.adminStats",
+        "paymentHistory.myPayments",
+        "paymentHistory.myStats"
+      ],
+      "direct_service_modules": ["server/services/payment-history.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "payments",
+      "mount_sources": [
+        {
+          "path": "server/routers/payments.ts",
+          "line": 64,
+          "end_line": 611,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L64-L611"
+        }
+      ],
+      "counts": {
+        "procedures": 13,
+        "queries": 8,
+        "mutations": 5,
+        "rest_mapped": 7,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "administrator": 4,
+        "authenticated": 8,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 13
+      },
+      "procedure_ids": [
+        "payments.adminGetHistory",
+        "payments.adminGetStats",
+        "payments.create",
+        "payments.createCheckoutSession",
+        "payments.createModificationCheckout",
+        "payments.expireCheckoutSession",
+        "payments.getCheckoutState",
+        "payments.getHistory",
+        "payments.getProviders",
+        "payments.getStats",
+        "payments.refundSettlementReview",
+        "payments.settlementReviews",
+        "payments.verifySession"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/booking-checkout.service.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/payment-history.service.ts",
+        "server/services/payment-providers/index.ts",
+        "server/services/rbac.service.ts",
+        "server/services/settlement-review.service.ts"
+      ],
+      "associated_web_routes": [
+        "/checkout/:bookingId",
+        "/my-bookings",
+        "/payment-history"
+      ]
+    },
+    {
+      "id": "priceAlerts",
+      "mount_sources": [
+        {
+          "path": "server/routers/price-alerts.ts",
+          "line": 6,
+          "end_line": 105,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-alerts.ts#L6-L105"
+        }
+      ],
+      "counts": {
+        "procedures": 7,
+        "queries": 2,
+        "mutations": 5,
+        "rest_mapped": 0,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "administrator": 1,
+        "authenticated": 6
+      },
+      "capability_categories": {
+        "background-or-operator-maintenance": 1,
+        "human-domain-capability": 6
+      },
+      "procedure_ids": [
+        "priceAlerts.checkAlerts",
+        "priceAlerts.create",
+        "priceAlerts.delete",
+        "priceAlerts.getAll",
+        "priceAlerts.getById",
+        "priceAlerts.toggle",
+        "priceAlerts.updatePrice"
+      ],
+      "direct_service_modules": ["server/services/price-alerts.service.ts"],
+      "associated_web_routes": ["/price-alerts"]
+    },
+    {
+      "id": "priceCalendar",
+      "mount_sources": [
+        {
+          "path": "server/routers/price-calendar.ts",
+          "line": 10,
+          "end_line": 131,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-calendar.ts#L10-L131"
+        }
+      ],
+      "counts": {
+        "procedures": 3,
+        "queries": 3,
+        "mutations": 0,
+        "rest_mapped": 3,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "public builder; body/service guards may further restrict": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 3
+      },
+      "procedure_ids": [
+        "priceCalendar.getAvailableMonths",
+        "priceCalendar.getFlexiblePrices",
+        "priceCalendar.getMonthlyPrices"
+      ],
+      "direct_service_modules": ["server/services/price-calendar.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "priceLock",
+      "mount_sources": [
+        {
+          "path": "server/routers/price-lock.ts",
+          "line": 16,
+          "end_line": 106,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-lock.ts#L16-L106"
+        }
+      ],
+      "counts": {
+        "procedures": 4,
+        "queries": 2,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "authenticated": 4
+      },
+      "capability_categories": {
+        "human-domain-capability": 4
+      },
+      "procedure_ids": [
+        "priceLock.cancel",
+        "priceLock.checkLock",
+        "priceLock.create",
+        "priceLock.myLocks"
+      ],
+      "direct_service_modules": ["server/services/price-lock.service.ts"],
+      "associated_web_routes": ["/booking/:id", "/search"]
+    },
+    {
+      "id": "priceQuote",
+      "mount_sources": [
+        {
+          "path": "server/routers/price-quote.ts",
+          "line": 16,
+          "end_line": 87,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-quote.ts#L16-L87"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 1,
+        "mutations": 1,
+        "rest_mapped": 1,
+        "reachable_browser_references": 1
+      },
+      "authority_classes": {
+        "authenticated": 1,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 2
+      },
+      "procedure_ids": ["priceQuote.createOffer", "priceQuote.get"],
+      "direct_service_modules": [
+        "server/services/price-quote.service.ts",
+        "server/services/retail-offer.service.ts"
+      ],
+      "associated_web_routes": ["/booking/:id"]
+    },
+    {
+      "id": "pricing",
+      "mount_sources": [
+        {
+          "path": "server/routers/pricing.router.ts",
+          "line": 53,
+          "end_line": 349,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/pricing.router.ts#L53-L349"
+        }
+      ],
+      "counts": {
+        "procedures": 7,
+        "queries": 7,
+        "mutations": 0,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "public builder; body/service guards may further restrict": 7
+      },
+      "capability_categories": {
+        "pricing-calculation-api-with-other-product-callers": 7
+      },
+      "procedure_ids": [
+        "pricing.calculate",
+        "pricing.convertCurrency",
+        "pricing.getExchangeRate",
+        "pricing.getForecast",
+        "pricing.getPriceRange",
+        "pricing.getSupportedCurrencies",
+        "pricing.validate"
+      ],
+      "direct_service_modules": [
+        "server/services/currency/currency.service.ts",
+        "server/services/pricing/dynamic-pricing.service.ts"
+      ],
+      "associated_web_routes": []
+    },
+    {
+      "id": "rateLimit",
+      "mount_sources": [
+        {
+          "path": "server/routers/rate-limit.ts",
+          "line": 27,
+          "end_line": 239,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/rate-limit.ts#L27-L239"
+        }
+      ],
+      "counts": {
+        "procedures": 8,
+        "queries": 6,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 4,
+        "authenticated": 1,
+        "public builder; body/service guards may further restrict": 3
+      },
+      "capability_categories": {
+        "operator-maintenance": 8
+      },
+      "procedure_ids": [
+        "rateLimit.config",
+        "rateLimit.getUserStatus",
+        "rateLimit.myTier",
+        "rateLimit.resetIp",
+        "rateLimit.resetUser",
+        "rateLimit.status",
+        "rateLimit.statusForScope",
+        "rateLimit.tiers"
+      ],
+      "direct_service_modules": ["server/services/rate-limit.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "rebooking",
+      "mount_sources": [
+        {
+          "path": "server/routers/rebooking.ts",
+          "line": 14,
+          "end_line": 74,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/rebooking.ts#L14-L74"
+        }
+      ],
+      "counts": {
+        "procedures": 3,
+        "queries": 2,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "authenticated": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 3
+      },
+      "procedure_ids": [
+        "rebooking.getRebookData",
+        "rebooking.quickRebook",
+        "rebooking.searchFlights"
+      ],
+      "direct_service_modules": ["server/services/rebooking.service.ts"],
+      "associated_web_routes": ["/booking/:id", "/rebook/:bookingId"]
+    },
+    {
+      "id": "reference",
+      "mount_sources": [
+        {
+          "path": "server/routers/reference.ts",
+          "line": 29,
+          "end_line": 85,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/reference.ts#L29-L85"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 2,
+        "mutations": 0,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 2
+      },
+      "procedure_ids": ["reference.airlines", "reference.airports"],
+      "direct_service_modules": ["server/services/redis-cache.service.ts"],
+      "associated_web_routes": [
+        "/",
+        "/admin",
+        "/admin/gates",
+        "/booking/:id",
+        "/codeshare-flights",
+        "/embed/search",
+        "/price-alerts",
+        "/search"
+      ]
+    },
+    {
+      "id": "refunds",
+      "mount_sources": [
+        {
+          "path": "server/routers/refunds.ts",
+          "line": 53,
+          "end_line": 481,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L53-L481"
+        }
+      ],
+      "counts": {
+        "procedures": 14,
+        "queries": 9,
+        "mutations": 5,
+        "rest_mapped": 12,
+        "reachable_browser_references": 11
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/finance": 1,
+        "administrator": 5,
+        "authenticated": 8
+      },
+      "capability_categories": {
+        "human-domain-capability": 14
+      },
+      "procedure_ids": [
+        "refunds.adminCreate",
+        "refunds.calculateCancellationFee",
+        "refunds.cancelSplitBooking",
+        "refunds.checkRefundable",
+        "refunds.create",
+        "refunds.getCancellationPolicy",
+        "refunds.getDetails",
+        "refunds.getHistory",
+        "refunds.getStats",
+        "refunds.getTrends",
+        "refunds.refundInternalFunding",
+        "refunds.resumeSplitCancellation",
+        "refunds.splitCancellation",
+        "refunds.splitCancellationQueue"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/audit.service.ts",
+        "server/services/cancellation-fees.service.ts",
+        "server/services/internal-refund.service.ts",
+        "server/services/refunds-stats.service.ts",
+        "server/services/refunds.service.ts",
+        "server/services/split-refund.service.ts"
+      ],
+      "associated_web_routes": ["/admin/refunds", "/airline", "/my-bookings"]
+    },
+    {
+      "id": "reports",
+      "mount_sources": [
+        {
+          "path": "server/routers/reports.ts",
+          "line": 82,
+          "end_line": 342,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/reports.ts#L82-L342"
+        }
+      ],
+      "counts": {
+        "procedures": 12,
+        "queries": 0,
+        "mutations": 12,
+        "rest_mapped": 0,
+        "reachable_browser_references": 12
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/finance": 9,
+        "admin/super_admin or tenant-scoped airline_admin/ops": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 12
+      },
+      "procedure_ids": [
+        "reports.exportBookingsCSV",
+        "reports.exportBookingsExcel",
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.exportRefundsCSV",
+        "reports.exportRefundsExcel",
+        "reports.exportRevenueCSV",
+        "reports.exportRevenueExcel",
+        "reports.generateBookingsPDF",
+        "reports.generateFlightPerformancePDF",
+        "reports.generateRefundsPDF",
+        "reports.generateRevenuePDF"
+      ],
+      "direct_service_modules": ["server/services/report-export.service.ts"],
+      "associated_web_routes": [
+        "/admin/refunds",
+        "/admin/reports",
+        "/analytics"
+      ]
+    },
+    {
+      "id": "revenueAccounting",
+      "mount_sources": [
+        {
+          "path": "server/routers/revenue-accounting.ts",
+          "line": 22,
+          "end_line": 256,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/revenue-accounting.ts#L22-L256"
+        }
+      ],
+      "counts": {
+        "procedures": 13,
+        "queries": 11,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 12
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/finance": 3,
+        "administrator": 10
+      },
+      "capability_categories": {
+        "human-domain-capability": 13
+      },
+      "procedure_ids": [
+        "revenueAccounting.couponMonthReview",
+        "revenueAccounting.generateReport",
+        "revenueAccounting.getAncillaryRevenue",
+        "revenueAccounting.getDashboard",
+        "revenueAccounting.getDeferredRevenue",
+        "revenueAccounting.getRefundImpact",
+        "revenueAccounting.getReports",
+        "revenueAccounting.getRevenueByChannel",
+        "revenueAccounting.getRevenueByClass",
+        "revenueAccounting.getRevenueByRoute",
+        "revenueAccounting.getYieldAnalysis",
+        "revenueAccounting.prepareZatcaDraft",
+        "revenueAccounting.zatcaDraftAvailability"
+      ],
+      "direct_service_modules": [
+        "server/services/coupon-month-review.ts",
+        "server/services/fare-components.service.ts",
+        "server/services/revenue-accounting.service.ts"
+      ],
+      "associated_web_routes": [
+        "/admin/bsp-reporting",
+        "/admin/revenue-accounting",
+        "/airline"
+      ]
+    },
+    {
+      "id": "reviews",
+      "mount_sources": [
+        {
+          "path": "server/routers/reviews.ts",
+          "line": 6,
+          "end_line": 188,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/reviews.ts#L6-L188"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 6,
+        "mutations": 4,
+        "rest_mapped": 0,
+        "reachable_browser_references": 1
+      },
+      "authority_classes": {
+        "authenticated": 6,
+        "public builder; body/service guards may further restrict": 4
+      },
+      "capability_categories": {
+        "human-domain-capability": 10
+      },
+      "procedure_ids": [
+        "reviews.canReview",
+        "reviews.create",
+        "reviews.delete",
+        "reviews.getAirlineReviews",
+        "reviews.getAirlineStats",
+        "reviews.getFlightReviews",
+        "reviews.getFlightStats",
+        "reviews.getUserReviews",
+        "reviews.markHelpful",
+        "reviews.update"
+      ],
+      "direct_service_modules": ["server/services/reviews.service.ts"],
+      "associated_web_routes": ["/my-bookings"]
+    },
+    {
+      "id": "savedPassengers",
+      "mount_sources": [
+        {
+          "path": "server/routers/saved-passengers.ts",
+          "line": 27,
+          "end_line": 111,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/saved-passengers.ts#L27-L111"
+        }
+      ],
+      "counts": {
+        "procedures": 7,
+        "queries": 3,
+        "mutations": 4,
+        "rest_mapped": 0,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "authenticated": 7
+      },
+      "capability_categories": {
+        "human-domain-capability": 7
+      },
+      "procedure_ids": [
+        "savedPassengers.add",
+        "savedPassengers.delete",
+        "savedPassengers.getAll",
+        "savedPassengers.getById",
+        "savedPassengers.getDefault",
+        "savedPassengers.setDefault",
+        "savedPassengers.update"
+      ],
+      "direct_service_modules": ["server/services/saved-passengers.service.ts"],
+      "associated_web_routes": ["/booking/:id", "/saved-passengers"]
+    },
+    {
+      "id": "seatEconomics",
+      "mount_sources": [
+        {
+          "path": "server/routers/seat-economics.ts",
+          "line": 11,
+          "end_line": 68,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/seat-economics.ts#L11-L68"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 2,
+        "mutations": 0,
+        "rest_mapped": 2,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "administrator": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 2
+      },
+      "procedure_ids": [
+        "seatEconomics.getByBooking",
+        "seatEconomics.getByFlight"
+      ],
+      "direct_service_modules": [
+        "server/services/seat-economics-tenant.service.ts",
+        "server/services/seat-economics.service.ts"
+      ],
+      "associated_web_routes": ["/admin/seat-economics"]
+    },
+    {
+      "id": "seatMap",
+      "mount_sources": [
+        {
+          "path": "server/routers/seat-map.ts",
+          "line": 118,
+          "end_line": 570,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/seat-map.ts#L118-L570"
+        }
+      ],
+      "counts": {
+        "procedures": 18,
+        "queries": 8,
+        "mutations": 10,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "administrator": 8,
+        "authenticated": 7,
+        "public builder; body/service guards may further restrict": 3
+      },
+      "capability_categories": {
+        "human-domain-capability": 18
+      },
+      "procedure_ids": [
+        "seatMap.blockSeat",
+        "seatMap.calculateUpgradePrice",
+        "seatMap.changeSeat",
+        "seatMap.checkIn",
+        "seatMap.createSeatMap",
+        "seatMap.getBoardingPass",
+        "seatMap.getCheckInStatus",
+        "seatMap.getFlightSeatMap",
+        "seatMap.getPassengerSeat",
+        "seatMap.getSeatMap",
+        "seatMap.getSeatPricing",
+        "seatMap.initializeFlightSeats",
+        "seatMap.listSeatMaps",
+        "seatMap.releaseSeat",
+        "seatMap.selectSeat",
+        "seatMap.unblockSeat",
+        "seatMap.undoCheckIn",
+        "seatMap.updateSeatMap"
+      ],
+      "direct_service_modules": ["server/services/seat-map.service.ts"],
+      "associated_web_routes": [
+        "/booking/:id",
+        "/booking/multi-city",
+        "/check-in",
+        "/my-bookings"
+      ]
+    },
+    {
+      "id": "security",
+      "mount_sources": [
+        {
+          "path": "server/routers/security.ts",
+          "line": 10,
+          "end_line": 183,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/security.ts#L10-L183"
+        }
+      ],
+      "counts": {
+        "procedures": 8,
+        "queries": 3,
+        "mutations": 5,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 8
+      },
+      "capability_categories": {
+        "background-or-operator-maintenance": 1,
+        "human-domain-capability": 7
+      },
+      "procedure_ids": [
+        "security.blockIp",
+        "security.cleanupOldAttempts",
+        "security.getRecentSecurityEvents",
+        "security.isAccountLocked",
+        "security.isIpBlocked",
+        "security.lockAccount",
+        "security.unblockIp",
+        "security.unlockAccount"
+      ],
+      "direct_service_modules": ["server/services/account-lock.service.ts"],
+      "associated_web_routes": []
+    },
+    {
+      "id": "sla",
+      "mount_sources": [
+        {
+          "path": "server/routers/sla.ts",
+          "line": 25,
+          "end_line": 209,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sla.ts#L25-L209"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 7,
+        "mutations": 3,
+        "rest_mapped": 0,
+        "reachable_browser_references": 6
+      },
+      "authority_classes": {
+        "administrator": 10
+      },
+      "capability_categories": {
+        "human-domain-capability": 10
+      },
+      "procedure_ids": [
+        "sla.acknowledgeAlert",
+        "sla.generateReport",
+        "sla.getAlerts",
+        "sla.getMetricHistory",
+        "sla.getReports",
+        "sla.getSLADashboard",
+        "sla.getServiceStatus",
+        "sla.getSystemHealth",
+        "sla.getTargets",
+        "sla.updateTarget"
+      ],
+      "direct_service_modules": ["server/services/sla-monitoring.service.ts"],
+      "associated_web_routes": ["/admin/sla"]
+    },
+    {
+      "id": "sms",
+      "mount_sources": [
+        {
+          "path": "server/routers/sms.ts",
+          "line": 11,
+          "end_line": 386,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L11-L386"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 6,
+        "mutations": 4,
+        "rest_mapped": 10,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 8,
+        "authenticated": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 10
+      },
+      "procedure_ids": [
+        "sms.getMyLogs",
+        "sms.getPreferences",
+        "sms.getStats",
+        "sms.getTemplates",
+        "sms.getUserLogs",
+        "sms.listLogs",
+        "sms.resend",
+        "sms.sendBulk",
+        "sms.sendTemplated",
+        "sms.sendTest"
+      ],
+      "direct_service_modules": [
+        "server/services/sms.service.ts",
+        "server/services/user-preferences.service.ts"
+      ],
+      "associated_web_routes": []
+    },
+    {
+      "id": "softDelete",
+      "mount_sources": [
+        {
+          "path": "server/routers/soft-delete.ts",
+          "line": 6,
+          "end_line": 80,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/soft-delete.ts#L6-L80"
+        }
+      ],
+      "counts": {
+        "procedures": 5,
+        "queries": 2,
+        "mutations": 3,
+        "rest_mapped": 0,
+        "reachable_browser_references": 4
+      },
+      "authority_classes": {
+        "administrator": 4,
+        "authenticated": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 5
+      },
+      "procedure_ids": [
+        "softDelete.deleteBooking",
+        "softDelete.getDeletedBookings",
+        "softDelete.getDeletedCount",
+        "softDelete.purgeDeleted",
+        "softDelete.restoreBooking"
+      ],
+      "direct_service_modules": ["server/services/soft-delete.service.ts"],
+      "associated_web_routes": ["/admin/deleted-bookings"]
+    },
+    {
+      "id": "specialServices",
+      "mount_sources": [
+        {
+          "path": "server/routers/special-services.ts",
+          "line": 19,
+          "end_line": 395,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/special-services.ts#L19-L395"
+        }
+      ],
+      "counts": {
+        "procedures": 9,
+        "queries": 5,
+        "mutations": 4,
+        "rest_mapped": 0,
+        "reachable_browser_references": 4
+      },
+      "authority_classes": {
+        "administrator": 3,
+        "authenticated": 5,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 9
+      },
+      "procedure_ids": [
+        "specialServices.adminBulkUpdateStatus",
+        "specialServices.adminGetPending",
+        "specialServices.adminUpdateStatus",
+        "specialServices.cancelService",
+        "specialServices.getAvailableServices",
+        "specialServices.getBookingServices",
+        "specialServices.getPassengerServices",
+        "specialServices.getServiceById",
+        "specialServices.requestService"
+      ],
+      "direct_service_modules": ["server/services/special-services.service.ts"],
+      "associated_web_routes": ["/my-bookings"]
+    },
+    {
+      "id": "splitPayments",
+      "mount_sources": [
+        {
+          "path": "server/routers/split-payments.ts",
+          "line": 34,
+          "end_line": 375,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L34-L375"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 3,
+        "mutations": 7,
+        "rest_mapped": 10,
+        "reachable_browser_references": 4
+      },
+      "authority_classes": {
+        "authenticated": 8,
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 10
+      },
+      "procedure_ids": [
+        "splitPayments.cancelAll",
+        "splitPayments.cancelSplit",
+        "splitPayments.checkAllPaid",
+        "splitPayments.createPayerCheckout",
+        "splitPayments.getPayerDetails",
+        "splitPayments.getStatus",
+        "splitPayments.initiate",
+        "splitPayments.resendRequest",
+        "splitPayments.sendAllRequests",
+        "splitPayments.sendRequest"
+      ],
+      "direct_service_modules": [
+        "server/services/access-control.service.ts",
+        "server/services/split-payment.service.ts"
+      ],
+      "associated_web_routes": ["/checkout/:bookingId", "/pay/:token/:status?"]
+    },
+    {
+      "id": "standardReports",
+      "mount_sources": [
+        {
+          "path": "server/routers/standard-reports.ts",
+          "line": 31,
+          "end_line": 137,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/standard-reports.ts#L31-L137"
+        }
+      ],
+      "counts": {
+        "procedures": 10,
+        "queries": 3,
+        "mutations": 7,
+        "rest_mapped": 0,
+        "reachable_browser_references": 10
+      },
+      "authority_classes": {
+        "authenticated": 10
+      },
+      "capability_categories": {
+        "human-domain-capability": 10
+      },
+      "procedure_ids": [
+        "standardReports.catalog",
+        "standardReports.deleteTemplate",
+        "standardReports.downloadRun",
+        "standardReports.export",
+        "standardReports.run",
+        "standardReports.runTemplate",
+        "standardReports.runs",
+        "standardReports.saveTemplate",
+        "standardReports.setTemplateEnabled",
+        "standardReports.templates"
+      ],
+      "direct_service_modules": [
+        "server/services/standard-report-schedules.service.ts",
+        "server/services/standard-reports.service.ts"
+      ],
+      "associated_web_routes": ["/admin/standard-reports"]
+    },
+    {
+      "id": "suggestions",
+      "mount_sources": [
+        {
+          "path": "server/routers/suggestions.ts",
+          "line": 15,
+          "end_line": 66,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/suggestions.ts#L15-L66"
+        }
+      ],
+      "counts": {
+        "procedures": 3,
+        "queries": 3,
+        "mutations": 0,
+        "rest_mapped": 0,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "authenticated": 1,
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 3
+      },
+      "procedure_ids": [
+        "suggestions.deals",
+        "suggestions.forUser",
+        "suggestions.popular"
+      ],
+      "direct_service_modules": [
+        "server/services/smart-suggestions.service.ts"
+      ],
+      "associated_web_routes": ["/"]
+    },
+    {
+      "id": "supplierFinance",
+      "mount_sources": [
+        {
+          "path": "server/routers/supplier-finance.ts",
+          "line": 10,
+          "end_line": 23,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/supplier-finance.ts#L10-L23"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 1,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 1
+      },
+      "authority_classes": {
+        "admin/super_admin or tenant-scoped airline_admin/finance": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 2
+      },
+      "procedure_ids": ["supplierFinance.record", "supplierFinance.review"],
+      "direct_service_modules": ["server/services/supplier-finance.service.ts"],
+      "associated_web_routes": ["/airline"]
+    },
+    {
+      "id": "system",
+      "mount_sources": [
+        {
+          "path": "server/_core/systemRouter.ts",
+          "line": 5,
+          "end_line": 31,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/_core/systemRouter.ts#L5-L31"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 1,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "administrator": 1,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "platform-integration": 2
+      },
+      "procedure_ids": ["system.health", "system.notifyOwner"],
+      "direct_service_modules": [],
+      "associated_web_routes": []
+    },
+    {
+      "id": "tenants",
+      "mount_sources": [
+        {
+          "path": "server/routers/tenants.ts",
+          "line": 15,
+          "end_line": 49,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/tenants.ts#L15-L49"
+        }
+      ],
+      "counts": {
+        "procedures": 4,
+        "queries": 1,
+        "mutations": 3,
+        "rest_mapped": 0,
+        "reachable_browser_references": 4
+      },
+      "authority_classes": {
+        "administrator": 4
+      },
+      "capability_categories": {
+        "human-domain-capability": 4
+      },
+      "procedure_ids": [
+        "tenants.assignUser",
+        "tenants.create",
+        "tenants.list",
+        "tenants.setStatus"
+      ],
+      "direct_service_modules": ["server/services/tenant.service.ts"],
+      "associated_web_routes": ["/admin"]
+    },
+    {
+      "id": "travelAgent",
+      "mount_sources": [
+        {
+          "path": "server/routers/travel-agent.ts",
+          "line": 80,
+          "end_line": 703,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L80-L703"
+        }
+      ],
+      "counts": {
+        "procedures": 19,
+        "queries": 6,
+        "mutations": 13,
+        "rest_mapped": 16,
+        "reachable_browser_references": 11
+      },
+      "authority_classes": {
+        "administrator": 12,
+        "public builder; body/service guards may further restrict": 7
+      },
+      "capability_categories": {
+        "human-domain-capability": 19
+      },
+      "procedure_ids": [
+        "travelAgent.approveCredit",
+        "travelAgent.assignOwner",
+        "travelAgent.calculateCommission",
+        "travelAgent.createBooking",
+        "travelAgent.creditBalance",
+        "travelAgent.getAgentStats",
+        "travelAgent.getApiDocumentation",
+        "travelAgent.getBookings",
+        "travelAgent.getById",
+        "travelAgent.getPendingCommissions",
+        "travelAgent.getStats",
+        "travelAgent.list",
+        "travelAgent.regenerateCredentials",
+        "travelAgent.register",
+        "travelAgent.searchFlights",
+        "travelAgent.updateCommissionRate",
+        "travelAgent.updateCommissionStatus",
+        "travelAgent.updateStatus",
+        "travelAgent.validateCredentials"
+      ],
+      "direct_service_modules": [
+        "server/services/agency-credit.service.ts",
+        "server/services/travel-agent.service.ts"
+      ],
+      "associated_web_routes": ["/admin/travel-agents"]
+    },
+    {
+      "id": "travelScenarios",
+      "mount_sources": [
+        {
+          "path": "server/routers/travel-scenarios.ts",
+          "line": 17,
+          "end_line": 91,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-scenarios.ts#L17-L91"
+        }
+      ],
+      "counts": {
+        "procedures": 5,
+        "queries": 4,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "authenticated": 3,
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "human-domain-capability": 5
+      },
+      "procedure_ids": [
+        "travelScenarios.getAutoCheckIn",
+        "travelScenarios.getCarbonOffset",
+        "travelScenarios.getShareableItinerary",
+        "travelScenarios.getTravelRequirements",
+        "travelScenarios.setAutoCheckIn"
+      ],
+      "direct_service_modules": [
+        "server/services/travel-evidence-policy.ts",
+        "server/services/travel-scenarios.service.ts"
+      ],
+      "associated_web_routes": ["/booking/:id", "/my-bookings", "/profile"]
+    },
+    {
+      "id": "userPreferences",
+      "mount_sources": [
+        {
+          "path": "server/routers/user-preferences.ts",
+          "line": 14,
+          "end_line": 121,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/user-preferences.ts#L14-L121"
+        }
+      ],
+      "counts": {
+        "procedures": 7,
+        "queries": 3,
+        "mutations": 4,
+        "rest_mapped": 0,
+        "reachable_browser_references": 2
+      },
+      "authority_classes": {
+        "authenticated": 7
+      },
+      "capability_categories": {
+        "human-domain-capability": 7
+      },
+      "procedure_ids": [
+        "userPreferences.deleteMyPreferences",
+        "userPreferences.getMyPreferences",
+        "userPreferences.getNotificationSettings",
+        "userPreferences.getSavedPassport",
+        "userPreferences.updateMyPreferences",
+        "userPreferences.updateNotificationSettings",
+        "userPreferences.updatePassport"
+      ],
+      "direct_service_modules": ["server/services/user-preferences.service.ts"],
+      "associated_web_routes": ["/booking/:id", "/profile"]
+    },
+    {
+      "id": "vouchers",
+      "mount_sources": [
+        {
+          "path": "server/routers/vouchers.ts",
+          "line": 15,
+          "end_line": 478,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L15-L478"
+        }
+      ],
+      "counts": {
+        "procedures": 16,
+        "queries": 8,
+        "mutations": 8,
+        "rest_mapped": 16,
+        "reachable_browser_references": 7
+      },
+      "authority_classes": {
+        "administrator": 10,
+        "authenticated": 5,
+        "public builder; body/service guards may further restrict": 1
+      },
+      "capability_categories": {
+        "human-domain-capability": 16
+      },
+      "procedure_ids": [
+        "vouchers.addCredit",
+        "vouchers.applyVoucher",
+        "vouchers.create",
+        "vouchers.deactivate",
+        "vouchers.getAll",
+        "vouchers.getAllCredits",
+        "vouchers.getById",
+        "vouchers.getUsageHistory",
+        "vouchers.getUserCredits",
+        "vouchers.myCreditHistory",
+        "vouchers.myCreditUsage",
+        "vouchers.myCredits",
+        "vouchers.processExpiredCredits",
+        "vouchers.update",
+        "vouchers.useCredits",
+        "vouchers.validate"
+      ],
+      "direct_service_modules": ["server/services/voucher.service.ts"],
+      "associated_web_routes": [
+        "/admin/vouchers",
+        "/checkout/:bookingId",
+        "/my-bookings"
+      ]
+    },
+    {
+      "id": "waitlist",
+      "mount_sources": [
+        {
+          "path": "server/routers/waitlist.ts",
+          "line": 10,
+          "end_line": 334,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L10-L334"
+        }
+      ],
+      "counts": {
+        "procedures": 12,
+        "queries": 4,
+        "mutations": 8,
+        "rest_mapped": 12,
+        "reachable_browser_references": 5
+      },
+      "authority_classes": {
+        "administrator": 5,
+        "authenticated": 7
+      },
+      "capability_categories": {
+        "human-domain-capability": 12
+      },
+      "procedure_ids": [
+        "waitlist.acceptOffer",
+        "waitlist.cancel",
+        "waitlist.declineOffer",
+        "waitlist.getFlightWaitlist",
+        "waitlist.getPosition",
+        "waitlist.getStats",
+        "waitlist.join",
+        "waitlist.myWaitlist",
+        "waitlist.offerSeat",
+        "waitlist.processExpiredOffers",
+        "waitlist.processWaitlist",
+        "waitlist.updateNotifications"
+      ],
+      "direct_service_modules": ["server/services/waitlist.service.ts"],
+      "associated_web_routes": ["/my-waitlist", "/search"]
+    },
+    {
+      "id": "wallet",
+      "mount_sources": [
+        {
+          "path": "server/routers/wallet.ts",
+          "line": 16,
+          "end_line": 105,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/wallet.ts#L16-L105"
+        }
+      ],
+      "counts": {
+        "procedures": 4,
+        "queries": 2,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 4
+      },
+      "authority_classes": {
+        "authenticated": 4
+      },
+      "capability_categories": {
+        "human-domain-capability": 4
+      },
+      "procedure_ids": [
+        "wallet.balance",
+        "wallet.pay",
+        "wallet.topUp",
+        "wallet.transactions"
+      ],
+      "direct_service_modules": ["server/services/wallet.service.ts"],
+      "associated_web_routes": [
+        "/checkout/:bookingId",
+        "/my-bookings",
+        "/payment-history"
+      ]
+    },
+    {
+      "id": "weather",
+      "mount_sources": [
+        {
+          "path": "server/routers/weather.ts",
+          "line": 21,
+          "end_line": 70,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/weather.ts#L21-L70"
+        }
+      ],
+      "counts": {
+        "procedures": 4,
+        "queries": 2,
+        "mutations": 2,
+        "rest_mapped": 0,
+        "reachable_browser_references": 3
+      },
+      "authority_classes": {
+        "administrator": 4
+      },
+      "capability_categories": {
+        "human-domain-capability": 4
+      },
+      "procedure_ids": [
+        "weather.flightAdvisory",
+        "weather.mapStation",
+        "weather.refresh",
+        "weather.stations"
+      ],
+      "direct_service_modules": ["server/services/aviation-weather.service.ts"],
+      "associated_web_routes": ["/admin/operations"]
+    },
+    {
+      "id": "webhooks",
+      "mount_sources": [
+        {
+          "path": "server/routers/webhooks.ts",
+          "line": 12,
+          "end_line": 70,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/webhooks.ts#L12-L70"
+        }
+      ],
+      "counts": {
+        "procedures": 2,
+        "queries": 1,
+        "mutations": 1,
+        "rest_mapped": 0,
+        "reachable_browser_references": 0
+      },
+      "authority_classes": {
+        "public builder; body/service guards may further restrict": 2
+      },
+      "capability_categories": {
+        "signed-provider-inbound": 2
+      },
+      "procedure_ids": ["webhooks.stripe", "webhooks.test"],
+      "direct_service_modules": [],
+      "associated_web_routes": []
+    },
+    {
+      "id": "weightBalance",
+      "mount_sources": [
+        {
+          "path": "server/routers/weight-balance.ts",
+          "line": 23,
+          "end_line": 250,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/weight-balance.ts#L23-L250"
+        }
+      ],
+      "counts": {
+        "procedures": 11,
+        "queries": 6,
+        "mutations": 5,
+        "rest_mapped": 0,
+        "reachable_browser_references": 6
+      },
+      "authority_classes": {
+        "administrator": 11
+      },
+      "capability_categories": {
+        "legacy-calculation-demo": 11
+      },
+      "procedure_ids": [
+        "weightBalance.assignAircraft",
+        "weightBalance.calculate",
+        "weightBalance.checkLimits",
+        "weightBalance.evaluateDraft",
+        "weightBalance.generateLoadSheet",
+        "weightBalance.getAircraftLimits",
+        "weightBalance.getFlightWB",
+        "weightBalance.getHistory",
+        "weightBalance.reviewFlight",
+        "weightBalance.updateAircraftLimits",
+        "weightBalance.verifyCurrentDraft"
+      ],
+      "direct_service_modules": [
+        "server/services/load-sheet-lifecycle.service.ts",
+        "server/services/weight-balance.service.ts"
+      ],
+      "associated_web_routes": ["/admin/weight-balance"]
+    }
+  ]
+}

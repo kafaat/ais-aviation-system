@@ -1,0 +1,431 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "interpretation": "23 candidates, not 23 confirmed defects. Exactly three procedures here were individually confirmed as two operational UI gaps: settlement review/refund, and staff/station bag-return grant provisioning.",
+  "records": [
+    {
+      "procedure": "auth.logoutAllDevices",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 470,
+        "end_line": 507,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L470-L507"
+      },
+      "authority_summary": "authenticated",
+      "rest": {
+        "method": "POST",
+        "path": "/api/rest/auth/logout-all",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Authenticated current-user session contract exists. No active browser session-management UI was found. Whether a session/device page is required remains a product decision; ordinary logout and MFA are different actions."
+    },
+    {
+      "procedure": "auth.getActiveSessions",
+      "type": "query",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 513,
+        "end_line": 582,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L513-L582"
+      },
+      "authority_summary": "authenticated",
+      "rest": {
+        "method": "GET",
+        "path": "/api/rest/auth/sessions",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Authenticated current-user session contract exists. No active browser session-management UI was found. Whether a session/device page is required remains a product decision; ordinary logout and MFA are different actions."
+    },
+    {
+      "procedure": "auth.revokeSession",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 588,
+        "end_line": 611,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L588-L611"
+      },
+      "authority_summary": "authenticated",
+      "rest": {
+        "method": "DELETE",
+        "path": "/api/rest/auth/sessions/{sessionId}",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Authenticated current-user session contract exists. No active browser session-management UI was found. Whether a session/device page is required remains a product decision; ordinary logout and MFA are different actions."
+    },
+    {
+      "procedure": "payments.settlementReviews",
+      "type": "query",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 81,
+        "end_line": 93,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L81-L93"
+      },
+      "authority_summary": "administrator",
+      "rest": {
+        "method": "GET",
+        "path": "/api/rest/admin/payments/settlement-reviews",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "confirmed_operational_ui_gap",
+      "finding_id": "JF04",
+      "interpretation": "Individually traced human workflow/prerequisite; see the linked finding and journey evidence."
+    },
+    {
+      "procedure": "payments.refundSettlementReview",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 94,
+        "end_line": 115,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L94-L115"
+      },
+      "authority_summary": "administrator",
+      "rest": {
+        "method": "POST",
+        "path": "/api/rest/admin/payments/settlement-reviews/{paymentIntentId}/refund",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "confirmed_operational_ui_gap",
+      "finding_id": "JF04",
+      "interpretation": "Individually traced human workflow/prerequisite; see the linked finding and journey evidence."
+    },
+    {
+      "procedure": "priceCalendar.getMonthlyPrices",
+      "type": "query",
+      "source": {
+        "path": "server/routers/price-calendar.ts",
+        "line": 15,
+        "end_line": 48,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-calendar.ts#L15-L48"
+      },
+      "authority_summary": "public builder; body/service guards may further restrict",
+      "rest": {
+        "method": "GET",
+        "path": "/api/rest/price-calendar/monthly",
+        "protectMetadata": false
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "No reachable calendar/flexible-date UI. Classified separately as FE11; ordinary and multi-city search are connected. A product decision is needed before activating the unused component.",
+      "related_finding_id": "FE11"
+    },
+    {
+      "procedure": "priceCalendar.getFlexiblePrices",
+      "type": "query",
+      "source": {
+        "path": "server/routers/price-calendar.ts",
+        "line": 54,
+        "end_line": 93,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-calendar.ts#L54-L93"
+      },
+      "authority_summary": "public builder; body/service guards may further restrict",
+      "rest": {
+        "method": "GET",
+        "path": "/api/rest/price-calendar/flexible",
+        "protectMetadata": false
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "No reachable calendar/flexible-date UI. Classified separately as FE11; ordinary and multi-city search are connected. A product decision is needed before activating the unused component.",
+      "related_finding_id": "FE11"
+    },
+    {
+      "procedure": "dcsOperations.setBagReturnGrant",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/dcs-operations.ts",
+        "line": 115,
+        "end_line": 118,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/dcs-operations.ts#L115-L118"
+      },
+      "authority_summary": "admin/super_admin or tenant-scoped airline_admin",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "confirmed_operational_ui_gap",
+      "finding_id": "JF05",
+      "interpretation": "Individually traced human workflow/prerequisite; see the linked finding and journey evidence."
+    },
+    {
+      "procedure": "paymentHistory.myPayments",
+      "type": "query",
+      "source": {
+        "path": "server/routers/payment-history.ts",
+        "line": 14,
+        "end_line": 30,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payment-history.ts#L14-L30"
+      },
+      "authority_summary": "authenticated",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "The active /payment-history page already uses payments.getHistory and payments.getStats. An unused parallel namespace is not proof payment history is missing.",
+      "alternative_procedures": ["payments.getHistory", "payments.getStats"],
+      "alternative_source": {
+        "path": "client/src/pages/PaymentHistory.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PaymentHistory.tsx"
+      }
+    },
+    {
+      "procedure": "paymentHistory.myStats",
+      "type": "query",
+      "source": {
+        "path": "server/routers/payment-history.ts",
+        "line": 35,
+        "end_line": 39,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payment-history.ts#L35-L39"
+      },
+      "authority_summary": "authenticated",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "The active /payment-history page already uses payments.getHistory and payments.getStats. An unused parallel namespace is not proof payment history is missing.",
+      "alternative_procedures": ["payments.getHistory", "payments.getStats"],
+      "alternative_source": {
+        "path": "client/src/pages/PaymentHistory.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PaymentHistory.tsx"
+      }
+    },
+    {
+      "procedure": "security.getRecentSecurityEvents",
+      "type": "query",
+      "source": {
+        "path": "server/routers/security.ts",
+        "line": 14,
+        "end_line": 26,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/security.ts#L14-L26"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "security.lockAccount",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/security.ts",
+        "line": 31,
+        "end_line": 52,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/security.ts#L31-L52"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "security.unlockAccount",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/security.ts",
+        "line": 57,
+        "end_line": 74,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/security.ts#L57-L74"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "security.blockIp",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/security.ts",
+        "line": 97,
+        "end_line": 118,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/security.ts#L97-L118"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "security.unblockIp",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/security.ts",
+        "line": 123,
+        "end_line": 140,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/security.ts#L123-L140"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "fareRules.createFareClass",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 63,
+        "end_line": 166,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L63-L166"
+      },
+      "authority_summary": "administrator",
+      "rest": {
+        "method": "POST",
+        "path": "/api/rest/admin/fare-classes",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "fareRules.updateFareClass",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 172,
+        "end_line": 291,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L172-L291"
+      },
+      "authority_summary": "administrator",
+      "rest": {
+        "method": "PATCH",
+        "path": "/api/rest/admin/fare-classes/{id}",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "fareRules.createFareRule",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 415,
+        "end_line": 514,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L415-L514"
+      },
+      "authority_summary": "administrator",
+      "rest": {
+        "method": "POST",
+        "path": "/api/rest/admin/fare-rules",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "fareRules.updateFareRule",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 520,
+        "end_line": 625,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L520-L625"
+      },
+      "authority_summary": "administrator",
+      "rest": {
+        "method": "PATCH",
+        "path": "/api/rest/admin/fare-rules/{id}",
+        "protectMetadata": true
+      },
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "interline.createAgreement",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/interline.ts",
+        "line": 26,
+        "end_line": 98,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/interline.ts#L26-L98"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "interline.updateAgreement",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/interline.ts",
+        "line": 105,
+        "end_line": 188,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/interline.ts#L105-L188"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "interline.activate",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/interline.ts",
+        "line": 294,
+        "end_line": 322,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/interline.ts#L294-L322"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    },
+    {
+      "procedure": "interline.terminate",
+      "type": "mutation",
+      "source": {
+        "path": "server/routers/interline.ts",
+        "line": 328,
+        "end_line": 358,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/interline.ts#L328-L358"
+      },
+      "authority_summary": "administrator",
+      "rest": null,
+      "import_reachable_browser_reference": false,
+      "classification": "candidate_requires_product_and_alternative_flow_review",
+      "finding_id": null,
+      "interpretation": "Manual persona and alternate-client review is required before declaring a product defect."
+    }
+  ]
+}

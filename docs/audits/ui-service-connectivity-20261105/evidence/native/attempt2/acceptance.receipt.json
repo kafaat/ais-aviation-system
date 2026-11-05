@@ -1,0 +1,18 @@
+{
+  "stage": "acceptance",
+  "status": "PASS",
+  "startedAt": "2026-11-05T16:45:27.392081+00:00",
+  "argv": [
+    "/workspace/scratch/1e0211cd0153/ais-node22/node_modules/node/bin/node",
+    "/workspace/scratch/1e0211cd0153/ais-query-review/node_modules/@playwright/test/cli.js",
+    "test",
+    "--config",
+    "/workspace/scratch/1e0211cd0153/ais-ui-native-lab/attempt2/playwright.config.cjs"
+  ],
+  "cwd": "/workspace/scratch/1e0211cd0153/ais-query-review",
+  "environment": "explicit minimal environment, synthetic credentials, owned loopback endpoints",
+  "endedAt": "2026-11-05T16:45:46.442884+00:00",
+  "exitCode": 0,
+  "stdoutSha256": "215272434a565acfaeee4ac53a0dcaf74a6f471d90bb1ad7226290980c884ebb",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -172,6 +172,65 @@ afterEach(() => {
 });
 
 describe("split cancellation invoice authority", () => {
+  it.each(["admin", "super_admin"])(
+    "allows platform administrator %s to reserve another owner's split cancellation and inspect the queue",
+    async role => {
+      const actor = { id: 70, role };
+      const quote = (await getSplitRefundCancellation(7, actor)).quote!;
+      await reserveSplitRefundCancellation(
+        {
+          bookingId: 7,
+          quoteHash: quote.quoteHash,
+          reason: "requested_by_customer",
+        },
+        actor
+      );
+      expect(plan()).toMatchObject({ actorId: 70, refundAmount: 7501 });
+      expect((await listSplitRefundCancellations({}, actor)).items).toEqual([
+        expect.objectContaining({ bookingId: 7, status: "processing" }),
+      ]);
+      expect(state.create).not.toHaveBeenCalled();
+      expect(state.list).not.toHaveBeenCalled();
+      expect(state.retrieve).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["user", "finance", "airline_admin"])(
+    "rejects non-owner %s on split refund reads and commands without state or provider changes",
+    async role => {
+      const actor = { id: 70, role };
+      const quote = (await preview()).quote!;
+      const originalBooking = structuredClone(booking());
+      await expect(getSplitRefundCancellation(7, actor)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      await expect(
+        reserveSplitRefundCancellation(
+          {
+            bookingId: 7,
+            quoteHash: quote.quoteHash,
+            reason: "requested_by_customer",
+          },
+          actor
+        )
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        resumeSplitRefundCancellation({ bookingId: 7, splitId: 1 }, actor)
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        listSplitRefundCancellations({}, actor)
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      });
+      expect(booking()).toEqual(originalBooking);
+      expect(plan()).toBeUndefined();
+      expect(items()).toHaveLength(0);
+      expect(state.create).not.toHaveBeenCalled();
+      expect(state.list).not.toHaveBeenCalled();
+      expect(state.retrieve).not.toHaveBeenCalled();
+    }
+  );
+
   it("rejects all check-in paths after policy cancellation and detects partially checked-in groups", async () => {
     await reserve();
     await expect(performCheckIn(7, 1, {})).rejects.toThrow(

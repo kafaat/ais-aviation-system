@@ -1,14 +1,17 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import AiChat from "../AiChat";
 import en from "@/i18n/locales/en.json";
 import ar from "@/i18n/locales/ar.json";
 import { passengerRightsSource } from "@shared/passenger-policy";
+import { Route, Router } from "wouter";
+import { memoryLocation } from "wouter/memory-location";
 
 afterEach(() => vi.unstubAllEnvs());
 
 const current = vi.hoisted(() => ({
   language: "en",
+  authenticated: true,
   pending: null as Promise<{
     message: string;
     policySourceLanguage?: "ar" | "en";
@@ -27,7 +30,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 vi.mock("@/_core/hooks/useAuth", () => ({
-  useAuth: () => ({ user: { id: 1 } }),
+  useAuth: () => ({ user: current.authenticated ? { id: 1 } : null }),
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -64,6 +67,30 @@ vi.mock("@/lib/trpc", () => ({
     },
   },
 }));
+
+beforeEach(() => {
+  current.authenticated = true;
+});
+
+it("takes a guest to sign-in and preserves the AI chat return destination", async () => {
+  current.authenticated = false;
+  const route = memoryLocation({ path: "/ai-chat", record: true });
+  render(
+    <Router hook={route.hook}>
+      <Route path="/ai-chat">
+        <AiChat />
+      </Route>
+      <Route path="/login">
+        <h1>Sign in to continue</h1>
+      </Route>
+    </Router>
+  );
+  fireEvent.click(screen.getByRole("link", { name: "common.login" }));
+  expect(
+    await screen.findByRole("heading", { name: "Sign in to continue" })
+  ).toBeVisible();
+  expect(route.history.at(-1)).toBe("/login?returnTo=%2Fai-chat");
+});
 
 it.each([
   ["en", en.aiChat],

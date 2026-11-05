@@ -97,13 +97,18 @@ describe("render error recovery", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "errors.reportError" }));
     expect(telemetry.showReportDialog).toHaveBeenCalledWith("event-fixture-1");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it.each([false, true])(
-    "uses the local report fallback with telemetry=%s and no event identity",
-    initialized => {
+  it.each([
+    [false, null],
+    [true, null],
+    [false, "event-fixture-1"],
+  ])(
+    "does not claim a report was sent with telemetry=%s and event=%s",
+    (initialized, eventId) => {
       telemetry.isSentryInitialized.mockReturnValue(initialized);
-      telemetry.captureError.mockReturnValue(null);
+      telemetry.captureError.mockReturnValue(eventId);
       const report = vi.spyOn(console, "info").mockImplementation(() => {});
       const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
       render(
@@ -122,7 +127,15 @@ describe("render error recovery", () => {
           componentStack: expect.stringContaining("UnstableChild"),
         })
       );
-      expect(alert).toHaveBeenCalledWith("errors.reportConfirmation");
+      expect(alert).not.toHaveBeenCalled();
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "errors.reportUnavailable"
+      );
+      expect(screen.queryByText("errors.reportConfirmation")).toBeNull();
+      fail = false;
+      fireEvent.click(screen.getByRole("button", { name: "errors.tryAgain" }));
+      expect(screen.getByText("Recovered page")).toBeInTheDocument();
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
     }
   );
 });

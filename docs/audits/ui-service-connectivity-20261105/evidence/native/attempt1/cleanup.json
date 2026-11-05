@@ -1,0 +1,60 @@
+{
+  "at": "2026-11-05T16:42:44.198841+00:00",
+  "processes": [
+    {
+      "name": "acceptance",
+      "exitCode": 1,
+      "ownedHandle": true,
+      "stopped": true
+    },
+    {
+      "name": "api",
+      "exitCode": 0,
+      "ownedHandle": true,
+      "stopped": true
+    },
+    {
+      "name": "seed",
+      "exitCode": 0,
+      "ownedHandle": true,
+      "stopped": true
+    },
+    {
+      "name": "migrations",
+      "exitCode": 0,
+      "ownedHandle": true,
+      "stopped": true
+    },
+    {
+      "name": "redis",
+      "exitCode": 0,
+      "ownedHandle": true,
+      "stopped": true
+    },
+    {
+      "name": "mysql",
+      "exitCode": 0,
+      "ownedHandle": true,
+      "stopped": true
+    },
+    {
+      "name": "mysql-initialize",
+      "exitCode": 0,
+      "ownedHandle": true,
+      "stopped": true
+    },
+    {
+      "name": "collection",
+      "exitCode": 0,
+      "ownedHandle": true,
+      "stopped": true
+    }
+  ],
+  "portsClosed": {
+    "mysql": true,
+    "redis": true,
+    "api": true
+  },
+  "initCredentialFileRemoved": true,
+  "oldPidsOrResourcesSignaled": false
+}

@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "startedAt": "2026-11-05T16:45:00.626181+00:00",
+  "commit": "c09c4195aa40efbfb812316f7175bad7616b4a50",
+  "harnessSha256": "b694a9f538577c0f694024179e2f529e4215a8db7e33e76fb6c2fd2644bbaf92",
+  "scope": "Three actual browser/HTTP/MySQL acceptance cases; isolated synthetic fixtures, no provider or production-gateway proof",
+  "oldServiceResourcesAccessed": false,
+  "syntheticCredentialsOnly": true,
+  "ports": {
+    "mysql": 45957,
+    "redis": 46731,
+    "api": 55373
+  },
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "retries": 0,
+  "testIds": [
+    "697534a0948b9ca6278d-fb8980d48610c0f8fe5b",
+    "697534a0948b9ca6278d-84ca1462d81e9ca830d8",
+    "697534a0948b9ca6278d-28bb894dfc40f6f2eb10"
+  ],
+  "inputBindingsUnchanged": true,
+  "junitSha256": "091d4735964d3bef72d9dfee41661e834e871637c8d9df205b38fb9d86a8cf01",
+  "testResultsSha256": "114be2336b23abd099ec145c8e361f07b4b706261a3ebe7a166d3f71cd3f3170",
+  "endedAt": "2026-11-05T16:45:47.991472+00:00",
+  "cleanupPassed": true,
+  "cleanupSha256": "c1600a52148a5f26ff8c6e92a2ca01155606aae51c4ee7a52fce3b51f43989c9"
+}
