@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { exchangeRates } from "../../drizzle/schema";
-import { authorityRelationalFixture } from "./helpers/authority-relational-fixture";
+import * as relational from "./helpers/authority-relational-fixture";
 
 const boundary = vi.hoisted(() => ({
   db: null as unknown,
@@ -34,7 +34,8 @@ import {
 
 // Production Drizzle SQL and Zod contracts execute here. The database engine
 // is SQLite and the JSON cache is a double: this is not MySQL/Redis acceptance.
-let fixture: ReturnType<typeof authorityRelationalFixture>;
+const createFixture = relational.authorityRelationalFixture;
+let fixture: ReturnType<typeof createFixture>;
 const now = new Date("2026-11-05T12:00:00Z");
 const key = "exchange_rate:v2:SAR_KWD";
 function seed(
@@ -57,9 +58,7 @@ function seed(
     source: options.source ?? "fixture",
     validFrom: options.validFrom ?? "2026-11-05 11:00:00",
     validTo:
-      options.validTo === undefined
-        ? "2026-11-05 13:00:00"
-        : options.validTo,
+      options.validTo === undefined ? "2026-11-05 13:00:00" : options.validTo,
     updatedAt: options.updatedAt ?? "2026-11-05 11:00:00",
   });
 }
@@ -69,7 +68,7 @@ beforeEach(() => {
   vi.setSystemTime(now);
   boundary.cache.clear();
   boundary.ttls.clear();
-  fixture = authorityRelationalFixture([exchangeRates]);
+  fixture = createFixture([exchangeRates]);
   boundary.db = fixture.db;
 });
 afterEach(() => {
@@ -91,9 +90,8 @@ describe("currency precision and effective observation contracts", () => {
   );
 
   it("retains the two-decimal SAR unit contract", async () => {
-    expect((await convertCurrency(1.23, "SAR", "SAR")).convertedAmount).toBe(
-      1.23
-    );
+    const result = await convertCurrency(1.23, "SAR", "SAR");
+    expect(result.convertedAmount).toBe(1.23);
     expect(toMinorUnits(1.23, "SAR")).toBe(123);
     expect(fromMinorUnits(123, "SAR")).toBe(1.23);
   });
@@ -115,7 +113,7 @@ describe("currency precision and effective observation contracts", () => {
     expect(toMinorUnits(amount, "SAR")).toBe(minor);
   });
 
-  it("rejects non-finite, unsafe and unsupported monetary inputs", () => {
+  it("rejects invalid monetary inputs", () => {
     expect(() => toMinorUnits(Infinity, "SAR")).toThrow();
     expect(() => toMinorUnits(NaN, "KWD")).toThrow();
     expect(() => toMinorUnits(Number.MAX_SAFE_INTEGER, "KWD")).toThrow();
@@ -123,7 +121,7 @@ describe("currency precision and effective observation contracts", () => {
     expect(() => toMinorUnits(1, "XXX")).toThrow();
   });
 
-  it("restores Date and passes actual Zod contracts after a JSON cache hit", async () => {
+  it("passes Zod contracts after a JSON cache hit", async () => {
     seed(1);
     const cold = await getExchangeRate("SAR", "KWD");
     expect(cold.updatedAt).toBeInstanceOf(Date);
@@ -136,20 +134,20 @@ describe("currency precision and effective observation contracts", () => {
     const converted = await convertCurrency(1, "SAR", "KWD");
     expect(converted.rateTimestamp).toEqual(cold.updatedAt);
     for (const data of [cold, warm]) {
-      expect(
-        responseContracts.getExchangeRate.parse({ success: true, data })
-          .success
-      ).toBe(true);
-    }
-    expect(
-      responseContracts.convertCurrency.parse({
+      const parsed = responseContracts.getExchangeRate.parse({
         success: true,
-        data: converted,
-      }).success
-    ).toBe(true);
+        data,
+      });
+      expect(parsed.success).toBe(true);
+    }
+    const parsed = responseContracts.convertCurrency.parse({
+      success: true,
+      data: converted,
+    });
+    expect(parsed.success).toBe(true);
   });
 
-  it("selects the effective row, excluding future and expired observations", async () => {
+  it("excludes future and expired observations", async () => {
     seed(1, { rate: "0.080" });
     seed(2, {
       rate: "0.5",
@@ -165,13 +163,13 @@ describe("currency precision and effective observation contracts", () => {
     expect((await getExchangeRate("SAR", "KWD")).rate).toBe(0.08);
   });
 
-  it("uses an inclusive start and exclusive expiry boundary", async () => {
+  it("uses inclusive start and exclusive expiry", async () => {
     seed(1, { rate: "0.2", validTo: "2026-11-05 12:00:00" });
     seed(2, { rate: "0.083", validFrom: "2026-11-05 12:00:00" });
     expect((await getExchangeRate("SAR", "KWD")).rate).toBe(0.083);
   });
 
-  it("breaks equal observation timestamps deterministically by id", async () => {
+  it("breaks equal timestamps deterministically by id", async () => {
     seed(1, { rate: "0.081" });
     seed(2, { rate: "0.082" });
     expect((await getExchangeRate("SAR", "KWD")).rate).toBe(0.082);
@@ -183,13 +181,13 @@ describe("currency precision and effective observation contracts", () => {
     expect(boundary.ttls.get(key)).toBe(60);
   });
 
-  it("limits an open-ended observation to the configured one-hour cache", async () => {
+  it("limits open-ended observations to one hour", async () => {
     seed(1, { validTo: null });
     await getExchangeRate("SAR", "KWD");
     expect(boundary.ttls.get(key)).toBe(3600);
   });
 
-  it("rechecks validity even when a cache adapter returns an expired entry", async () => {
+  it("rechecks expiry independently of the cache TTL", async () => {
     seed(1, { validTo: "2026-11-05 12:01:00" });
     await getExchangeRate("SAR", "KWD");
     vi.setSystemTime(new Date("2026-11-05T12:02:00Z"));
@@ -214,14 +212,14 @@ describe("currency precision and effective observation contracts", () => {
     }
   );
 
-  it("does not cache fallback estimates ahead of newly supplied evidence", async () => {
+  it("does not cache fallback estimates", async () => {
     expect((await getExchangeRate("SAR", "KWD")).source).toBe("fallback");
     expect(boundary.cache.size).toBe(0);
     seed(1, { rate: "0.085" });
     expect((await getExchangeRate("SAR", "KWD")).rate).toBe(0.085);
   });
 
-  it("retains the shortest expiry and oldest observation on cross rates", async () => {
+  it("inherits cross-rate expiry and observation time", async () => {
     seed(1, {
       from: "USD",
       to: "SAR",
