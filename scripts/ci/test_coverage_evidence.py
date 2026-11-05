@@ -111,6 +111,9 @@ class CoverageEvidenceTests(unittest.TestCase):
                 self.assertEqual(manifest["result"]["exitCode"], 0)
                 self.assertEqual(manifest["status"], "failed")
                 self.assertIn(error, manifest["result"]["evidenceErrors"])
+                self.assertIn(f"Coverage evidence rejected: {error}", result.stderr)
+                self.assertIn(str((directory / "execution-manifest.json").relative_to(self.root)), result.stderr)
+                self.assertNotIn("PRIVATE_MARKER", result.stderr)
                 self.assertFalse((directory / "coverage/codecov").exists())
 
     def test_missing_reports_cannot_reuse_prior_success(self):
