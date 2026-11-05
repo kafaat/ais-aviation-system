@@ -215,7 +215,7 @@ jobs:
 
       - name: Verify coverage evidence tooling
         run: |
-          node --test scripts/ci/coverage-partitions.test.mjs
+          node --test scripts/ci/coverage-partitions.test.mjs scripts/ci/coverage-scope-inventory.test.mjs
           python3 -m unittest scripts/ci/test_coverage_evidence.py
 
       - name: Run tests with coverage
@@ -230,6 +230,11 @@ jobs:
           STRIPE_SECRET_KEY: sk_test_mock_key
           STRIPE_WEBHOOK_SECRET: whsec_mock_secret
         run: node scripts/ci/run-coverage-evidence.mjs
+
+      - name: Record coverage source and exclusion inventory
+        env:
+          COVERAGE_EVIDENCE_DIR: ${{ steps.coverage.outputs.evidence-dir }}
+        run: node scripts/ci/coverage-scope-inventory.mjs write "$COVERAGE_EVIDENCE_DIR"
 
       - name: Upload test coverage
         if: always()
