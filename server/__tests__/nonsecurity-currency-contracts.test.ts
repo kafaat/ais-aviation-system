@@ -6,17 +6,25 @@ const boundary = vi.hoisted(() => ({
   db: null as unknown,
   cache: new Map<string, string>(),
   ttls: new Map<string, number>(),
+  readDelayMs: 0,
+  writeDelayMs: 0,
 }));
 vi.mock("../db", () => ({ getDb: () => boundary.db }));
 vi.mock("../services/cache.service", () => ({
   cacheService: {
     async get(key: string) {
       const text = boundary.cache.get(key);
+      if (boundary.readDelayMs) {
+        vi.setSystemTime(Date.now() + boundary.readDelayMs);
+      }
       return text ? JSON.parse(text) : null;
     },
     async set(key: string, value: unknown, ttl: number) {
       boundary.cache.set(key, JSON.stringify(value));
       boundary.ttls.set(key, ttl);
+      if (boundary.writeDelayMs) {
+        vi.setSystemTime(Date.now() + boundary.writeDelayMs);
+      }
     },
     async del(key: string) {
       boundary.cache.delete(key);
@@ -68,6 +76,8 @@ beforeEach(() => {
   vi.setSystemTime(now);
   boundary.cache.clear();
   boundary.ttls.clear();
+  boundary.readDelayMs = 0;
+  boundary.writeDelayMs = 0;
   fixture = createFixture([exchangeRates]);
   boundary.db = fixture.db;
 });
@@ -193,6 +203,23 @@ describe("currency precision and effective observation contracts", () => {
     vi.setSystemTime(new Date("2026-11-05T12:02:00Z"));
     seed(2, { rate: "0.084", validFrom: "2026-11-05 12:01:00" });
     expect((await getExchangeRate("SAR", "KWD")).rate).toBe(0.084);
+  });
+
+  it("rechecks the clock after a delayed cache read", async () => {
+    seed(1, { rate: "0.081", validTo: "2026-11-05 12:01:00" });
+    await getExchangeRate("SAR", "KWD");
+    boundary.readDelayMs = 120000;
+    const result = await getExchangeRate("SAR", "KWD");
+    expect(result.source).toBe("fallback");
+    expect(result.rate).not.toBe(0.081);
+  });
+
+  it("rejects a quote that expires during a cache write", async () => {
+    seed(1, { validTo: "2026-11-05 12:01:00" });
+    boundary.writeDelayMs = 120000;
+    await expect(getExchangeRate("SAR", "KWD")).rejects.toThrow(
+      "Exchange rate expired during conversion"
+    );
   });
 
   it.each(["old-version", "wrong-pair", "bad-date", "future", "zero-rate"])(
