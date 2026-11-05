@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+import { chromiumSandboxEnv } from "./e2e/fixtures/chromium-sandbox-env";
 
 // A dedicated launch owns both the actual built app and a loopback provider.
 // This config must never reuse a separately running application or live Stripe.
@@ -57,6 +58,7 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         launchOptions: {
           chromiumSandbox: true,
+          env: chromiumSandboxEnv(),
           executablePath: process.env.AIS_TEST_CHROMIUM_BIN,
         },
       },
