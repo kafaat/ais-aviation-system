@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "baseline": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
+  "source_revision": "15a97a7cd7c593493d5511df95b7386822be1c76",
+  "policy": "Documented tests are not a verified closure. An item may be verified only with current-source passing acceptance evidence.",
+  "findings": [
+    {
+      "id": "BE-01",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-02",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-C01",
+      "priority": "P2",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "SRC-API-SHUTDOWN",
+      "priority": "P2",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "META-01",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-03",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-04",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-05",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-06",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-07",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-08",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-09",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "BE-10",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-01",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-02",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-03",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-04",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-05",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-06",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-07",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-08",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-09",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-11",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-01",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-02",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-03",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-04",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-05",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-06",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-07",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-08",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-09",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-10",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-11",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "OPS-10",
+      "priority": "P2",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-12",
+      "priority": "P2",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "CAP-01",
+      "priority": "P1",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    },
+    {
+      "id": "UI-M01",
+      "priority": "P2",
+      "status": "needs_current_sha_verification",
+      "evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
+      "accepted_sha": null,
+      "acceptance_run": null
+    }
+  ],
+  "report_catalog": {
+    "path": "docs/audits/reporting-completion-20261104/catalog.json",
+    "expected_total": 99,
+    "available": 36,
+    "partial": 35,
+    "blocked": 28,
+    "promotions_verified": 0
+  }
+}
