@@ -109,19 +109,31 @@ test.describe("Built entry and account recovery acceptance", () => {
     page,
   }) => {
     await useBrowserSession(page, "regular");
-    await page.goto("/my-bookings");
-    await expect(
-      page.getByRole("heading", { name: "My Bookings", exact: true })
-    ).toBeVisible();
+    const destination = "/profile?entry=expired-query#preferences";
+    const loaded = page.waitForResponse(
+      response =>
+        isProcedure(response, "userPreferences.getMyPreferences") &&
+        response.status() === 200
+    );
+    await page.goto(destination);
+    await loaded;
+    await expect(page.getByTestId("save-button")).toBeEnabled();
     // Removing only this context's cookies expires its browser authentication;
     // the shared fixture's server session is not revoked for other tests.
     await page.context().clearCookies();
     expect(await rpc(page).auth.me.query()).toBeNull();
-    const destination = "/profile?entry=expired-query#preferences";
     const failed = page.waitForResponse(response =>
       isUnauthorizedProcedure(response, "userPreferences.getMyPreferences")
     );
-    await navigateWithinDocument(page, destination);
+    // Refetch the mounted query through the browser lifecycle used by TanStack.
+    // useAuth disables focus refetch. Navigating to a cold private route instead
+    // races auth.me=null against its lazy page: the guard can correctly redirect
+    // before getMyPreferences ever exists, which does not exercise query expiry.
+    await page.evaluate(() => {
+      if (document.visibilityState !== "visible")
+        throw new Error("Expected a visible profile before query refetch");
+      window.dispatchEvent(new Event("visibilitychange"));
+    });
     await failed;
     await expectLogin(page, destination);
     await page.reload();
@@ -247,14 +259,4 @@ async function expectLogin(page: Page, returnTo: string) {
       url.pathname === "/login" && url.searchParams.get("returnTo") === returnTo
   );
   await expect(page.getByTestId("login-submit")).toBeVisible();
-}
-
-async function navigateWithinDocument(page: Page, path: string) {
-  // A browser history navigation retains the existing identity observer. The
-  // new private query must reach the native server and exercise main.tsx's
-  // UNAUTHORIZED subscription, rather than a fresh document's route guard.
-  await page.evaluate(destination => {
-    window.history.pushState(null, "", destination);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, path);
 }

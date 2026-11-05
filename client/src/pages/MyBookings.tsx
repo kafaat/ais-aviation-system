@@ -997,7 +997,7 @@ export default function MyBookings() {
           open={cancelDialogOpen}
           onOpenChange={setCancelDialogOpen}
           onSuccess={() => {
-            setSelectedBooking(null);
+            void bookingsQuery.refetch();
           }}
         />
       )}

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../server/routers";
 import { trpc } from "@/lib/trpc";
 import {
   Dialog,
@@ -26,6 +28,10 @@ interface CancelBookingDialogProps {
   onSuccess: () => void;
 }
 
+type RefundReceipt = inferRouterOutputs<AppRouter>["refunds"]["create"] & {
+  bookingId: number;
+};
+
 export function CancelBookingDialog({
   bookingId,
   bookingReference,
@@ -37,6 +43,8 @@ export function CancelBookingDialog({
   const { t } = useTranslation();
   const [reason, setReason] = useState<string>("requested_by_customer");
   const [notes, setNotes] = useState("");
+  const [receipt, setReceipt] = useState<RefundReceipt | null>(null);
+  const currentReceipt = receipt?.bookingId === bookingId ? receipt : null;
 
   const utils = trpc.useUtils();
   const splitCancellation = trpc.refunds.splitCancellation.useQuery(
@@ -60,11 +68,11 @@ export function CancelBookingDialog({
 
   // Create refund mutation
   const createRefund = trpc.refunds.create.useMutation({
-    onSuccess: () => {
-      toast.success(t("cancelBooking.successMessage"));
-      utils.bookings.myBookings.invalidate();
+    onSuccess: (result, input) => {
+      setReceipt({ ...result, bookingId: input.bookingId });
+      toast.success(t("cancelBooking.receipt.recorded"));
+      void utils.bookings.myBookings.invalidate();
       onSuccess();
-      onOpenChange(false);
     },
     onError: error => {
       toast.error(error.message || t("cancelBooking.errorMessage"));
@@ -93,7 +101,41 @@ export function CancelBookingDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {splitCancellation.isLoading ? (
+        {currentReceipt ? (
+          <>
+            <section
+              aria-labelledby="refund-receipt-title"
+              className="space-y-4 py-4"
+            >
+              <h3 id="refund-receipt-title" className="font-semibold">
+                {t("cancelBooking.receipt.title")}
+              </h3>
+              <p role="status">
+                {t(
+                  `cancelBooking.receipt.state.${currentReceipt.status ?? "unknown"}`,
+                  {
+                    defaultValue: t("cancelBooking.receipt.state.unknown"),
+                  }
+                )}
+              </p>
+              <dl className="grid grid-cols-2 gap-2 text-sm">
+                <dt>{t("cancelBooking.receipt.reference")}</dt>
+                <dd className="break-all">
+                  <bdi>{currentReceipt.refundId}</bdi>
+                </dd>
+                <dt>{t("cancelBooking.refundAmount")}</dt>
+                <dd>
+                  {(currentReceipt.amount / 100).toFixed(2)} {t("common.sar")}
+                </dd>
+              </dl>
+            </section>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)}>
+                {t("cancelBooking.receipt.close")}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : splitCancellation.isLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>

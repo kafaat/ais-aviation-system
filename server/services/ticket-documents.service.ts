@@ -9,6 +9,7 @@ import {
   airports,
   airlines,
   seatInventory,
+  ticketCoupons,
 } from "../../drizzle/schema";
 import { generateTicketNumber, type TicketData } from "./eticket.service";
 import {
@@ -104,7 +105,7 @@ export async function readTicketDocument(
       });
     }
     const couponLegs = [];
-    const legs: TicketData[] = [];
+    const legs: Array<Omit<TicketData, "issueDate">> = [];
     for (const [index, id] of ids.entries()) {
       const segment = segments[index];
       const f = locked.find(f => f.id === id);
@@ -169,7 +170,6 @@ export async function readTicketDocument(
           : "Unverified. Contact airline staff.",
         totalAmount: booking.totalAmount,
         currency: "SAR",
-        issueDate: new Date(),
       });
     }
     const coupons = await localDocumentCoupons(
@@ -179,19 +179,40 @@ export async function readTicketDocument(
       ticketNumber,
       couponLegs
     );
+    // Read after localDocumentCoupons: newly inserted coupons receive their
+    // creation time from the database. Include exchanged history so retaining
+    // a document across a partial exchange does not invent a new issue date.
+    const [issuance] = await tx
+      .select({ createdAt: ticketCoupons.createdAt })
+      .from(ticketCoupons)
+      .where(
+        and(
+          eq(ticketCoupons.bookingId, bookingId),
+          eq(ticketCoupons.passengerId, passengerId),
+          eq(ticketCoupons.ticketNumber, ticketNumber)
+        )
+      )
+      .orderBy(asc(ticketCoupons.createdAt), asc(ticketCoupons.couponNumber))
+      .limit(1);
+    if (!issuance || !Number.isFinite(issuance.createdAt.getTime()))
+      throw new Error("Local ticket issue time unavailable");
     for (const [i, coupon] of coupons.entries()) {
       legs[i].localCoupon = {
         number: coupon.couponNumber,
         status: coupon.status,
       };
     }
-    const first = legs[0];
+    const issuedLegs = legs.map(leg => ({
+      ...leg,
+      issueDate: issuance.createdAt,
+    }));
+    const first = issuedLegs[0];
     if (!first) throw new Error("Empty ticket itinerary");
     return {
       booking,
       passenger,
-      legs,
-      data: { ...first, additionalLegs: legs.slice(1) },
+      legs: issuedLegs,
+      data: { ...first, additionalLegs: issuedLegs.slice(1) },
     };
   });
 }

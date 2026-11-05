@@ -7,12 +7,24 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { startNativeRedis } from "./native-redis";
+import { startRedisFaultProxy } from "./redis-fault-proxy";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const entry = fileURLToPath(new URL("../../_core/index.ts", import.meta.url));
 const require = createRequire(import.meta.url);
 const stripeKey = "sk_test_native_api_process_fixture_only";
 export const apiProcessWebhookSecret = "whsec_native_api_process_fixture_only";
+export const apiProcessProviderDiagnostic =
+  "PRIVATE_NATIVE_PROVIDER_DIAGNOSTIC";
+
+type ProviderState = "ready" | "unavailable" | "timeout";
+export interface ApiProcessOptions {
+  providerConfiguration?: "configured" | "missing-key" | "missing-mock";
+  redis?: "unavailable" | "native";
+  /** Test-only driver seam; never represents an observed MySQL failure. */
+  poolEndFault?: "reject" | "hang";
+}
 
 async function listen(server: Server) {
   await new Promise<void>((resolve, reject) => {
@@ -56,8 +68,10 @@ async function bounded<T>(
 /** Every socket belongs to this child-only proxy; outage never touches MySQL itself. */
 async function mysqlProxy(host: string, port: number) {
   let enabled = true;
+  let attempts = 0;
   const sockets = new Set<Socket>();
   const server = createServer(client => {
+    attempts++;
     if (!enabled) {
       client.destroy();
       return;
@@ -93,6 +107,7 @@ async function mysqlProxy(host: string, port: number) {
       enabled = true;
     },
     connections: () => sockets.size,
+    attempts: () => attempts,
     async close() {
       enabled = false;
       for (const socket of sockets) socket.destroy();
@@ -106,8 +121,13 @@ export interface ApiProcessExit {
   signal: NodeJS.Signals | null;
 }
 
-/** Start the unmodified API entry point with no inherited credentials or endpoints. */
-export async function startApiProcessFixture(databaseUrl: string) {
+/** Run the real entry with owned endpoints. Only poolEndFault replaces a driver
+ * operation; the process, signal handlers, shutdown coordinator and pool cleanup
+ * remain real and its explicit fixture receipts identify that injection. */
+export async function startApiProcessFixture(
+  databaseUrl: string,
+  options: ApiProcessOptions = {}
+) {
   const database = new URL(databaseUrl);
   if (
     database.protocol !== "mysql:" ||
@@ -122,9 +142,13 @@ export async function startApiProcessFixture(databaseUrl: string) {
   const emptyEnv = join(temp, "empty.env");
   await writeFile(emptyEnv, "", { flag: "wx" });
   let proxy: Awaited<ReturnType<typeof mysqlProxy>> | undefined;
+  let nativeRedis: Awaited<ReturnType<typeof startNativeRedis>> | undefined;
+  let redisProxy: Awaited<ReturnType<typeof startRedisFaultProxy>> | undefined;
   let child: ChildProcess | undefined;
   let exited: Promise<ApiProcessExit> | undefined;
   let output = "";
+  let providerState: ProviderState = "ready";
+  let redisAttempts = 0;
   const records: Array<Record<string, unknown>> = [];
   const providerRequests: Array<{
     method: string | undefined;
@@ -149,6 +173,16 @@ export async function startApiProcessFixture(databaseUrl: string) {
       );
       return;
     }
+    if (providerState === "timeout") {
+      // The real readiness fetch must abort its own socket at its 1500ms bound.
+      // No test timer synthesizes the API's timeout response.
+      return;
+    }
+    if (providerState === "unavailable") {
+      response.writeHead(500, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ error: apiProcessProviderDiagnostic }));
+      return;
+    }
     response.writeHead(200, { "Content-Type": "application/json" });
     response.end(
       JSON.stringify({
@@ -161,14 +195,20 @@ export async function startApiProcessFixture(databaseUrl: string) {
   });
   // Redis is deliberately unavailable. This exercises the documented memory
   // cache fallback without reaching shared/default Redis or starting workers.
-  const redis = createServer(socket => socket.destroy());
+  const redis = createServer(socket => {
+    redisAttempts++;
+    socket.destroy();
+  });
   const reservation = createServer();
 
-  async function stop() {
+  function signal(value: "SIGTERM" | "SIGINT") {
+    if (child && child.exitCode === null && child.signalCode === null)
+      child.kill(value);
+  }
+  async function stop(value: "SIGTERM" | "SIGINT" = "SIGTERM") {
     proxy?.reconnect();
     if (!child || !exited) return undefined;
-    if (child.exitCode === null && child.signalCode === null)
-      child.kill("SIGTERM");
+    signal(value);
     return bounded(
       exited,
       13_000,
@@ -196,6 +236,7 @@ export async function startApiProcessFixture(databaseUrl: string) {
         const closed = await bounded(
           Promise.allSettled([
             proxy?.close(),
+            redisProxy?.close(),
             closeServer(stripe),
             closeServer(redis),
             closeServer(reservation),
@@ -206,7 +247,11 @@ export async function startApiProcessFixture(databaseUrl: string) {
         for (const result of closed)
           if (result.status === "rejected") cleanupError ??= result.reason;
       } finally {
-        await rm(temp, { recursive: true, force: true });
+        try {
+          await nativeRedis?.stop();
+        } finally {
+          await rm(temp, { recursive: true, force: true });
+        }
       }
     }
     if (cleanupError) throw cleanupError;
@@ -219,6 +264,10 @@ export async function startApiProcessFixture(databaseUrl: string) {
     );
     const stripePort = await listen(stripe);
     const redisPort = await listen(redis);
+    if (options.redis === "native") {
+      nativeRedis = await startNativeRedis();
+      redisProxy = await startRedisFaultProxy(nativeRedis.url);
+    }
     const preferredPort = await listen(reservation);
     await closeServer(reservation);
     database.hostname = "127.0.0.1";
@@ -242,12 +291,14 @@ export async function startApiProcessFixture(databaseUrl: string) {
       DATABASE_URL: database.toString(),
       DB_POOL_SIZE: "3",
       DB_CONNECT_TIMEOUT: "1000",
-      REDIS_URL: `redis://127.0.0.1:${redisPort}`,
+      REDIS_URL: redisProxy?.url ?? `redis://127.0.0.1:${redisPort}`,
       QUEUE_REDIS_URL: `redis://127.0.0.1:${redisPort}`,
       CACHE_PREFIX: "native-api-process-fixture",
       AIS_PROVIDER_BOUNDARY: "isolated",
-      STRIPE_MOCK_HOST: mockOrigin,
-      STRIPE_SECRET_KEY: stripeKey,
+      STRIPE_MOCK_HOST:
+        options.providerConfiguration === "missing-mock" ? "" : mockOrigin,
+      STRIPE_SECRET_KEY:
+        options.providerConfiguration === "missing-key" ? "" : stripeKey,
       STRIPE_WEBHOOK_SECRET: apiProcessWebhookSecret,
       OAUTH_SERVER_URL: mockOrigin,
       AUTH_SERVICE_URL: mockOrigin,
@@ -260,15 +311,19 @@ export async function startApiProcessFixture(databaseUrl: string) {
       METRICS_TOKEN: "native-api-process-metrics-fixture",
       TRUSTED_PROXIES: "loopback",
     };
-    child = spawn(
-      process.execPath,
-      ["--import", pathToFileURL(require.resolve("tsx")).href, entry],
-      {
-        cwd: root,
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"],
-      }
-    );
+    const imports = ["--import", pathToFileURL(require.resolve("tsx")).href];
+    if (options.poolEndFault) {
+      environment.AIS_API_PROCESS_POOL_END_FAULT = options.poolEndFault;
+      imports.push(
+        "--import",
+        new URL("./api-process-pool-end-fault.ts", import.meta.url).href
+      );
+    }
+    child = spawn(process.execPath, [...imports, entry], {
+      cwd: root,
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     exited = new Promise<ApiProcessExit>((resolve, reject) => {
       child!.once("error", reject);
       child!.once("close", (code, signal) => resolve({ code, signal }));
@@ -306,7 +361,18 @@ export async function startApiProcessFixture(databaseUrl: string) {
           proxy,
           records,
           providerRequests,
+          setProviderState: (state: ProviderState) => {
+            providerState = state;
+          },
+          redis: {
+            mode: options.redis ?? "unavailable",
+            rejectedConnections: () => redisAttempts,
+            nativeUrl: nativeRedis?.url,
+            disconnect: () => redisProxy?.disconnect(),
+            reconnect: () => redisProxy?.reconnect(),
+          },
           diagnostics: () => output.slice(-6000),
+          signal,
           stop,
           close,
         };
