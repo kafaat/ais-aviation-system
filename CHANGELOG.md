@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.38.0
+
+<!-- ais-release-source: fcc32cc05325c6ab9aae5fb895a42ecb46287f92 -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(reports): add scoped HTTP QUERY preview (#286) (fcc32cc)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.37.1...v1.38.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.37.1
 
 <!-- ais-release-source: 10a3f5e83bad2d7726841becc15f421d1a5b8727 -->
