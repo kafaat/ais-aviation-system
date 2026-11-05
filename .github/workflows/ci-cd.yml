@@ -628,7 +628,7 @@ jobs:
           CI: true
           E2E_BASE_URL: http://localhost:3000
           AIS_DISPOSABLE_DATABASE: true
-        run: pnpm exec playwright test e2e/ci-smoke.spec.ts e2e/hardening-journeys.spec.ts e2e/agency-owner.spec.ts e2e/vrs-report-exports.spec.ts e2e/standard-reports.spec.ts e2e/vrs-kiosk-tags.spec.ts e2e/extra-seat.spec.ts e2e/agency-commissions.spec.ts e2e/multi-city-fare.spec.ts e2e/vrs-baggage-admission.spec.ts e2e/agency-credit.spec.ts e2e/local-ticket-revalidation.spec.ts e2e/payer-terminal-acceptance.spec.ts e2e/auth-recovery-acceptance.spec.ts e2e/booking-dialog-acceptance.spec.ts e2e/ui-service-connectivity.spec.ts --project=chromium
+        run: pnpm exec playwright test e2e/ci-smoke.spec.ts e2e/hardening-journeys.spec.ts e2e/agency-owner.spec.ts e2e/vrs-report-exports.spec.ts e2e/standard-reports.spec.ts e2e/vrs-kiosk-tags.spec.ts e2e/extra-seat.spec.ts e2e/agency-commissions.spec.ts e2e/multi-city-fare.spec.ts e2e/vrs-baggage-admission.spec.ts e2e/agency-credit.spec.ts e2e/local-ticket-revalidation.spec.ts e2e/payer-terminal-acceptance.spec.ts e2e/auth-recovery-acceptance.spec.ts e2e/booking-dialog-acceptance.spec.ts e2e/ui-service-connectivity.spec.ts e2e/forensic-consumers.spec.ts --project=chromium
 
       # Logout must revoke a real session without invalidating the shared
       # sessions used by the funded journeys. A fresh app and owned Redis DB

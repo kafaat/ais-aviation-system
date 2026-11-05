@@ -406,6 +406,16 @@ export async function seedOpsReportRows(insert: FixtureInsert) {
     tenantId: 101,
     checkInState: "closed",
   });
+  // A per-passenger state resolves the legacy booking-wide checkedIn flag.
+  // Another passenger's check-in alone cannot establish this no-show candidate.
+  await insert(dcsPassengerStates, {
+    id: 4,
+    bookingId: 10,
+    passengerId: 100,
+    flightId: 1,
+    state: "not_checked_in",
+    boardingDenied: 0,
+  });
   await insert(dcsPassengerStates, {
     id: 1,
     bookingId: 10,

@@ -1,3 +1,8 @@
+import {
+  createVoucherInputSchema,
+  updateVoucherInputSchema,
+  voucherMoneySchema,
+} from "../../shared/voucher";
 import { responseContracts } from "../contracts/vouchers";
 import { z } from "zod";
 import {
@@ -35,10 +40,9 @@ export const vouchersRouter = router({
     .input(
       z.object({
         code: z.string().min(1).max(50).describe("Voucher code to validate"),
-        amount: z
-          .number()
-          .min(0)
-          .describe("Purchase amount in cents to calculate discount"),
+        amount: voucherMoneySchema.describe(
+          "Purchase amount in SAR minor units (halalas)"
+        ),
       })
     )
     .output(responseContracts["validate"])
@@ -69,7 +73,9 @@ export const vouchersRouter = router({
       z.object({
         code: z.string().min(1).max(50).describe("Voucher code to apply"),
         bookingId: z.number().describe("Booking ID to apply voucher to"),
-        amount: z.number().min(0).describe("Booking amount in cents"),
+        amount: voucherMoneySchema.describe(
+          "Booking amount in SAR minor units (halalas)"
+        ),
       })
     )
     .output(responseContracts["applyVoucher"])
@@ -188,37 +194,7 @@ export const vouchersRouter = router({
         protect: true,
       },
     })
-    .input(
-      z.object({
-        code: z
-          .string()
-          .min(3)
-          .max(50)
-          .describe("Unique voucher code (will be uppercased)"),
-        type: z.enum(["fixed", "percentage"]).describe("Type of discount"),
-        value: z
-          .number()
-          .min(1)
-          .describe("Discount value (cents for fixed, percentage for %)"),
-        minPurchase: z
-          .number()
-          .min(0)
-          .default(0)
-          .describe("Minimum purchase amount in cents"),
-        maxDiscount: z
-          .number()
-          .optional()
-          .describe("Maximum discount amount in cents (for percentage)"),
-        maxUses: z
-          .number()
-          .optional()
-          .describe("Maximum number of uses (null = unlimited)"),
-        validFrom: z.date().describe("Start date"),
-        validUntil: z.date().describe("Expiration date"),
-        description: z.string().optional().describe("Admin notes"),
-        isActive: z.boolean().default(true).describe("Active status"),
-      })
-    )
+    .input(createVoucherInputSchema)
     .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       return await voucherService.createVoucher(input, ctx.user.id);
@@ -289,20 +265,7 @@ export const vouchersRouter = router({
         protect: true,
       },
     })
-    .input(
-      z.object({
-        id: z.number().describe("Voucher ID"),
-        type: z.enum(["fixed", "percentage"]).optional(),
-        value: z.number().min(1).optional(),
-        minPurchase: z.number().min(0).optional(),
-        maxDiscount: z.number().optional().nullable(),
-        maxUses: z.number().optional().nullable(),
-        validFrom: z.date().optional(),
-        validUntil: z.date().optional(),
-        description: z.string().optional().nullable(),
-        isActive: z.boolean().optional(),
-      })
-    )
+    .input(updateVoucherInputSchema)
     .output(responseContracts["update"])
     .mutation(async ({ input }) => {
       const { id, ...data } = input;

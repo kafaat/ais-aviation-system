@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { FlightStatusBadge } from "@/components/FlightStatusBadge";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { FlightReviewsSection } from "@/components/FlightReviewsSection";
 import type { FlightData } from "@/components/FlightCard";
 import {
   Plane,
@@ -51,6 +53,10 @@ export function FlightPreviewDialog({
   const isRTL = i18n.language === "ar";
 
   if (!flight) return null;
+
+  const canBook =
+    ["scheduled", "delayed"].includes(flight.status) &&
+    new Date(flight.departureTime).getTime() > Date.now();
 
   const formatDate = (date: Date) => {
     return formatFlightDate(date, flight.origin.timezone, i18n.language, {
@@ -116,6 +122,23 @@ export function FlightPreviewDialog({
             </div>
           </div>
           <FlightStatusBadge status={flight.status || "scheduled"} size="sm" />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <FavoriteButton
+            flightId={flight.id}
+            size="sm"
+            variant="outline"
+            showLabel
+            showTooltip={false}
+          />
+          <Link
+            href="/favorites"
+            className="text-sm text-primary underline"
+            onClick={() => onOpenChange(false)}
+          >
+            {t("favorites.savedFlights")}
+          </Link>
         </div>
 
         {/* Flight Route Visualization */}
@@ -256,7 +279,7 @@ export function FlightPreviewDialog({
                   {t("common.currency")}
                 </span>
               </p>
-              {flight.economyAvailable > 0 && (
+              {canBook && flight.economyAvailable > 0 && (
                 <Button asChild className="w-full mt-3" size="sm">
                   <Link
                     href={`/booking/${flight.id}?class=economy`}
@@ -300,7 +323,7 @@ export function FlightPreviewDialog({
                   {t("common.currency")}
                 </span>
               </p>
-              {flight.businessAvailable > 0 && (
+              {canBook && flight.businessAvailable > 0 && (
                 <Button
                   asChild
                   className="w-full mt-3 bg-amber-600 hover:bg-amber-700"
@@ -317,6 +340,16 @@ export function FlightPreviewDialog({
             </div>
           </div>
         </div>
+        <Separator />
+        <FlightReviewsSection
+          key={flight.id}
+          flightId={flight.id}
+          flightInfo={{
+            flightNumber: flight.flightNumber,
+            origin: flight.origin.code,
+            destination: flight.destination.code,
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

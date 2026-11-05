@@ -64,6 +64,32 @@ export const dcsBagReturnGrantInput = command.extend({
 export const dcsBagReturnGrantResult = dcsBagReturnGrantInput
   .pick({ staffId: true, airlineId: true, airportId: true, enabled: true })
   .extend({ eventId: id });
+export const dcsBagReturnGrantListInput = z.object({
+  flightId: id,
+  after: id.optional(),
+  limit: z.number().int().min(1).max(100).default(25),
+});
+export const dcsBagReturnGrantList = z.object({
+  scope: z.object({
+    flightId: id,
+    flightNumber: z.string(),
+    tenantId: id,
+    airlineId: id,
+    airportId: id,
+  }),
+  validity: z.literal("until_revoked"),
+  grants: z.array(
+    z.object({
+      id,
+      staffId: id,
+      staffName: z.string().nullable(),
+      staffRole: z.string().nullable(),
+      eligible: z.boolean(),
+      enabled: z.boolean(),
+    })
+  ),
+  nextCursor: id.nullable(),
+});
 export const dcsFlightResult = z.object({
   eventId: id,
   flightId: id,

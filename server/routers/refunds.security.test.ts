@@ -7,11 +7,16 @@ const mocks = vi.hoisted(() => ({
   createRefund: vi.fn(),
   auditRefund: vi.fn(),
   listSplitRefundCancellations: vi.fn(),
+  refundable: vi.fn(),
+  quote: vi.fn(),
 }));
 
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
-vi.mock("../services/refunds.service", () => ({
+vi.mock("../services/refunds.service", async importOriginal => ({
+  ...(await importOriginal<typeof import("../services/refunds.service")>()),
   createRefund: mocks.createRefund,
+  isBookingRefundable: mocks.refundable,
+  getCancellationQuote: mocks.quote,
 }));
 vi.mock("../services/audit.service", () => ({
   auditRefund: mocks.auditRefund,
@@ -20,9 +25,6 @@ vi.mock("../services/refunds-stats.service", () => ({
   getRefundStats: vi.fn(),
   getRefundHistory: vi.fn(),
   getRefundTrends: vi.fn(),
-}));
-vi.mock("../services/access-control.service", () => ({
-  assertBookingOwnership: vi.fn(),
 }));
 vi.mock("../services/split-refund.service", () => ({
   getSplitRefundCancellation: vi.fn(),
@@ -71,6 +73,119 @@ beforeEach(() => {
   mocks.listSplitRefundCancellations.mockResolvedValue({
     items: [],
     nextCursor: null,
+  });
+  mocks.refundable.mockResolvedValue({ refundable: true });
+  mocks.quote.mockResolvedValue({
+    totalAmount: 10000,
+    cancellationFee: 5000,
+    refundAmount: 5000,
+    refundPercentage: 50,
+    tier: "medium",
+    quoteHash: "a".repeat(64),
+    policyReason: "time_based",
+    requiresZeroRefundConfirmation: false,
+  });
+});
+
+describe("refund preview ownership and nullable tenant scope", () => {
+  function previewContext(
+    role: Parameters<typeof context>[0],
+    tenantId: number | null,
+    booking: { userId: number; tenantId: number | null } | null
+  ) {
+    const ctx = context(role);
+    ctx.tenantId = tenantId;
+    if (ctx.user) ctx.user.tenantId = tenantId;
+    mocks.getDb.mockResolvedValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => (booking ? [booking] : []),
+          }),
+        }),
+      }),
+    });
+    return refundsRouter.createCaller(ctx);
+  }
+  it.each([null, 7])(
+    "allows the verified booking owner with the same tenant scope %s",
+    async tenantId => {
+      const caller = previewContext("user", tenantId, {
+        userId: 1,
+        tenantId,
+      });
+      await expect(caller.checkRefundable({ bookingId: 10 })).resolves.toEqual({
+        refundable: true,
+      });
+      await expect(
+        caller.calculateCancellationFee({ bookingId: 10 })
+      ).resolves.toMatchObject({ refundAmount: 5000 });
+    }
+  );
+  it.each([
+    {
+      role: "user" as const,
+      callerTenant: null,
+      owner: 2,
+      bookingTenant: null,
+    },
+    { role: "user" as const, callerTenant: null, owner: 1, bookingTenant: 7 },
+    { role: "user" as const, callerTenant: 7, owner: 1, bookingTenant: null },
+    { role: "user" as const, callerTenant: 7, owner: 1, bookingTenant: 8 },
+    { role: "user" as const, callerTenant: 7, owner: 2, bookingTenant: 7 },
+    { role: "finance" as const, callerTenant: 7, owner: 2, bookingTenant: 7 },
+    {
+      role: "airline_admin" as const,
+      callerTenant: 7,
+      owner: 2,
+      bookingTenant: 7,
+    },
+  ])(
+    "rejects nonowner or cross-scope preview $role/$callerTenant/$owner/$bookingTenant",
+    async ({ role, callerTenant, owner, bookingTenant }) => {
+      const caller = previewContext(role, callerTenant, {
+        userId: owner,
+        tenantId: bookingTenant,
+      });
+      await expect(
+        caller.checkRefundable({ bookingId: 10 })
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(
+        caller.calculateCancellationFee({ bookingId: 10 })
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(mocks.refundable).not.toHaveBeenCalled();
+      expect(mocks.quote).not.toHaveBeenCalled();
+    }
+  );
+  it.each(["admin", "super_admin"] as const)(
+    "preserves the platform %s cross-owner and cross-tenant preview override",
+    async role => {
+      const caller = previewContext(role, null, { userId: 2, tenantId: 7 });
+      await expect(caller.checkRefundable({ bookingId: 10 })).resolves.toEqual({
+        refundable: true,
+      });
+      await expect(
+        caller.calculateCancellationFee({ bookingId: 10 })
+      ).resolves.toMatchObject({ refundAmount: 5000 });
+    }
+  );
+  it("rejects anonymous previews and keeps missing bookings unavailable to administrators", async () => {
+    const anonymous = previewContext(null, null, { userId: 1, tenantId: null });
+    await expect(
+      anonymous.checkRefundable({ bookingId: 10 })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(
+      anonymous.calculateCancellationFee({ bookingId: 10 })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    const admin = previewContext("admin", null, null);
+    await expect(
+      admin.checkRefundable({ bookingId: 10 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      admin.calculateCancellationFee({ bookingId: 10 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mocks.refundable).not.toHaveBeenCalled();
+    expect(mocks.quote).not.toHaveBeenCalled();
   });
 });
 

@@ -72,9 +72,11 @@ export async function ownedBooking(
   passengers = [
     { firstName: "Synthetic", lastName: "Journey", type: "adult" as const },
   ],
-  account: Parameters<typeof useBrowserSession>[1] = "regular"
+  account: Parameters<typeof useBrowserSession>[1] | null = "regular"
 ) {
-  await useBrowserSession(page, account);
+  // An explicit null retains a journey's already authenticated, isolated
+  // customer. The real auth.me call below must still prove its owner identity.
+  if (account !== null) await useBrowserSession(page, account);
   const client = rpc(page);
   const user = await client.auth.me.query();
   if (!user) throw new Error("Authentication failed");

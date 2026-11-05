@@ -134,7 +134,7 @@ export function FlightReviewsSection({
   return (
     <div className={cn("space-y-6", className)}>
       {/* Header with Write Review Button */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <Star className="h-5 w-5 text-amber-500 fill-amber-500" />
           {t("reviews.title")}

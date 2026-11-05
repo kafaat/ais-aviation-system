@@ -41,12 +41,16 @@ export const reviewsRouter = router({
       })
     )
     .output(responseContracts["getFlightReviews"])
-    .query(async ({ input }) => {
-      return await reviewsService.getFlightReviews(input.flightId, {
-        limit: input.limit,
-        offset: input.offset,
-        minRating: input.minRating,
-      });
+    .query(async ({ input, ctx }) => {
+      return await reviewsService.getFlightReviews(
+        input.flightId,
+        {
+          limit: input.limit,
+          offset: input.offset,
+          minRating: input.minRating,
+        },
+        ctx.user?.id
+      );
     }),
 
   /**
@@ -130,8 +134,11 @@ export const reviewsRouter = router({
       })
     )
     .output(responseContracts["markHelpful"])
-    .mutation(async ({ input }) => {
-      return await reviewsService.markReviewHelpful(input.reviewId);
+    .mutation(async ({ input, ctx }) => {
+      return await reviewsService.markReviewHelpful(
+        input.reviewId,
+        ctx.user.id
+      );
     }),
 
   /**

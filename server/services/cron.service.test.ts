@@ -27,6 +27,7 @@ const auditJobs = vi.hoisted(() => ({
   waitlist: vi.fn(),
   groups: vi.fn(),
   splitRefunds: vi.fn(),
+  ordinaryRefunds: vi.fn(),
   bagDrop: vi.fn(),
   cleanup: vi.fn(),
   reminders: vi.fn(),
@@ -53,6 +54,9 @@ vi.mock("./waitlist.service", () => ({
 }));
 vi.mock("./group-booking.service", () => ({
   expireGroupAllocations: auditJobs.groups,
+}));
+vi.mock("./ordinary-refund.service", () => ({
+  processPendingOrdinaryRefunds: auditJobs.ordinaryRefunds,
 }));
 vi.mock("./split-refund.service", () => ({
   processPendingSplitRefunds: auditJobs.splitRefunds,
@@ -172,6 +176,7 @@ describe("cron.service scheduler", () => {
     expect(processPendingOrderRefunds).toHaveBeenCalledTimes(1);
   });
   it.each([
+    ["ordinaryRefunds", "* * * * *", auditJobs.ordinaryRefunds],
     ["weatherRefresh", "*/10 * * * *", auditJobs.weather],
     ["privacyRequests", "* * * * *", auditJobs.privacy],
     ["autoCheckIn", "* * * * *", auditJobs.checkIn],

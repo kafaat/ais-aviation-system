@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { Express, Request, Response } from "express";
+import { safeReturnTo } from "../../shared/return-to";
 import { registerOAuthRoutes } from "./oauth";
 
 const state = vi.hoisted(() => ({
@@ -9,6 +10,25 @@ const state = vi.hoisted(() => ({
   upsert: vi.fn(),
   mfa: vi.fn(),
   challenge: vi.fn(),
+  consume: vi.fn(),
+}));
+vi.mock("../services/oauth-login-state.service", async importOriginal => ({
+  ...(await importOriginal<
+    typeof import("../services/oauth-login-state.service")
+  >()),
+  consumeOAuthLogin: state.consume,
+}));
+vi.mock("./oauth-config", () => ({
+  getOAuthConfiguration: () => ({
+    redirectUri: "https://ais.test/api/oauth/callback",
+    nonceCookieName: "__Host-ais_oauth_nonce",
+    nonceCookieOptions: {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+    },
+  }),
 }));
 vi.mock("./sdk", () => ({
   sdk: {
@@ -42,35 +62,42 @@ beforeEach(() => {
 });
 
 async function callback(returnTo?: string) {
+  state.consume.mockResolvedValue({
+    redirectUri: "https://ais.test/api/oauth/callback",
+    returnTo: safeReturnTo(returnTo),
+  });
   let handler: ((req: Request, res: Response) => Promise<void>) | undefined;
   registerOAuthRoutes({
-    get: (_path: string, callback: typeof handler) => {
-      handler = callback;
+    get: (path: string, callback: typeof handler) => {
+      if (path === "/api/oauth/callback") handler = callback;
     },
   } as unknown as Express);
   const res = {
     redirect: vi.fn(),
     cookie: vi.fn(),
-    status: vi.fn(),
+    clearCookie: vi.fn(),
+    setHeader: vi.fn(),
+    status: vi.fn().mockReturnThis(),
     json: vi.fn(),
   };
   const req = {
+    headers: { cookie: "__Host-ais_oauth_nonce=fixture-browser-nonce" },
     query: {
       code: "provider-code",
       state: "original-provider-state",
-      returnTo,
+      returnTo: "/attacker-supplied-target",
     },
   };
   await handler?.(req as unknown as Request, res as unknown as Response);
   return res;
 }
 
-it("returns an OAuth login to the local journey without changing the provider state exchange", async () => {
+it("uses the bound journey and passes the canonical callback URI to token exchange", async () => {
   const target = "/checkout/700?canceled=true&currency=USD";
   const res = await callback(target);
   expect(state.exchange).toHaveBeenCalledWith(
     "provider-code",
-    "original-provider-state"
+    "https://ais.test/api/oauth/callback"
   );
   expect(res.cookie).toHaveBeenCalledOnce();
   expect(res.redirect).toHaveBeenCalledWith(302, target);

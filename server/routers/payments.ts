@@ -32,6 +32,7 @@ import { isAdmin } from "../services/rbac.service";
 import { isBookingOwnedBy } from "../services/access-control.service";
 import { assertNoCollectionReview } from "../services/booking-settlement.service";
 import {
+  getSettlementReview,
   listSettlementReviews,
   requestSettlementReviewRefund,
 } from "../services/settlement-review.service";
@@ -91,6 +92,21 @@ export const paymentsRouter = router({
     .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
     .output(responseContracts["settlementReviews"])
     .query(({ input }) => listSettlementReviews(input.limit)),
+  settlementReview: adminProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/admin/payments/settlement-reviews/{paymentIntentId}",
+        tags: ["Payments", "Admin"],
+        summary: "Read a pending or refunded settlement review",
+        protect: true,
+      },
+    })
+    .input(
+      z.object({ paymentIntentId: z.string().regex(/^pi_[A-Za-z0-9_]+$/) })
+    )
+    .output(responseContracts["settlementReview"])
+    .query(({ input }) => getSettlementReview(input.paymentIntentId)),
   refundSettlementReview: adminProcedure
     .meta({
       openapi: {

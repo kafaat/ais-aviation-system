@@ -1,3 +1,11 @@
+import {
+  createVoucherInputSchema,
+  updateVoucherPatchSchema,
+  voucherTermsSchema,
+  voucherMoneySchema,
+  voucherLockedFields,
+} from "../../shared/voucher";
+import type { z } from "zod";
 import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -28,13 +36,27 @@ import { confirmFundedBooking } from "./booking-settlement.service";
 // Voucher Functions
 // ============================================================================
 
+function validateInput<T>(schema: z.ZodType<T>, data: unknown): T {
+  const result = schema.safeParse(data);
+  if (!result.success)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: result.error.issues[0]?.message ?? "Invalid voucher",
+    });
+  return result.data;
+}
+
 /**
  * Create a new voucher (admin only)
  */
 export async function createVoucher(
-  data: Omit<InsertVoucher, "id" | "usedCount" | "createdAt" | "updatedAt">,
+  data: Omit<
+    InsertVoucher,
+    "id" | "usedCount" | "createdAt" | "updatedAt" | "createdBy"
+  >,
   createdBy: number
 ) {
+  const input = validateInput(createVoucherInputSchema, data);
   const database = await getDb();
   if (!database) {
     throw new TRPCError({
@@ -48,7 +70,7 @@ export async function createVoucher(
     const [existing] = await database
       .select()
       .from(vouchers)
-      .where(eq(vouchers.code, data.code.toUpperCase()))
+      .where(eq(vouchers.code, input.code))
       .limit(1);
 
     if (existing) {
@@ -59,8 +81,8 @@ export async function createVoucher(
     }
 
     const [result] = await database.insert(vouchers).values({
-      ...data,
-      code: data.code.toUpperCase(),
+      ...input,
+      code: input.code,
       createdBy,
       usedCount: 0,
     });
@@ -140,28 +162,93 @@ export async function getVoucherById(id: number) {
 export async function updateVoucher(
   id: number,
   data: Partial<
-    Omit<InsertVoucher, "id" | "code" | "createdAt" | "updatedAt" | "createdBy">
+    Omit<
+      InsertVoucher,
+      "id" | "code" | "createdAt" | "updatedAt" | "createdBy" | "usedCount"
+    >
   >
 ) {
+  return await updateVoucherRecord(
+    id,
+    validateInput(updateVoucherPatchSchema, data)
+  );
+}
+
+async function updateVoucherRecord(
+  id: number,
+  data: z.infer<typeof updateVoucherPatchSchema>,
+  deactivateOnly = false
+) {
   const database = await getDb();
-  if (!database) {
+  if (!database)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
-  }
-
+  // Ignore omitted fields, but retain explicit nulls used to clear limits.
+  const patch = Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined)
+  ) as typeof data;
   try {
-    await database.update(vouchers).set(data).where(eq(vouchers.id, id));
-
-    const [updated] = await database
-      .select()
-      .from(vouchers)
-      .where(eq(vouchers.id, id))
-      .limit(1);
-
-    return updated;
+    return await database.transaction(async tx => {
+      // Redemption also locks this voucher, so edits cannot race its usage count.
+      const [existing] = await tx
+        .select()
+        .from(vouchers)
+        .where(eq(vouchers.id, id))
+        .limit(1)
+        .for("update");
+      if (!existing)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Voucher not found",
+        });
+      if (!deactivateOnly) {
+        const merged = validateInput(voucherTermsSchema, {
+          ...existing,
+          ...patch,
+        });
+        if (merged.maxUses !== null && merged.maxUses < existing.usedCount)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Usage limit cannot be less than the current usage count",
+          });
+        const changedTerms = voucherLockedFields.some(field => {
+          const value = patch[field];
+          return (
+            value !== undefined &&
+            (value instanceof Date
+              ? value.getTime() !== existing.validFrom.getTime()
+              : value !== existing[field])
+          );
+        });
+        if (changedTerms) {
+          // usedCount may be decremented when a reservation is released. A
+          // historical usage row still makes the original terms immutable.
+          const [usage] = await tx
+            .select({ id: voucherUsage.id })
+            .from(voucherUsage)
+            .where(eq(voucherUsage.voucherId, id))
+            .limit(1);
+          if (existing.isActive || existing.usedCount > 0 || usage)
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "Discount terms can only be changed on inactive, never-used vouchers",
+            });
+        }
+      }
+      if (Object.keys(patch).length)
+        await tx.update(vouchers).set(patch).where(eq(vouchers.id, id));
+      const [updated] = await tx
+        .select()
+        .from(vouchers)
+        .where(eq(vouchers.id, id))
+        .limit(1);
+      return updated;
+    });
   } catch (error) {
+    if (error instanceof TRPCError) throw error;
     console.error("Error updating voucher:", error);
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -170,11 +257,9 @@ export async function updateVoucher(
   }
 }
 
-/**
- * Deactivate voucher (admin only)
- */
+/** Always permit explicit deactivation, including invalid historical values. */
 export function deactivateVoucher(id: number) {
-  return updateVoucher(id, { isActive: false });
+  return updateVoucherRecord(id, { isActive: false }, true);
 }
 
 /**
@@ -186,6 +271,7 @@ export async function validateVoucher(
   amount: number,
   userId?: number
 ) {
+  validateInput(voucherMoneySchema, amount);
   const database = await getDb();
   if (!database) {
     throw new TRPCError({
@@ -219,6 +305,8 @@ export async function validateVoucher(
         message: "This voucher is no longer active",
       });
     }
+
+    validateInput(voucherTermsSchema, voucher);
 
     // Check validity period
     if (new Date(voucher.validFrom) > now) {
@@ -402,6 +490,9 @@ export async function applyVoucher(
           message: "Voucher not found or inactive",
         });
       }
+
+      validateInput(voucherTermsSchema, voucher);
+      validateInput(voucherMoneySchema, amount);
 
       if (
         new Date(voucher.validFrom) > now ||

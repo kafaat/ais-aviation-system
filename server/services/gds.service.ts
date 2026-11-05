@@ -2,9 +2,9 @@ import { requireDemoCapability } from "./demo-capability";
 /**
  * GDS (Global Distribution System) Integration Service
  *
- * Handles integration with major GDS providers (Amadeus, Sabre, Travelport, TravelSky)
- * for flight availability, booking (PNR creation), ticketing, and cancellation.
- * All GDS message exchanges are logged for audit and diagnostics.
+ * Stores configuration and explicit development simulations for Amadeus, Sabre,
+ * Travelport and TravelSky. No accepted provider adapter is installed. Logged
+ * simulator results are not external booking, ticket or delivery evidence.
  */
 
 import { TRPCError } from "@trpc/server";
@@ -57,6 +57,12 @@ export type GdsMessageType =
 export type GdsMessageDirection = "outbound" | "inbound";
 
 export type GdsMessageStatus = "success" | "error" | "timeout" | "pending";
+
+type GdsSimulation = { execution: "simulation"; providerContacted: false };
+const simulationOutcome: GdsSimulation = {
+  execution: "simulation",
+  providerContacted: false,
+};
 
 export interface CreateConnectionParams {
   provider: GdsProvider;
@@ -112,7 +118,7 @@ export interface SearchAvailabilityParams {
   directOnly?: boolean;
 }
 
-export interface AvailabilityResult {
+export interface AvailabilityResult extends GdsSimulation {
   correlationId: string;
   provider: GdsProvider;
   flights: Array<{
@@ -160,7 +166,7 @@ export interface CreateBookingParams {
   ticketTimeLimit?: string; // ISO date string
 }
 
-export interface BookingResult {
+export interface BookingResult extends GdsSimulation {
   correlationId: string;
   provider: GdsProvider;
   pnrLocator: string;
@@ -183,7 +189,7 @@ export interface BookingResult {
   responseTimeMs: number;
 }
 
-export interface TicketResult {
+export interface TicketResult extends GdsSimulation {
   correlationId: string;
   provider: GdsProvider;
   pnrLocator: string;
@@ -195,7 +201,7 @@ export interface TicketResult {
   responseTimeMs: number;
 }
 
-export interface CancelResult {
+export interface CancelResult extends GdsSimulation {
   correlationId: string;
   provider: GdsProvider;
   pnrLocator: string;
@@ -1155,6 +1161,8 @@ export async function listConnections(
  * Updates lastHealthCheck timestamp and status accordingly.
  */
 export async function testConnection(connectionId: number): Promise<{
+  execution: "simulation";
+  providerContacted: false;
   connectionId: number;
   provider: GdsProvider;
   healthy: boolean;
@@ -1205,12 +1213,12 @@ export async function testConnection(connectionId: number): Promise<{
       updateData.status = "active";
     }
     updateData.lastError = null;
-    message = `Connection to ${connection.provider} (${connection.environment}) is healthy. Response time: ${responseTimeMs}ms`;
+    message = `Simulated connection to ${connection.provider} (${connection.environment}): fixture passed; no provider contacted. Simulated response time: ${responseTimeMs}ms`;
   } else {
     updateData.status = "error";
     updateData.lastError =
       "Health check failed: missing API credentials or base URL";
-    message = `Connection to ${connection.provider} (${connection.environment}) failed health check: missing credentials or base URL`;
+    message = `Simulated connection to ${connection.provider} (${connection.environment}): fixture failed because credentials or base URL are missing; no provider contacted`;
   }
 
   await db
@@ -1254,7 +1262,7 @@ export async function testConnection(connectionId: number): Promise<{
   });
 
   console.info(
-    `[GDS] Health check for connection ${connectionId} (${connection.provider}): ${isHealthy ? "HEALTHY" : "UNHEALTHY"} (${responseTimeMs}ms)`
+    `[GDS simulation] Fixture health for connection ${connectionId} (${connection.provider}): ${isHealthy ? "PASSED" : "FAILED"}; provider not contacted (${responseTimeMs}ms simulated)`
   );
 
   return {
@@ -1263,6 +1271,7 @@ export async function testConnection(connectionId: number): Promise<{
     healthy: isHealthy,
     responseTimeMs,
     message,
+    ...simulationOutcome,
   };
 }
 
@@ -1501,6 +1510,7 @@ export async function searchAvailability(
     provider: connection.provider,
     flights: simulatedFlights,
     responseTimeMs,
+    ...simulationOutcome,
   };
 }
 
@@ -1643,6 +1653,7 @@ export async function createBooking(
   const simulatedResponseTimeMs = Math.floor(Math.random() * 800) + 200;
 
   const bookingResult: BookingResult = {
+    ...simulationOutcome,
     correlationId,
     provider: connection.provider,
     pnrLocator,
@@ -1684,7 +1695,7 @@ export async function createBooking(
   });
 
   console.info(
-    `[GDS] Booking created via ${connection.provider}: PNR=${pnrLocator}, flight=${params.flightNumber}, pax=${params.passengers.length} (${simulatedResponseTimeMs}ms)`
+    `[GDS simulation] Synthetic booking via ${connection.provider}: PNR=${pnrLocator}, flight=${params.flightNumber}, pax=${params.passengers.length} (${simulatedResponseTimeMs}ms simulated)`
   );
 
   return bookingResult;
@@ -1759,6 +1770,7 @@ export async function issueTicket(
   const simulatedResponseTimeMs = Math.floor(Math.random() * 600) + 300;
 
   const ticketResult: TicketResult = {
+    ...simulationOutcome,
     correlationId,
     provider: connection.provider,
     pnrLocator: pnr,
@@ -1789,7 +1801,7 @@ export async function issueTicket(
   });
 
   console.info(
-    `[GDS] Ticket issued via ${connection.provider}: PNR=${pnr}, tickets=${ticketResult.tickets.length} (${simulatedResponseTimeMs}ms)`
+    `[GDS simulation] Synthetic ticket via ${connection.provider}: PNR=${pnr}, tickets=${ticketResult.tickets.length} (${simulatedResponseTimeMs}ms simulated)`
   );
 
   return ticketResult;
@@ -1865,6 +1877,7 @@ export async function cancelBooking(
   const cancellationReference = `CXL-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 
   const cancelResult: CancelResult = {
+    ...simulationOutcome,
     correlationId,
     provider: connection.provider,
     pnrLocator: pnr,
@@ -1890,7 +1903,7 @@ export async function cancelBooking(
   });
 
   console.info(
-    `[GDS] Booking cancelled via ${connection.provider}: PNR=${pnr}, ref=${cancellationReference} (${simulatedResponseTimeMs}ms)`
+    `[GDS simulation] Synthetic cancellation via ${connection.provider}: PNR=${pnr}, ref=${cancellationReference} (${simulatedResponseTimeMs}ms simulated)`
   );
 
   return cancelResult;

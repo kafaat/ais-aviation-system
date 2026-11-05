@@ -29,7 +29,7 @@ import {
   loadPlans,
   baggageItems,
 } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -465,14 +465,38 @@ async function readFlightManifest(db: SettlementTx, flightId: number) {
 // Weight & Balance
 // ============================================================================
 
-export async function calculateWeightAndBalance(input: {
-  flightId: number;
-  aircraftTypeId: number;
-  fuelWeight: number;
-  cargoDistribution?: Array<{ zone: string; weight: number }>;
-}) {
+export async function calculateWeightAndBalance(
+  input: {
+    flightId: number;
+    aircraftTypeId: number;
+    fuelWeight: number;
+    cargoDistribution?: Array<{ zone: string; weight: number }>;
+  },
+  transaction?: SettlementTx
+) {
   requireDemoCapability("Weight and balance simulation");
-  const db = await getDb();
+  if (
+    !Number.isSafeInteger(input.flightId) ||
+    input.flightId <= 0 ||
+    !Number.isSafeInteger(input.aircraftTypeId) ||
+    input.aircraftTypeId <= 0 ||
+    !Number.isSafeInteger(input.fuelWeight) ||
+    input.fuelWeight < 0 ||
+    input.cargoDistribution?.some(
+      item =>
+        !item ||
+        typeof item.zone !== "string" ||
+        !item.zone.trim() ||
+        !Number.isSafeInteger(item.weight) ||
+        item.weight < 0
+    )
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Simulation loads require valid IDs and nonnegative whole kilograms",
+    });
+  const db = transaction ?? (await getDb());
   if (!db)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -483,7 +507,12 @@ export async function calculateWeightAndBalance(input: {
   const [aircraft] = await db
     .select()
     .from(aircraftTypes)
-    .where(eq(aircraftTypes.id, input.aircraftTypeId))
+    .where(
+      and(
+        eq(aircraftTypes.id, input.aircraftTypeId),
+        eq(aircraftTypes.active, true)
+      )
+    )
     .limit(1);
 
   if (!aircraft)
@@ -500,12 +529,7 @@ export async function calculateWeightAndBalance(input: {
     })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        eq(bookings.flightId, input.flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    )
+    .where(manifestBookingCondition(input.flightId))
     .groupBy(passengers.type);
 
   // Calculate passenger weight
@@ -529,7 +553,7 @@ export async function calculateWeightAndBalance(input: {
     .where(
       and(
         manifestBaggageFlightCondition(input.flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
+        manifestBookingCondition(input.flightId)
       )
     );
 
@@ -680,35 +704,36 @@ export async function createLoadPlan(input: {
       message: "Database not available",
     });
 
-  // Calculate weight and balance
-  const wb = await calculateWeightAndBalance(input);
-
-  const [result] = await db.insert(loadPlans).values({
-    flightId: input.flightId,
-    aircraftTypeId: input.aircraftTypeId,
-    passengerCount: wb.weights.passengers.count,
-    passengerWeight: wb.weights.passengers.weight,
-    baggageCount: wb.weights.baggage.count,
-    baggageWeight: wb.weights.baggage.weight,
-    cargoDistribution: input.cargoDistribution
-      ? JSON.stringify(input.cargoDistribution)
-      : null,
-    totalCargoWeight: wb.weights.cargo.weight,
-    fuelWeight: input.fuelWeight,
-    zeroFuelWeight: wb.weights.zeroFuel,
-    takeoffWeight: wb.weights.takeoff,
-    landingWeight: wb.weights.landing,
-    cgPosition: wb.balance.cgPosition.toString(),
-    status: "calculated",
-    withinLimits: wb.safety.withinLimits,
-    warnings:
-      wb.safety.warnings.length > 0 ? JSON.stringify(wb.safety.warnings) : null,
+  return db.transaction(async tx => {
+    // Calculation, publication and approval share the flight lock. A later
+    // edition cannot be inserted during an approval of the previous edition.
+    await lockSimulatedLoadPlanFlight(tx, input.flightId);
+    const wb = await calculateWeightAndBalance(input, tx);
+    const [result] = await tx.insert(loadPlans).values({
+      flightId: input.flightId,
+      aircraftTypeId: input.aircraftTypeId,
+      passengerCount: wb.weights.passengers.count,
+      passengerWeight: wb.weights.passengers.weight,
+      baggageCount: wb.weights.baggage.count,
+      baggageWeight: wb.weights.baggage.weight,
+      cargoDistribution: input.cargoDistribution
+        ? JSON.stringify(input.cargoDistribution)
+        : null,
+      totalCargoWeight: wb.weights.cargo.weight,
+      fuelWeight: input.fuelWeight,
+      zeroFuelWeight: wb.weights.zeroFuel,
+      takeoffWeight: wb.weights.takeoff,
+      landingWeight: wb.weights.landing,
+      cgPosition: wb.balance.cgPosition.toString(),
+      status: "calculated",
+      withinLimits: wb.safety.withinLimits,
+      warnings:
+        wb.safety.warnings.length > 0
+          ? JSON.stringify(wb.safety.warnings)
+          : null,
+    });
+    return { id: Number(result.insertId), ...wb };
   });
-
-  return {
-    id: Number(result.insertId),
-    ...wb,
-  };
 }
 
 export async function getLoadPlan(flightId: number) {
@@ -724,7 +749,7 @@ export async function getLoadPlan(flightId: number) {
     .select()
     .from(loadPlans)
     .where(eq(loadPlans.flightId, flightId))
-    .orderBy(sql`${loadPlans.createdAt} DESC`)
+    .orderBy(desc(loadPlans.createdAt), desc(loadPlans.id))
     .limit(1);
 
   if (!plan) return null;
@@ -790,9 +815,8 @@ async function transitionSimulatedLoadPlan(
     const [plan] = await tx
       .select()
       .from(loadPlans)
-      .where(
-        and(eq(loadPlans.id, loadPlanId), eq(loadPlans.flightId, hint.flightId))
-      )
+      .where(eq(loadPlans.flightId, hint.flightId))
+      .orderBy(desc(loadPlans.createdAt), desc(loadPlans.id))
       .limit(1)
       .for("update");
     if (!plan)
@@ -800,24 +824,101 @@ async function transitionSimulatedLoadPlan(
         code: "NOT_FOUND",
         message: "Load plan not found",
       });
+    if (plan.id !== loadPlanId)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "A newer load calculation exists; review the latest plan",
+      });
     if (!plan.withinLimits)
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Cannot approve load plan with safety warnings",
+      });
+    let cargoDistribution: Array<{ zone: string; weight: number }>;
+    try {
+      cargoDistribution = plan.cargoDistribution
+        ? JSON.parse(plan.cargoDistribution)
+        : [];
+      if (
+        !Array.isArray(cargoDistribution) ||
+        cargoDistribution.some(
+          item =>
+            !item ||
+            typeof item.zone !== "string" ||
+            !item.zone.trim() ||
+            typeof item.weight !== "number" ||
+            !Number.isFinite(item.weight) ||
+            item.weight < 0
+        )
+      )
+        throw new Error("Invalid cargo distribution");
+    } catch {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Stored cargo load is invalid; recalculate the plan",
+      });
+    }
+    const current = await calculateWeightAndBalance(
+      {
+        flightId: plan.flightId,
+        aircraftTypeId: plan.aircraftTypeId,
+        fuelWeight: plan.fuelWeight,
+        cargoDistribution,
+      },
+      tx
+    );
+    if (!current.safety.withinLimits)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Current load exceeds safety limits; recalculate the plan",
+      });
+    const calculated = {
+      passengerCount: current.weights.passengers.count,
+      passengerWeight: current.weights.passengers.weight,
+      baggageCount: current.weights.baggage.count,
+      baggageWeight: current.weights.baggage.weight,
+      totalCargoWeight: current.weights.cargo.weight,
+      zeroFuelWeight: current.weights.zeroFuel,
+      takeoffWeight: current.weights.takeoff,
+      landingWeight: current.weights.landing,
+      cgPosition: current.balance.cgPosition,
+    };
+    if (
+      Object.entries(calculated).some(
+        ([key, value]) => Number(plan[key as keyof typeof calculated]) !== value
+      )
+    )
+      throw new TRPCError({
+        code: "CONFLICT",
+        message:
+          "Passenger, baggage or aircraft inputs changed; recalculate the load plan",
+      });
+    if (plan.status === status) return { success: true };
+    if (status === "approved" && plan.status !== "calculated")
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Only a current calculated plan can be approved",
       });
     if (status === "finalized" && plan.status !== "approved")
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Load plan must be approved before finalizing",
       });
-    await tx
+    const [changed] = await tx
       .update(loadPlans)
       .set(
         status === "approved"
           ? { status, approvedBy: actorId, approvedAt: new Date() }
           : { status, finalizedBy: actorId, finalizedAt: new Date() }
       )
-      .where(eq(loadPlans.id, loadPlanId));
+      .where(
+        and(eq(loadPlans.id, loadPlanId), eq(loadPlans.status, plan.status))
+      );
+    if (changed.affectedRows !== 1)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Load plan changed; reload the current plan",
+      });
     return { success: true };
   });
 }

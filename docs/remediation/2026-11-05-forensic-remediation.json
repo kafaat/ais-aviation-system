@@ -1,0 +1,521 @@
+{
+  "schemaVersion": 1,
+  "auditBaseline": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "implementationBaseline": "50a3114ec49d2bf43a4933f54b7eba43de086888",
+  "coordination": "One conversation owns both tracks; six specialist agents reused across bounded parallel waves.",
+  "boundaries": [
+    "Specialist assignment is not organizational accountable ownership.",
+    "Fixture, native SQL, HTTP/browser, provider and device evidence are separate.",
+    "No provider, device, fiscal or operational authority acceptance is inferred from a passing mock.",
+    "Final accepted source and test receipts are recorded only after execution."
+  ],
+  "findings": [
+    {
+      "id": "FIN-01",
+      "priority": "P1",
+      "category": "new",
+      "title": "نجاح الاسترداد الجزئي المؤجّل لا يُكمل إلغاء الحجز",
+      "assignedSpecialist": "A1",
+      "implementationStatus": "implemented",
+      "verificationStatus": "native_pass",
+      "originalAcceptance": "pending ثم succeeded، تكرار الحدث، فقد الاستجابة، الاسترداد التعويضي، إغلاق DCS، وإثبات تحرير السعة والقسيمة مرة واحدة.",
+      "sourcePaths": [
+        "server/services/refunds.service.ts",
+        "server/webhooks/stripe.ts",
+        "server/services/payment-settlement.service.ts"
+      ],
+      "changes": [
+        "Durable cancellation command, verified event/worker convergence, immutable provider payload, stale-owner guards and reconciliation on conflicts."
+      ],
+      "acceptanceEvidence": [
+        "docs/remediation/forensic-evidence-20261105/finance-native.json"
+      ],
+      "remaining": [
+        "Final combined source CI and MySQL9.7 matrix.",
+        "Existing production records require the documented controlled reconciliation; no production backfill has run."
+      ]
+    },
+    {
+      "id": "FIN-02",
+      "priority": "P1",
+      "category": "new",
+      "title": "تمويل المحفظة المسحوب بمنازعة يبقى قابلًا للإنفاق",
+      "assignedSpecialist": "A2",
+      "implementationStatus": "implemented",
+      "verificationStatus": "native_pass",
+      "originalAcceptance": "سحب جزئي وكامل، إعادة الأموال، تكرار الحدث وترتيبه المعكوس، وشراء متزامن مع المنازعة على MySQL.",
+      "sourcePaths": [
+        "server/services/payment-dispute.service.ts",
+        "server/services/wallet.service.ts"
+      ],
+      "changes": [
+        "Capped wallet funding projection shared by refund/dispute, historical spend guard, owner lookup index and native concurrent ordering controls."
+      ],
+      "acceptanceEvidence": [
+        "docs/remediation/forensic-evidence-20261105/finance-native.json"
+      ],
+      "remaining": [
+        "Final combined source CI and MySQL9.7 matrix.",
+        "Existing production records require the documented controlled reconciliation; no production backfill has run."
+      ]
+    },
+    {
+      "id": "IDENTITY-01",
+      "priority": "P1",
+      "category": "new",
+      "title": "قفل الحساب لا يُجدّد بصورة سليمة بعد فكّه أو انتهاء مدته",
+      "assignedSpecialist": "A4",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "قفل أول، فك ثم قفل ثانٍ، انتهاء ثم محاولات فاشلة جديدة، منع تسجيل الدخول وتجديد الجلسة وCookie وBearer، وتزامن القفل والفك على MySQL.",
+      "sourcePaths": [
+        "server/services/account-lock.service.ts",
+        "drizzle/0013_schema_reconciliation.sql"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "OWN-01",
+      "priority": "P1",
+      "category": "new",
+      "title": "إطلاق المقعد لا يعيد إثبات ملكيته داخل المعاملة",
+      "assignedSpecialist": "A3",
+      "implementationStatus": "implemented",
+      "verificationStatus": "native_pass",
+      "originalAcceptance": "نجاح المالك، رفض غير المالك والمستأجر المخالف، رفض تغير الارتباط بلا أثر، وتزامن حقيقي بين إعادة التخصيص والإطلاق. أبقِ قيود المقعد المدفوع وcheck-in وDCS.",
+      "sourcePaths": [
+        "server/routers/seat-map.ts",
+        "server/services/seat-map.service.ts"
+      ],
+      "changes": [
+        "Server-derived actor and expected booking/passenger are revalidated under locks; conditional seat write and scoped passenger mirror."
+      ],
+      "acceptanceEvidence": [
+        "docs/remediation/forensic-evidence-20261105/seat-native.json"
+      ],
+      "remaining": ["Final combined source CI and MySQL9.7 matrix."]
+    },
+    {
+      "id": "IDENTITY-02",
+      "priority": "P2",
+      "category": "new",
+      "title": "state في OAuth غير مربوط بالمتصفح الذي بدأ الدخول",
+      "assignedSpecialist": "A5",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "رفض state الغائبة والمختلفة والمنتهية والمعاد استخدامها، ورفض استهلاك متصفح ثانٍ لمعاملة المتصفح الأول، مع نجاح مساري OAuth وMFA الصحيحين.",
+      "sourcePaths": [
+        "client/src/const.ts",
+        "server/_core/oauth.ts",
+        "server/_core/sdk.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "IDENTITY-03",
+      "priority": "P2",
+      "category": "new",
+      "title": "حظر IP يُسجّل دون مستهلك ينفذه عند دخول الطلب",
+      "assignedSpecialist": "A5",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "حظر ثم رفض REST وtRPC والدخول، بقاء العناوين الأخرى، استعادة الوصول بعد الفك أو الانتهاء، وعدم قبول عنوان محقون من وكيل غير موثوق.",
+      "sourcePaths": [
+        "server/routers/security.ts",
+        "server/services/account-lock.service.ts",
+        "server/_core/middleware/user-rate-limit.middleware.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "IDENTITY-04",
+      "priority": "P2",
+      "category": "new",
+      "title": "تفاوت admin وsuper_admin ما يزال قائمًا خارج #288",
+      "assignedSpecialist": "A6",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "مصفوفة الأدوار السبعة عبر المالك وغير المالك والمستأجر الآخر لكل نقطة قراءة أو تعديل معنية.",
+      "sourcePaths": [
+        "server/services/rbac.service.ts",
+        "server/routers/bookings.ts",
+        "server/routers/ndc.ts",
+        "server/services/split-checkout.service.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "IDENTITY-05",
+      "priority": "P2",
+      "category": "new",
+      "title": "عملاء Bearer يحتسبون كمجهولين عند تحديد حصة الطلبات",
+      "assignedSpecialist": "A5",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "مستخدمان بـBearer على عنوان واحد لهما حصتان مستقلتان، وتكافؤ الحصة بين Cookie وBearer للدور نفسه، وبقاء رفض Bearer غير الصالح.",
+      "sourcePaths": [
+        "server/_core/middleware/user-rate-limit.middleware.ts",
+        "server/_core/context.ts",
+        "server/services/rate-limit.service.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "IDENTITY-06",
+      "priority": "P3",
+      "category": "new",
+      "title": "تعريف القدرات الهرمي يختلف عن البوابات المنفذة",
+      "assignedSpecialist": "A6",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "كل قدرة موثقة تعطي القرار نفسه في الإجراء الفعلي، مع اختبارات فصل finance وops.",
+      "sourcePaths": [
+        "server/services/rbac.service.ts",
+        "server/_core/trpc.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "OPS-06",
+      "priority": "P1",
+      "category": "known",
+      "title": "سياسة إعادة توزيع المقاعد ذات الحظر التشغيلي غير محسومة",
+      "assignedSpecialist": "A3",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "استيفاء الشرط المتبقي وتسجيل مصدر الاختبار وإيصال القبول المطابق.",
+      "sourcePaths": [
+        "docs/remediation/coverage-closure-ledger.json",
+        "docs/remediation/2026-11-05-native-gap-acceptance.md"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "UI-05",
+      "priority": "P1",
+      "category": "known",
+      "title": "سياسة الأجرة غير القابلة للاسترداد غير موصولة بالإلغاء",
+      "assignedSpecialist": "A1",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "استيفاء الشرط المتبقي وتسجيل مصدر الاختبار وإيصال القبول المطابق.",
+      "sourcePaths": [
+        "docs/remediation/coverage-closure-ledger.json",
+        "docs/remediation/2026-11-05-native-gap-acceptance.md"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "UI-07",
+      "priority": "P1",
+      "category": "known",
+      "title": "إثبات الطباعة على الجهاز المستهدف غير متوفر",
+      "assignedSpecialist": "A3",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "استيفاء الشرط المتبقي وتسجيل مصدر الاختبار وإيصال القبول المطابق.",
+      "sourcePaths": [
+        "docs/remediation/coverage-closure-ledger.json",
+        "docs/remediation/2026-11-05-native-gap-acceptance.md"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "CAP-01",
+      "priority": "P1",
+      "category": "known",
+      "title": "التقارير الجزئية والمحجوبة لم تستوف شروط الإغلاق",
+      "assignedSpecialist": "A6",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "استيفاء الشرط المتبقي وتسجيل مصدر الاختبار وإيصال القبول المطابق.",
+      "sourcePaths": [
+        "docs/remediation/coverage-closure-ledger.json",
+        "docs/remediation/2026-11-05-native-gap-acceptance.md"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "GOV-01",
+      "priority": "P1",
+      "category": "governance",
+      "title": "لا توجد تعيينات مالك مسؤول أو مناوبة في سجل الخدمات",
+      "assignedSpecialist": "integrator",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "نجاح verify_service_ownership على السجل الفعلي، وتطابق كل خدمة نشطة مع تعريف مجالها المعتمد.",
+      "sourcePaths": [
+        "docs/architecture/service-ownership.json",
+        "scripts/deploy/verify_service_ownership.py"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "CONS-01",
+      "priority": "P2",
+      "category": "new",
+      "title": "واجهة القسائم تحوّل 10% إلى 1000%",
+      "assignedSpecialist": "A6",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "10% تُخزّن 10 وتخصم 10 من 100؛ 10 ريالات تُخزّن 1000؛ سقف 20 لا يرفع الخصم المقصود؛ رفض النسب غير المدعومة دون إفساد السجلات الصحيحة.",
+      "sourcePaths": [
+        "client/src/pages/admin/VoucherManagement.tsx",
+        "server/routers/vouchers.ts",
+        "server/services/voucher.service.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "CONS-02",
+      "priority": "P2",
+      "category": "consumer",
+      "title": "طابور مراجعة التسويات بلا واجهة تشغيل",
+      "assignedSpecialist": "A1",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "عرض حالة review_required، رفض غير المصرح له، نجاح الأمر مرة واحدة، وعدم ادعاء استرداد نهائي قبل الحدث الموثق.",
+      "sourcePaths": [
+        "server/routers/payments.ts",
+        "server/services/settlement-review.service.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "CONS-03",
+      "priority": "P2",
+      "category": "consumer",
+      "title": "منح صلاحية إعادة الحقيبة بلا واجهة إدارية",
+      "assignedSpecialist": "A3",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "منح وفك المنح من مسؤول صحيح، رفض الموظف أو المحطة أو الناقل أو المستأجر المخالف، ورفض التسليم بعد الإلغاء حتى من واجهة كانت مفتوحة.",
+      "sourcePaths": [
+        "server/routers/dcs-operations.ts",
+        "server/services/dcs-operations.service.ts",
+        "client/src/pages/DcsDesk.tsx"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "CONS-04",
+      "priority": "P2",
+      "category": "consumer",
+      "title": "الرحلات الفردية المحفوظة بلا زر إضافة متصل",
+      "assignedSpecialist": "A4",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "إضافة رحلة معينة ثم ظهورها بعد إعادة التحميل وحذفها، مع حماية المالك وعدم تغيير قائمة المسارات بطريق الخطأ.",
+      "sourcePaths": [
+        "client/src/pages/FavoritesPage.tsx",
+        "client/src/components/FlightFavorites.tsx",
+        "client/src/components/FavoriteButton.tsx",
+        "client/src/pages/SearchResults.tsx",
+        "client/src/pages/BookingPage.tsx",
+        "server/routers/favorites.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "CONS-05",
+      "priority": "P2",
+      "category": "consumer",
+      "title": "قراءة المراجعات وإحصاءاتها والتصويت عليها غير مركبة في الواجهة",
+      "assignedSpecialist": "A4",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "ظهور مراجعة مقبولة، ترقيم صفحات وتصويت صحيح، ورفض التصويت المخالف دون كشف بيانات غير مقصودة.",
+      "sourcePaths": [
+        "client/src/pages/MyBookings.tsx",
+        "client/src/components/ReviewForm.tsx",
+        "client/src/components/ReviewsList.tsx",
+        "client/src/components/FlightReviewsSection.tsx",
+        "server/routers/reviews.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "CONS-06",
+      "priority": "P3",
+      "category": "consumer",
+      "title": "زر تعديل القسيمة معطل دائمًا",
+      "assignedSpecialist": "A6",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "تعديل حقول مسموحة وعرض الحالة بعد الحفظ، ورفض تغيير الشروط المالية المحظور بعد الاستخدام.",
+      "sourcePaths": [
+        "client/src/pages/admin/VoucherManagement.tsx",
+        "server/routers/vouchers.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "SSOT-01",
+      "priority": "P2",
+      "category": "governance",
+      "title": "خطة Order كمصدر حقيقة ما تزال مقترحة",
+      "assignedSpecialist": "integrator",
+      "implementationStatus": "in_progress",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "قرار معماري معتمد ومالك تجاري، نموذج عناصر وإصدارات، مقارنة متفق عليها بلا فروق غير مفسرة، وقبول التحول والتراجع.",
+      "sourcePaths": [
+        "docs/architecture/decisions/0001-order-as-record-of-truth.md",
+        "server/services/ndc.service.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "TEST-01",
+      "priority": "P2",
+      "category": "governance",
+      "title": "حدود سلوكية مهمة لم تثبتها حزمة CI الناجحة",
+      "assignedSpecialist": "integrator",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "مصفوفة دور ومالك ومستأجر ووسيلة نقل وحالة عمل، وإيصالات مصدر واحد لاختبارات MySQL والمتصفح ونتائج الأثر.",
+      "sourcePaths": ["vitest.config.ts"],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "INT-01",
+      "priority": "P1",
+      "category": "integration",
+      "title": "التوزيع الخارجي والتذاكر والربط بين الناقلين غير مقبولة بعد",
+      "assignedSpecialist": "A5",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "أدلة جهة مقابلة محددة للناقل والبائع والمستأجر، تشمل الرفض والمهلة والتكرار والإلغاء والاسترداد وعهدة الأمتعة.",
+      "sourcePaths": [
+        "server/services/demo-capability.ts",
+        "server/services/gds.service.ts",
+        "server/services/ndc-capabilities.ts",
+        "server/services/codeshare.service.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "INT-02",
+      "priority": "P1",
+      "category": "integration",
+      "title": "إرسال APIS وعامل نقل رسائل Type B لم يكتملا إنتاجيًا",
+      "assignedSpecialist": "A5",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "قبول الطرف المقابل للرسالة والمرسل والمسار، انتهاء التأجير والإعادة، منع أثر مكرر، ورفض ACK مزور أو خارج النطاق.",
+      "sourcePaths": [
+        "server/services/apis.service.ts",
+        "server/services/aviation-message-transmission.service.ts",
+        "scripts/acceptance/handler-station.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "INT-03",
+      "priority": "P1",
+      "category": "integration",
+      "title": "قبول الطباعة والماسحات وعهدة المناول ما يزال خارجيًا",
+      "assignedSpecialist": "A3",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "إيصالات طابعة وماسح وناقل ومحطة محددة، مطابقة الباركود والهوية، وتجربة الأعطال والتكرار وإغلاق عهدة الأمتعة.",
+      "sourcePaths": [
+        "server/services/bcbp.service.ts",
+        "server/services/kiosk.service.ts",
+        "docs/operations/baggage-r753-acceptance.md"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "INT-04",
+      "priority": "P1",
+      "category": "integration",
+      "title": "ZATCA يدعم مسودة داخلية ومعاينة دون دورة إصدار مقبولة",
+      "assignedSpecialist": "integrator",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "قبول الفاتورة والتعديل والرفض والإعادة والمصالحة على بيئة الجهة المطلوبة؛ معرف evidence في متغير البيئة ليس بمفرده إيصال قبول.",
+      "sourcePaths": [
+        "server/services/fare-components.service.ts",
+        "docs/finance/zatca-readiness.md"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "INT-05",
+      "priority": "P1",
+      "category": "integration",
+      "title": "ثمانية موصلات دفع إضافية موجودة لكنها محجوبة مركزيًا",
+      "assignedSpecialist": "A2",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "توقيع الأحداث، دفع متأخر أو مكرر، فقد الاستجابة، استرداد جزئي وكامل، ومصالحة إيصالات المزود مع دفتر AIS.",
+      "sourcePaths": ["server/services/payment-providers/index.ts"],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    },
+    {
+      "id": "INT-06",
+      "priority": "P1",
+      "category": "integration",
+      "title": "اعتماد خطة الحمولة وإقفالها في DCS ما يزالان تجريبيين",
+      "assignedSpecialist": "A3",
+      "implementationStatus": "pending",
+      "verificationStatus": "not_run",
+      "originalAcceptance": "اختبار تجاوز الحدود وتغير الركاب والأمتعة المتأخر وإعادة الإصدار والتزامن، وقبول صاحب سلطة التشغيل بالمحطة والطائرة.",
+      "sourcePaths": [
+        "server/services/dcs.service.ts",
+        "server/routers/dcs.ts"
+      ],
+      "changes": [],
+      "acceptanceEvidence": [],
+      "remaining": []
+    }
+  ]
+}

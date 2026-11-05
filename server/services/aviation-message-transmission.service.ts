@@ -9,6 +9,10 @@ import { providerBoundary } from "../_core/provider-boundary";
 import { getDb } from "../db";
 import { parseAuthorityAcknowledgment } from "./apis-pnrgov";
 import {
+  requireOperationalTransportSimulation,
+  simulatedTransportOutcome,
+} from "./aviation-transport-capability.service";
+import {
   assertTransmissionTransition,
   parseOperationalDraft,
   operationalMessageTypes,
@@ -105,7 +109,8 @@ function assertTypeBRoute(
     envelope.messageType !== row.messageType ||
     route.messageType !== row.messageType ||
     envelope.originAddress !== route.originAddress ||
-    envelope.destinationAddress !== route.destinationAddress
+    envelope.destinationAddress !== route.destinationAddress ||
+    envelope.messageDigest !== row.messageDigest
   )
     throw new Error(
       "Operational message has no matching accepted Type B route"
@@ -124,6 +129,7 @@ export async function queueTransmission(input: {
   transmissionId: number;
   tenantId: number;
 }) {
+  requireOperationalTransportSimulation();
   const db = await getDb();
   if (!db) throw new Error("Aviation message storage unavailable");
   return db.transaction(async tx => {
@@ -161,23 +167,52 @@ export async function queueTransmission(input: {
       .update(operationalMessageTransmissions)
       .set({ status: "queued", nextAttemptAt: new Date() })
       .where(eq(operationalMessageTransmissions.id, row.id));
-    return { transmissionId: row.id, status: "queued" as const };
+    return {
+      transmissionId: row.id,
+      status: "queued" as const,
+      ...simulatedTransportOutcome,
+    };
   });
 }
 
-/** Claims one due message. The adapter must later record success or failure. */
+/** Simulation worker contract only. No production network adapter is installed. */
 export async function claimDueTransmission(now = new Date()) {
-  if (
-    process.env.AIS_TYPE_B_TRANSPORT_ENABLED !== "true" ||
-    providerBoundary() !== "open"
-  )
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Operational message transport is disabled",
-    });
+  requireOperationalTransportSimulation();
   const db = await getDb();
   if (!db) throw new Error("Aviation message storage unavailable");
   return db.transaction(async tx => {
+    // A worker may have transmitted before dying. Expiry is not proof of
+    // non-delivery: quarantine the ambiguous attempt, never automatically send
+    // it again. The existing failed state is terminal pending reconciliation.
+    const [expired] = await tx
+      .select({ id: operationalMessageTransmissions.id })
+      .from(operationalMessageTransmissions)
+      .where(
+        and(
+          eq(operationalMessageTransmissions.direction, "outbound"),
+          eq(operationalMessageTransmissions.status, "sending"),
+          or(
+            isNull(operationalMessageTransmissions.leaseUntil),
+            lte(operationalMessageTransmissions.leaseUntil, now)
+          )
+        )
+      )
+      .limit(1)
+      .for("update", { skipLocked: true });
+    if (expired) {
+      await tx
+        .update(operationalMessageTransmissions)
+        .set({
+          status: "failed",
+          errorMessage:
+            "delivery_outcome_unknown: expired lease; reconciliation required",
+          leaseKey: null,
+          leaseUntil: null,
+          nextAttemptAt: null,
+        })
+        .where(eq(operationalMessageTransmissions.id, expired.id));
+      return null;
+    }
     const [match] = await tx
       .select({
         row: operationalMessageTransmissions,
@@ -237,6 +272,9 @@ export async function claimDueTransmission(now = new Date()) {
         .set({
           status: "failed",
           errorMessage: "Type B route no longer matches this draft",
+          leaseKey: null,
+          leaseUntil: null,
+          nextAttemptAt: null,
         })
         .where(eq(operationalMessageTransmissions.id, row.id));
       return null;
@@ -254,29 +292,56 @@ export async function claimDueTransmission(now = new Date()) {
       .where(eq(operationalMessageTransmissions.id, row.id));
     return {
       transmissionId: row.id,
+      tenantId: row.tenantId,
+      routeId: route.id,
+      transportProfile: route.transportProfile,
+      originAddress: route.originAddress,
+      destinationAddress: route.destinationAddress,
+      stationCode: route.stationCode,
       leaseKey,
+      leaseUntil: new Date(now.getTime() + 60_000),
       messageType: row.messageType,
       messageContent: row.messageContent,
+      messageDigest: row.messageDigest,
+      idempotencyKey: row.idempotencyKey,
       attempt: row.attemptCount + 1,
+      ...simulatedTransportOutcome,
     };
   });
 }
 
 export async function recordTransportResult(input: {
   transmissionId: number;
+  tenantId: number;
+  routeId: number;
+  transportProfile: string;
+  messageDigest: string;
   leaseKey: string;
   providerMessageId?: string;
   errorMessage?: string;
+  /** Only a confirmed pre-send failure can be retried automatically. */
+  deliveryOutcome?: "not_sent" | "unknown";
   now?: Date;
 }) {
+  requireOperationalTransportSimulation();
+  if (input.providerMessageId && input.errorMessage)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "A receipt and failure cannot be recorded together",
+    });
   const db = await getDb();
   if (!db) throw new Error("Aviation message storage unavailable");
   const now = input.now ?? new Date();
-  return db.transaction(async tx => {
+  const outcome = await db.transaction(async tx => {
     const [row] = await tx
       .select()
       .from(operationalMessageTransmissions)
-      .where(eq(operationalMessageTransmissions.id, input.transmissionId))
+      .where(
+        and(
+          eq(operationalMessageTransmissions.id, input.transmissionId),
+          eq(operationalMessageTransmissions.tenantId, input.tenantId)
+        )
+      )
       .limit(1)
       .for("update");
     if (!row || row.leaseKey !== input.leaseKey || row.status !== "sending")
@@ -284,8 +349,48 @@ export async function recordTransportResult(input: {
         code: "CONFLICT",
         message: "Stale transmission lease",
       });
+    if (
+      row.routeId !== input.routeId ||
+      row.messageDigest !== input.messageDigest
+    )
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Transmission result binding mismatch",
+      });
+    if (!row.leaseUntil || row.leaseUntil <= now) {
+      await tx
+        .update(operationalMessageTransmissions)
+        .set({
+          status: "failed",
+          errorMessage:
+            "delivery_outcome_unknown: expired lease; reconciliation required",
+          leaseKey: null,
+          leaseUntil: null,
+          nextAttemptAt: null,
+        })
+        .where(eq(operationalMessageTransmissions.id, row.id));
+      return { expiredLease: true as const };
+    }
+    const [route] = await tx
+      .select()
+      .from(operationalMessageRoutes)
+      .where(
+        and(
+          eq(operationalMessageRoutes.id, input.routeId),
+          eq(operationalMessageRoutes.tenantId, input.tenantId)
+        )
+      )
+      .limit(1)
+      .for("update");
+    if (!route || route.transportProfile !== input.transportProfile)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Transmission route unavailable or profile changed",
+      });
+    assertTypeBRoute(row, route, now);
     if (input.errorMessage) {
-      const terminal = row.attemptCount >= 5;
+      const ambiguous = input.deliveryOutcome !== "not_sent";
+      const terminal = ambiguous || row.attemptCount >= 5;
       const status = terminal ? "failed" : "retry_scheduled";
       assertTransmissionTransition(row.status, status);
       const delay = Math.min(60 * 60_000, 2 ** row.attemptCount * 30_000);
@@ -293,19 +398,23 @@ export async function recordTransportResult(input: {
         .update(operationalMessageTransmissions)
         .set({
           status,
-          errorMessage: input.errorMessage.slice(0, 500),
+          errorMessage: ambiguous
+            ? "delivery_outcome_unknown: reconciliation required"
+            : input.errorMessage.slice(0, 500),
           nextAttemptAt: terminal ? null : new Date(now.getTime() + delay),
           leaseKey: null,
           leaseUntil: null,
         })
         .where(eq(operationalMessageTransmissions.id, row.id));
-      return { status };
+      return { status, ...simulatedTransportOutcome };
     }
     if (
-      !input.providerMessageId?.trim() ||
-      input.providerMessageId.length > 128
+      !input.providerMessageId ||
+      !/^fixture-[A-Za-z0-9:._/-]{1,120}$/.test(input.providerMessageId)
     )
-      throw new Error("A transport receipt reference is required");
+      throw new Error(
+        "An explicitly synthetic fixture receipt reference is required"
+      );
     assertTransmissionTransition(row.status, "sent");
     await tx
       .update(operationalMessageTransmissions)
@@ -318,8 +427,20 @@ export async function recordTransportResult(input: {
         errorMessage: null,
       })
       .where(eq(operationalMessageTransmissions.id, row.id));
-    return { status: "sent" as const };
+    // The legacy state machine is exercised in disposable fixtures only. The
+    // API outcome never describes this as an external transmission.
+    return {
+      status: "simulated" as const,
+      persistedStatus: "sent" as const,
+      ...simulatedTransportOutcome,
+    };
   });
+  if ("expiredLease" in outcome)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Expired transmission lease; reconciliation required",
+    });
+  return outcome;
 }
 
 export async function recordAuthorityAcknowledgment(input: {
@@ -328,6 +449,9 @@ export async function recordAuthorityAcknowledgment(input: {
   responseContent: string;
   now?: Date;
 }) {
+  // Parsing an envelope is not source authentication. Until an authenticated
+  // receiver is installed, callers can exercise only the explicit demo path.
+  requireOperationalTransportSimulation();
   const db = await getDb();
   if (!db) throw new Error("Aviation message storage unavailable");
   const now = input.now ?? new Date();
@@ -350,12 +474,27 @@ export async function recordAuthorityAcknowledgment(input: {
       });
     if (row.direction !== "outbound")
       throw new Error("Outbound transmission required");
+    if (
+      !row.providerMessageId?.startsWith("fixture-") ||
+      !row.sentAt ||
+      row.sentAt > now ||
+      createHash("sha256").update(row.messageContent).digest("hex") !==
+        row.messageDigest
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "An intact simulated outbound receipt is required",
+      });
     const decision = parseAuthorityAcknowledgment(input.responseContent, row);
     const responseDigest = createHash("sha256")
       .update(input.responseContent)
       .digest("hex");
     if (row.responseDigest === responseDigest && row.status === decision.status)
-      return decision;
+      return {
+        ...decision,
+        ...simulatedTransportOutcome,
+        authenticatedAuthorityAcknowledgment: false as const,
+      };
     assertTransmissionTransition(
       row.status as TransmissionStatus,
       decision.status
@@ -372,6 +511,10 @@ export async function recordAuthorityAcknowledgment(input: {
           : null,
       })
       .where(eq(operationalMessageTransmissions.id, row.id));
-    return decision;
+    return {
+      ...decision,
+      ...simulatedTransportOutcome,
+      authenticatedAuthorityAcknowledgment: false as const,
+    };
   });
 }

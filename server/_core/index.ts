@@ -32,6 +32,7 @@ import { serveStatic, setupVite } from "./vite";
 import { handleStripeWebhook } from "../webhooks/stripe";
 import { webhookLimiter } from "./rateLimiter";
 import { createUserRateLimitMiddleware } from "./middleware/user-rate-limit.middleware";
+import { blockedIpAdmission } from "./middleware/blocked-ip.middleware";
 import {
   sentryErrorMiddleware,
   errorResponseMiddleware,
@@ -109,6 +110,8 @@ async function startServer() {
         .filter(Boolean)
     );
   }
+  // Admission precedes every API route and development rate-limit bypass.
+  app.use("/api", blockedIpAdmission);
   const server = createServer(app);
 
   // Stripe webhook MUST be registered BEFORE express.json() to preserve raw body

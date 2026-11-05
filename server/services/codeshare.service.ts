@@ -1540,7 +1540,8 @@ export async function terminateInterlineAgreement(id: number, reason: string) {
 }
 
 /**
- * Check if two airlines have an active interline agreement.
+ * Local planning check for an active interline agreement, not authorization
+ * to issue an external ticket, transfer baggage or settle with a partner.
  * Checks both orderings (airline1/airline2 are interchangeable).
  * Returns the agreement details if found, or null.
  */

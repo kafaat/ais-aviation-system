@@ -11,18 +11,84 @@ export type UserRole =
   | "ops"
   | "support";
 
-// Define role hierarchies (higher roles inherit lower role permissions)
-const ROLE_HIERARCHY: Record<UserRole, number> = {
-  user: 1,
-  support: 2,
-  ops: 3,
-  finance: 4,
-  airline_admin: 5,
-  admin: 6,
-  super_admin: 7,
+// These grants mirror protected/admin/airline-scoped procedures. Operations
+// and finance are separate authorities; neither inherits the other.
+const ROLE_GRANTS: Record<UserRole, readonly UserRole[]> = {
+  user: ["user"],
+  support: ["user", "support"],
+  ops: ["user", "ops"],
+  finance: ["user", "finance"],
+  airline_admin: ["user", "ops", "finance", "airline_admin"],
+  admin: [
+    "user",
+    "support",
+    "ops",
+    "finance",
+    "airline_admin",
+    "admin",
+    "super_admin",
+  ],
+  super_admin: [
+    "user",
+    "support",
+    "ops",
+    "finance",
+    "airline_admin",
+    "admin",
+    "super_admin",
+  ],
 };
+const TENANT_SCOPED_ROLES: readonly UserRole[] = [
+  "ops",
+  "finance",
+  "airline_admin",
+];
 
-// Define role descriptions and capabilities
+const customerCapabilities = [
+  "Search flights",
+  "Make bookings",
+  "View own bookings",
+  "Modify own bookings",
+  "Cancel own bookings",
+  "Download own tickets",
+  "Check-in",
+];
+const operationsCapabilities = [
+  "Update flight status",
+  "Delay/cancel flights",
+  "Modify flight schedules",
+  "View operational reports",
+];
+const financeCapabilities = [
+  "Process refunds",
+  "View payment reports",
+  "Access revenue analytics",
+  "Export financial reports",
+];
+const airlineCapabilities = [
+  ...operationsCapabilities,
+  ...financeCapabilities,
+  "Create/update flights",
+  "Manage airline data",
+  "Configure routes",
+  "Set base pricing",
+  "View airline analytics",
+];
+const platformCapabilities = [
+  ...customerCapabilities,
+  ...airlineCapabilities,
+  "Manage airports",
+  "Manage airlines",
+  "Access all system data",
+  "View system logs",
+  "Configure system settings",
+  "Manage user roles",
+  "Access audit logs",
+  "Modify security settings",
+];
+
+// Capabilities describe the role gates, not an override of resource ownership
+// or tenant policy. Scoped staff still need a valid matching tenant context.
 export const ROLE_DEFINITIONS: Record<
   UserRole,
   {
@@ -34,147 +100,60 @@ export const ROLE_DEFINITIONS: Record<
   user: {
     name: "User",
     description: "Regular customer",
-    capabilities: [
-      "Search flights",
-      "Make bookings",
-      "View own bookings",
-      "Modify own bookings",
-      "Cancel own bookings",
-      "Download tickets",
-      "Check-in",
-    ],
+    capabilities: [...customerCapabilities],
   },
   support: {
     name: "Support Agent",
-    description: "Customer support representative",
-    capabilities: [
-      "All user capabilities",
-      "View all bookings",
-      "Modify bookings on behalf of customers",
-      "Process refunds",
-      "Access customer information",
-    ],
+    description:
+      "Customer support account with authenticated customer access; no staff authority",
+    capabilities: [...customerCapabilities],
   },
   ops: {
     name: "Operations Staff",
-    description: "Operations and scheduling team",
-    capabilities: [
-      "All support capabilities",
-      "Update flight status",
-      "Delay/cancel flights",
-      "Modify flight schedules",
-      "View operational reports",
-    ],
+    description: "Operations within the assigned airline tenant",
+    capabilities: [...customerCapabilities, ...operationsCapabilities],
   },
   finance: {
     name: "Finance Team",
-    description: "Financial operations team",
-    capabilities: [
-      "View all financial data",
-      "Process refunds",
-      "View payment reports",
-      "Update pricing",
-      "Access revenue analytics",
-      "Export financial reports",
-    ],
+    description: "Financial operations within the assigned airline tenant",
+    capabilities: [...customerCapabilities, ...financeCapabilities],
   },
   airline_admin: {
     name: "Airline Administrator",
-    description: "Airline management team",
-    capabilities: [
-      "All ops capabilities",
-      "Create/update flights",
-      "Manage airline data",
-      "Configure routes",
-      "Set base pricing",
-      "View airline analytics",
-    ],
+    description: "Operations and finance within the assigned airline tenant",
+    capabilities: [...customerCapabilities, ...airlineCapabilities],
   },
   admin: {
     name: "Administrator",
-    description: "System administrator",
-    capabilities: [
-      "All airline_admin capabilities",
-      "Manage airports",
-      "Manage airlines",
-      "Access all system data",
-      "View system logs",
-      "Configure system settings",
-    ],
+    description:
+      "Platform administration, subject to resource ownership policies",
+    capabilities: [...platformCapabilities],
   },
   super_admin: {
     name: "Super Administrator",
-    description: "Full system access",
-    capabilities: [
-      "All admin capabilities",
-      "Manage user roles",
-      "Access audit logs",
-      "Modify security settings",
-      "Delete data",
-      "Full system control",
-    ],
+    description:
+      "Platform administration, subject to resource ownership policies",
+    capabilities: [...platformCapabilities],
   },
 };
 
-/**
- * Check if a role is authorized for required roles
- * @param userRole - The user's current role
- * @param requiredRoles - Array of roles that are allowed
- * @returns true if authorized, false otherwise
- */
+/** Role eligibility only; callers must also enforce tenant and resource policy. */
 export function isAuthorized(
   userRole: UserRole,
   requiredRoles: UserRole[]
 ): boolean {
-  if (requiredRoles.length === 0) {
-    return true; // No specific role required
-  }
-
-  // Check if user's role is in the required roles
-  if (requiredRoles.includes(userRole)) {
-    return true;
-  }
-
-  // Check if user's role is higher in hierarchy than any required role
-  const userRoleLevel = ROLE_HIERARCHY[userRole];
-  const requiredLevel = Math.min(
-    ...requiredRoles.map(role => ROLE_HIERARCHY[role])
+  if (!isValidRole(userRole)) return false;
+  return (
+    requiredRoles.length === 0 ||
+    requiredRoles.some(role => ROLE_GRANTS[userRole].includes(role))
   );
-
-  // Super admin can access everything
-  if (userRole === "super_admin") {
-    return true;
-  }
-
-  return userRoleLevel >= requiredLevel;
 }
 
-/**
- * Check if a role has a specific capability
- */
 export function hasCapability(userRole: UserRole, capability: string): boolean {
-  const roleDef = ROLE_DEFINITIONS[userRole];
-  if (!roleDef) {
-    return false;
-  }
-
-  // Check direct capabilities
-  if (roleDef.capabilities.includes(capability)) {
-    return true;
-  }
-
-  // Check inherited capabilities from lower roles
-  const userLevel = ROLE_HIERARCHY[userRole];
-  for (const [role, level] of Object.entries(ROLE_HIERARCHY)) {
-    if (level < userLevel) {
-      const lowerRoleDef = ROLE_DEFINITIONS[role as UserRole];
-      if (lowerRoleDef.capabilities.includes(capability)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return (
+    isValidRole(userRole) &&
+    ROLE_DEFINITIONS[userRole].capabilities.includes(capability)
+  );
 }
 
 /**
@@ -205,6 +184,20 @@ export function createRBACMiddleware(requiredRoles: UserRole[]) {
       });
     }
 
+    const grants = ROLE_GRANTS[ctx.user.role as UserRole];
+    const matchedRoles = requiredRoles.filter(role => grants.includes(role));
+    if (
+      !isAdmin(ctx.user.role) &&
+      matchedRoles.length > 0 &&
+      matchedRoles.every(role => TENANT_SCOPED_ROLES.includes(role)) &&
+      (ctx.user.tenantId == null || ctx.tenantId !== ctx.user.tenantId)
+    ) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Valid tenant context required",
+      });
+    }
+
     return next({
       ctx: {
         ...ctx,
@@ -223,7 +216,7 @@ export function isAdmin(userRole: string): boolean {
 }
 
 /**
- * Helper to check if user is support or higher
+ * Legacy staff-account classification; this does not grant staff authority.
  */
 export function isSupportOrHigher(userRole: string): boolean {
   const supportRoles: UserRole[] = [
@@ -241,7 +234,12 @@ export function isSupportOrHigher(userRole: string): boolean {
  * Helper to check if user has financial access
  */
 export function hasFinancialAccess(userRole: string): boolean {
-  const financialRoles: UserRole[] = ["finance", "admin", "super_admin"];
+  const financialRoles: UserRole[] = [
+    "finance",
+    "airline_admin",
+    "admin",
+    "super_admin",
+  ];
   return financialRoles.includes(userRole as UserRole);
 }
 
@@ -263,12 +261,12 @@ export function getRoleCapabilities(role: UserRole): string[] {
  * Get all roles
  */
 export function getAllRoles(): UserRole[] {
-  return Object.keys(ROLE_HIERARCHY) as UserRole[];
+  return Object.keys(ROLE_GRANTS) as UserRole[];
 }
 
 /**
  * Check if role exists
  */
 export function isValidRole(role: string): role is UserRole {
-  return role in ROLE_HIERARCHY;
+  return Object.hasOwn(ROLE_GRANTS, role);
 }

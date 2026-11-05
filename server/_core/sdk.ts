@@ -46,35 +46,17 @@ class OAuthService {
     }
   }
 
-  private decodeState(state: string): string {
-    // Both atob (base64 decode) and URL parsing can throw on malformed input,
-    // so wrap everything in a single try-catch for a clean error message.
-    let redirectUri: string;
-    try {
-      redirectUri = atob(state);
-      const url = new URL(redirectUri);
-      if (
-        !["http:", "https:"].includes(url.protocol) ||
-        !url.pathname.endsWith("/api/oauth/callback")
-      ) {
-        throw new Error("Invalid redirect URI in OAuth state");
-      }
-    } catch {
-      throw new Error("Invalid redirect URI in OAuth state");
-    }
-
-    return redirectUri;
-  }
-
   async getTokenByCode(
     code: string,
-    state: string
+    redirectUri: string
   ): Promise<ExchangeTokenResponse> {
     const payload: ExchangeTokenRequest = {
       clientId: ENV.appId,
       grantType: "authorization_code",
       code,
-      redirectUri: this.decodeState(state),
+      // The callback supplies the canonical URI from consumed server state.
+      // Provider state is now opaque and must never be decoded as a URI.
+      redirectUri,
     };
 
     const { data } = await this.client.post<ExchangeTokenResponse>(
@@ -139,13 +121,13 @@ class SDKServer {
   /**
    * Exchange OAuth authorization code for access token
    * @example
-   * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
+   * const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
    */
   exchangeCodeForToken(
     code: string,
-    state: string
+    redirectUri: string
   ): Promise<ExchangeTokenResponse> {
-    return this.oauthService.getTokenByCode(code, state);
+    return this.oauthService.getTokenByCode(code, redirectUri);
   }
 
   /**

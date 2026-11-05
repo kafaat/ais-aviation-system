@@ -1,0 +1,2025 @@
+{
+  "schema_version": 1,
+  "integration_base": "83367fe",
+  "implementation_commits": [
+    "6510e8445e7b0563e349abd0f6ee4e3fbcc79e01",
+    "81a7c0b33daae94649b4dfe3be9fba5d89f7e3de"
+  ],
+  "ledger": "docs/remediation/20261104-report-source-acceptance-ledger.md",
+  "counts": {
+    "definitions": 99,
+    "available_local_source": 36,
+    "partial": 35,
+    "blocked": 28,
+    "runnable": 71
+  },
+  "availability_changes": [],
+  "generated_catalog_changes": false,
+  "functional_changes": [
+    {
+      "reports": [5, 14, 19, 27, 54, 92],
+      "change": "No-show inference uses the same passenger and sector; explicitly conflicting-tenant DCS events are excluded while owned nullable legacy events remain usable.",
+      "negative_control_reports": [5, 92]
+    },
+    {
+      "reader": "loadUplift",
+      "negative_control_reports": [95],
+      "change": "Contradictory coupon, booking, passenger and tenant references and impossible evidence timestamps are filtered before the source limit; complete ingest snapshot takes precedence over payload. Duplicate valid receipts remain ambiguous."
+    }
+  ],
+  "test_evidence": {
+    "no-show-before.log": {
+      "result": "2 expected regression failures on preceding predicates"
+    },
+    "no-show-after.log": {
+      "passed": 25
+    },
+    "uplift-before.log": {
+      "result": "1 expected regression failure from 10005 contradictory receipts exhausting the source limit"
+    },
+    "finance-and-all99-after.log": {
+      "passed": 148,
+      "all_99_declaration_and_guard_cases": 128,
+      "finance_relational_cases": 20
+    }
+  },
+  "verification_limits": [
+    "No native MySQL result is claimed. Root owns native MySQL JSON_TYPE/join acceptance and aggregate gates.",
+    "SQLite tests execute Drizzle relational SQL; they do not certify MySQL JSON typing or production source acceptance.",
+    "No accounting recognition, authoritative tax determination, internal-office assignment, accepted carrier/provider receipt, or missing historical record was fabricated."
+  ],
+  "external_acceptance_blocked_ids": [7, 32, 33, 34, 35, 36, 37, 38, 39, 40],
+  "business_model_or_source_blocked_ids": [
+    10, 13, 21, 24, 41, 47, 50, 51, 52, 61, 65, 66, 74, 87, 88, 91, 98, 99
+  ],
+  "rows": [
+    {
+      "id": 1,
+      "title": "Agent Details",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "All users in the permitted tenant, with their declared role and role capabilities; no credentials are exported.",
+      "source_limitations": [
+        "Internal sales-office assignments are not recorded. Office is unknown; the role description does not override endpoint-specific authorization."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "إسناد المستخدم إلى مكتب بيع داخلي.",
+        "acceptance_criterion": "نموذج مكتب وإسناد مؤرخ مملوك للشركة؛ يحتفظ التقرير بحدود صلاحيات كل إجراء ولا يعرض بيانات اعتماد."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 2,
+      "title": "APIS Data",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Flight passenger documents, dates of birth and document completeness, including passengers with missing data.",
+      "source_limitations": [
+        "This is a protected document report, not an authority submission or acknowledgment."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 3,
+      "title": "Confirmed Passengers",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Confirmed and completed sector members for a specific flight.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 4,
+      "title": "Currencies",
+      "category": "commercial",
+      "availability": "available",
+      "declared_source_scope": "Configured currency catalog and every persisted exchange-rate record, with source, validity and explicit missing current rates.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 5,
+      "title": "Daily Flight Load",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "One UTC departure day with booked, checked-in, boarded, offloaded and recorded no-show counts.",
+      "source_limitations": [
+        "No-shows are reported only after an explicit DCS close. Boarding is local attendance evidence, not external ticket uplift."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 6,
+      "title": "Eticket Status",
+      "category": "finance",
+      "availability": "available",
+      "declared_source_scope": "Current coupon states for a specified local ticket number.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 7,
+      "title": "ETL Processing",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "Accepted handler ETL receipts and their processed coupons.",
+      "source_limitations": [
+        "Production handler ETL acceptance and the daily accepted/rejected receipt register are not available."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "سجل إيصالات المعالج المقبولة والمرفوضة وروابط القسائم.",
+        "acceptance_criterion": "استيراد إيصالات معالج مقبول، حفظ معرف الحدث والتاريخ والقسائم، وإثبات معالجة الرفض والتكرار دون ترقية محاولة نقل إلى قبول."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 8,
+      "title": "Eticket Values",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Local documents created in a UTC period with their traceable fare-component lines.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "دليل الإصدار الخارجي وتخصيص القيم الكامل للقسائم.",
+        "acceptance_criterion": "قبول إيصال الإصدار وربط مصادر المكونات بكل وثيقة وقسيمة دون تكرار الخصم أو تقدير الضرائب كقيمة معتمدة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 9,
+      "title": "Eticket Value (PNR)",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "All local ticket coupons and monetary source lines for a specified PNR or booking reference.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "مصادر الوثائق والقيم غير المخصصة داخل PNR.",
+        "acceptance_criterion": "تسوية جميع مكونات الحجز مع الوثائق والركاب والقطاعات والعملات؛ يبقى المصدر غير القابل للتخصيص ظاهرًا."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 10,
+      "title": "Expired Tickets",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "Documents whose authoritative validity period has expired.",
+      "source_limitations": [
+        "Document validity dates and the operator's expiry policy are not recorded. Booking or payment expiry is not ticket expiry."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "صلاحية الوثيقة وسياسة انتهاء معتمدة.",
+        "acceptance_criterion": "تخزين أساس الصلاحية ونسخة السياسة وأحداث التمديد أو إعادة الإصدار، ثم اختبار حد الانتهاء من هذه القيم."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 11,
+      "title": "Fares Departing City",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "Filed fare-class rules applicable to the specified origin airport, including unrestricted rules and each rule's validity and pricing terms.",
+      "source_limitations": [
+        "The system stores relative fare-class/rule pricing, not an independently filed final fare amount. This is a configuration report, not a passenger quote. Tenant attribution uses airlines with flights owned by that tenant."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "سعر نهائي معتمد، مقابل قواعد نسبية حاليًا.",
+        "acceptance_criterion": "مصدر سعر ونسخة صلاحية وعملة وشروط تطبيق يمكن مطابقته على مطار المغادرة؛ تقرير الإعداد لا يصير عرض راكب."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 12,
+      "title": "Fares City Pair",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "Filed fare-class rules for the specified directional airport pair, including route-wide rules.",
+      "source_limitations": [
+        "The system stores relative fare-class/rule pricing, not an independently filed final fare amount. This is a configuration report, not a passenger quote. Tenant attribution uses airlines with flights owned by that tenant."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "سعر نهائي معتمد لكل اتجاه وفترة.",
+        "acceptance_criterion": "قبول مصدر السعر وشروطه ومطابقة الاتجاهين والفترات والاستثناءات؛ لا تُضرب المضاعفات وتسمى سعرًا نهائيًا بلا مصدر."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 13,
+      "title": "FAX Information",
+      "category": "operations",
+      "availability": "blocked",
+      "declared_source_scope": "Airport FAX directory information.",
+      "source_limitations": [
+        "No authoritative airport FAX directory is recorded; SSR/OSI APFAX is a different report."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "دليل FAX رسمي للمطارات.",
+        "acceptance_criterion": "إدخال مصدر وتاريخ تحقق لكل عنوان؛ فحص صلاحية الدليل. محتوى SSR/OSI APFAX لا يغلق هذا المصدر."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 14,
+      "title": "Flown Load",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Local DCS boarded passenger counts for flights with recorded off-block movement or completed status.",
+      "source_limitations": [
+        "Only recorded boardings are counted. Completed flight status alone never implies a passenger flew or a coupon was uplifted."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 15,
+      "title": "Flight Availability 1 Day",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "All flights in one UTC day with cabin capacity and effective availability after unexpired holds.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 16,
+      "title": "Flight Availability 1 Week",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "All flights in seven UTC days starting on the chosen date, including unexpired holds.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 17,
+      "title": "Flight Manifest",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Passenger, booking, current local coupon, sector seat and attributed baggage details.",
+      "source_limitations": [
+        "Ticket and coupon fields describe AIS local documents. They do not certify external carrier issuance, uplift or settlement.",
+        "Ambiguous or missing coupon identities are shown explicitly. Returned bags are excluded; unresolved physical registrations block the manifest."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 18,
+      "title": "Flight List",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Alternative flight passenger list using current sector membership.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 19,
+      "title": "Flight Count",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Passenger counts for one flight, with route, dates, cabin and passenger types.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 20,
+      "title": "Flight Count",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Passenger detail with distinct booking reference, PNR and passenger type.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 21,
+      "title": "Flight Group",
+      "category": "operations",
+      "availability": "blocked",
+      "declared_source_scope": "Inventory across an operational multi-leg flight group.",
+      "source_limitations": [
+        "The system has booking itineraries but no authoritative operational flight-group identity. An itinerary is not a flight group."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "هوية مجموعة تشغيلية وروابط رحلاتها.",
+        "acceptance_criterion": "تخزين هوية معتمدة ذات عضوية مؤرخة والتحقق من الرحلات والشركة؛ حجز متعدد المقاطع وحده لا يحدد المجموعة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 22,
+      "title": "Flight ID",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Operational details of a flight by database identifier.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 23,
+      "title": "Flight Complete List",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Passengers retaining inventory, plus unallocated active holds clearly separated from named reservations.",
+      "source_limitations": [
+        "Unallocated holds have no passenger or PNR; they are shown with empty identity fields and their seat quantity."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 24,
+      "title": "Flight Passengers By Office",
+      "category": "operations",
+      "availability": "blocked",
+      "declared_source_scope": "Passengers grouped by the office that created the booking.",
+      "source_limitations": [
+        "Historical booking-origin sales-office identity is not recorded; user and agency identity cannot substitute for it."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "مكتب إنشاء الحجز وقت البيع.",
+        "acceptance_criterion": "حفظ إسناد مكتب مملوك للشركة عند الحدث وربطه بركاب الرحلة، مع اختبارات تغير مكتب الموظف لاحقًا."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 25,
+      "title": "Flight Passenger Table",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Passenger list selected by the flight database identifier.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 26,
+      "title": "Flight Times",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Departure and arrival times for flights from a specified origin airport during a UTC period.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 27,
+      "title": "Flight Counts",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Distinct passenger and current local ticketed-passenger counts for each flight.",
+      "source_limitations": [
+        "Ticket and coupon fields describe AIS local documents. They do not certify external carrier issuance, uplift or settlement."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 28,
+      "title": "Form Of Payments",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Payment records by creation period and method, with current attempt status.",
+      "source_limitations": [
+        "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
+        "Payment attempts are separate from settled ledger movements."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "إسناد المكتب وربط المحاولة بتسويتها.",
+        "acceptance_criterion": "مكتب مؤرخ وروابط حركات أو إيصالات الدفع؛ تبقى المحاولة والحركة المستقرة مميزتين في الناتج."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 29,
+      "title": "Frequent Flyer Activity",
+      "category": "commercial",
+      "availability": "available",
+      "declared_source_scope": "Every recorded miles transaction in the UTC creation period, including member, type, signed miles and balance after the transaction.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 30,
+      "title": "Frequent Flyer Membership",
+      "category": "commercial",
+      "availability": "available",
+      "declared_source_scope": "Members whose recorded membership start falls in the UTC period; member ID is the user's ID.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 31,
+      "title": "Frequent Flyer Transactions",
+      "category": "commercial",
+      "availability": "available",
+      "declared_source_scope": "All recorded transactions for the selected member (user ID), optionally restricted by UTC creation period and transaction type.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 32,
+      "title": "GDS Bookings",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales.",
+      "source_limitations": [
+        "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "إيصال حجز GDS مقبول وربطه بالحجز المحلي.",
+        "acceptance_criterion": "ربط معرف المزود والحجز بإيصال قبول محفوظ؛ إثبات الرفض والإلغاء وتكرار الرسائل."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 33,
+      "title": "GDS Etickets",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales.",
+      "source_limitations": [
+        "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "إيصالات إصدار GDS وروابط التذاكر والقسائم.",
+        "acceptance_criterion": "مطابقة رقم الوثيقة والقسيمة والقطاع والجهة المصدرة بإيصال مقبول، دون اعتبار الرقم المحلي دليل إصدار خارجي."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 34,
+      "title": "GDS ID",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales.",
+      "source_limitations": [
+        "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "معرف مزود موثق على الحجز المقبول.",
+        "acceptance_criterion": "ضمان فصل المزود والشركة ومعرف الحجز، وفحص التصادم والمراجع غير المقبولة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 35,
+      "title": "GDS PNR Quantity",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales.",
+      "source_limitations": [
+        "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "سجل PNR مقبول مع حالة وتوقيت الحدث.",
+        "acceptance_criterion": "عد السجلات المقبولة مرة واحدة ضمن الفترة، وإثبات أثر الإلغاء وإعادة وصول الإيصال."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 36,
+      "title": "GDS Segments",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales.",
+      "source_limitations": [
+        "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "قطاعات GDS المقبولة وربطها بقطاعات AIS.",
+        "acceptance_criterion": "مطابقة القطاع والرحلة والوثيقة مع إيصال المزود، ومعالجة الاستبدال والإلغاء دون مضاعفة القطاع."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 37,
+      "title": "GDS Travel Agent ID",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales.",
+      "source_limitations": [
+        "Requires accepted provider booking receipts and their explicit AIS booking, ticket and sector links. Technical GDS messages and local agency bookings are not accepted GDS sales."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "معرف وكالة المزود ضمن عملية مقبولة.",
+        "acceptance_criterion": "حفظ معرف الجهة من إيصال المزود والتحقق من علاقته بالحجز والشركة؛ معرف وكالة محلية لا يكفي."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 38,
+      "title": "Interline Etickets",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "Accepted IATA IET documents and bookings.",
+      "source_limitations": [
+        "Accepted interline issue receipts and coupon mappings are not available."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "إيصال إصدار interline وربط الشريك والقسائم.",
+        "acceptance_criterion": "اعتماد تكامل الشريك ثم حفظ إيصال الإصدار والرفض وربط كل قسيمة بالناقل والقطاع الصحيحين."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 39,
+      "title": "Interline IDEC Files",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "Transactions in an accepted IDEC file.",
+      "source_limitations": [
+        "An accepted IDEC specification, importer and partner file receipt are required."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "مواصفة IDEC مقبولة ومستورد وإيصال ملف الشريك.",
+        "acceptance_criterion": "اعتماد نسخة الصيغة والتحقق من الملف والسجل والمجموع والرفض والتكرار على ملف شريك مقبول."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 40,
+      "title": "Interline Values",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "Actual interline coupon values and settlement shares.",
+      "source_limitations": [
+        "Accepted interline coupon and settlement evidence is required; a prorate estimate is insufficient."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "حصص تسوية فعلية للقسائم وعملاتها.",
+        "acceptance_criterion": "مطابقة الحصص مع كشف تسوية مقبول وإثبات توازن المجموع والعملات؛ تقدير prorate لا يثبت التسوية."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 41,
+      "title": "Issues Offices",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Internal ticket-issuing offices.",
+      "source_limitations": [
+        "No issuing-office entity or immutable issuing-office attribution is recorded. Travel agencies and provider office identifiers cannot substitute for it."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "كيان مكتب إصدار وإسناد غير قابل لإعادة التفسير.",
+        "acceptance_criterion": "حفظ مكتب إصدار الوثيقة وقت الحدث واختبار حدود الشركة وتغير بيانات المكتب لاحقًا."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 42,
+      "title": "Last Record Locator",
+      "category": "commercial",
+      "availability": "available",
+      "declared_source_scope": "Newest non-deleted booking in scope, ordered by creation time then booking ID. Includes pending, confirmed, completed and cancelled bookings.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 43,
+      "title": "Lifted Tickets",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Local coupons with recorded uplift proof, selected by flight departure date.",
+      "source_limitations": [
+        "Only an F coupon with exactly one matching persisted coupon_uplift receipt is included. Check-in, boarding and completed flight status alone are insufficient. Production uplift ingestion remains subject to external acceptance."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "قبول إنتاجي لمصدر رفع القسيمة.",
+        "acceptance_criterion": "قبول جهة الرفع وحفظ إيصال وحيد مطابق للراكب والحجز والقطاع والوقت؛ حالة F وحدها غير كافية."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 44,
+      "title": "Load Factors",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Recorded sold inventory divided by physical capacity; holds and effective availability are separate.",
+      "source_limitations": [
+        "The load factor measures booked inventory, not flown passengers; zero-capacity flights have a null factor."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 45,
+      "title": "Load Overbookings",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Flights with recorded sold inventory at or above 100% of physical capacity.",
+      "source_limitations": [
+        "Unexpired holds are displayed separately and do not turn into sold seats."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 46,
+      "title": "Message Table",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "Configured operational Type-B message routes and the application's SMS template catalog, with configuration and acceptance state kept separate.",
+      "source_limitations": [
+        "There is no unified persisted registry of email templates. SMS templates do not prove that a delivery provider is configured or accepted."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "سجل قوالب بريد موحد ونسخه.",
+        "acceptance_criterion": "تخزين تعريف القالب ونسخته وحالته ومصدره؛ إعداد القالب لا يمنح إيصال إرسال أو وصول."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 47,
+      "title": "Migration Report",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Booking import batch errors.",
+      "source_limitations": [
+        "No booking-import batch/source-row/error workflow is recorded. Database schema migrations and forensic audits are different operations."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "دفعات استيراد حجوزات وسجلات أخطائها.",
+        "acceptance_criterion": "سجل دفعة ومصدر وصف وحالة قبول أو رفض لكل صف، مع إعادة تشغيل آمنة؛ ترحيلات SQL ليست استيراد حجوزات."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 48,
+      "title": "No Seat Plan",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Flights with missing or incomplete allocated seat inventory, or an invalid, mismatched or ambiguous allocated seat map.",
+      "source_limitations": [
+        "A matching catalog map alone does not prove that it was allocated to a flight."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 49,
+      "title": "No Tickets",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Reservations holding inventory with no current local coupon for any passenger on that sector.",
+      "source_limitations": [
+        "Ticket and coupon fields describe AIS local documents. They do not certify external carrier issuance, uplift or settlement.",
+        "Legacy ticket numbers without coupon records are marked unverified and are not called proven unticketed."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 50,
+      "title": "No Ticket or Time Limit",
+      "category": "operations",
+      "availability": "blocked",
+      "declared_source_scope": "Inventory-holding reservations without a ticket or an authoritative ticketing time limit.",
+      "source_limitations": [
+        "Commercial ticketing time limits are not recorded. Inventory-lock expiry is not a ticketing time limit."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "أجل إصدار تجاري محفوظ على الحجز.",
+        "acceptance_criterion": "حفظ مصدر الأجل ووقت تغييره وحالة الإصدار، واختبار حدود UTC؛ انتهاء قفل مخزون أو checkout لا يكفي."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 51,
+      "title": "Sales Offices",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Internal sales offices.",
+      "source_limitations": [
+        "No tenant-owned sales-office entity is recorded. Travel agencies are distinct from airline sales offices."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "دليل مكاتب بيع مملوك للشركة.",
+        "acceptance_criterion": "نموذج مكتب مع مالك وصلاحية وحالة، وربط معتمد بعمليات البيع؛ لا يحول وكالة السفر إلى مكتب داخلي."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 52,
+      "title": "Sales Office Credit Limits",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Credit limits assigned to internal sales offices.",
+      "source_limitations": [
+        "No sales-office credit account or office assignment exists. Agency and corporate credit are separate accounts."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "حساب ائتمان مكتب وحدوده وحركاته.",
+        "acceptance_criterion": "تسجيل الموافقات والحد والتعرض والحركات، ومطابقة الرصيد ضمن الشركة؛ لا يستبدل بحساب شركة أو وكالة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 53,
+      "title": "Passengers",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Passengers on a specific flight with cabin, type, booking reference and PNR.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 54,
+      "title": "Passenger Summary",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Passenger counts by flight, route, date, cabin and adult/child/infant type.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 55,
+      "title": "Payments",
+      "category": "finance",
+      "availability": "available",
+      "declared_source_scope": "All authorized payment records in a UTC creation period, including method, provider and current status.",
+      "source_limitations": [
+        "A payment record is not proof of settlement. Use the ledger-movement report for cash and non-cash settlement."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 56,
+      "title": "PNL (Passenger Name List)",
+      "category": "operations",
+      "availability": "partial",
+      "declared_source_scope": "Generate an operator-template PNL draft from authorized flight members and a configured route.",
+      "source_limitations": [
+        "The generated draft is downloadable report content. It is not persisted, queued, sent or acknowledged by this read operation.",
+        "A configured Type-B address and valid Latin document names are required; carrier acceptance remains separate."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "انتقال مسودة القراءة إلى مسار إرسال مقبول.",
+        "acceptance_criterion": "استخدام مسار حفظ وإرسال منفصل مع عنوان وصيغة معتمدين وإيصال ناقل؛ يبقى تنزيل التقرير عملية قراءة بلا إرسال."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 57,
+      "title": "PNL Status",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Every flight in a departure period from an origin airport, with each recorded outbound PNL version and its actual transport status.",
+      "source_limitations": [
+        "Flights without a stored PNL are shown as not_generated. Draft, sent and acknowledged are separate recorded states; this report does not send messages."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 58,
+      "title": "PNR 50",
+      "category": "commercial",
+      "availability": "available",
+      "declared_source_scope": "Latest 50 non-deleted bookings in scope, ordered by creation time then booking ID. Fewer rows are returned when fewer exist.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 59,
+      "title": "PNR Full (Passenger Name Record)",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "Unified local booking snapshot: booking, passengers, sectors, local coupons, payments, fare components, ancillary purchases and recorded history, with an explicit record type per row.",
+      "source_limitations": [
+        "Only allowlisted local business fields are included. Provider credentials, payment payloads, raw audit values and passenger travel documents are excluded. External issuance and unrecorded historic events are not inferred."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "أحداث غير مسجلة وإصدار خارجي غير مثبت.",
+        "acceptance_criterion": "ربط إيصالات وأحداث مصادر الأعمال المفقودة مع حفظ توقيتها وملكيتها؛ لا يستلزم الإكمال كشف الوثائق أو الحمولات السرية."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 60,
+      "title": "PNR History",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "Unified local timeline of booking creation, state transitions, payment events, servicing requests, ledger entries and booking audit events. The period filters event time.",
+      "source_limitations": [
+        "The report preserves source identifiers and separate events; it does not claim that every historical action produced an event. Raw audit values, provider payloads and free-text error details are excluded."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تاريخ أحداث شامل يتجاوز السجلات المحتفظ بها.",
+        "acceptance_criterion": "اعتماد سجل أحداث مؤرخ وقابل للتتبع وسياسة احتفاظ؛ اختبار التسلسل والتصحيحات والفجوات دون اختلاق أحداث قديمة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 61,
+      "title": "PNR from Credit Card Authorization",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Find a booking by the card issuer's authorization code.",
+      "source_limitations": [
+        "No authoritative card authorization code is recorded. Payment-intent IDs and gateway transaction IDs are not authorization codes."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "رمز تفويض صادر عن جهة البطاقة.",
+        "acceptance_criterion": "قبول سجل التفويض وربطه بالدفع والحجز، مع رفض المعرفات غير المطابقة؛ payment-intent ليس رمز تفويض."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 62,
+      "title": "PNR Table",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "Unified local booking snapshots for all current booking-sector members of the selected flight. Legacy bookings are included only when they have no sector rows.",
+      "source_limitations": [
+        "Uses the same allowlisted local fields as PNR Full. External issuance and unrecorded historical events are not inferred."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "نفس مصادر PNR Full الناقصة لكل عضو رحلة.",
+        "acceptance_criterion": "استكمال مصادر 59 ثم مطابقتها على عضوية الرحلة المتسقة مع شركة الحجز، بما يشمل التحويلات والإلغاءات."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 63,
+      "title": "Product Sales",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "Every funded ancillary purchase, by its recorded funding time, including product, booking, quantity, snapshot prices and current cancellation/refund state.",
+      "source_limitations": [
+        "Rows are funded purchases, including authorized no-charge purchases. Product-level cash collections and net refund allocation are not independently recorded. Historic rows without funding evidence are excluded; sale-currency snapshots are unavailable and catalog currency is labelled separately."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "عملة البيع وتخصيص النقد والاسترداد على الصنف.",
+        "acceptance_criterion": "حفظ لقطة الصنف والعملة ومصدر التمويل وتخصيص الاسترداد، ومطابقة مجموع الأصناف بالحركات الفعلية؛ عدم التحصيل يظل مميزًا."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 64,
+      "title": "Passport Data",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Protected passport and travel-document details for passengers departing the specified origin airport in a UTC period.",
+      "source_limitations": [
+        "Origin selects an airport by IATA code. Missing and unverified documents remain explicit; document records do not prove authority acceptance."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 65,
+      "title": "PNR's on Queues",
+      "category": "commercial",
+      "availability": "blocked",
+      "declared_source_scope": "Membership of bookings in operational reservation queues.",
+      "source_limitations": [
+        "No reservation queue or PNR queue-membership workflow exists. Background job queues are not reservation queues."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "صفوف حجز تشغيلية وعضوية PNR.",
+        "acceptance_criterion": "نموذج صف وحدث إدخال ونقل وإزالة مؤرخ وصلاحيات شركة؛ صف المهام الخلفية ليس مصدرًا بديلًا."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 66,
+      "title": "Remittances",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "Receipted transfers from a sales office.",
+      "source_limitations": [
+        "No authoritative sales-office remittance register exists."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "تحويل مكتب بيع بإيصال.",
+        "acceptance_criterion": "ربط المكتب والتحويل والعملة والحركة المالية بإيصال محفوظ، والتحقق من الإجماليات والتكرار."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 67,
+      "title": "Revenue Post Departure",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Uplifted local coupon component values by flight date, retaining their proof references.",
+      "source_limitations": [
+        "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
+        "Only an F coupon with exactly one matching persisted coupon_uplift receipt is included. Check-in, boarding and completed flight status alone are insufficient. Production uplift ingestion remains subject to external acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص الإيراد والمكتب وقبول الرفع.",
+        "acceptance_criterion": "تسوية التمويل والضرائب والولاء والمكونات بإثبات رفع مقبول وسياسة الاعتراف؛ قيمة مكون محلي ليست إيرادًا معترفًا به."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 68,
+      "title": "Refunds",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Posted refund and partial-refund ledger entries by transaction date, keeping cash and non-cash tenders distinct.",
+      "source_limitations": [
+        "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "مكتب العملية الأصلي.",
+        "acceptance_criterion": "إسناد مكتب مؤرخ لكل حركة استرداد مع الحفاظ على نوع العطاء والعملة والتاريخ الحاليين."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 69,
+      "title": "Reported Sales By Office",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Local document fare-component lines by record creation period; office attribution is explicitly unavailable.",
+      "source_limitations": [
+        "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "مكتب البيع أو الإصدار وإسناده للوثيقة.",
+        "acceptance_criterion": "مصدر مكتب محفوظ عند العملية وربط الوثيقة ومكوناتها بالإصدار المقبول؛ لا يستعاض عنه بالوكالة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 70,
+      "title": "Reported Sales System Wide",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "All posted booking ledger movements by transaction date, including charges and their refund reversals.",
+      "source_limitations": [
+        "This is a settlement movement register. A settlement does not establish the ticket sale/issue event required for full equivalence."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "رابط الحركة المالية بحدث البيع أو الإصدار.",
+        "acceptance_criterion": "مطابقة الحركات بالوثائق وأحداثها المؤرخة مع تفسير الفروق؛ النقد المستقر وحده لا يحدد وقت البيع."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 71,
+      "title": "Reported Excess Baggage Sales",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Funded baggage product line items with their recorded funding reference and lifecycle state.",
+      "source_limitations": [
+        "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
+        "The product catalogue identifies baggage but does not classify airport excess-weight sales. Excess classification and net item refund allocation remain unknown."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تصنيف زيادة الوزن وإسناد المكتب والاسترداد للصنف.",
+        "acceptance_criterion": "مصدر زيادة وزن تجارية موثق وربط الصنف والتمويل والاسترداد والمكتب؛ بيع منتج أمتعة عادي لا يثبت excess weight."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 72,
+      "title": "Reservations By Flight Date",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Reservations selected by sector departure date, including multi-sector bookings and their creation date.",
+      "source_limitations": [],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 73,
+      "title": "Reservations Without Tickets",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Inventory-holding reservations with missing or unverified current local passenger coupons in a departure period.",
+      "source_limitations": [
+        "Ticket and coupon fields describe AIS local documents. They do not certify external carrier issuance, uplift or settlement.",
+        "Missing coupon evidence and legacy unverified ticket identities are separate exception reasons."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 74,
+      "title": "Restricted Flights",
+      "category": "operations",
+      "availability": "blocked",
+      "declared_source_scope": "Commercial flight sale restrictions with their effective periods.",
+      "source_limitations": [
+        "No authoritative flight-wide commercial restriction history is recorded; cancellation, sold-out capacity and restricted seats are different facts."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "تاريخ قيود تجارية شاملة للرحلة.",
+        "acceptance_criterion": "تخزين نوع القيد وسببه وسريانه واعتماده ورفعه، واختبار الحالة عند التاريخ المطلوب."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 75,
+      "title": "Revenue System Wide",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Separately dated booking, local-document and evidenced uplift component values, grouped by UTC Monday-start week.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص الاعتراف المحاسبي الكامل.",
+        "acceptance_criterion": "تسوية التمويل والضريبة والولاء والوثائق والرفع وفق سياسة معتمدة، ثم مطابقة تجميع الأسابيع والعملات دون خلط الأسس."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 76,
+      "title": "Revenue Daily Flight",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Separately dated booking, local-document and evidenced uplift component values, grouped by UTC day.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "نفس تخصيص الإيراد مع حدود اليوم.",
+        "acceptance_criterion": "مصادر الاعتراف نفسها مع مطابقة أيام الحجز والوثيقة والرفع المستقلة وحدود UTC."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 77,
+      "title": "Revenue By Route",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "All route/day groups for separately dated component values; no top-route truncation.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص الإيراد لمسار فعلي.",
+        "acceptance_criterion": "مصادر الاعتراف وروابط المسار، ثم مطابقة جميع مجموعات المسارات دون اقتطاع أو توزيع مبلغ حجز بلا أصل."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 78,
+      "title": "Revenue By Flight",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Separately dated component values for every matching flight identity.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص الإيراد لهوية رحلة مؤرخة.",
+        "acceptance_criterion": "مطابقة مصادر الاعتراف بالرحلة والقطاع مع فصل رحلتين تشتركان في الرقم التجاري."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 79,
+      "title": "Revenue By Passenger",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Passenger/sector component lines with independent booking, local-document and uplift dates.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص الإيراد على الراكب والقطاع.",
+        "acceptance_criterion": "إسناد مكونات وخصومات وضرائب وتمويل ورفع مقبول إلى الراكب المالك؛ يبقى المبلغ العام للحجز غير موزع حتى ورود مصدر."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 80,
+      "title": "Revenue Flight Number",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Component values by dated flight identity, filterable by flight ID and departure city/airport.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص الإيراد دون جمع هويات رحلات مختلفة.",
+        "acceptance_criterion": "مصادر الاعتراف نفسها مع هوية وتاريخ الرحلة، واختبار الرقم المتكرر عبر الأيام والشركات."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 81,
+      "title": "Revenue By Route",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Recorded uplift component values grouped by sector route and observation date.",
+      "source_limitations": [
+        "Only an F coupon with exactly one matching persisted coupon_uplift receipt is included. Check-in, boarding and completed flight status alone are insufficient. Production uplift ingestion remains subject to external acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "قبول الرفع وتخصيص الإيراد المرفوع.",
+        "acceptance_criterion": "مطابقة إيصالات الرفع ومكونات القسائم والتمويل والتخصيص على المسار، مع رفض الرفع المتعارض أو المتكرر."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 82,
+      "title": "Revenue Tickets",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Local ticket component values with document identity and explicit unknown office attribution.",
+      "source_limitations": [
+        "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص إيراد الوثيقة ومكتبها.",
+        "acceptance_criterion": "تسوية مكونات الوثيقة والتمويل والضريبة والولاء والرفع، وربط المكتب المؤرخ؛ تبقى القيم غير المحسومة مجهولة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 83,
+      "title": "Revenue By Route And Month",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Monthly route component values; the reference's sales-office dimension remains unavailable.",
+      "source_limitations": [
+        "The system has no authoritative sales/issue-office relationship. Office is unknown; an agency or sales channel is not substituted for an office.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Booked, local-document and uplift amounts describe separately dated commercial component values. They are not recognized accounting revenue. Bookings without a fare-component snapshot cannot contribute a value; this is not the full invoice or ledger total. Revenue recognition remains unknown pending funding, tax, loyalty allocation and accepted carrier evidence reconciliation."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص الإيراد وإسناد المكتب والشهر.",
+        "acceptance_criterion": "مصادر الاعتراف والمكتب مع مطابقة مجموع كل شهر ومسار وعملة إلى مصادره المؤرخة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 84,
+      "title": "RO Reports",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Full cabin and configured RBD inventory by flight, with holds, waitlist and effective physical availability.",
+      "source_limitations": [
+        "Cabin totals and RBD subsets are separate levels and must not be added together. Waitlists are recorded by cabin, not by RBD."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 85,
+      "title": "Sales",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Local document creation records with the actual linked agency, coupon and traceable component values.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Agency attribution uses the unique agent-booking relation; it is not a GDS or office attribution."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "إيصال بيع أو إصدار خارجي مع تاريخ معتمد.",
+        "acceptance_criterion": "مطابقة الوثائق والمكونات وإسناد الوكالة بإيصالاتها الأصلية؛ تاريخ إنشاء صف محلي ليس بالضرورة تاريخ البيع الأصلي."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 86,
+      "title": "Sales All",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Local ticket document records and components by their recorded creation date.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "Original sale timestamps and every exchange/reversal-to-document monetary mapping remain unavailable."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "التاريخ الأصلي وروابط المبادلات والعكوس المالية.",
+        "acceptance_criterion": "سجل كامل للبيع وإعادة الإصدار والتبادل والعكس مرتبط بالوثائق والقيم؛ توضح فجوات البيانات القديمة بدل تعويضها بالتخمين."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 87,
+      "title": "Sales by City",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "Sales grouped by the city of the actual point of sale.",
+      "source_limitations": [
+        "No authoritative point-of-sale city is stored. A flight's origin city cannot replace it."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "مدينة نقطة البيع وقت العملية.",
+        "acceptance_criterion": "حفظ مدينة نقطة البيع من مكتب أو قناة موثقة عند البيع؛ إثبات أن تغير مسار الرحلة لا يغير نسبتها."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 88,
+      "title": "Tax Codes",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "Configured operator-approved tax codes and effective policies.",
+      "source_limitations": [
+        "The application has offer tax estimates, not an operator-approved tax-code registry."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "سجل ضرائب معتمد ومؤرخ.",
+        "acceptance_criterion": "إدخال الأكواد والسياسة ونسخ السريان من الجهة المعتمدة، ومطابقة خطوط الضريبة بالمصدر؛ تقدير العرض يبقى تقديرًا."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 89,
+      "title": "Ticket Calculation",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "All recorded local coupon calculations and source components, including unmapped and reversed lines.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تخصيص كامل وقواعد ضرائب معتمدة.",
+        "acceptance_criterion": "مطابقة الحساب لمصادر السعر والضرائب والخصومات على القسيمة، مع الفصل بين التقدير والقيمة المعتمدة."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 90,
+      "title": "Ticket Coupons",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Details of one ticket/coupon, its current state, monetary source lines and matching uplift receipt.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "Amounts are integer minor units in the stated currency. Fare components are commercial source lines, not approved tax determinations. OFFER_TAX_ESTIMATE remains an estimate. Booking-level or ambiguously mapped lines are never copied onto every coupon.",
+        "A complete immutable history of every coupon state is not yet recorded."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تاريخ حالات القسيمة غير القابل للمحو.",
+        "acceptance_criterion": "تسجيل كل انتقال ومصدره وتوقيته وربطه بالقسيمة؛ فحص الإبطال والاسترداد والتبادل والتصحيح."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 91,
+      "title": "Ticket Go Shows",
+      "category": "operations",
+      "availability": "blocked",
+      "declared_source_scope": "Passengers who actually boarded a flight different from their original ticketed flight.",
+      "source_limitations": [
+        "Original ticket-flight attribution and accepted go-show linkage are not recorded together. Reaccommodation or a manual go-show flag alone does not establish this event."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "رحلة الوثيقة الأصلية وربط go-show مقبول.",
+        "acceptance_criterion": "حفظ الحدث وروابط الوثيقة والراكب والرحلتين مع إثبات التشغيل؛ علامة يدوية أو إعادة إيواء لا تكفي وحدها."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 92,
+      "title": "Ticket No Shows",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Passengers with a current open local coupon and no recorded check-in after explicit DCS close.",
+      "source_limitations": [
+        "Ticket and coupon fields describe AIS local documents. They do not certify external carrier issuance, uplift or settlement.",
+        "Current seats and DCS attendance/history are checked per passenger and sector. Offloaded, boarded, checked-in and ambiguous legacy booking-wide check-ins are not called no-shows."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 93,
+      "title": "Tickets without bookings",
+      "category": "operations",
+      "availability": "available",
+      "declared_source_scope": "Current open or checked-in local coupons with a missing, cancelled, deleted or removed booking sector.",
+      "source_limitations": [
+        "Ticket and coupon fields describe AIS local documents. They do not certify external carrier issuance, uplift or settlement.",
+        "Names are returned only when the passenger belongs to the same booking and tenant. Cross-tenant malformed booking links are excluded."
+      ],
+      "remaining_dependency": null,
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 94,
+      "title": "Ticket Status",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Current states of local coupons whose document rows were created during the selected UTC period.",
+      "source_limitations": [
+        "Ticket numbers and coupon states are AIS local document records. Local creation can materialize a legacy document; it does not prove an external carrier issue time or acceptance.",
+        "This is current status by local record creation date, not a historical status-at-cutoff reconstruction."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "إعادة بناء الحالة عند نقطة زمنية.",
+        "acceptance_criterion": "سجل انتقالات مؤرخ يسمح باشتقاق الحالة عند cutoff؛ حالة اليوم وتاريخ إنشاء الصف لا يعيدان بناء الماضي."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 95,
+      "title": "Ticket Used",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Used local coupons with one matching uplift receipt; a partially used document remains identifiable by coupon number.",
+      "source_limitations": [
+        "Only an F coupon with exactly one matching persisted coupon_uplift receipt is included. Check-in, boarding and completed flight status alone are insufficient. Production uplift ingestion remains subject to external acceptance."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "قبول إنتاجي لمصدر رفع القسيمة.",
+        "acceptance_criterion": "قبول جهة الرفع ومطابقة إيصال واحد صالح لكل قسيمة مستخدمة، مع إبقاء الاستخدام الجزئي واضحًا."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 96,
+      "title": "Tickets Voided",
+      "category": "finance",
+      "availability": "partial",
+      "declared_source_scope": "Persisted coupon-void events by event time, retaining a prior V transition after a subsequent refund.",
+      "source_limitations": [
+        "Reads retained transactional outbox closure receipts. Legacy changes without receipts and pruned outbox history cannot be reconstructed; current V state is not substituted for a void event."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "تاريخ إبطال كامل يتجاوز outbox المحتفظ به.",
+        "acceptance_criterion": "سجل إبطال دائم وسياسة احتفاظ مع توثيق نطاق اكتمال التاريخ؛ لا تعاد صناعة إيصالات قديمة محذوفة من الحالة الحالية."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 97,
+      "title": "VRS Messages",
+      "category": "commercial",
+      "availability": "partial",
+      "declared_source_scope": "Recorded outbound Type-B message transmissions created in the UTC period, retaining draft, sending and acknowledgment states separately.",
+      "source_limitations": [
+        "No complete generated-email ledger exists. These are Type-B transmission metadata, not a combined email/TTY history; content and provider payloads are excluded."
+      ],
+      "remaining_dependency": {
+        "availability": "partial",
+        "missing_source_or_completion_dependency": "سجل بريد مولد كامل بجانب Type-B.",
+        "acceptance_criterion": "حفظ هوية الرسالة والقالب والأحداث وإيصالات المزود، مع فصل الإنشاء والإرسال والقبول والوصول وعدم كشف المحتوى السري."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 98,
+      "title": "Web Bookings without Credit Card Authorizations",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "IBE bookings missing a required card authorization.",
+      "source_limitations": [
+        "A trusted IBE channel and card authorization register are required. A provider payment ID or pending state is not an authorization code."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "قناة IBE موثقة وسجل تفويضات البطاقة.",
+        "acceptance_criterion": "مطابقة الحجوزات ذات القناة المؤكدة بتفويضاتها، وتحديد عدم وجود التفويض بعد القراءة المكتملة للسجل."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    },
+    {
+      "id": 99,
+      "title": "Web Bookings On TTL",
+      "category": "finance",
+      "availability": "blocked",
+      "declared_source_scope": "IBE bookings holding inventory under an actual ticketing time limit.",
+      "source_limitations": [
+        "An authoritative IBE channel and ticketing deadline are not recorded. Inventory lock or checkout expiry is not substituted for a commercial ticketing time limit."
+      ],
+      "remaining_dependency": {
+        "availability": "blocked",
+        "missing_source_or_completion_dependency": "قناة IBE موثقة وأجل إصدار تجاري.",
+        "acceptance_criterion": "حفظ أصل القناة والأجل وأحداث التعديل، واختبار الحالات قبل الحد وعنده وبعده دون استعارة مهلة الدفع."
+      },
+      "checks_passed": [
+        "catalog_definition_matches_source",
+        "role_and_tenant_matrix",
+        "ledger_status_consistency",
+        "blocked_before_source_query"
+      ],
+      "verification_scope": "Declaration, capability and ledger checks only. Targeted reader behavior is documented in the suite evidence, not inferred from a successful empty read."
+    }
+  ]
+}

@@ -233,6 +233,22 @@ describe("durable split checkout lifecycle", () => {
     expect(state.expire).not.toHaveBeenCalled();
     expect(rows().every(s => s.status === "pending")).toBe(true);
   });
+  it.each(["admin", "super_admin"])(
+    "allows the intended %s owner bypass",
+    async role => {
+      await cancelPaymentSplits({ bookingId: 7 }, { id: 8, role });
+      expect(rows().every(split => split.status === "cancelled")).toBe(true);
+    }
+  );
+  it.each(["support", "ops", "finance", "airline_admin"])(
+    "denies an unrelated %s account",
+    async role => {
+      await expect(
+        cancelPaymentSplits({ bookingId: 7 }, { id: 8, role })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(rows().every(split => split.status === "pending")).toBe(true);
+    }
+  );
   it("requires ownership before touching the provider, including direct service calls", async () => {
     await createSplitCheckout(token);
     state.retrieve.mockClear();

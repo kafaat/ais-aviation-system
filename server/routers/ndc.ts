@@ -1,3 +1,5 @@
+import { isAdmin } from "../services/rbac.service";
+import { getNdcExecutionCapability } from "../services/distribution-readiness.service";
 import { ndcActions, ndcCapability } from "../services/ndc-capabilities";
 import { seatExchangeSchema } from "../services/seat-exchange.service";
 import { cancelOrderServiceQuote } from "../services/order-service-checkout.service";
@@ -97,6 +99,15 @@ const serviceItemSchema = z.object({
  * and ancillary service management through a standards-compliant interface.
  */
 export const ndcRouter = router({
+  getExecutionCapability: protectedProcedure
+    .output(
+      z.object({
+        localDirectOrdersAvailable: z.literal(true),
+        externalExecutionAvailable: z.literal(false),
+        reason: z.literal("accepted_external_ndc_adapter_unavailable"),
+      })
+    )
+    .query(() => getNdcExecutionCapability()),
   // A catalog lookup never supplies authorization to a write endpoint.
   lookupCapability: protectedProcedure
     .input(
@@ -158,8 +169,8 @@ export const ndcRouter = router({
   /**
    * NDC AirShopping - Search for flight offers
    *
-   * Performs an NDC-compliant air shopping request, returning available offers
-   * with pricing for the requested origin, destination, dates, and passengers.
+   * Returns local AIS direct offers using NDC-shaped payloads. External carrier
+   * shopping and seller integration remain unavailable.
    */
   airShopping: publicProcedure
     .meta({
@@ -169,7 +180,7 @@ export const ndcRouter = router({
         tags: ["NDC"],
         summary: "NDC AirShopping request",
         description:
-          "Search for available flight offers using the NDC AirShopping standard. Returns priced offers including fare details, cabin class, and ancillary bundles.",
+          "Search local AIS direct flight offers using NDC-shaped payloads. Returns local pricing, fare details, cabin class and ancillary bundles; no external carrier or seller is contacted.",
       },
     })
     .input(
@@ -279,8 +290,8 @@ export const ndcRouter = router({
   /**
    * NDC OrderCreate - Create an order from a selected offer
    *
-   * Converts a shopping offer into a confirmed order with passenger details,
-   * contact information, and payment method.
+   * Converts a supported local direct offer into a pending local order with
+   * passenger details and contact information. This does not issue a provider ticket.
    */
   createOrder: protectedProcedure
     .meta({
@@ -379,7 +390,7 @@ export const ndcRouter = router({
         }
 
         // Verify ownership: user must own the order or be an admin
-        if (order.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        if (order.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
             message: "You do not have permission to view this order",

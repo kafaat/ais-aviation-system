@@ -5,6 +5,7 @@
 
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -20,6 +21,7 @@ interface FavoriteButtonProps {
   variant?: "ghost" | "outline" | "default";
   className?: string;
   showTooltip?: boolean;
+  showLabel?: boolean;
 }
 
 export function FavoriteButton({
@@ -28,24 +30,31 @@ export function FavoriteButton({
   variant = "ghost",
   className = "",
   showTooltip = true,
+  showLabel = false,
 }: FavoriteButtonProps) {
   const { t } = useTranslation();
+  const { isAuthenticated, loading: isLoadingAuth } = useAuth();
+  const utils = trpc.useUtils();
 
   const {
     data: isFavorited,
     isLoading: isCheckingFavorite,
+    isError,
     refetch,
   } = trpc.favorites.isFlightFavorited.useQuery(
     { flightId },
     {
-      enabled: !!flightId,
+      enabled: isAuthenticated && !!flightId,
     }
   );
 
   const addFavorite = trpc.favorites.addFlight.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t("favorites.addedToFavorites"));
-      refetch();
+      await Promise.all([
+        utils.favorites.isFlightFavorited.invalidate({ flightId }),
+        utils.favorites.getFlights.invalidate(),
+      ]);
     },
     onError: error => {
       toast.error(error.message);
@@ -53,9 +62,12 @@ export function FavoriteButton({
   });
 
   const removeFavorite = trpc.favorites.removeFlight.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t("favorites.removed"));
-      refetch();
+      await Promise.all([
+        utils.favorites.isFlightFavorited.invalidate({ flightId }),
+        utils.favorites.getFlights.invalidate(),
+      ]);
     },
     onError: error => {
       toast.error(error.message);
@@ -63,10 +75,29 @@ export function FavoriteButton({
   });
 
   const isLoading =
-    isCheckingFavorite || addFavorite.isPending || removeFavorite.isPending;
+    isLoadingAuth ||
+    (isAuthenticated && isCheckingFavorite) ||
+    addFavorite.isPending ||
+    removeFavorite.isPending;
+
+  const saved = isAuthenticated && Boolean(isFavorited);
+  const label = saved
+    ? t("favorites.removeSavedFlight", "Remove saved flight")
+    : t("favorites.saveFlight", "Save this flight");
 
   const handleToggle = () => {
-    if (isFavorited) {
+    if (!isAuthenticated) {
+      toast.error(t("common.loginRequired"));
+      return;
+    }
+    if (isError) {
+      void refetch();
+      toast.error(
+        t("favorites.loadError", "Could not load saved flights. Please retry.")
+      );
+      return;
+    }
+    if (saved) {
       removeFavorite.mutate({ flightId });
     } else {
       addFavorite.mutate({ flightId });
@@ -78,17 +109,14 @@ export function FavoriteButton({
       variant={variant}
       size={size}
       className={`rounded-full transition-all duration-200 ${
-        isFavorited
+        saved
           ? "text-rose-500 bg-rose-50 hover:bg-rose-100"
           : "hover:text-rose-500 hover:bg-rose-50"
       } ${className}`}
       onClick={handleToggle}
       disabled={isLoading}
-      aria-label={
-        isFavorited
-          ? t("favorites.removeFromFavorites")
-          : t("favorites.addToFavorites")
-      }
+      aria-label={label}
+      aria-pressed={saved}
       data-testid="favorite-button"
     >
       {isLoading ? (
@@ -96,11 +124,12 @@ export function FavoriteButton({
       ) : (
         <Heart
           className={`h-5 w-5 transition-all duration-200 ${
-            isFavorited ? "fill-current scale-110" : ""
+            saved ? "fill-current scale-110" : ""
           }`}
           aria-hidden="true"
         />
       )}
+      {showLabel && <span>{label}</span>}
     </Button>
   );
 
@@ -111,11 +140,7 @@ export function FavoriteButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{buttonContent}</TooltipTrigger>
-      <TooltipContent>
-        {isFavorited
-          ? t("favorites.removeFromFavorites")
-          : t("favorites.addToFavorites")}
-      </TooltipContent>
+      <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
 }

@@ -103,6 +103,7 @@ nativeDescribe("native authentication sessions, rotation and MFA", () => {
   let apiOrigin = "";
   let auth: typeof import("../services/mobile-auth-v2.service").mobileAuthServiceV2;
   let mfa: typeof import("../services/mfa.service");
+  let locks: typeof import("../services/account-lock.service");
   let fault: { status: number; body: unknown } | null = null;
 
   async function serve(server: Server) {
@@ -281,6 +282,7 @@ nativeDescribe("native authentication sessions, rotation and MFA", () => {
     });
     vi.stubEnv("AUTH_SERVICE_URL", await serve(provider));
     vi.resetModules();
+    locks = await import("../services/account-lock.service");
     auth = (await import("../services/mobile-auth-v2.service"))
       .mobileAuthServiceV2;
     mfa = await import("../services/mfa.service");
@@ -544,6 +546,132 @@ nativeDescribe("native authentication sessions, rotation and MFA", () => {
     await expect(
       auth.authenticateSession(active.sessionId)
     ).resolves.toMatchObject({ id: ownerId });
+  });
+
+  it("reuses the actual unique account lock row after an explicit unlock and denies access again", async () => {
+    const [indexes] = await pool!.query<mysql.RowDataPacket[]>(
+      "SHOW INDEX FROM account_locks WHERE Column_name = 'userId'"
+    );
+    expect(indexes.some(index => Number(index.Non_unique) === 0)).toBe(true);
+
+    const session = await login();
+    await locks.lockAccount(ownerId, "First automatic lock", "system", 30);
+    const [first] = await state.db!.select().from(schema.accountLocks);
+    await expect(auth.login(ownerId)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(await currentUser({ cookie: session.cookie })).toBeNull();
+
+    await locks.unlockAccount(ownerId, "admin:fixture");
+    expect(await locks.isAccountLocked(ownerId)).toBe(false);
+    expect(await currentUser({ cookie: session.cookie })).toMatchObject({
+      id: ownerId,
+    });
+    await locks.lockAccount(ownerId, "Second automatic lock", "system", 30);
+    await expect(auth.login(ownerId)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(await currentUser({ cookie: session.cookie })).toBeNull();
+    expect(await state.db!.select().from(schema.accountLocks)).toMatchObject([
+      {
+        id: first.id,
+        userId: ownerId,
+        isActive: true,
+        reason: "Second automatic lock",
+        unlockedAt: null,
+        unlockedBy: null,
+      },
+    ]);
+  });
+
+  it("renews an expired but still active lock after five failed attempts", async () => {
+    const session = await login();
+    await locks.lockAccount(ownerId, "Previous lock", "system", 1);
+    vi.setSystemTime(new Date(Date.now() + 2 * 60_000));
+    expect(await currentUser({ cookie: session.cookie })).toMatchObject({
+      id: ownerId,
+    });
+    const [expired] = await state.db!.select().from(schema.accountLocks);
+    expect(expired.isActive).toBe(true);
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await locks.recordLoginAttempt({
+        email: "owner@example.test",
+        ipAddress: "127.0.0.1",
+        success: false,
+        failureReason: "Controlled invalid password",
+      });
+    }
+
+    const rows = await state.db!.select().from(schema.accountLocks);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: expired.id,
+      isActive: true,
+      lockedBy: "system",
+      reason: "Account locked after 5 failed login attempts",
+      autoUnlockAt: new Date(Date.now() + 30 * 60_000),
+    });
+    expect(await locks.isAccountLocked(ownerId)).toBe(true);
+    await expect(auth.login(ownerId)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(await currentUser({ cookie: session.cookie })).toBeNull();
+    expect(await state.db!.select().from(schema.securityEvents)).toMatchObject([
+      { userId: ownerId, eventType: "account_locked", ipAddress: "127.0.0.1" },
+    ]);
+  });
+
+  it("serializes concurrent upserts without duplicates or weakening the longest active lock", async () => {
+    await Promise.all(
+      [5, 60, 10, 30].map(minutes =>
+        locks.lockAccount(
+          ownerId,
+          `Lock for ${minutes} minutes`,
+          "system",
+          minutes
+        )
+      )
+    );
+    const rows = await state.db!.select().from(schema.accountLocks);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      isActive: true,
+      reason: "Lock for 60 minutes",
+      autoUnlockAt: new Date(Date.now() + 60 * 60_000),
+    });
+    // A delayed weaker request must preserve both the stronger deadline and source.
+    await locks.lockAccount(ownerId, "Stale weaker request", "system", 1);
+    const [retained] = await state.db!.select().from(schema.accountLocks);
+    expect(retained).toEqual(rows[0]);
+    await expect(auth.login(ownerId)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+  });
+
+  it("retains permanent administrative locks until explicitly unlocked", async () => {
+    await Promise.all([
+      locks.lockAccount(ownerId, "Administrative hold", "admin:fixture"),
+      locks.lockAccount(ownerId, "Automatic hold", "system", 30),
+    ]);
+    await locks.lockAccount(ownerId, "Delayed automatic hold", "system", 120);
+    const rows = await state.db!.select().from(schema.accountLocks);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      isActive: true,
+      reason: "Administrative hold",
+      lockedBy: "admin:fixture",
+      autoUnlockAt: null,
+    });
+    expect(await locks.isAccountLocked(ownerId)).toBe(true);
+    await locks.unlockAccount(ownerId, "admin:fixture");
+    await locks.lockAccount(ownerId, "New automatic hold", "system", 30);
+    const [renewed] = await state.db!.select().from(schema.accountLocks);
+    expect(renewed).toMatchObject({
+      reason: "New automatic hold",
+      lockedBy: "system",
+    });
+    expect(renewed.autoUnlockAt).not.toBeNull();
   });
 
   it("enforces locks and deletion suspension while resolving current role and tenant from storage", async () => {

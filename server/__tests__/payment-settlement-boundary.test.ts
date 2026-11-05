@@ -30,8 +30,9 @@ vi.mock("../services/flights.service", () => ({
 import { cancelAfterPartialRefund } from "../services/payment-settlement.service";
 import { processStripeEvent } from "../webhooks/stripe";
 import { topUpWallet, payFromWallet } from "../services/wallet.service";
-import { seatInventory } from "../../drizzle/schema";
+import { dcsPassengerStates, seatInventory } from "../../drizzle/schema";
 import { createBooking } from "../services/bookings.service";
+import { DepartureReleaseError } from "../services/booking-settlement.service";
 
 let fixture: ReturnType<typeof transactionMemory>;
 const payment = (
@@ -332,14 +333,27 @@ describe("verified payment settlement", () => {
     });
     expect(fixture.rows("flights")[0].economyAvailable).toBe(5);
   });
-  it.each([60000, 100000])(
-    "preserves boarded travel and reconciles a verified refund of %i after OUT",
-    async firstRefund => {
+  it.each(
+    ["final closure", "boarding before closure"].flatMap(phase =>
+      [60000, 100000].map(firstRefund => ({ phase, firstRefund }))
+    )
+  )(
+    "preserves travel and reconciles a verified refund of $firstRefund after $phase",
+    async ({ firstRefund, phase }) => {
       await event("checkout.session.completed", payment());
-      Object.assign(fixture.rows("flights")[0], {
-        dcsClosedAt: new Date(),
-        stationOffBlocksAt: new Date(),
-      });
+      if (phase === "final closure")
+        Object.assign(fixture.rows("flights")[0], {
+          dcsClosedAt: new Date(),
+          stationOffBlocksAt: new Date(),
+        });
+      const attendance = {
+        id: 12,
+        bookingId: 7,
+        passengerId: 14,
+        flightId: 4,
+        state: "boarded" as const,
+      };
+      await fixture.db.insert(dcsPassengerStates).values(attendance);
       const seat = {
         id: 12,
         bookingId: 7,
@@ -369,7 +383,10 @@ describe("verified payment settlement", () => {
       expect(fixture.rows("payment_receipts")[0]).toMatchObject({
         refundedAmount: firstRefund,
         settlementStatus: "review_required",
-        settlementError: expect.stringMatching(/departure reconciliation/i),
+        settlementError:
+          phase === "final closure"
+            ? DepartureReleaseError.reason
+            : DepartureReleaseError.boardedReason,
       });
       // Further cumulative provider deliveries update the financial record while retaining the departure review.
       await refund(100000);
@@ -395,6 +412,7 @@ describe("verified payment settlement", () => {
         seatsReserved: true,
       });
       expect(fixture.rows("seat_inventory")).toMatchObject([seat]);
+      expect(fixture.rows("dcs_passenger_states")).toMatchObject([attendance]);
       expect(fixture.rows("flights")[0].economyAvailable).toBe(4);
     }
   );

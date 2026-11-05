@@ -5,7 +5,8 @@
  * Delegates to the codeshare service which handles both codeshare
  * and interline agreement management.
  *
- * IATA Resolution 780/788 compliance
+ * Local agreement and proration planning. No accepted external ticketing,
+ * baggage-transfer or settlement transport is installed.
  */
 
 export {
@@ -21,3 +22,4 @@ export {
 } from "./codeshare.service";
 
 export type { UpdateInterlineAgreementInput } from "./codeshare.service";
+export { getInterlineExecutionCapability } from "./distribution-readiness.service";

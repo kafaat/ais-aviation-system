@@ -62,7 +62,10 @@ export async function verifyUnpaidInvoices(
       segments: JSON.stringify(
         ids.map(id => ({ flightId: id, segmentKey: `SEG-${id}` }))
       ),
-      offerPayload: JSON.stringify({ pricing: { passengerCount: 1 } }),
+      offerPayload: JSON.stringify({
+        ndcVersion: "21.3",
+        pricing: { passengerCount: 1 },
+      }),
       expiresAt: new Date(Date.now() + 600000),
     });
     return offerId;

@@ -5,6 +5,7 @@ import {
   eq,
   exists,
   gte,
+  getTableColumns,
   inArray,
   isNull,
   lt,
@@ -752,21 +753,55 @@ async function loadUplift(
 ) {
   if (!coupons.length)
     return new Map<number, (typeof aviationEvidence.$inferSelect)[]>();
+  const proofCoupon = alias(ticketCoupons, "finance_uplift_coupon");
+  const proofBooking = alias(bookings, "finance_uplift_booking");
+  const proofFlight = alias(flights, "finance_uplift_flight");
+  // Use the same complete reference object as the in-memory verifier. A
+  // partially populated ingest snapshot must not borrow payload fields.
+  const reference = sql`CASE WHEN LOWER(JSON_TYPE(${aviationEvidence.ingestSnapshot})) = 'object'
+    THEN ${aviationEvidence.ingestSnapshot} ELSE ${aviationEvidence.payload} END`;
+  const referenceId = (field: "couponId" | "bookingId" | "passengerId") =>
+    sql`JSON_EXTRACT(${reference}, ${`$.${field}`})`;
   const rows = bounded(
     await db
-      .select()
+      .select(getTableColumns(aviationEvidence))
       .from(aviationEvidence)
+      .innerJoin(
+        proofCoupon,
+        and(
+          sql`${referenceId("couponId")} = ${proofCoupon.id}`,
+          sql`${referenceId("bookingId")} = ${proofCoupon.bookingId}`,
+          sql`${referenceId("passengerId")} = ${proofCoupon.passengerId}`,
+          eq(aviationEvidence.flightId, proofCoupon.flightId)
+        )
+      )
+      .innerJoin(
+        proofBooking,
+        and(
+          eq(proofBooking.id, proofCoupon.bookingId),
+          sameTenant(aviationEvidence.tenantId, proofBooking.tenantId)
+        )
+      )
+      .innerJoin(
+        proofFlight,
+        and(
+          eq(proofFlight.id, proofCoupon.flightId),
+          sameTenant(proofFlight.tenantId, proofBooking.tenantId)
+        )
+      )
       .where(
         and(
           eq(aviationEvidence.kind, "coupon_uplift"),
           scopeCondition(aviationEvidence.tenantId, scope),
           inArray(
-            sql`COALESCE(JSON_EXTRACT(${aviationEvidence.ingestSnapshot}, '$.couponId'), JSON_EXTRACT(${aviationEvidence.payload}, '$.couponId'))`,
-            coupons.map(c => c.couponId)
+            proofCoupon.id,
+            coupons.map(coupon => coupon.couponId)
           ),
-          inArray(aviationEvidence.flightId, [
-            ...new Set(coupons.map(c => c.flightId)),
-          ])
+          sql`LOWER(JSON_TYPE(${referenceId("couponId")})) = 'integer'`,
+          sql`LOWER(JSON_TYPE(${referenceId("bookingId")})) = 'integer'`,
+          sql`LOWER(JSON_TYPE(${referenceId("passengerId")})) = 'integer'`,
+          gte(aviationEvidence.observedAt, proofCoupon.createdAt),
+          gte(aviationEvidence.observedAt, proofFlight.departureTime)
         )
       )
       .orderBy(asc(aviationEvidence.observedAt), asc(aviationEvidence.id))

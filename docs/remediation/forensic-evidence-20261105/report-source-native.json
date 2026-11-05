@@ -1,0 +1,25 @@
+{
+  "findings": ["CAP-01"],
+  "source": {
+    "commit": "b9995f9f4e50b215a8c731e96b8aef3ee307e5bd",
+    "tree": "403569ffd198b9132d8e8a750db5191fd546a0bb",
+    "status": "",
+    "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "result": {
+    "passed": 116,
+    "failed": 0,
+    "skipped": 0,
+    "suites": 3
+  },
+  "receiptSha256": "5ed1d703222df284e6dabbdaed769be9ffc0a92d3501565bce6e7834dc3b70f6",
+  "resultsSha256": "f0e6ea3bc30cc94587e5e7f22734daaab942ff19bf8c368a320b565c583f0168",
+  "filesAtTestedCommit": {
+    "server/services/standard-reports-ops.service.ts": "0cbf2496b3f1dc46fcfa06d25d2c47f5ca1eaaf08e79bf60e348b9b5bdc20ac2",
+    "server/services/standard-reports-finance.service.ts": "9568027dd07eb8513484c0f30bf1948ba94361e819d7b094534482ba8e38ff62"
+  },
+  "limits": [
+    "116 native cases validate current local SQL readers and boundaries, not all99 reports or external source acceptance.",
+    "Catalog remains36 available,35partial,28blocked; exact per-report dependencies are retained."
+  ]
+}

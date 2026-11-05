@@ -1,4 +1,5 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { transactionMemory } from "./helpers/transaction-memory";
 const boundary = vi.hoisted(() => ({
   db: null as ReturnType<typeof transactionMemory>["db"] | null,
@@ -12,6 +13,11 @@ import {
 import { generateAPISMessage } from "../services/apis.service";
 
 afterEach(() => vi.unstubAllEnvs());
+beforeEach(() => {
+  vi.stubEnv("AIS_ENABLE_DEMOS", "true");
+  vi.stubEnv("AIS_TYPE_B_TRANSPORT_ENABLED", "true");
+  vi.stubEnv("AIS_PROVIDER_BOUNDARY", "open");
+});
 
 const outbound =
   "UNB+IATA:1+AIR+AUTH+261103:1200+I'UNH+M+PNRGOV:21:1:IA+TX'UNT+2+M'UNZ+1+I'";
@@ -26,6 +32,9 @@ it("applies only the original message's reply and keeps the first receipt on rep
         tenant_id: 1,
         messageType: "PNRGOV",
         messageContent: outbound,
+        messageDigest: createHash("sha256").update(outbound).digest("hex"),
+        providerMessageId: "fixture-authority-10",
+        sentAt: new Date("2026-11-03T12:00:00Z"),
         direction: "outbound",
         status: "sent",
       },

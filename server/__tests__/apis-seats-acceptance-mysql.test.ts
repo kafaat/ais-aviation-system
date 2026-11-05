@@ -41,6 +41,7 @@ const tables = [
   schema.seatMaps,
   schema.seatInventory,
   schema.paymentReceipts,
+  schema.ordinaryBookingRefunds,
   schema.dcsFlightOperations,
   schema.dcsPassengerStates,
   schema.dcsOperationEvents,
@@ -1064,6 +1065,197 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
       state.db = db;
       connection.release();
     }
+  });
+
+  it("refuses a stale seat release after a competing owner claims the seat", async () => {
+    await adminSeats().initializeFlightSeats({ flightId: 41, seatMapId: 51 });
+    await seats().selectSeat({
+      flightId: 41,
+      seatNumber: "1A",
+      bookingId: 71,
+      passengerId: 81,
+    });
+    await db.insert(schema.bookings).values(
+      booking(72, {
+        userId: 10,
+        numberOfPassengers: 1,
+      })
+    );
+    await db.insert(schema.passengers).values({
+      id: 83,
+      bookingId: 72,
+      tenantId: 3,
+      firstName: "Synthetic",
+      lastName: "Replacement",
+      type: "adult",
+    });
+
+    const connection = await pool!.getConnection();
+    const readerDb = drizzle(connection, { schema, mode: "default" });
+    // Hold the real router preflight result after SQL has read owner 9's seat.
+    // A competing owner completes release/selection before that result resumes.
+    const gate = holdStatement(
+      connection,
+      /^select .*`bookingId`.*`passengerId`.* from `seat_inventory`/i,
+      "after"
+    );
+    state.db = readerDb;
+    const releasing = seats().releaseSeat({ flightId: 41, seatNumber: "1A" });
+    try {
+      await Promise.race([
+        gate.entered,
+        releasing.then(() => {
+          throw new Error("Seat release did not reach its preflight barrier");
+        }),
+      ]);
+      state.db = db;
+      await seats().releaseSeat({ flightId: 41, seatNumber: "1A" });
+      await seatMapRouter.createCaller(context(10)).selectSeat({
+        flightId: 41,
+        seatNumber: "1A",
+        bookingId: 72,
+        passengerId: 83,
+      });
+      const replacementSeats = await db.select().from(schema.seatInventory);
+      const replacementPassengers = await db.select().from(schema.passengers);
+      expect(
+        replacementSeats.find(row => row.seatNumber === "1A")
+      ).toMatchObject({
+        bookingId: 72,
+        passengerId: 83,
+        status: "occupied",
+      });
+      expect(replacementPassengers.find(row => row.id === 83)).toMatchObject({
+        seatNumber: "1A",
+      });
+
+      gate.release();
+      await expect(releasing).rejects.toMatchObject({
+        code: "CONFLICT",
+        message: "Seat assignment changed; refresh and retry",
+      });
+      expect(await db.select().from(schema.seatInventory)).toEqual(
+        replacementSeats
+      );
+      expect(await db.select().from(schema.passengers)).toEqual(
+        replacementPassengers
+      );
+    } finally {
+      gate.release();
+      await releasing.catch(() => undefined);
+      gate.restore();
+      state.db = db;
+      connection.release();
+    }
+  });
+
+  it("waits for a competing booking owner transfer and reauthorizes the locked booking", async () => {
+    await adminSeats().initializeFlightSeats({ flightId: 41, seatMapId: 51 });
+    await seats().selectSeat({
+      flightId: 41,
+      seatNumber: "1A",
+      bookingId: 71,
+      passengerId: 81,
+    });
+    const beforeSeats = await db.select().from(schema.seatInventory);
+    const beforePassengers = await db.select().from(schema.passengers);
+    const connection = await pool!.getConnection();
+    const transfer = await pool!.getConnection();
+    const releaserDb = drizzle(connection, { schema, mode: "default" });
+    const gate = holdStatement(
+      connection,
+      /^select .* from `bookings`.* for update$/i
+    );
+    state.db = releaserDb;
+    const releasing = seats().releaseSeat({ flightId: 41, seatNumber: "1A" });
+    let settled = false;
+    const outcome = releasing.then(
+      value => {
+        settled = true;
+        return { value };
+      },
+      error => {
+        settled = true;
+        return { error };
+      }
+    );
+    let nativeWait = false;
+    try {
+      await Promise.race([
+        gate.entered,
+        outcome.then(() => {
+          throw new Error(
+            "Seat release did not reach its booking-lock barrier"
+          );
+        }),
+      ]);
+      await transfer.beginTransaction();
+      await transfer.query(
+        "UPDATE bookings SET userId = ? WHERE id = ?",
+        [10, 71]
+      );
+      gate.release();
+
+      const deadline = performance.now() + 5000;
+      while (!settled && performance.now() < deadline) {
+        const [waits] = await admin!.query<mysql.RowDataPacket[]>(
+          `SELECT COUNT(*) AS count
+           FROM performance_schema.data_lock_waits AS waits
+           JOIN performance_schema.data_locks AS locks
+             ON locks.ENGINE = waits.ENGINE
+            AND locks.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID
+           WHERE locks.OBJECT_SCHEMA = ? AND locks.OBJECT_NAME = 'bookings'`,
+          [databaseName]
+        );
+        nativeWait = Number(waits[0]?.count) > 0;
+        if (nativeWait) break;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(nativeWait).toBe(true);
+      expect(settled).toBe(false);
+      await transfer.commit();
+      await expect(releasing).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(await db.select().from(schema.seatInventory)).toEqual(beforeSeats);
+      expect(await db.select().from(schema.passengers)).toEqual(
+        beforePassengers
+      );
+      expect(
+        (
+          await db
+            .select()
+            .from(schema.bookings)
+            .where(eq(schema.bookings.id, 71))
+        )[0].userId
+      ).toBe(10);
+    } finally {
+      gate.release();
+      await transfer.rollback();
+      await outcome;
+      gate.restore();
+      state.db = db;
+      connection.release();
+      transfer.release();
+    }
+  });
+
+  it("refuses cross-tenant seat release without clearing the native assignment", async () => {
+    await adminSeats().initializeFlightSeats({ flightId: 41, seatMapId: 51 });
+    await seats().selectSeat({
+      flightId: 41,
+      seatNumber: "1A",
+      bookingId: 71,
+      passengerId: 81,
+    });
+    const beforeSeats = await db.select().from(schema.seatInventory);
+    const beforePassengers = await db.select().from(schema.passengers);
+    await expect(
+      seatMapRouter.createCaller(context(9, 4)).releaseSeat({
+        flightId: 41,
+        seatNumber: "1A",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await db.select().from(schema.seatInventory)).toEqual(beforeSeats);
+    expect(await db.select().from(schema.passengers)).toEqual(beforePassengers);
   });
 
   it.each(["reader", "issuer", "pdf"] as const)(

@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
   dcsBagReturnGrants,
@@ -21,6 +21,7 @@ import {
   dcsCheckInInput,
   dcsReturnBagInput,
   dcsBagReturnGrantInput,
+  dcsBagReturnGrantListInput,
   dcsTransitionInput,
   type DcsDesk,
 } from "../contracts/dcs-operations";
@@ -527,6 +528,84 @@ async function stationGrant(
     );
   const [grant] = await (lock ? query.for("update") : query);
   return grant ?? null;
+}
+
+/** Paginated administration view scoped by the same witness flight as writes. */
+export async function listBagReturnGrants(
+  raw: z.infer<typeof dcsBagReturnGrantListInput>,
+  actor: DcsActor
+) {
+  const input = dcsBagReturnGrantListInput.parse(raw);
+  if (!isAdmin(actor.role) && actor.role !== "airline_admin")
+    reject("Airline administration is required", "FORBIDDEN");
+  return await database().transaction(async tx => {
+    const flight = await scopedFlight(tx, input.flightId, actor);
+    if (!flight.tenantId)
+      reject("A scoped airline flight is required", "FORBIDDEN");
+    await assertTenantOperational(tx, flight.tenantId);
+    const found = await tx
+      .select()
+      .from(dcsBagReturnGrants)
+      .where(
+        and(
+          eq(dcsBagReturnGrants.tenantId, flight.tenantId),
+          eq(dcsBagReturnGrants.airlineId, flight.airlineId),
+          eq(dcsBagReturnGrants.airportId, flight.originId),
+          input.after == null
+            ? undefined
+            : gt(dcsBagReturnGrants.id, input.after)
+        )
+      )
+      .orderBy(asc(dcsBagReturnGrants.id))
+      .limit(input.limit + 1);
+    const grants = found.slice(0, input.limit);
+    const staff = grants.length
+      ? await tx
+          .select({ id: users.id, name: users.name, role: users.role })
+          .from(users)
+          .where(
+            and(
+              eq(users.tenantId, flight.tenantId),
+              inArray(
+                users.id,
+                grants.map(grant => grant.staffId)
+              )
+            )
+          )
+      : [];
+    return {
+      scope: {
+        flightId: flight.id,
+        flightNumber: flight.flightNumber,
+        tenantId: flight.tenantId,
+        airlineId: flight.airlineId,
+        airportId: flight.originId,
+      },
+      // The existing grant has no expiry column. Do not invent a client-only
+      // expiry that the handover authority would not enforce.
+      validity: "until_revoked" as const,
+      grants: grants.map(grant => {
+        const employee = staff.find(
+          candidate => candidate.id === grant.staffId
+        );
+        return {
+          id: grant.id,
+          staffId: grant.staffId,
+          staffName: employee?.name ?? null,
+          staffRole: employee?.role ?? null,
+          eligible: Boolean(
+            employee &&
+            ["ops", "airline_admin", "admin", "super_admin"].includes(
+              employee.role
+            )
+          ),
+          enabled: grant.enabled,
+        };
+      }),
+      nextCursor:
+        found.length > input.limit ? (grants.at(-1)?.id ?? null) : null,
+    };
+  });
 }
 
 /** Derive the authorized tenant, operating carrier and origin from the witness flight. */

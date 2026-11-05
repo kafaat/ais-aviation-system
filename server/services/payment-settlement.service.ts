@@ -7,6 +7,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   bookings,
   bookingRefundItems,
+  ordinaryBookingRefunds,
   flights,
   bookingModifications,
   orderServiceRefunds,
@@ -30,6 +31,7 @@ import {
 } from "./booking-settlement.service";
 import { recordEvent } from "./outbox.service";
 import { isActiveSplitPayment } from "./booking-checkout.service";
+import { reconcileWalletFunding } from "./wallet-funding.service";
 
 export interface VerifiedPayment {
   paymentIntentId: string;
@@ -660,6 +662,7 @@ export async function settleVerifiedRefund(
       .for("update");
     if (
       planned &&
+      planned.refundAmount > 0 &&
       (!input.refundId ||
         planned.status !== "succeeded" ||
         planned.refundId !== input.refundId ||
@@ -667,6 +670,26 @@ export async function settleVerifiedRefund(
     )
       return;
   }
+  const [ordinaryCancellation] = ownerBooking
+    ? await tx
+        .select()
+        .from(ordinaryBookingRefunds)
+        .where(
+          eq(ordinaryBookingRefunds.paymentIntentId, input.paymentIntentId)
+        )
+        .for("update")
+    : [];
+  // The charge aggregate can include a still-pending refund. Require the saved
+  // cancellation's individual success before applying it or releasing carriage.
+  if (
+    ordinaryCancellation &&
+    !ordinaryCancellation.completedAt &&
+    (ordinaryCancellation.status !== "succeeded" ||
+      ordinaryCancellation.refundId !== input.refundId ||
+      input.amountRefunded !==
+        ordinaryCancellation.baseRefundedAmount + ordinaryCancellation.amount)
+  )
+    return;
   const servicePlans = ownerBooking
     ? await tx
         .select()
@@ -703,7 +726,13 @@ export async function settleVerifiedRefund(
   )
     throw new Error("Invalid cumulative refund");
   const delta = input.amountRefunded - receipt.refundedAmount;
-  if (delta <= 0) return;
+  if (delta <= 0) {
+    // A charge event may have already recorded this amount before an older
+    // cancellation was adopted. Zero new money must not lose the intent.
+    if (ownerBooking && ordinaryCancellation?.status === "succeeded")
+      await completeOrdinaryCancellation(tx, ordinaryCancellation);
+    return;
+  }
   await tx
     .update(paymentReceipts)
     .set({ refundedAmount: input.amountRefunded })
@@ -722,19 +751,10 @@ export async function settleVerifiedRefund(
   if (receipt.kind === "wallet_topup") {
     const wallet = ownerWallet;
     if (!wallet) throw new Error("Refund wallet missing");
-    const balance = wallet.balance - delta;
-    await tx
-      .update(wallets)
-      .set({ balance, ...(balance < 0 ? { status: "frozen" as const } : {}) })
-      .where(eq(wallets.id, wallet.id));
-    await tx.insert(walletTransactions).values({
-      walletId: wallet.id,
-      userId: wallet.userId,
-      type: "withdrawal",
-      amount: -delta,
-      balanceAfter: balance,
-      description: "Provider reversed wallet funding",
-      stripePaymentIntentId: input.paymentIntentId,
+    await reconcileWalletFunding(tx, {
+      receipt: { ...receipt, refundedAmount: input.amountRefunded },
+      wallet,
+      eventId: input.eventId,
     });
   } else if (
     receipt.bookingId &&
@@ -787,7 +807,7 @@ export async function settleVerifiedRefund(
       .where(eq(payments.stripePaymentIntentId, input.paymentIntentId));
     if (
       receipt.settlementStatus === "review_required" &&
-      receipt.settlementError !== DepartureReleaseError.reason
+      !DepartureReleaseError.isReason(receipt.settlementError)
     ) {
       await tx
         .update(paymentReceipts)
@@ -795,6 +815,8 @@ export async function settleVerifiedRefund(
         .where(eq(paymentReceipts.paymentIntentId, input.paymentIntentId));
     }
   }
+  if (ownerBooking && ordinaryCancellation?.status === "succeeded")
+    await completeOrdinaryCancellation(tx, ordinaryCancellation);
   await recordEvent(tx, {
     aggregateType: "payment",
     aggregateId: input.paymentIntentId,
@@ -814,6 +836,44 @@ export async function settleVerifiedRefund(
   });
 }
 
+async function completeOrdinaryCancellation(
+  tx: SettlementTx,
+  intent: typeof ordinaryBookingRefunds.$inferSelect
+) {
+  if (intent.completedAt) return;
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, intent.bookingId))
+    .for("update");
+  const [receipt] = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, intent.paymentIntentId))
+    .for("update");
+  if (!booking || !receipt)
+    throw new Error("Cancellation settlement owner missing");
+  let completed = booking.status === "cancelled";
+  if (!completed && receipt.settlementStatus === "applied")
+    completed = await cancelAfterPartialRefund(
+      tx,
+      booking,
+      intent.paymentIntentId,
+      intent.actorId
+    );
+  await tx
+    .update(ordinaryBookingRefunds)
+    .set(
+      completed
+        ? { completedAt: new Date(), errorCode: null }
+        : {
+            status: "review_required",
+            errorCode: "cancellation_reconciliation_required",
+          }
+    )
+    .where(eq(ordinaryBookingRefunds.bookingId, intent.bookingId));
+}
+
 /** A provider-confirmed, fee-bearing cancellation keeps its financial receipt
  * even when final departure prevents releasing the passenger's itinerary. */
 export async function cancelAfterPartialRefund(
@@ -827,7 +887,7 @@ export async function cancelAfterPartialRefund(
     .from(paymentReceipts)
     .where(eq(paymentReceipts.paymentIntentId, paymentIntentId))
     .for("update");
-  if (receipt?.reason === DepartureReleaseError.reason) return;
+  if (DepartureReleaseError.isReason(receipt?.reason)) return false;
   try {
     await tx.transaction(inner =>
       cancelBookingResources(
@@ -837,6 +897,7 @@ export async function cancelAfterPartialRefund(
         actorId
       )
     );
+    return true;
   } catch (error) {
     if (!(error instanceof DepartureReleaseError)) throw error;
     await requireCollectionReview(
@@ -845,5 +906,6 @@ export async function cancelAfterPartialRefund(
       booking,
       error.message
     );
+    return false;
   }
 }

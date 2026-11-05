@@ -1,3 +1,8 @@
+import {
+  hasAcceptedPaymentIntegration,
+  paymentIntegrationInfo,
+  requireAcceptedPaymentIntegration,
+} from "./acceptance";
 import type {
   PaymentProvider,
   PaymentProviderInfo,
@@ -32,8 +37,9 @@ export class TabbyProvider implements PaymentProvider {
   }
 
   isAvailable(): boolean {
-    return Boolean(
-      process.env.TABBY_PUBLIC_KEY && process.env.TABBY_SECRET_KEY
+    return (
+      hasAcceptedPaymentIntegration(this.id) &&
+      Boolean(process.env.TABBY_PUBLIC_KEY && process.env.TABBY_SECRET_KEY)
     );
   }
 
@@ -51,12 +57,14 @@ export class TabbyProvider implements PaymentProvider {
       currencies: ["SAR", "AED", "KWD", "BHD"],
       region: "mena",
       enabled: this.isAvailable(),
+      ...paymentIntegrationInfo(this.id),
     };
   }
 
   async createCheckoutSession(
     input: CheckoutSessionInput
   ): Promise<CheckoutSessionResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const amountInSAR = (input.amount / 100).toFixed(2);
 
     const payload = {
@@ -119,6 +127,7 @@ export class TabbyProvider implements PaymentProvider {
   }
 
   async verifyPayment(sessionId: string): Promise<PaymentVerificationResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(`${this.baseUrl}/payments/${sessionId}`, {
       headers: {
         Authorization: `Bearer ${this.secretKey}`,
@@ -143,6 +152,7 @@ export class TabbyProvider implements PaymentProvider {
   }
 
   async refund(input: RefundInput): Promise<RefundResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(
       `${this.baseUrl}/payments/${input.transactionId}/refunds`,
       {

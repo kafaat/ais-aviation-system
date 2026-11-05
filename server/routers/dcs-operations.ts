@@ -13,6 +13,8 @@ import {
   dcsTransitionInput,
   dcsBagReturnGrantInput,
   dcsBagReturnGrantResult,
+  dcsBagReturnGrantListInput,
+  dcsBagReturnGrantList,
   dcsReturnBagInput,
   dcsReturnBagResult,
 } from "../contracts/dcs-operations";
@@ -22,6 +24,7 @@ import {
   getDcsDesk,
   returnDcsBag,
   setBagReturnGrant,
+  listBagReturnGrants,
   transitionDcsPassenger,
   type DcsActor,
 } from "../services/dcs-operations.service";
@@ -116,6 +119,10 @@ export const dcsOperationsRouter = router({
     .input(dcsBagReturnGrantInput)
     .output(dcsBagReturnGrantResult)
     .mutation(({ input, ctx }) => setBagReturnGrant(input, actor(ctx))),
+  bagReturnGrants: airlineAdminProcedure
+    .input(dcsBagReturnGrantListInput)
+    .output(dcsBagReturnGrantList)
+    .query(({ input, ctx }) => listBagReturnGrants(input, actor(ctx))),
   returnBag: airlineOpsProcedure
     .input(dcsReturnBagInput)
     .output(dcsReturnBagResult)

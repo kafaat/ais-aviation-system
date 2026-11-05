@@ -15,8 +15,10 @@ const mocks = vi.hoisted(() => ({
   retrieveRefund: vi.fn(),
   listRefunds: vi.fn(),
   calculateFee: vi.fn(),
-  settle: vi.fn(),
-  cancel: vi.fn(),
+  reserve: vi.fn(),
+  process: vi.fn(),
+  request: null as any,
+  departureTime: new Date("2030-01-01"),
   assertUnused: vi.fn(),
   refundsState: [] as Array<{
     id: string;
@@ -32,9 +34,13 @@ vi.mock("./ticket-coupons.service", () => ({
 vi.mock("./booking-settlement.service", () => ({
   assertBookingDepartureReleasable: vi.fn(),
 }));
-vi.mock("./payment-settlement.service", () => ({
-  settleVerifiedRefund: mocks.settle,
-  cancelAfterPartialRefund: mocks.cancel,
+// These tests isolate authorization, quoting and provider-command selection.
+// ordinary-refund-boundary.test.ts exercises the real durable processor and
+// transactional cancellation effects.
+vi.mock("./ordinary-refund.service", () => ({
+  getOrdinaryRefundCancellation: vi.fn(async () => undefined),
+  reserveOrdinaryRefundCancellation: mocks.reserve,
+  processOrdinaryRefundCancellation: mocks.process,
 }));
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
 vi.mock("../stripe", () => ({
@@ -60,6 +66,17 @@ vi.mock("../stripe", () => ({
 vi.mock("./email.service", () => ({ sendRefundConfirmation: vi.fn() }));
 vi.mock("./cancellation-fees.service", () => ({
   calculateCancellationFee: mocks.calculateFee,
+}));
+vi.mock("./cancellation-policy.service", () => ({
+  quoteCancellationPolicy: (
+    _tx: unknown,
+    current: { totalAmount: number }
+  ) => ({
+    ...mocks.calculateFee(current.totalAmount, mocks.departureTime),
+    quoteHash: "a".repeat(64),
+    policyReason: "time_based",
+    requiresZeroRefundConfirmation: false,
+  }),
 }));
 vi.mock("./metrics.service", () => ({ trackRefundIssued: vi.fn() }));
 vi.mock("./notification.service", () => ({ notifyRefundProcessed: vi.fn() }));
@@ -98,6 +115,18 @@ function refundRecord(
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.refundsState.length = 0;
+  mocks.request = null;
+  mocks.departureTime = new Date("2030-01-01");
+  mocks.reserve.mockImplementation(async (_database, input) => {
+    mocks.request = input.request;
+  });
+  mocks.process.mockImplementation(
+    async (_bookingId, observed) =>
+      observed ??
+      mocks.refund(mocks.request, {
+        idempotencyKey: mocks.request.metadata.refundOperationId,
+      })
+  );
 
   const query = {
     from: vi.fn().mockReturnThis(),
@@ -174,7 +203,8 @@ it("exposes the used-carriage refusal to the cancellation form before quoting a 
 function expectNoFinancialWrites() {
   expect(mocks.refund).not.toHaveBeenCalled();
   expect(mocks.update).not.toHaveBeenCalled();
-  expect(mocks.settle).not.toHaveBeenCalled();
+  expect(mocks.reserve).not.toHaveBeenCalled();
+  expect(mocks.process).not.toHaveBeenCalled();
 }
 
 describe("refund service authorization", () => {
@@ -311,12 +341,12 @@ describe("refund amount validation", () => {
   });
 
   it.each([0, -1, 1.5, 10001, NaN, Infinity])(
-    "rejects invalid calculated refund %s",
+    "refuses a provider refund with calculated amount %s",
     async refundAmount => {
       mocks.calculateFee.mockReturnValue({ refundAmount });
 
       await expect(createRefund(input, owner)).rejects.toMatchObject({
-        code: "BAD_REQUEST",
+        code: refundAmount === 0 ? "PRECONDITION_FAILED" : "BAD_REQUEST",
       });
 
       expectNoFinancialWrites();
@@ -394,6 +424,7 @@ describe("refund amount validation", () => {
     mocks.calculateFee.mockImplementation(calculateCancellationFee);
     vi.useFakeTimers({ toFake: ["Date"] });
     const flight = { departureTime: new Date("2030-01-02T21:00:00Z") };
+    mocks.departureTime = flight.departureTime;
     try {
       vi.setSystemTime(new Date("2030-01-01T20:59:59Z"));
       mocks.limit.mockReset();
@@ -422,7 +453,7 @@ describe("refund amount validation", () => {
       const retry = await createRefund(input, owner);
       expect(retry).toMatchObject({ refundId: "re_first", amount: 5000 });
       expect(mocks.refund).toHaveBeenCalledTimes(1);
-      expect(mocks.settle).toHaveBeenCalledTimes(1);
+      expect(mocks.process).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
@@ -476,35 +507,27 @@ describe("refund amount validation", () => {
   });
 });
 
-describe("refund cancels the itinerary", () => {
-  it("cancels the booking in the settlement transaction after a fee-bearing refund", async () => {
+describe("refund cancellation handoff", () => {
+  it("passes the immutable cancellation purpose, amount and trusted actor to the durable processor", async () => {
     await createRefund({ ...input, reason: "plans changed" }, owner);
-    expect(mocks.refund).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 8000 }),
-      expect.anything()
-    );
-    expect(mocks.settle).toHaveBeenCalledTimes(1);
-    expect(mocks.cancel).toHaveBeenCalledTimes(1);
-    expect(mocks.cancel).toHaveBeenCalledWith(
+    expect(mocks.reserve).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ id: 10, status: "confirmed" }),
-      booking.stripePaymentIntentId,
-      owner.id
+      expect.objectContaining({
+        bookingId: 10,
+        actor: owner,
+        userId: owner.id,
+        baseRefundedAmount: 0,
+        request: expect.objectContaining({
+          amount: 8000,
+          payment_intent: "pi_test",
+          metadata: {
+            bookingId: "10",
+            refundOperationId: "booking-10-cancel-pi_test",
+          },
+        }),
+      })
     );
-  });
-  it("does not cancel twice when settlement already cancelled a fully refunded booking", async () => {
-    mocks.limit.mockReset();
-    mocks.limit
-      .mockResolvedValueOnce([booking])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ paymentIntentId: "pi_test" }])
-      .mockResolvedValueOnce([{ ...booking, status: "cancelled" }]);
-    mocks.calculateFee.mockReturnValue({ refundAmount: 10000 });
-    await createRefund(input, owner);
-    expect(mocks.settle).toHaveBeenCalledTimes(1);
-    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(mocks.process).toHaveBeenCalledWith(10, undefined);
   });
   it("refuses to move money for a paid booking whose collection has no receipt", async () => {
     mocks.limit.mockReset();
@@ -518,6 +541,6 @@ describe("refund cancels the itinerary", () => {
       code: "PRECONDITION_FAILED",
     });
     expectNoFinancialWrites();
-    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(mocks.process).not.toHaveBeenCalled();
   });
 });

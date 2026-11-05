@@ -576,12 +576,7 @@ export async function addFlightFavorite(userId: number, flightId: number) {
       )
       .limit(1);
 
-    if (existing) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "This flight is already in your favorites",
-      });
-    }
+    if (existing) return existing;
 
     // Verify flight exists
     const [flight] = await db
@@ -602,13 +597,30 @@ export async function addFlightFavorite(userId: number, flightId: number) {
       flightId,
     };
 
-    const [result] = await db.insert(userFlightFavorites).values(favoriteData);
-
-    return {
-      id: result.insertId,
-      ...favoriteData,
-      createdAt: new Date(),
-    };
+    // Concurrent saves and transport retries reuse the unique owner/flight row.
+    await db
+      .insert(userFlightFavorites)
+      .values(favoriteData)
+      .onDuplicateKeyUpdate({
+        set: { flightId: sql`${userFlightFavorites.flightId}` },
+      });
+    const [saved] = await db
+      .select()
+      .from(userFlightFavorites)
+      .where(
+        and(
+          eq(userFlightFavorites.userId, userId),
+          eq(userFlightFavorites.flightId, flightId)
+        )
+      )
+      .limit(1);
+    if (!saved) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Favorite changed; please try again",
+      });
+    }
+    return saved;
   } catch (error) {
     if (error instanceof TRPCError) throw error;
     console.error("[Favorites Service] Error adding flight favorite:", error);
@@ -652,7 +664,12 @@ export async function removeFlightFavorite(userId: number, flightId: number) {
 
     await db
       .delete(userFlightFavorites)
-      .where(eq(userFlightFavorites.id, favorite.id));
+      .where(
+        and(
+          eq(userFlightFavorites.id, favorite.id),
+          eq(userFlightFavorites.userId, userId)
+        )
+      );
 
     return { success: true };
   } catch (error) {

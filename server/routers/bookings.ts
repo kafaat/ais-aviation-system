@@ -1,3 +1,4 @@
+import { isAdmin } from "../services/rbac.service";
 import { initialAncillarySchema } from "../services/initial-booking-ancillaries";
 import { checkInPassengers } from "../services/departure-control.service";
 import { departureState } from "../services/dcs-state.service";
@@ -180,7 +181,7 @@ export const bookingsRouter = router({
 
       assertTenantMatch(booking.tenantId, ctx.tenantId);
 
-      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+      if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
 
@@ -212,7 +213,7 @@ export const bookingsRouter = router({
 
       assertTenantMatch(booking.tenantId, ctx.tenantId);
 
-      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+      if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
 

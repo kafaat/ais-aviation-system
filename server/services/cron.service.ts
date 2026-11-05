@@ -130,6 +130,16 @@ export const PERIODIC_JOB_CATALOG = [
     },
   },
   {
+    name: "ordinaryRefunds",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { processPendingOrdinaryRefunds } =
+        await import("./ordinary-refund.service");
+      await processPendingOrdinaryRefunds();
+    },
+  },
+  {
     name: "splitRefunds",
     cron: "* * * * *",
     periodMs: 60_000,

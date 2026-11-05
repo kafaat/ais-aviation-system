@@ -13,7 +13,10 @@ import {
   releaseInventoryLock,
 } from "../../server/services/inventory-lock.service";
 import { cancelBooking } from "../../server/services/bookings.service";
-import type { SettlementTx } from "../../server/services/booking-settlement.service";
+import {
+  DepartureReleaseError,
+  type SettlementTx,
+} from "../../server/services/booking-settlement.service";
 import {
   settleVerifiedPayment,
   settleVerifiedRefund,
@@ -330,6 +333,44 @@ export async function verifyDcsCounterLifecycle(
     passengerId: number;
     flightId: number;
   }) => checkInDcsPassenger({ ...key, ...command() }, actor);
+
+  async function carriageSnapshot(bookingId: number, flightIds: number[]) {
+    return {
+      bookings: await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, bookingId)),
+      segments: await db
+        .select()
+        .from(s.bookingSegments)
+        .where(eq(s.bookingSegments.bookingId, bookingId))
+        .orderBy(asc(s.bookingSegments.id)),
+      coupons: await db
+        .select()
+        .from(s.ticketCoupons)
+        .where(eq(s.ticketCoupons.bookingId, bookingId))
+        .orderBy(asc(s.ticketCoupons.id)),
+      attendance: await db
+        .select()
+        .from(s.dcsPassengerStates)
+        .where(eq(s.dcsPassengerStates.bookingId, bookingId))
+        .orderBy(asc(s.dcsPassengerStates.id)),
+      seats: await db
+        .select()
+        .from(s.seatInventory)
+        .where(eq(s.seatInventory.bookingId, bookingId))
+        .orderBy(asc(s.seatInventory.id)),
+      capacity: await db
+        .select({
+          flightId: s.flights.id,
+          economyAvailable: s.flights.economyAvailable,
+          businessAvailable: s.flights.businessAvailable,
+        })
+        .from(s.flights)
+        .where(inArray(s.flights.id, flightIds))
+        .orderBy(asc(s.flights.id)),
+    };
+  }
 
   async function stationSnapshot(bookingIds: number[], flightIds: number[]) {
     return {
@@ -926,7 +967,10 @@ export async function verifyDcsCounterLifecycle(
         { ...j.key(), action: "offload", ...command() },
         actor
       );
-      await releaseSeat(flightId, "1B");
+      await releaseSeat(flightId, "1B", {
+        actor: { userId: ownerId, tenantId },
+        expected: { bookingId: j.bookingId, passengerId },
+      });
       const current = await getDcsDesk(flightId, actor);
       assert.equal(current.passengers[0].boardingDenied, true);
       assert.equal(current.passengers[0].attendanceState, "offloaded");
@@ -1029,7 +1073,7 @@ export async function verifyDcsCounterLifecycle(
   );
 
   await check(
-    "DCS: a concurrent refund cannot mix passenger, baggage and capacity snapshots in a manifest",
+    "DCS: a concurrent late refund preserves boarded manifest snapshots and capacity",
     async () => {
       const j = await journey();
       await staffCheckIn(j.key());
@@ -1045,6 +1089,12 @@ export async function verifyDcsCounterLifecycle(
         .select()
         .from(s.bookings)
         .where(eq(s.bookings.id, j.bookingId));
+      const carriage = await carriageSnapshot(j.bookingId, j.flightIds);
+      assert.equal(carriage.attendance[0].state, "boarded");
+      assert.equal(carriage.coupons[0].status, "C");
+      assert.equal(carriage.seats[0].status, "checked_in");
+      const paymentIntentId = `pi_dcs_counter_${j.bookingId}`;
+      const refundEventId = `evt_manifest_race_${randomUUID()}`;
       const pool = getPool();
       assert(pool);
       const control = await pool.getConnection();
@@ -1118,22 +1168,40 @@ export async function verifyDcsCounterLifecycle(
         pool.getConnection = originalGetConnection;
         refund = db.transaction(tx =>
           settleVerifiedRefund(tx, {
-            paymentIntentId: `pi_dcs_counter_${j.bookingId}`,
+            paymentIntentId,
             chargeId: `ch_manifest_race_${j.bookingId}`,
             amount: funded.totalAmount,
             amountRefunded: funded.totalAmount,
             currency: "sar",
-            eventId: `evt_manifest_race_${randomUUID()}`,
+            eventId: refundEventId,
           })
         );
         await refund;
-        const [reversed] = await db
+        const [receipt] = await db
           .select()
-          .from(s.bookings)
-          .where(eq(s.bookings.id, j.bookingId));
-        assert.equal(reversed.status, "cancelled");
-        assert.equal(reversed.paymentStatus, "refunded");
-        assert.equal(await storedSeat(j.key()), undefined);
+          .from(s.paymentReceipts)
+          .where(eq(s.paymentReceipts.paymentIntentId, paymentIntentId));
+        assert.equal(receipt.refundedAmount, funded.totalAmount);
+        assert.equal(receipt.settlementStatus, "review_required");
+        assert.equal(
+          receipt.settlementError,
+          DepartureReleaseError.boardedReason
+        );
+        const movements = await db
+          .select()
+          .from(s.financialLedger)
+          .where(eq(s.financialLedger.stripeEventId, refundEventId));
+        assert.equal(movements.length, 1);
+        assert.equal(movements[0].type, "refund");
+        assert.equal(
+          movements[0].amount,
+          (funded.totalAmount / 100).toFixed(2)
+        );
+        assert.equal(movements[0].currency, "SAR");
+        assert.deepEqual(
+          await carriageSnapshot(j.bookingId, j.flightIds),
+          carriage
+        );
         assert.equal(
           resumedConnection,
           undefined,
@@ -1145,16 +1213,23 @@ export async function verifyDcsCounterLifecycle(
         assert.deepEqual(during.passengers, before.passengers);
         assert.deepEqual(during.baggage, before.baggage);
         assert.deepEqual(during.capacity, before.capacity);
-        await assert.rejects(generateFlightManifest(j.key().flightId), {
-          code: "PRECONDITION_FAILED",
-          message: /reconciliation/i,
-        });
+        // Cash quarantine preserves the actual onboard carriage. A fresh
+        // report must agree with the paused snapshot, not erase the passenger
+        // or treat the retained seat and baggage as orphaned evidence.
+        const after = (await generateFlightManifest(j.key().flightId)).manifest;
+        assert.deepEqual(after.passengers, before.passengers);
+        assert.deepEqual(after.baggage, before.baggage);
+        assert.deepEqual(after.capacity, before.capacity);
         const closeout = await getFlightBaggageCloseout(
           j.key().flightId,
           tenantId
         );
         assert.equal(closeout.readyToClose, false);
-        assert(closeout.unresolvedRegistrations.includes(bag.tagNumber));
+        assert.equal(closeout.expectedBags, 1);
+        assert.equal(closeout.unexpectedBags, 0);
+        assert.deepEqual(closeout.unresolvedRegistrations, []);
+        assert.deepEqual(closeout.missingEntry, [bag.tagNumber]);
+        assert.deepEqual(closeout.missingLoading, [bag.tagNumber]);
       } finally {
         pool.getConnection = originalGetConnection;
         try {
@@ -1241,6 +1316,8 @@ export async function verifyDcsCounterLifecycle(
         { ...baglessSector, action: "board", ...command() },
         actor
       );
+      const baggedBefore = (await generateFlightManifest(j.key().flightId))
+        .manifest;
       const before = (await generateFlightManifest(baglessSector.flightId))
         .manifest;
       assert.equal(before.baggage.pieces, 0);
@@ -1265,21 +1342,30 @@ export async function verifyDcsCounterLifecycle(
         .update(s.seatInventory)
         .set({ checkInNonce: validSeat.checkInNonce })
         .where(eq(s.seatInventory.id, validSeat.id));
+      // Capture after restoring the intentional nonce-corruption control so
+      // its legitimate updatedAt changes cannot be mistaken for refund writes.
+      const carriage = await carriageSnapshot(j.bookingId, j.flightIds);
+      assert.equal(carriage.attendance.length, 2);
+      assert.equal(carriage.coupons.length, 2);
+      assert.equal(carriage.seats.length, 2);
+      assert(carriage.attendance.every(state => state.state === "boarded"));
+      assert(carriage.coupons.every(coupon => coupon.status === "C"));
+      assert(carriage.seats.every(seat => seat.status === "checked_in"));
       const [funded] = await db
         .select()
         .from(s.bookings)
         .where(eq(s.bookings.id, j.bookingId));
       const paymentIntentId = `pi_dcs_counter_${j.bookingId}`;
-      await db.transaction(tx =>
-        settleVerifiedRefund(tx, {
-          paymentIntentId,
-          chargeId: `ch_dcs_counter_${j.bookingId}`,
-          amount: funded.totalAmount,
-          amountRefunded: funded.totalAmount,
-          currency: "sar",
-          eventId: `evt_dcs_counter_refund_${randomUUID()}`,
-        })
-      );
+      const refund = {
+        paymentIntentId,
+        chargeId: `ch_dcs_counter_${j.bookingId}`,
+        amount: funded.totalAmount,
+        amountRefunded: funded.totalAmount,
+        currency: "sar",
+        eventId: `evt_dcs_counter_refund_${randomUUID()}`,
+      };
+      for (let i = 0; i < 2; i++)
+        await db.transaction(tx => settleVerifiedRefund(tx, refund));
       const [refunded] = await db
         .select()
         .from(s.bookings)
@@ -1288,40 +1374,55 @@ export async function verifyDcsCounterLifecycle(
         .select()
         .from(s.paymentReceipts)
         .where(eq(s.paymentReceipts.paymentIntentId, paymentIntentId));
-      assert.equal(refunded.paymentStatus, "refunded");
-      assert.equal(refunded.status, "cancelled");
+      assert.equal(refunded.paymentStatus, "paid");
+      assert.equal(refunded.status, "confirmed");
+      assert.equal(refunded.seatsReserved, true);
       assert.equal(receipt.refundedAmount, funded.totalAmount);
-      assert.equal(await storedSeat(j.key()), undefined);
-      const [state] = await db
+      assert.equal(receipt.settlementStatus, "review_required");
+      assert.equal(
+        receipt.settlementError,
+        DepartureReleaseError.boardedReason
+      );
+      const movements = await db
         .select()
-        .from(s.dcsPassengerStates)
-        .where(
-          and(
-            eq(s.dcsPassengerStates.bookingId, j.bookingId),
-            eq(s.dcsPassengerStates.passengerId, j.key().passengerId),
-            eq(s.dcsPassengerStates.flightId, j.key().flightId)
-          )
-        );
-      assert.equal(state.state, "boarded");
-      await assert.rejects(getDcsDesk(j.key().flightId, actor), {
-        code: "PRECONDITION_FAILED",
-        message: /reconciliation/i,
-      });
-      await assert.rejects(generateFlightManifest(baglessSector.flightId), {
-        code: "PRECONDITION_FAILED",
-        message: /reconciliation.*boarded passenger/i,
-      });
+        .from(s.financialLedger)
+        .where(eq(s.financialLedger.stripeEventId, refund.eventId));
+      assert.equal(
+        movements.length,
+        1,
+        "Repeated cash evidence records one refund delta"
+      );
+      assert.equal(movements[0].type, "refund");
+      assert.equal(movements[0].amount, (funded.totalAmount / 100).toFixed(2));
+      assert.equal(movements[0].currency, "SAR");
+      assert.deepEqual(
+        await carriageSnapshot(j.bookingId, j.flightIds),
+        carriage
+      );
+      assert.equal(
+        (await getDcsDesk(j.key().flightId, actor)).passengers[0]
+          .attendanceState,
+        "boarded"
+      );
+      for (const [flightId, prior] of [
+        [j.key().flightId, baggedBefore],
+        [baglessSector.flightId, before],
+      ] as const) {
+        const current = (await generateFlightManifest(flightId)).manifest;
+        assert.deepEqual(current.passengers, prior.passengers);
+        assert.deepEqual(current.baggage, prior.baggage);
+        assert.deepEqual(current.capacity, prior.capacity);
+      }
       const closeout = await getFlightBaggageCloseout(
         j.key().flightId,
         tenantId
       );
       assert.equal(closeout.readyToClose, false);
-      assert(closeout.unexpectedBags >= 1);
-      assert(closeout.unresolvedRegistrations.includes(bag.tagNumber));
-      await assert.rejects(generateFlightManifest(j.key().flightId), {
-        code: "PRECONDITION_FAILED",
-        message: /reconciliation/i,
-      });
+      assert.equal(closeout.expectedBags, 1);
+      assert.equal(closeout.unexpectedBags, 0);
+      assert.deepEqual(closeout.unresolvedRegistrations, []);
+      assert.deepEqual(closeout.missingEntry, [bag.tagNumber]);
+      assert.deepEqual(closeout.missingLoading, [bag.tagNumber]);
       assert.equal(
         (
           await db
@@ -1342,6 +1443,75 @@ export async function verifyDcsCounterLifecycle(
         "Readers must not invent a deplane or offload event"
       );
       assert.equal((await bags(j.bookingId))[0].id, bag.id);
+      // The hold must still allow real physical recovery. It cannot stand in
+      // for deplaning, return the bag, or reopen financial/departure authority.
+      await assert.rejects(
+        transitionDcsPassenger(
+          { ...j.key(), action: "offload", ...command() },
+          actor
+        ),
+        /Deplane/
+      );
+      assert.equal(
+        (
+          await transitionDcsPassenger(
+            { ...j.key(), action: "deplane", ...command() },
+            actor
+          )
+        ).state,
+        "checked_in"
+      );
+      await assert.rejects(
+        transitionDcsPassenger(
+          { ...j.key(), action: "offload", ...command() },
+          actor
+        ),
+        { code: "PRECONDITION_FAILED", message: /baggage/i }
+      );
+      for (const action of ["deplane", "offload"] as const)
+        assert.equal(
+          (
+            await transitionDcsPassenger(
+              { ...baglessSector, action, ...command() },
+              actor
+            )
+          ).state,
+          action === "deplane" ? "checked_in" : "offloaded"
+        );
+      const recovered = await carriageSnapshot(j.bookingId, j.flightIds);
+      assert.deepEqual(recovered.capacity, carriage.capacity);
+      assert.equal(recovered.bookings[0].status, "confirmed");
+      assert.equal(recovered.bookings[0].paymentStatus, "paid");
+      assert.equal(recovered.bookings[0].seatsReserved, true);
+      assert.equal(
+        recovered.coupons.find(coupon => coupon.flightId === j.key().flightId)
+          ?.status,
+        "C"
+      );
+      assert.equal(
+        recovered.coupons.find(
+          coupon => coupon.flightId === baglessSector.flightId
+        )?.status,
+        "O"
+      );
+      assert.equal((await storedSeat(j.key())).status, "checked_in");
+      assert.equal((await storedSeat(baglessSector)).checkInNonce, null);
+      const [heldReceipt] = await db
+        .select()
+        .from(s.paymentReceipts)
+        .where(eq(s.paymentReceipts.paymentIntentId, paymentIntentId));
+      assert.equal(heldReceipt.refundedAmount, funded.totalAmount);
+      assert.equal(heldReceipt.settlementStatus, "review_required");
+      assert.equal(
+        heldReceipt.settlementError,
+        DepartureReleaseError.boardedReason
+      );
+      await assert.rejects(
+        staffCheckIn(baglessSector),
+        /departure reconciliation/i
+      );
+      assert.equal((await bags(j.bookingId))[0].returnEventId, null);
+      assert.equal((await bags(j.bookingId))[0].returnEvidenceId, null);
     }
   );
   const supervisor = { ...actor, role: "airline_admin" as const };
@@ -2168,9 +2338,9 @@ export async function verifyDcsCounterLifecycle(
           }),
         })
         .$returningId();
-      // Approved compatible remaps preserve operational blocks. The original
-      // workbook's blanket rejection wording remains a policy reconciliation
-      // item; this acceptance deliberately does not change that behavior.
+      // Compatible local remaps preserve operational blocks. The engineering
+      // policy is documented in docs/operations/dcs-remap-policy.md; this case
+      // establishes state preservation, not operator or aircraft approval.
       const remap = { flightId: idA, seatMapId: replacement, ...command() };
       const remapped = await remapDeskSeats(remap, supervisor);
       const afterRemap = await stationSnapshot([a.bookingId], [idA]);

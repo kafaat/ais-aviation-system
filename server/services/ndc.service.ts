@@ -1,4 +1,5 @@
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
+import { requireLocalNdcOrigin } from "./distribution-readiness.service";
 import { LOCAL_NDC_VERSION as NDC_VERSION } from "./ndc-capabilities";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import {
@@ -568,6 +569,7 @@ function requireHold(
 export async function searchOffers(
   params: SearchOffersInput
 ): Promise<NdcOfferResponse[]> {
+  requireLocalNdcOrigin(params);
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -905,6 +907,7 @@ export const getOfferPrice = getOffer;
 export async function createOrder(
   params: CreateOrderInput
 ): Promise<NdcOrderResponse> {
+  requireLocalNdcOrigin(params);
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -957,6 +960,20 @@ export async function createOrder(
           message: `NDC offer not found: ${params.offerId}`,
         });
       }
+
+      // The persisted offer's issuer wins over caller-supplied channel labels.
+      requireLocalNdcOrigin({ channel: offer.channel });
+      const offerPayload = safeParseJson<unknown>(offer.offerPayload, null);
+      if (
+        !offerPayload ||
+        typeof offerPayload !== "object" ||
+        !("ndcVersion" in offerPayload) ||
+        offerPayload.ndcVersion !== NDC_VERSION
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "The offer has no supported local NDC issuance profile",
+        });
 
       const now = new Date();
 
@@ -1024,6 +1041,12 @@ export async function createOrder(
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Offer flight unavailable",
+          });
+        if (flight.airlineId !== offer.airlineId)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Cross-carrier NDC issuance requires accepted interline integration",
           });
         if (held.size && [...held.values()][0].tenantId !== flight.tenantId)
           throw new TRPCError({
@@ -1382,6 +1405,7 @@ export async function cancelOrder(
         code: "CONFLICT",
         message: "NDC booking association changed",
       });
+    requireLocalNdcOrigin(order);
     // Replays after cancellation or a verified refund must not release seats again.
     if (
       order.status === "refunded" ||
@@ -1876,6 +1900,12 @@ export async function generateOfferFromFlight(params: {
   expiresAt: Date;
   returnDate?: Date;
 }): Promise<NdcOfferResponse> {
+  requireLocalNdcOrigin(params);
+  if (params.ownerCode !== params.flight.airline.code)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Local NDC offers cannot claim a different issuing carrier",
+    });
   const db = await getDb();
   if (!db)
     throw new TRPCError({

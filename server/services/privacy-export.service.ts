@@ -19,7 +19,9 @@ type PersonalTable =
   | typeof s.consentHistory
   | typeof s.milesTransactions
   | typeof s.favoriteFlights
+  | typeof s.userFlightFavorites
   | typeof s.flightReviews
+  | typeof s.flightReviewHelpfulVotes
   | typeof s.bookingModifications;
 
 /** Keyset pages preserve every row in the transaction's repeatable-read snapshot. */
@@ -203,7 +205,15 @@ export async function* privacyDocument(
     ["payments", bookingRelatedRows(db, userId, "payments")],
     ["milesTransactions", personalRows(db, s.milesTransactions, userId)],
     ["favorites", personalRows(db, s.favoriteFlights, userId)],
+    [
+      "individualFlightFavorites",
+      personalRows(db, s.userFlightFavorites, userId),
+    ],
     ["reviews", personalRows(db, s.flightReviews, userId)],
+    [
+      "reviewHelpfulVotes",
+      personalRows(db, s.flightReviewHelpfulVotes, userId),
+    ],
     ["bookingModifications", personalRows(db, s.bookingModifications, userId)],
   ];
   const encode = (json: string) =>

@@ -109,6 +109,13 @@ export function FlightStatusBadge({
           "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800",
         pulseColor: "bg-green-500",
       },
+      completed: {
+        icon: <PlaneLanding className={iconSizes[size]} />,
+        label: t("flightStatus.completed"),
+        className:
+          "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+        pulseColor: "bg-slate-400",
+      },
     };
 
     return configs[statusType] || configs.scheduled;
