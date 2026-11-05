@@ -11,9 +11,11 @@ import { httpBatchLink } from "@trpc/client";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import superjson from "superjson";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { REPORT_PREVIEW_PATH } from "@shared/report-preview";
 import type {
   StandardReportDefinition,
+  StandardReportFilters,
   StandardReportResult,
 } from "@shared/standard-reports";
 import StandardReports from "../StandardReports";
@@ -74,10 +76,19 @@ const definitions: StandardReportDefinition[] = [
     limitations: ["Actual ticket expiration is not recorded."],
     filters: [],
   },
+  {
+    id: 44,
+    title: "Load Factors",
+    category: "operations",
+    availability: "available",
+    description: "Recorded sold inventory divided by physical capacity.",
+    limitations: [],
+    filters: ["startDate", "endDate", "origin", "destination", "status"],
+  },
 ];
 function result(input: {
   reportId: number;
-  filters: Record<string, unknown>;
+  filters: StandardReportFilters;
 }): StandardReportResult {
   return {
     reportId: input.reportId,
@@ -110,6 +121,10 @@ let calls: Array<{ path: string; input: any }>;
 let templates: any[];
 let runs: any[];
 beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockRejectedValue(new Error("Unexpected native preview request"))
+  );
   auth.user = {
     id: 11,
     role: "airline_admin",
@@ -185,6 +200,26 @@ beforeEach(() => {
     }),
   };
 });
+afterEach(() => vi.unstubAllGlobals());
+
+function loadFactorResult(
+  filters: StandardReportResult["filters"] = {}
+): StandardReportResult {
+  return {
+    ...result({ reportId: 44, filters }),
+    columns: [
+      { key: "flightNumber", label: "Flight number", type: "text" },
+      { key: "capacity", label: "Physical capacity", type: "number" },
+      {
+        key: "loadFactorPercent",
+        label: "Booked load factor percent",
+        type: "number",
+      },
+    ],
+    rows: [{ flightNumber: "AI1044", capacity: 180, loadFactorPercent: 0 }],
+    notes: ["Booked inventory, not flown passengers."],
+  };
+}
 
 function makeRun(overrides: Record<string, unknown> = {}) {
   return {
@@ -315,6 +350,147 @@ describe("standard report workspace", () => {
       expect(calls).toEqual([]);
     }
   );
+
+  it("uses QUERY for load-factor previews and retains the existing transport for other reports", async () => {
+    visit();
+    await preview();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(
+      calls.filter(call => call.path === "standardReports.run")
+    ).toHaveLength(1);
+
+    const nativePreview = vi.fn(
+      async (_url: RequestInfo | URL, options?: RequestInit) => {
+        const input = JSON.parse(String(options?.body));
+        return Response.json(loadFactorResult(input.filters));
+      }
+    );
+    vi.stubGlobal("fetch", nativePreview);
+    fireEvent.click(screen.getByTestId("standard-report-option-44"));
+    fireEvent.change(screen.getByLabelText("Start date (UTC)"), {
+      target: { value: "2026-11-01" },
+    });
+    fireEvent.change(screen.getByLabelText("End date (UTC)"), {
+      target: { value: "2026-11-05" },
+    });
+    const table = await preview();
+
+    expect(within(table).getByText("AI1044")).toBeVisible();
+    expect(within(table).getByRole("cell", { name: "0" })).toBeVisible();
+    expect(nativePreview).toHaveBeenCalledExactlyOnceWith(
+      REPORT_PREVIEW_PATH,
+      expect.objectContaining({
+        method: "QUERY",
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({
+          reportId: 44,
+          filters: { startDate: "2026-11-01", endDate: "2026-11-05" },
+        }),
+      })
+    );
+    expect(
+      calls.filter(call => call.path === "standardReports.run")
+    ).toHaveLength(1);
+    expect(screen.getByTestId("standard-run-report")).toBeEnabled();
+  });
+
+  it("falls back once to the existing report mutation when QUERY is unsupported", async () => {
+    const nativePreview = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 405 }));
+    vi.stubGlobal("fetch", nativePreview);
+    handlers["standardReports.run"] = input => loadFactorResult(input.filters);
+    visit();
+    fireEvent.click(await screen.findByTestId("standard-report-option-44"));
+
+    expect(within(await preview()).getByText("AI1044")).toBeVisible();
+    expect(nativePreview).toHaveBeenCalledTimes(1);
+    expect(calls.filter(call => call.path === "standardReports.run")).toEqual([
+      {
+        path: "standardReports.run",
+        input: { reportId: 44, filters: expect.any(Object) },
+      },
+    ]);
+  });
+
+  it.each([401, 403, 429, 500])(
+    "keeps HTTP %i visible without a second report request",
+    async status => {
+      const nativePreview = vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { code: "REJECTED", message: "Preview cannot be read" },
+            { status }
+          )
+        );
+      vi.stubGlobal("fetch", nativePreview);
+      visit();
+      fireEvent.click(await screen.findByTestId("standard-report-option-44"));
+      fireEvent.click(screen.getByTestId("standard-run-report"));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Preview cannot be read"
+      );
+      expect(
+        screen.queryByTestId("standard-report-table")
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId("standard-run-report")).toBeEnabled();
+      expect(nativePreview).toHaveBeenCalledTimes(1);
+      expect(calls.some(call => call.path === "standardReports.run")).toBe(
+        false
+      );
+    }
+  );
+
+  it("cancels a QUERY after filters change and never falls back from its late rejection", async () => {
+    const pending = deferred<Response>();
+    const nativePreview = vi.fn().mockReturnValue(pending.promise);
+    vi.stubGlobal("fetch", nativePreview);
+    visit();
+    fireEvent.click(await screen.findByTestId("standard-report-option-44"));
+    fireEvent.click(screen.getByTestId("standard-run-report"));
+    await waitFor(() => expect(nativePreview).toHaveBeenCalledTimes(1));
+    const signal = (nativePreview.mock.calls[0][1] as RequestInit).signal;
+    expect(screen.getByTestId("standard-run-report")).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Start date (UTC)"), {
+      target: { value: "2026-10-01" },
+    });
+    expect(signal?.aborted).toBe(true);
+    await act(async () => pending.resolve(new Response(null, { status: 405 })));
+
+    expect(
+      screen.queryByTestId("standard-report-table")
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(calls.some(call => call.path === "standardReports.run")).toBe(false);
+    expect(screen.getByTestId("standard-run-report")).toBeEnabled();
+  });
+
+  it("cancels the old scope's QUERY and discards its result after a tenant change", async () => {
+    const pending = deferred<Response>();
+    const nativePreview = vi.fn().mockReturnValue(pending.promise);
+    vi.stubGlobal("fetch", nativePreview);
+    const route = visit();
+    fireEvent.click(await screen.findByTestId("standard-report-option-44"));
+    fireEvent.click(screen.getByTestId("standard-run-report"));
+    await waitFor(() => expect(nativePreview).toHaveBeenCalledTimes(1));
+    const signal = (nativePreview.mock.calls[0][1] as RequestInit).signal;
+
+    auth.user = { ...auth.user!, tenantId: 202 };
+    route.refreshAuth();
+    await screen.findByTestId("standard-report-option-55");
+    expect(signal?.aborted).toBe(true);
+    await act(async () => pending.resolve(Response.json(loadFactorResult())));
+
+    expect(
+      screen.queryByTestId("standard-report-table")
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("AI1044")).not.toBeInTheDocument();
+    expect(calls.some(call => call.path === "standardReports.run")).toBe(false);
+  });
 
   it("shows partial-source limitations, preserves zero and unknown, and makes blocked reports non-executable", async () => {
     visit();

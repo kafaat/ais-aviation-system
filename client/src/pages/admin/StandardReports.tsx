@@ -21,6 +21,7 @@ import {
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { downloadFile } from "@/lib/downloadFile";
+import { previewStandardReport } from "@/lib/report-preview";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -341,7 +342,9 @@ function ReportWorkspace({
   const [historyCursors, setHistoryCursors] = useState<number[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [previewPending, setPreviewPending] = useState(false);
   const revision = useRef(0);
+  const previewRequest = useRef<AbortController | null>(null);
   const manualRequestIds = useRef(new Map<number, string>());
   const utils = trpc.useUtils();
   const catalogQuery = trpc.standardReports.catalog.useQuery(undefined, {
@@ -357,7 +360,8 @@ function ReportWorkspace({
     { beforeId: historyCursors.at(-1) },
     { enabled: tab === "history", retry: false, refetchOnWindowFocus: false }
   );
-  const runMutation = trpc.standardReports.run.useMutation();
+  const runMutation = trpc.standardReports.run.useMutation({ retry: false });
+  const previewBusy = previewPending || runMutation.isPending;
   const exportMutation = trpc.standardReports.export.useMutation();
   const saveMutation = trpc.standardReports.saveTemplate.useMutation();
   const deleteMutation = trpc.standardReports.deleteTemplate.useMutation();
@@ -402,6 +406,8 @@ function ReportWorkspace({
   useEffect(
     () => () => {
       revision.current += 1;
+      previewRequest.current?.abort();
+      previewRequest.current = null;
     },
     []
   );
@@ -418,6 +424,7 @@ function ReportWorkspace({
 
   function invalidatePreview() {
     revision.current += 1;
+    previewRequest.current?.abort();
     setResult(null);
     setPage(0);
     setActionError(null);
@@ -441,6 +448,10 @@ function ReportWorkspace({
   async function previewReport() {
     if (!selected || selected.availability === "blocked") return;
     const requestRevision = ++revision.current;
+    previewRequest.current?.abort();
+    const controller = new AbortController();
+    previewRequest.current = controller;
+    setPreviewPending(true);
     setResult(null);
     setPage(0);
     setActionError(null);
@@ -450,7 +461,11 @@ function ReportWorkspace({
         reportId: selected.id,
         filters: toFilters(selected, filters, copy),
       };
-      const data = await runMutation.mutateAsync(request);
+      const data = await previewStandardReport(
+        request,
+        input => runMutation.mutateAsync(input),
+        { signal: controller.signal }
+      );
       if (requestRevision !== revision.current) return;
       if (data.reportId !== request.reportId) throw new Error(copy.changed);
       setResult(data);
@@ -464,6 +479,11 @@ function ReportWorkspace({
     } catch (error) {
       if (requestRevision === revision.current)
         setActionError(errorText(error, copy.reportError));
+    } finally {
+      if (previewRequest.current === controller) {
+        previewRequest.current = null;
+        setPreviewPending(false);
+      }
     }
   }
 
@@ -998,11 +1018,10 @@ function ReportWorkspace({
                                 type="submit"
                                 data-testid="standard-run-report"
                                 disabled={
-                                  runMutation.isPending ||
-                                  exportMutation.isPending
+                                  previewBusy || exportMutation.isPending
                                 }
                               >
-                                {runMutation.isPending ? (
+                                {previewBusy ? (
                                   <Loader2
                                     className="size-4 animate-spin"
                                     aria-hidden="true"
@@ -1010,9 +1029,7 @@ function ReportWorkspace({
                                 ) : (
                                   <Play className="size-4" aria-hidden="true" />
                                 )}
-                                {runMutation.isPending
-                                  ? copy.running
-                                  : copy.run}
+                                {previewBusy ? copy.running : copy.run}
                               </Button>
                               {!!selected.filters.length && (
                                 <Button
@@ -1284,7 +1301,7 @@ function ReportWorkspace({
                                       disabled={
                                         !projectedColumns.length ||
                                         exportMutation.isPending ||
-                                        runMutation.isPending
+                                        previewBusy
                                       }
                                       onClick={() => void exportReport(format)}
                                     >
@@ -1538,7 +1555,7 @@ function ReportWorkspace({
                                   !result ||
                                   !projectedColumns.length ||
                                   templateBusy ||
-                                  runMutation.isPending
+                                  previewBusy
                                 }
                               >
                                 <Save className="size-4" aria-hidden="true" />
