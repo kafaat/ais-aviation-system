@@ -74,11 +74,14 @@ export const pricingRouter = router({
 
         if (input.currency !== "SAR") {
           const conversion = await CurrencyService.convertCurrency(
-            result.finalPrice / 100, // Convert from cents
+            CurrencyService.fromMinorUnits(result.finalPrice, "SAR"),
             "SAR",
             input.currency
           );
-          convertedPrice = Math.round(conversion.convertedAmount * 100);
+          convertedPrice = CurrencyService.toMinorUnits(
+            conversion.convertedAmount,
+            input.currency
+          );
           displayCurrency = input.currency;
         }
 
@@ -87,13 +90,15 @@ export const pricingRouter = router({
           data: {
             basePrice: result.basePrice,
             finalPrice: result.finalPrice,
+            // Base/final prices remain SAR minor units; this field uses the
+            // target currency exponent (for example, 1000 minor units per KWD).
             convertedPrice,
             currency: displayCurrency,
             breakdown: result.breakdown,
             validUntil: result.validUntil,
             priceId: result.priceId,
             formatted: CurrencyService.formatPrice(
-              convertedPrice / 100,
+              CurrencyService.fromMinorUnits(convertedPrice, displayCurrency),
               displayCurrency
             ),
           },
@@ -146,9 +151,18 @@ export const pricingRouter = router({
           return {
             success: true,
             data: {
-              min: Math.round(minConversion.convertedAmount * 100),
-              max: Math.round(maxConversion.convertedAmount * 100),
-              average: Math.round(avgConversion.convertedAmount * 100),
+              min: CurrencyService.toMinorUnits(
+                minConversion.convertedAmount,
+                input.currency
+              ),
+              max: CurrencyService.toMinorUnits(
+                maxConversion.convertedAmount,
+                input.currency
+              ),
+              average: CurrencyService.toMinorUnits(
+                avgConversion.convertedAmount,
+                input.currency
+              ),
               currency: input.currency,
               formattedMin: CurrencyService.formatPrice(
                 minConversion.convertedAmount,
@@ -226,7 +240,10 @@ export const pricingRouter = router({
               );
               return {
                 date: item.date,
-                predictedPrice: Math.round(conversion.convertedAmount * 100),
+                predictedPrice: CurrencyService.toMinorUnits(
+                  conversion.convertedAmount,
+                  input.currency
+                ),
                 formatted: CurrencyService.formatPrice(
                   conversion.convertedAmount,
                   input.currency
