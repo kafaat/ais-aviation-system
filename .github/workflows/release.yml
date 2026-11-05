@@ -23,10 +23,6 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - "**.md"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
   workflow_dispatch:
     inputs:
       release_type:
@@ -150,6 +146,16 @@ jobs:
             emit mode propose
             emit release_type "$RELEASE_TYPE"
           else
+            # A manually selected proposal may predate any conventional
+            # feature/fix commit. Documentation-only advances still refresh it.
+            for ref in $(git ls-remote --heads origin 'refs/heads/release/v*' | awk '{print $2}'); do
+              tag="${ref#refs/heads/release/}"
+              if [ -z "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+                emit mode propose
+                emit release_type existing
+                exit 0
+              fi
+            done
             emit mode none
           fi
 
@@ -162,58 +168,38 @@ jobs:
     if: needs.check-release.outputs.mode == 'propose'
     runs-on: ubuntu-latest
     outputs:
-      new_version: ${{ steps.version.outputs.new_version }}
-      current_version: ${{ steps.version.outputs.current_version }}
+      new_version: ${{ steps.proposal-version.outputs.new_version }}
+      current_version: ${{ steps.proposal-version.outputs.current_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
       - name: Calculate new version
         id: version
+        if: needs.check-release.outputs.release_type != 'existing'
         env:
           CUSTOM_VERSION: ${{ inputs.custom_version }}
-        run: |
-          CURRENT_VERSION=$(jq -r '.version' package.json)
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          RELEASE_TYPE: ${{ needs.check-release.outputs.release_type }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+        run: node scripts/ci/release-version.mjs
 
-          if [ -n "$CUSTOM_VERSION" ]; then
-            if ! [[ "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
-              echo "::error::Invalid custom version"
-              exit 1
-            fi
-            NEW_VERSION="$CUSTOM_VERSION"
-            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
-          MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
-          PATCH=$(echo $CURRENT_VERSION | cut -d. -f3 | cut -d- -f1)
-          RELEASE_TYPE="${{ needs.check-release.outputs.release_type }}"
-
-          case $RELEASE_TYPE in
-            major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-              ;;
-            minor)
-              MINOR=$((MINOR + 1))
-              PATCH=0
-              ;;
-            patch)
-              PATCH=$((PATCH + 1))
-              ;;
-          esac
-
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
-            NEW_VERSION="${NEW_VERSION}-rc.$(date +%Y%m%d%H%M)"
-          fi
-
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+      - name: Reuse the active proposal version
+        id: proposal-version
+        env:
+          CANDIDATE_VERSION: ${{ steps.version.outputs.new_version }}
+          CUSTOM_VERSION: ${{ inputs.custom_version }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+          EVENT_NAME: ${{ github.event_name }}
+          REUSE_OPEN_PROPOSAL: ${{ needs.check-release.outputs.release_type == 'existing' }}
+        run: node scripts/ci/release-proposal.mjs select
 
   # =============================================================================
   # Generate Changelog
@@ -230,39 +216,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
       - name: Generate changelog
         id: changelog
-        run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"- %s (%h)" --reverse)
-          else
-            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
-          fi
-
-          FEATURES=$(echo "$COMMITS" | grep -E "^- (feat|feature)" || true)
-          FIXES=$(echo "$COMMITS" | grep -E "^- (fix|bugfix)" || true)
-          PERF=$(echo "$COMMITS" | grep -E "^- perf" || true)
-          DOCS=$(echo "$COMMITS" | grep -E "^- docs" || true)
-          CHORE=$(echo "$COMMITS" | grep -E "^- (chore|build|ci)" || true)
-          REFACTOR=$(echo "$COMMITS" | grep -E "^- refactor" || true)
-          OTHER=$(echo "$COMMITS" | grep -vE "^- (feat|feature|fix|bugfix|perf|docs|chore|build|ci|refactor)" || true)
-
-          CHANGELOG="## What's Changed in v${{ needs.version.outputs.new_version }}\n\n"
-          if [ -n "$FEATURES" ]; then CHANGELOG+="### Features\n$FEATURES\n\n"; fi
-          if [ -n "$FIXES" ]; then CHANGELOG+="### Bug Fixes\n$FIXES\n\n"; fi
-          if [ -n "$PERF" ]; then CHANGELOG+="### Performance Improvements\n$PERF\n\n"; fi
-          if [ -n "$REFACTOR" ]; then CHANGELOG+="### Code Refactoring\n$REFACTOR\n\n"; fi
-          if [ -n "$DOCS" ]; then CHANGELOG+="### Documentation\n$DOCS\n\n"; fi
-          if [ -n "$CHORE" ]; then CHANGELOG+="### Maintenance\n$CHORE\n\n"; fi
-          if [ -n "$OTHER" ]; then CHANGELOG+="### Other Changes\n$OTHER\n\n"; fi
-          if [ -n "$LAST_TAG" ]; then
-            CHANGELOG+="\n**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${{ needs.version.outputs.new_version }}"
-          fi
-
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
+        run: node scripts/ci/release-proposal.mjs notes
 
   # =============================================================================
   # Propose: version bump on a release branch, opened as a pull request
@@ -296,202 +260,105 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # One release proposal at a time. A second bump while one is open would
-      # produce two competing version commits; the operator closes or merges
-      # the open one first. Three outcomes:
-      #   create: no release branch exists; bump, push, open the PR, start checks.
-      #   attach: this version's branch exists without an open PR (an earlier
-      #           run pushed it and then failed to open the PR); reuse it, open
-      #           the PR, start checks. This is how a re-run recovers.
-      #   neither: a branch for another version, or an open PR, already exists.
-      - name: Refuse a duplicate proposal
-        id: guard
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: v${{ needs.version.outputs.new_version }}
-          RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
-        run: |
-          set -euo pipefail
-          echo "create=false" >> "$GITHUB_OUTPUT"
-          echo "attach=false" >> "$GITHUB_OUTPUT"
-          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "::error::$RELEASE_TAG already exists; use resume_tag to publish it."
-            exit 1
-          fi
-          # A release branch whose version is already tagged is a leftover of a
-          # published release, not an open proposal; drop it rather than let
-          # it block every later proposal.
-          open=""
-          for ref in $(git ls-remote --heads origin 'refs/heads/release/v*' | awk '{print $2}' | sed 's#^refs/heads/##'); do
-            tag="${ref#release/}"
-            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-              echo "::notice::$ref is already published as $tag; deleting the stale branch."
-              git push origin --delete "$ref"
-            else
-              open="${open:+$open }$ref"
-            fi
-          done
-          if [ -z "$open" ]; then
-            echo "create=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ "$open" = "$RELEASE_BRANCH" ]; then
-            existing="$(gh pr list --state open --head "$RELEASE_BRANCH" --json number --jq 'length')"
-            if [ "$existing" = "0" ]; then
-              echo "::notice::$RELEASE_BRANCH exists without an open pull request; reusing it."
-              echo "attach=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "::notice::A pull request for $RELEASE_BRANCH is already open."
-            fi
-            exit 0
-          fi
-          echo "::notice::Another release branch is open: $open. Merge or delete it before proposing another."
-
-      - name: Update version in package.json
-        if: steps.guard.outputs.create == 'true'
+      # All jobs use github.sha. An older queued run must never bind its notes
+      # to newer main code. Only the managed notes block is regenerated; manual
+      # notes outside it and every published changelog entry are preserved.
+      - name: Prepare or refresh the release proposal
+        id: proposal
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
-        run: |
-          npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts
-
-      - name: Update CHANGELOG.md
-        if: steps.guard.outputs.create == 'true'
-        env:
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
           RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
-        run: |
-          NEW_CHANGELOG="# Changelog\n\n${RELEASE_NOTES}\n\n"
-          if [ -f CHANGELOG.md ]; then
-            EXISTING=$(tail -n +3 CHANGELOG.md)
-            echo -e "$NEW_CHANGELOG\n---\n\n$EXISTING" > CHANGELOG.md
-          else
-            echo -e "$NEW_CHANGELOG" > CHANGELOG.md
-          fi
+        run: node scripts/ci/release-proposal.mjs prepare
 
-      - name: Format CHANGELOG.md with Prettier
-        if: steps.guard.outputs.create == 'true'
+      - name: Format release notes
+        if: steps.proposal.outputs.skip != 'true'
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
-          pnpm exec prettier --write CHANGELOG.md
+          pnpm exec prettier --write CHANGELOG.md package.json
 
-      - name: Commit version bump
-        if: steps.guard.outputs.create == 'true'
-        run: |
-          git add package.json CHANGELOG.md
-          git commit -m "chore(release): v${{ needs.version.outputs.new_version }}"
-
-      # The release commit is reviewed like any other, but its whole point is
-      # to carry nothing except the version bump and changelog. Prove that
-      # before it leaves this runner; the publisher proves it again on main.
-      - name: Verify the release commit changes no code
-        if: steps.guard.outputs.create == 'true'
-        run: |
-          set -euo pipefail
-          unexpected=$(git diff --name-only HEAD~1 HEAD | grep -vxE 'CHANGELOG\.md|package\.json' || true)
-          if [ -n "$unexpected" ]; then
-            echo "::error::Release commit touches files other than CHANGELOG.md and package.json:"
-            printf '%s\n' "$unexpected" >&2
-            exit 1
-          fi
-          if ! diff <(git show HEAD~1:package.json | jq -S 'del(.version)') \
-                    <(jq -S 'del(.version)' package.json) > /dev/null; then
-            echo "::error::Release commit changes package.json beyond its version field."
-            git --no-pager diff HEAD~1 HEAD -- package.json >&2
-            exit 1
-          fi
-          echo "Release commit is limited to the version bump and changelog."
-
-      - name: Push version bump
-        if: steps.guard.outputs.create == 'true'
+      # Rebuild from the recorded main tree, retaining the old proposal head as
+      # a parent. The helper verifies the resulting delta and historical notes
+      # before committing; a normal fast-forward push cannot discard edits.
+      - name: Verify and commit the release proposal
+        id: commit
+        if: steps.proposal.outputs.skip != 'true'
         env:
-          RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
-        run: git push origin "HEAD:refs/heads/$RELEASE_BRANCH"
+          RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+          RELEASE_PREVIOUS_HEAD: ${{ steps.proposal.outputs.previous_head }}
+        run: node scripts/ci/release-proposal.mjs commit
 
-      # The title carries no `release` scope on purpose: the PR title check
-      # rejects that scope. The squash commit on main is recognised by its
-      # content, so the title does not need to match a pattern.
-      - name: Open the release pull request
-        if: steps.guard.outputs.create == 'true' || steps.guard.outputs.attach == 'true'
+      - name: Prepare the reviewed PR description
+        id: body
+        if: steps.proposal.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
-          RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
-          RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+          RELEASE_BODY_FILE: ${{ runner.temp }}/release-pr.md
+        run: node scripts/ci/release-proposal.mjs body
+
+      - name: Push the verified proposal
+        if: steps.proposal.outputs.skip != 'true'
+        env:
+          RELEASE_BRANCH: ${{ steps.proposal.outputs.branch }}
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+          RELEASE_PREVIOUS_HEAD: ${{ steps.proposal.outputs.previous_head }}
+          RELEASE_HEAD: ${{ steps.commit.outputs.head }}
         run: |
           set -euo pipefail
-          body_file="$(mktemp)"
-          {
-            echo "## Description"
-            echo
-            echo "Version bump to v$RELEASE_VERSION and its changelog entry. This pull request changes only \`package.json\` and \`CHANGELOG.md\`; the tag and the GitHub release are created from the merge commit once it reaches \`main\`."
-            echo
-            echo "## Type of Change"
-            echo
-            echo "- [x] Other (please describe): release version bump"
-            echo
-            echo "## Related Issues"
-            echo
-            echo "Release proposal generated by the Release Automation workflow."
-            echo
-            echo "## How to Test"
-            echo
-            echo "1. The required checks run on this branch, started by the pull_request event (or by the workflow when that event did not fire)."
-            echo "2. \`git diff --name-only main...HEAD\` lists only \`package.json\` and \`CHANGELOG.md\`."
-            echo "3. After merge, the Release Automation workflow publishes \`v$RELEASE_VERSION\` from the merge commit."
-            echo
-            echo "## Checklist"
-            echo
-            echo "- [x] My code follows the project's code style"
-            echo "- [x] I have performed a self-review of my changes"
-            echo "- [x] I have added tests that prove my fix/feature works — not applicable, version bump only"
-            echo "- [x] New and existing unit tests pass locally — verified by the checks on this branch"
-            echo "- [x] I have updated the documentation accordingly — changelog"
-            echo "- [x] My changes generate no new warnings"
-            echo "- [x] I have checked for potential security issues — no code changes"
-            echo
-            echo "## Additional Notes"
-            echo
-            echo "$RELEASE_NOTES"
-          } > "$body_file"
-          # Creating a pull request with GITHUB_TOKEN needs the repository
-          # setting "Allow GitHub Actions to create and approve pull requests"
-          # (Settings → Actions → General → Workflow permissions). Without it
-          # the branch is still pushed; a re-run of this workflow, or a
-          # manually opened pull request from the branch, continues from here.
-          if ! gh pr create \
-            --base main \
-            --head "$RELEASE_BRANCH" \
-            --title "chore: release v$RELEASE_VERSION" \
-            --body-file "$body_file"; then
-            echo "::error::Could not open the pull request for $RELEASE_BRANCH. If the message says GitHub Actions is not permitted to create pull requests, enable 'Allow GitHub Actions to create and approve pull requests' under Settings → Actions → General and re-run this workflow; the pushed branch is reused. Or open it by hand: https://github.com/${GITHUB_REPOSITORY}/compare/main...${RELEASE_BRANCH}?expand=1"
-            exit 1
-          fi
+          current_main="$(git ls-remote --heads origin refs/heads/main | cut -f1)"
+          current_head="$(git ls-remote --heads origin "refs/heads/$RELEASE_BRANCH" | cut -f1)"
+          test "$current_main" = "$RELEASE_SOURCE_SHA" || { echo '::error::main advanced; a newer run must refresh the proposal.'; exit 1; }
+          test "$current_head" = "$RELEASE_PREVIOUS_HEAD" || { echo '::error::The proposal changed concurrently; preserve it and retry.'; exit 1; }
+          git push origin "HEAD:refs/heads/$RELEASE_BRANCH"
+          test "$(git ls-remote --heads origin "refs/heads/$RELEASE_BRANCH" | cut -f1)" = "$RELEASE_HEAD"
 
-      # A branch pushed with GITHUB_TOKEN triggers no workflow. The pull
-      # request opened above does raise pull_request events when the
-      # repository allows Actions to create pull requests, and then every
-      # required check already runs once; dispatching again ran each gate a
-      # second time on the same head. workflow_dispatch is kept as the
-      # fallback for the case where no pull_request run appeared. The check
-      # runs attach to the branch head, which is the pull request head.
-      - name: Start the required checks on the release branch
-        if: steps.guard.outputs.create == 'true' || steps.guard.outputs.attach == 'true'
+      # Metadata is refreshed even when commit creation was already completed
+      # by a previous interrupted run. Text outside the managed PR block stays.
+      - name: Open or update the release pull request
+        if: steps.proposal.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
+          RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
+          RELEASE_BRANCH: ${{ steps.proposal.outputs.branch }}
+          RELEASE_HEAD: ${{ steps.commit.outputs.head }}
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+          RELEASE_BODY_FILE: ${{ runner.temp }}/release-pr.md
+        run: |
+          set -euo pipefail
+          # Read again just before editing so intervening reviewer prose stays.
+          RELEASE_PR="$(node scripts/ci/release-proposal.mjs body --print-number)"
+          test "$(git ls-remote --heads origin "refs/heads/$RELEASE_BRANCH" | cut -f1)" = "$RELEASE_HEAD"
+          if [ -n "$RELEASE_PR" ]; then
+            gh pr edit "$RELEASE_PR" --body-file "$RELEASE_BODY_FILE"
+          else
+            gh pr create --base main --head "$RELEASE_BRANCH" \
+              --title "chore: release v$RELEASE_VERSION" --body-file "$RELEASE_BODY_FILE"
+          fi
+
+      # Token pushes need an explicit dispatch when no PR run starts. Filter by
+      # the exact new head: a successful run on yesterday's head proves nothing
+      # about a refreshed proposal. A repeated recovery does not duplicate runs.
+      - name: Start the required checks on the release branch
+        if: steps.proposal.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BRANCH: ${{ steps.proposal.outputs.branch }}
+          RELEASE_HEAD: ${{ steps.commit.outputs.head }}
         run: |
           set -euo pipefail
           sleep 30
           for workflow in ci-cd.yml production-gates.yml component-labs.yml docker-image-validation.yml; do
-            # A pull_request run that GitHub parked as action_required
-            # (awaiting workflow approval) never ran and never will on its
-            # own; it must not count as started.
-            started="$(gh run list --workflow "$workflow" --branch "$RELEASE_BRANCH" --event pull_request --json databaseId,conclusion --jq '[.[] | select(.conclusion != "action_required")] | length')"
-            if [ "$started" != "0" ]; then
-              echo "$workflow already runs on $RELEASE_BRANCH from the pull request event"
+            test "$(git ls-remote --heads origin "refs/heads/$RELEASE_BRANCH" | cut -f1)" = "$RELEASE_HEAD"
+            started="$(RELEASE_WORKFLOW="$workflow" node scripts/ci/release-proposal.mjs checks)"
+            if [ "$started" = "true" ]; then
+              echo "$workflow already started for $RELEASE_HEAD"
               continue
             fi
             gh workflow run "$workflow" --ref "$RELEASE_BRANCH"
-            echo "Started $workflow on $RELEASE_BRANCH"
+            echo "Started $workflow for $RELEASE_HEAD"
           done
 
   # =============================================================================
@@ -573,9 +440,8 @@ jobs:
           RELEASE_TAG: ${{ needs.check-release.outputs.tag }}
           RELEASE_SOURCE_SHA: ${{ needs.check-release.outputs.source_sha }}
           RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
-          # Empty on a push, where the tag suffix decides. On a dispatch the
-          # operator's choice must reach the release, including a custom
-          # version, which never receives the -rc suffix.
+          # The reviewed version suffix persists prerelease selection across
+          # proposal and merge; push runs do not have the dispatch inputs.
           RELEASE_PRERELEASE: ${{ inputs.prerelease }}
 
       - name: Notify release
@@ -644,10 +510,16 @@ jobs:
             echo "::notice::Automatic deployment trigger is not configured; release publication remains successful."
           fi
 
+      # Dispatch a workflow that consumes the requested immutable tag. A bare
+      # repository_dispatch has no consumer in this repository. The PAT needs
+      # Actions: write; the consumer re-verifies the published stable release.
       - name: Trigger deployment workflow
         if: steps.deployment-credential.outputs.configured == 'true'
-        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
-        with:
-          token: ${{ secrets.DEPLOYMENT_PAT }}
-          event-type: release-deployment
-          client-payload: '{"version": "${{ needs.check-release.outputs.version }}", "ref": "${{ needs.check-release.outputs.tag }}"}'
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOYMENT_PAT }}
+          RELEASE_TAG: ${{ needs.check-release.outputs.tag }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          gh workflow run ci-cd.yml --repo "$GITHUB_REPOSITORY" --ref "$RELEASE_TAG" \
+            --raw-field release_tag="$RELEASE_TAG" \
+            --raw-field release_commit="$RELEASE_COMMIT"

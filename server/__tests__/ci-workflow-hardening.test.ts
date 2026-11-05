@@ -10,6 +10,42 @@ const workflowFiles = readdirSync(workflowDir).filter(name =>
   /\.ya?ml$/.test(name)
 );
 
+function workflow(name: string) {
+  return readFileSync(join(workflowDir, name), "utf8");
+}
+
+// Isolate job and step blocks so a matching command in an unrelated job cannot
+// satisfy a release safety contract. Behavior is exercised by the release
+// helper tests; these assertions guard the workflow wiring around those helpers.
+function job(text: string, id: string) {
+  const jobs = text.slice(text.indexOf("\njobs:\n") + "\njobs:\n".length);
+  const block = jobs
+    .split(/(?=^ {2}[\w-]+:\s*$)/m)
+    .find(value => value.startsWith(`  ${id}:\n`));
+  if (!block) throw new Error(`Workflow job ${id} was not found`);
+  return block;
+}
+
+function steps(text: string) {
+  return text
+    .split(/(?=^ {6}- )/m)
+    .filter(value => value.startsWith("      - "));
+}
+
+function step(text: string, name: string) {
+  const block = steps(text).find(value =>
+    value.startsWith(`      - name: ${name}\n`)
+  );
+  if (!block) throw new Error(`Workflow step ${name} was not found`);
+  return block;
+}
+
+function dependencies(text: string) {
+  const value = /^ {4}needs:\s*(.+)$/m.exec(text)?.[1];
+  if (!value) return [];
+  return value.replace(/^\[|\]$/g, "").split(/,\s*/);
+}
+
 describe("CI workflow hardening", () => {
   it("pins every external GitHub Action to an immutable commit SHA", () => {
     const violations: string[] = [];
@@ -26,35 +62,74 @@ describe("CI workflow hardening", () => {
     expect(violations).toEqual([]);
   });
 
-  it("does not fall back to GITHUB_TOKEN for optional release deployment dispatch", () => {
-    const text = readFileSync(join(workflowDir, "release.yml"), "utf8");
-    expect(text).not.toContain(
+  it("dispatches the deployment consumer on the exact published tag with the explicit PAT", () => {
+    const release = workflow("release.yml");
+    const trigger = job(release, "trigger-deployment");
+    const detect = step(trigger, "Detect deployment credential");
+    const dispatch = step(trigger, "Trigger deployment workflow");
+    const consumer = workflow("ci-cd.yml");
+    const verify = step(
+      job(consumer, "release-deployment"),
+      "Verify deployment provenance"
+    );
+    expect(dependencies(trigger)).toEqual(["check-release", "release"]);
+    expect(trigger).toContain(
+      "needs.check-release.outputs.mode == 'publish' && !contains(needs.check-release.outputs.tag, '-')"
+    );
+    expect(release).not.toContain(
       "secrets.DEPLOYMENT_PAT || secrets.GITHUB_TOKEN"
     );
-    expect(text).toContain("DEPLOYMENT_PAT: ${{ secrets.DEPLOYMENT_PAT }}");
-    expect(text).toContain(
+    expect(detect).toContain("DEPLOYMENT_PAT: ${{ secrets.DEPLOYMENT_PAT }}");
+    expect(dispatch).toContain(
       "if: steps.deployment-credential.outputs.configured == 'true'"
     );
-    expect(text).toContain("token: ${{ secrets.DEPLOYMENT_PAT }}");
+    expect(dispatch).toContain("GH_TOKEN: ${{ secrets.DEPLOYMENT_PAT }}");
+    expect(dispatch).not.toContain("secrets.GITHUB_TOKEN");
+    expect(dispatch).toContain(
+      "RELEASE_TAG: ${{ needs.check-release.outputs.tag }}"
+    );
+    expect(dispatch).toContain("RELEASE_COMMIT: ${{ github.sha }}");
+    expect(dispatch).toContain(
+      'gh workflow run ci-cd.yml --repo "$GITHUB_REPOSITORY" --ref "$RELEASE_TAG"'
+    );
+    for (const [input, env] of [
+      ["release_tag", "RELEASE_TAG"],
+      ["release_commit", "RELEASE_COMMIT"],
+    ]) {
+      expect(dispatch).toContain(`--raw-field ${input}="$${env}"`);
+      expect(consumer).toMatch(new RegExp(`^ {6}${input}:$`, "m"));
+      expect(verify).toContain(`\${{ inputs.${input} }}`);
+    }
+    expect(release).not.toMatch(/uses:.*repository-dispatch@/);
   });
 
-  // The release bot's commit is the tip of main and the one commit no workflow
-  // runs against, because a GITHUB_TOKEN push starts no new run. It is only safe
-  // while it carries nothing but the version bump, so the proof must run before
-  // the push and must not become a separate optional step.
-  it("proves the release commit carries no code before pushing it to main", () => {
-    const text = readFileSync(join(workflowDir, "release.yml"), "utf8");
-    const verify = text.indexOf("Verify the release commit changes no code");
-    const push = text.indexOf("name: Push version bump");
-    expect(verify).toBeGreaterThan(-1);
-    expect(push).toBeGreaterThan(verify);
-    expect(text).toContain(
-      "git diff --name-only HEAD~1 HEAD | grep -vxE 'CHANGELOG\\.md|package\\.json'"
+  it("verifies the source-bound proposal before a non-forced push to its release branch", () => {
+    const propose = job(workflow("release.yml"), "propose");
+    const prepare = step(propose, "Prepare or refresh the release proposal");
+    const commit = step(propose, "Verify and commit the release proposal");
+    const push = step(propose, "Push the verified proposal");
+    expect(prepare).toContain("node scripts/ci/release-proposal.mjs prepare");
+    expect(commit).toContain("node scripts/ci/release-proposal.mjs commit");
+    expect(propose.indexOf(commit)).toBeLessThan(propose.indexOf(push));
+    expect(prepare).toContain("RELEASE_SOURCE_SHA: ${{ github.sha }}");
+    expect(commit).toContain("RELEASE_SOURCE_SHA: ${{ github.sha }}");
+    expect(push).toContain(
+      "RELEASE_BRANCH: ${{ steps.proposal.outputs.branch }}"
     );
-    expect(text).toContain("jq -S 'del(.version)'");
-    // The bump must no longer be committed and pushed in one unguarded step.
-    expect(text).not.toMatch(
-      /git commit -m "chore\(release\)[^\n]*\n\s*git push/
+    expect(push).toContain("RELEASE_HEAD: ${{ steps.commit.outputs.head }}");
+    expect(push).toContain('test "$current_main" = "$RELEASE_SOURCE_SHA"');
+    expect(push).toContain('test "$current_head" = "$RELEASE_PREVIOUS_HEAD"');
+    expect(push).toContain('git push origin "HEAD:refs/heads/$RELEASE_BRANCH"');
+    expect(propose).not.toMatch(
+      /git push[^\n]*(?:--force|\s-f(?:\s|$)|HEAD:main)/
+    );
+    const helper = readFileSync(
+      join(process.cwd(), "scripts", "ci", "release-proposal.mjs"),
+      "utf8"
+    );
+    expect(helper).toContain("const branch = `release/v${version}`");
+    expect(helper).toContain(
+      "verifyProposalChanges(git, source, commit, version)"
     );
   });
 
@@ -62,44 +137,165 @@ describe("CI workflow hardening", () => {
   // which no ruleset could allow without a bypass. It now travels through a
   // release branch and a pull request, and the checks the ruleset requires are
   // started explicitly because a token-pushed branch starts none by itself.
-  it("routes the release commit through a pull request instead of pushing to main", () => {
-    const text = readFileSync(join(workflowDir, "release.yml"), "utf8");
+  it("opens a release PR, selects checks for its current head, and publishes the merged SHA", () => {
+    const text = workflow("release.yml");
+    const propose = job(text, "propose");
+    const pr = step(propose, "Open or update the release pull request");
+    const checks = step(
+      propose,
+      "Start the required checks on the release branch"
+    );
     expect(text).not.toContain("git push origin HEAD:main");
-    expect(text).toContain('git push origin "HEAD:refs/heads/$RELEASE_BRANCH"');
-    expect(text).toContain("gh pr create");
-    expect(text).toContain("--base main");
-    for (const workflow of [
+    expect(pr).toContain("gh pr create --base main");
+    expect(pr).toContain(
+      'gh pr edit "$RELEASE_PR" --body-file "$RELEASE_BODY_FILE"'
+    );
+    expect(checks).toContain("RELEASE_HEAD: ${{ steps.commit.outputs.head }}");
+    expect(checks).toContain(
+      'RELEASE_WORKFLOW="$workflow" node scripts/ci/release-proposal.mjs checks'
+    );
+    const helper = readFileSync(
+      join(process.cwd(), "scripts", "ci", "release-proposal.mjs"),
+      "utf8"
+    );
+    expect(helper).toMatch(/"--commit",\s*head/);
+    expect(helper).toContain("run.headSha === head");
+    expect(helper).toContain('run.conclusion !== "action_required"');
+    expect(helper).toContain(
+      '["pull_request", "workflow_dispatch"].includes(run.event)'
+    );
+    for (const name of [
       "ci-cd.yml",
       "production-gates.yml",
       "component-labs.yml",
       "docker-image-validation.yml",
     ]) {
-      expect(text).toContain(workflow);
-      expect(readFileSync(join(workflowDir, workflow), "utf8")).toMatch(
-        /^\s*workflow_dispatch:/m
-      );
+      expect(checks).toContain(name);
+      expect(workflow(name)).toMatch(/^\s*workflow_dispatch:/m);
     }
     // Publication tags the merged commit itself, not whatever main points at
     // by the time the job runs.
-    expect(text).toContain("RELEASE_MERGED_SHA: ${{ github.sha }}");
+    const publishTarget = step(
+      job(text, "release"),
+      "Verify the merged release commit"
+    );
+    expect(publishTarget).toContain("RELEASE_MERGED_SHA: ${{ github.sha }}");
+    expect(publishTarget).toContain("release-publication.js prepare");
   });
 
-  // The dispatch input used to reach the release object directly. Once the
-  // publisher inferred it from the tag, a custom version, which never gets the
-  // -rc suffix, published a checked prerelease as a full release.
-  it("carries the operator's prerelease choice into release publication", () => {
-    const workflow = readFileSync(join(workflowDir, "release.yml"), "utf8");
-    const publish = workflow.indexOf("release-publication.js publish");
-    expect(publish).toBeGreaterThan(-1);
-    const step = workflow.slice(publish, publish + 600);
-    expect(step).toContain("RELEASE_PRERELEASE: ${{ inputs.prerelease }}");
+  // The later push event has no manual inputs. The choice must enter the
+  // version calculation and be persisted in the reviewed version suffix.
+  it("passes prerelease intent into version calculation and reads the persisted suffix when publishing", () => {
+    const release = workflow("release.yml");
+    const version = job(release, "version");
+    const calculate = step(version, "Calculate new version");
+    expect(calculate).toContain("node scripts/ci/release-version.mjs");
+    expect(calculate).toContain("CUSTOM_VERSION: ${{ inputs.custom_version }}");
+    expect(calculate).toContain("RELEASE_PRERELEASE: ${{ inputs.prerelease }}");
+    expect(step(version, "Reuse the active proposal version")).toContain(
+      "CANDIDATE_VERSION: ${{ steps.version.outputs.new_version }}"
+    );
+    expect(job(release, "propose")).toContain(
+      "RELEASE_VERSION: ${{ needs.version.outputs.new_version }}"
+    );
+    const publish = step(job(release, "release"), "Create GitHub Release");
+    expect(publish).toContain("release-publication.js publish");
+    expect(publish).toContain(
+      "RELEASE_TAG: ${{ needs.check-release.outputs.tag }}"
+    );
     const publisher = readFileSync(
       join(process.cwd(), "scripts", "ci", "release-publication.js"),
       "utf8"
     );
     expect(publisher).toContain('process.env.RELEASE_PRERELEASE === "true"');
-    // The tag suffix stays as the fallback for push-triggered releases.
     expect(publisher).toContain('tag.includes("-")');
+  });
+
+  it("keeps release deployment behind provenance, normal CI gates and browser acceptance", () => {
+    const ci = workflow("ci-cd.yml");
+    const verifier = job(ci, "release-deployment");
+    expect(verifier).toContain("contents: read");
+    expect(verifier).toContain(
+      "requested: ${{ steps.verify.outputs.requested }}"
+    );
+    expect(step(verifier, "Verify deployment provenance")).toContain(
+      "run: node scripts/ci/release-deployment.mjs"
+    );
+    expect(dependencies(job(ci, "lint"))).toContain("release-deployment");
+    expect(dependencies(job(ci, "test"))).toContain("lint");
+    expect(dependencies(job(ci, "security"))).toContain("lint");
+    expect(dependencies(job(ci, "build"))).toEqual(
+      expect.arrayContaining(["lint", "test", "security"])
+    );
+    for (const name of [
+      "docker",
+      "deploy-production",
+      "deploy-docker-compose",
+    ]) {
+      const deployment = job(ci, name);
+      expect(dependencies(deployment)).toContain("release-deployment");
+      expect(deployment).toContain(
+        "needs.release-deployment.outputs.requested == 'true'"
+      );
+      expect(deployment).not.toContain(
+        "github.event_name == 'workflow_dispatch'"
+      );
+      if (name !== "docker") {
+        expect(dependencies(deployment)).toEqual(
+          expect.arrayContaining(["build", "docker", "e2e"])
+        );
+        expect(deployment).toMatch(/^ {4}environment:$/m);
+        expect(deployment).toMatch(/^ {4}concurrency:$/m);
+        expect(deployment).toContain("cancel-in-progress: false");
+      }
+    }
+    // Default checkout uses the event SHA. Any explicit override must keep it;
+    // checking out main or a mutable tag would invalidate the verified source.
+    for (const checkout of steps(ci).filter(value =>
+      value.includes("uses: actions/checkout@")
+    )) {
+      const explicitRef = /^ {10}ref:\s*(.+)$/m.exec(checkout)?.[1];
+      if (explicitRef) expect(explicitRef).toBe("${{ github.sha }}");
+    }
+  });
+
+  it("reports an unconfigured production deployment without sending a success notification", () => {
+    const production = job(workflow("ci-cd.yml"), "deploy-production");
+    const unconfigured = step(
+      production,
+      "Report unconfigured Kubernetes deployment"
+    );
+    expect(unconfigured).toContain(
+      "steps.kube-config.outputs.configured != 'true'"
+    );
+    expect(unconfigured).toContain("no Kubernetes deployment was performed");
+    expect(unconfigured).toContain("GITHUB_STEP_SUMMARY");
+    expect(step(production, "Notify deployment success")).toContain(
+      "steps.kube-config.outputs.configured == 'true'"
+    );
+  });
+
+  it("rechecks current main inside each production job immediately before mutation", () => {
+    const ci = workflow("ci-cd.yml");
+    for (const [name, firstMutation] of [
+      ["deploy-production", "Create deployment namespace"],
+      ["deploy-docker-compose", "Deploy to server"],
+    ]) {
+      const production = job(ci, name);
+      const ordered = steps(production);
+      const guard = step(production, "Verify current production source");
+      const mutation = step(production, firstMutation);
+      expect(production).toMatch(/^ {4}concurrency:$/m);
+      expect(guard).toContain(
+        "run: node scripts/ci/release-deployment.mjs current-main"
+      );
+      expect(ordered.indexOf(guard) + 1).toBe(ordered.indexOf(mutation));
+      if (name === "deploy-production") {
+        expect(guard).toContain(
+          "if: steps.kube-config.outputs.configured == 'true'"
+        );
+      }
+    }
   });
 
   // A bare `eslint .` exits 0 on any number of warnings, so the backlog grew
