@@ -13,6 +13,7 @@ import * as schema from "../../drizzle/schema";
 import { responseContracts } from "../contracts/pricing.router";
 import { startNativeRedis } from "./helpers/native-redis";
 
+type FxCache = typeof import("../services/cache.service").cacheService;
 const boundary = vi.hoisted(() => ({ db: null as unknown }));
 vi.mock("../db", () => ({ getDb: () => boundary.db }));
 // Currency SQL, Redis, the production pricing router, HTTP transport and output
@@ -28,21 +29,23 @@ const allowed =
   Boolean(process.env.AIS_TEST_REDIS_SERVER_BIN);
 const nativeDescribe = allowed ? describe : describe.skip;
 
-nativeDescribe("currency contracts over native MySQL, Redis and HTTP", () => {
+nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
   let admin: mysql.Connection | undefined;
   let connection: mysql.Connection | undefined;
   let databaseName = "";
   let databaseCreated = false;
   let redisFixture: Awaited<ReturnType<typeof startNativeRedis>> | undefined;
   let reference: Redis | undefined;
-  let cache: typeof import("../services/cache.service").cacheService | undefined;
+  let cache: FxCache | undefined;
   let server: Server | undefined;
   let url = "";
   const table = getTableName(schema.exchangeRates);
   const key = "exchange_rate:v2:SAR_KWD";
+  const pair = { fromCurrency: "SAR", toCurrency: "KWD" };
 
   async function request(procedure: string, input: Record<string, unknown>) {
-    const encoded = encodeURIComponent(JSON.stringify(superjson.serialize(input)));
+    const serialized = JSON.stringify(superjson.serialize(input));
+    const encoded = encodeURIComponent(serialized);
     const response = await fetch(`${url}/${procedure}?input=${encoded}`);
     const body = await response.json();
     expect(response.status).toBe(200);
@@ -72,7 +75,10 @@ nativeDescribe("currency contracts over native MySQL, Redis and HTTP", () => {
     admin = await mysql.createConnection(options);
     await admin.query(`CREATE DATABASE \`${databaseName}\``);
     databaseCreated = true;
-    connection = await mysql.createConnection({ ...options, database: databaseName });
+    connection = await mysql.createConnection({
+      ...options,
+      database: databaseName,
+    });
     await connection.query("SET SESSION time_zone = '+00:00'");
     // Use canonical column names and MySQL types. This fixture proves query and
     // driver behavior, not full migration/index/constraint parity.
@@ -109,7 +115,8 @@ nativeDescribe("currency contracts over native MySQL, Redis and HTTP", () => {
       const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
       listener.once("error", reject);
     });
-    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/trpc`;
+    const port = (server.address() as AddressInfo).port;
+    url = `http://127.0.0.1:${port}/api/trpc`;
   }, 30000);
 
   beforeEach(async () => {
@@ -150,7 +157,7 @@ nativeDescribe("currency contracts over native MySQL, Redis and HTTP", () => {
     }
   });
 
-  it("preserves three decimal currencies through the real public route", async () => {
+  it("preserves three decimals through the public route", async () => {
     for (const currency of ["KWD", "BHD", "OMR"]) {
       const result = responseContracts.convertCurrency.parse(
         await request("convertCurrency", {
@@ -164,10 +171,11 @@ nativeDescribe("currency contracts over native MySQL, Redis and HTTP", () => {
     }
   });
 
-  it("returns the same contract after MySQL then a proven Redis cache hit", async () => {
+  it("proves the Redis cache hit after the MySQL read", async () => {
     const time = Date.now();
-    await seed(1, "0.082", new Date(time - 60000), new Date(time + 60000));
-    const pair = { fromCurrency: "SAR", toCurrency: "KWD" };
+    const from = new Date(time - 60000);
+    const until = new Date(time + 60000);
+    await seed(1, "0.082", from, until);
     const first = responseContracts.getExchangeRate.parse(
       await request("getExchangeRate", pair)
     );
@@ -189,20 +197,24 @@ nativeDescribe("currency contracts over native MySQL, Redis and HTTP", () => {
     expect(converted.data.rateTimestamp).toEqual(first.data.updatedAt);
   });
 
-  it("rejects expired and future observations in the real MySQL predicate", async () => {
+  it("rejects future and expired MySQL observations", async () => {
     const time = Date.now();
-    await seed(1, "0.081", new Date(time - 60000), new Date(time + 60000));
-    await seed(2, "0.9", new Date(time + 60000), new Date(time + 120000));
-    await seed(3, "0.8", new Date(time - 120000), new Date(time - 60000));
+    const past = new Date(time - 60000);
+    const future = new Date(time + 60000);
+    await seed(1, "0.081", past, future);
+    await seed(2, "0.9", future, new Date(time + 120000));
+    await seed(3, "0.8", new Date(time - 120000), past);
     const result = responseContracts.getExchangeRate.parse(
-      await request("getExchangeRate", { fromCurrency: "SAR", toCurrency: "KWD" })
+      await request("getExchangeRate", pair)
     );
     expect(result.data.rate).toBe(0.081);
   });
 
-  it("does not accept an expired snapshot even before Redis deletes its key", async () => {
+  it("rechecks snapshot expiry independently of Redis", async () => {
     const time = Date.now();
-    await seed(1, "0.084", new Date(time - 60000), new Date(time + 60000));
+    const past = new Date(time - 60000);
+    const future = new Date(time + 60000);
+    await seed(1, "0.084", past, future);
     await reference!.setex(
       key,
       60,
@@ -217,11 +229,11 @@ nativeDescribe("currency contracts over native MySQL, Redis and HTTP", () => {
           updatedAt: new Date(time - 120000),
         },
         validFrom: new Date(time - 120000),
-        expiresAt: new Date(time - 60000),
+        expiresAt: past,
       })
     );
     const result = responseContracts.getExchangeRate.parse(
-      await request("getExchangeRate", { fromCurrency: "SAR", toCurrency: "KWD" })
+      await request("getExchangeRate", pair)
     );
     expect(result.data.rate).toBe(0.084);
     expect(result.data.source).toBe("bank");
