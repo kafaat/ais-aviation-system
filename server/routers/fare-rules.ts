@@ -441,7 +441,9 @@ export const fareRulesRouter = router({
         validUntil: z
           .string()
           .optional()
-          .describe("Rule validity end date (ISO 8601), null for indefinite"),
+          .describe(
+            "Inclusive validity end: full UTC day for a calendar date, exact instant for a timestamp; omit for indefinite"
+          ),
         originAirportId: z
           .number()
           .int()
@@ -461,6 +463,7 @@ export const fareRulesRouter = router({
           .describe("Flat price adjustment in SAR cents (+/-)"),
         priceMultiplier: z
           .number()
+          .nonnegative()
           .optional()
           .describe("Price multiplier (1.0 = no change, 1.1 = +10%)"),
       })
@@ -480,8 +483,17 @@ export const fareRulesRouter = router({
       try {
         return await fareRulesService.createFareRule({
           ...input,
-          validFrom: new Date(input.validFrom),
-          validUntil: input.validUntil ? new Date(input.validUntil) : undefined,
+          validFrom: fareRulesService.parseFareRuleValidityDate(
+            input.validFrom,
+            "start"
+          ),
+          validUntil:
+            input.validUntil !== undefined
+              ? fareRulesService.parseFareRuleValidityDate(
+                  input.validUntil,
+                  "end"
+                )
+              : undefined,
           priceMultiplier: input.priceMultiplier?.toFixed(3),
         });
       } catch (error) {
@@ -533,7 +545,9 @@ export const fareRulesRouter = router({
           .string()
           .optional()
           .nullable()
-          .describe("Validity end date (ISO 8601)"),
+          .describe(
+            "Inclusive validity end: full UTC day for a calendar date, exact instant for a timestamp; null for indefinite"
+          ),
         originAirportId: z
           .number()
           .int()
@@ -551,7 +565,11 @@ export const fareRulesRouter = router({
           .int()
           .optional()
           .describe("Price adjustment in SAR cents"),
-        priceMultiplier: z.number().optional().describe("Price multiplier"),
+        priceMultiplier: z
+          .number()
+          .nonnegative()
+          .optional()
+          .describe("Price multiplier"),
         active: z.boolean().optional().describe("Active status"),
       })
     )
@@ -571,19 +589,23 @@ export const fareRulesRouter = router({
 
       const { id, validFrom, validUntil, priceMultiplier, ...rest } = input;
 
-      const updateData: Record<string, unknown> = { ...rest };
-      if (validFrom !== undefined) {
-        updateData.validFrom = new Date(validFrom);
-      }
-      if (validUntil !== undefined) {
-        updateData.validUntil =
-          validUntil !== null ? new Date(validUntil) : null;
-      }
-      if (priceMultiplier !== undefined) {
-        updateData.priceMultiplier = priceMultiplier.toFixed(3);
-      }
-
       try {
+        const updateData: Record<string, unknown> = { ...rest };
+        if (validFrom !== undefined) {
+          updateData.validFrom = fareRulesService.parseFareRuleValidityDate(
+            validFrom,
+            "start"
+          );
+        }
+        if (validUntil !== undefined) {
+          updateData.validUntil =
+            validUntil !== null
+              ? fareRulesService.parseFareRuleValidityDate(validUntil, "end")
+              : null;
+        }
+        if (priceMultiplier !== undefined) {
+          updateData.priceMultiplier = priceMultiplier.toFixed(3);
+        }
         return await fareRulesService.updateFareRule(id, updateData);
       } catch (error) {
         if (error instanceof Error && error.message.includes("not found")) {
@@ -721,7 +743,11 @@ export const fareRulesRouter = router({
         fareClassId: z.number().int().describe("Fare class ID"),
         originId: z.number().int().describe("Origin airport ID"),
         destinationId: z.number().int().describe("Destination airport ID"),
-        departureDate: z.string().describe("Departure date (ISO 8601)"),
+        departureDate: z
+          .string()
+          .describe(
+            "Selected flight's UTC calendar day or exact ISO 8601 departure timestamp"
+          ),
         returnDate: z
           .string()
           .optional()

@@ -24,6 +24,7 @@ function itinerary() {
       {
         id: 3,
         userId: 7,
+        tenantId: 1,
         flightId: 11,
         status: "confirmed",
         paymentStatus: "paid",
@@ -33,7 +34,13 @@ function itinerary() {
       },
     ],
     passengers: [
-      { id: 4, bookingId: 3, firstName: "Sample", lastName: "Traveler" },
+      {
+        id: 4,
+        bookingId: 3,
+        tenantId: 1,
+        firstName: "Sample",
+        lastName: "Traveler",
+      },
     ],
     // Carrier and airport codes feed the IATA BCBP leg issued with each pass.
     airlines: [{ id: 1, code: "SV", name: "Sample Carrier" }],
@@ -44,6 +51,7 @@ function itinerary() {
     ],
     flights: flightIds.map((id, i) => ({
       id,
+      tenantId: 1,
       flightNumber: "SV" + id,
       airlineId: 1,
       originId: i + 1,
@@ -80,7 +88,7 @@ async function ticket(flightId: number) {
   return (
     await issueBoardingPass(
       { bookingId: 3, passengerId: 4, flightId },
-      { userId: 7 }
+      { userId: 7, tenantId: 1 }
     )
   ).token;
 }

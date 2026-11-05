@@ -1351,7 +1351,10 @@ export async function verifyDcsCounterLifecycle(
         const newPassenger = j.key(1, reopen ? 0 : 1);
         await staffCheckIn(closed);
         if (!reopen) await staffCheckIn(target);
-        const pass = await issueBoardingPass(target, { userId: ownerId });
+        const pass = await issueBoardingPass(target, {
+          userId: ownerId,
+          tenantId,
+        });
         await transitionDcsPassenger(
           { ...closed, action: "board", ...command() },
           actor
@@ -1444,7 +1447,7 @@ export async function verifyDcsCounterLifecycle(
           /departure reconciliation/i
         );
         await assert.rejects(
-          issueBoardingPass(target, { userId: ownerId }),
+          issueBoardingPass(target, { userId: ownerId, tenantId }),
           /departure reconciliation/i
         );
         assert.equal((await verifyActiveBoardingPass(pass.token)).valid, false);

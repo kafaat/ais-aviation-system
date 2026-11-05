@@ -16,6 +16,7 @@ let fareClass: FareClass;
 let flightExists: boolean;
 let classExists: boolean;
 const departureDate = "2030-01-14T12:00:00Z";
+let scheduledDeparture: string;
 const input = {
   flightId: 1,
   fareClassId: 2,
@@ -35,6 +36,7 @@ function rule(
   return {
     id: rules.length + 1,
     fareClassId: 2,
+    airlineId: 7,
     ruleName: category,
     ruleCategory: category,
     conditions: JSON.stringify(conditions),
@@ -55,6 +57,7 @@ beforeEach(() => {
   rules = [];
   flightExists = true;
   classExists = true;
+  scheduledDeparture = departureDate;
   fareClass = {
     id: 2,
     airlineId: 7,
@@ -78,6 +81,9 @@ beforeEach(() => {
                   id: 1,
                   airlineId: 7,
                   flightNumber: "ZX101",
+                  originId: 3,
+                  destinationId: 4,
+                  departureTime: new Date(scheduledDeparture),
                   economyPrice: 10000,
                   businessPrice: 25000,
                 },
@@ -105,7 +111,438 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
+describe("UTC fare period date boundaries", () => {
+  const cases = [
+    {
+      label: "one calendar day",
+      start: "2030-01-14",
+      end: "2030-01-14",
+      departure: departureDate,
+      inside: true,
+    },
+    {
+      label: "inclusive final calendar day",
+      start: "2030-01-13",
+      end: "2030-01-14",
+      departure: departureDate,
+      inside: true,
+    },
+    {
+      label: "final millisecond of the calendar day",
+      start: "2030-01-14",
+      end: "2030-01-14",
+      departure: "2030-01-14T23:59:59.999Z",
+      inside: true,
+    },
+    {
+      label: "first instant of the next UTC day",
+      start: "2030-01-13",
+      end: "2030-01-13",
+      departure: "2030-01-14T00:00:00Z",
+      inside: false,
+    },
+    {
+      label: "timestamp start with a calendar end on the same day",
+      start: "2030-01-14T11:00:00Z",
+      end: "2030-01-14",
+      departure: departureDate,
+      inside: true,
+    },
+    {
+      label: "explicit midnight remains an exact end instant",
+      start: "2030-01-13",
+      end: "2030-01-14T00:00:00Z",
+      departure: departureDate,
+      inside: false,
+    },
+    {
+      label: "inclusive explicit timestamp end",
+      start: "2030-01-14T11:00:00Z",
+      end: departureDate,
+      departure: departureDate,
+      inside: true,
+    },
+    {
+      label: "one millisecond after an explicit timestamp end",
+      start: "2030-01-14T11:00:00Z",
+      end: "2030-01-14T11:59:59.999Z",
+      departure: departureDate,
+      inside: false,
+    },
+  ];
+
+  it.each(cases)("blackout: $label", async period => {
+    scheduledDeparture = period.departure;
+    rules = [
+      rule("blackout_dates", {
+        blackoutPeriods: [{ start: period.start, end: period.end }],
+      }),
+    ];
+    const quote = calculateFare({
+      ...input,
+      departureDate: period.departure.slice(0, 10),
+    });
+    if (period.inside) await expect(quote).rejects.toThrow(/blackout period/);
+    else await expect(quote).resolves.toMatchObject({ adjustedFare: 10000 });
+    const validated = await validateBookingRules({
+      ...validation,
+      departureDate: period.departure,
+    });
+    expect(validated.valid).toBe(!period.inside);
+    expect(validated.violations.map(item => item.category)).toEqual(
+      period.inside ? ["blackout_dates"] : []
+    );
+  });
+
+  it.each(cases)("seasonality: $label", async period => {
+    scheduledDeparture = period.departure;
+    rules = [
+      rule("seasonality", {
+        season: "UTC boundary",
+        periodStart: period.start,
+        periodEnd: period.end,
+        seasonMultiplier: 2,
+      }),
+    ];
+    await expect(
+      calculateFare({
+        ...input,
+        departureDate: period.departure.slice(0, 10),
+      })
+    ).resolves.toMatchObject({
+      adjustedFare: period.inside ? 20000 : 10000,
+      totalPerPassenger: period.inside ? 23000 : 11500,
+    });
+    await expect(
+      validateBookingRules({ ...validation, departureDate: period.departure })
+    ).resolves.toMatchObject({ valid: true, violations: [] });
+  });
+
+  it("treats a calendar end and its exact end-of-day alias consistently", async () => {
+    rules = [
+      rule("blackout_dates", {
+        periods: [
+          {
+            start: "2030-01-14T11:00:00Z",
+            from: "2030-01-14T11:00:00Z",
+            end: "2030-01-14",
+            to: "2030-01-14T23:59:59.999Z",
+          },
+        ],
+      }),
+    ];
+    await expect(calculateFare(input)).rejects.toThrow(/blackout period/);
+    await expect(validateBookingRules(validation)).resolves.toMatchObject({
+      valid: false,
+      violations: [{ category: "blackout_dates" }],
+    });
+  });
+
+  it("rejects an explicit midnight alias that contradicts a calendar end", async () => {
+    rules = [
+      rule("blackout_dates", {
+        periods: [
+          {
+            start: "2030-01-13",
+            end: "2030-01-14",
+            to: "2030-01-14T00:00:00Z",
+          },
+        ],
+      }),
+    ];
+    await expect(calculateFare(input)).rejects.toThrow(/conditions/);
+    await expect(validateBookingRules(validation)).rejects.toThrow(
+      /conditions/
+    );
+  });
+});
+
 describe("fare quote arithmetic and ordered rule behavior", () => {
+  describe("review follow-up guards", () => {
+    it("rejects a surcharge adjustment that would make its monetary amount negative", async () => {
+      rules = [
+        rule(
+          "surcharges",
+          { surchargeType: "YQ", fixedAmount: 100 },
+          { priceAdjustment: -20000 }
+        ),
+      ];
+      await expect(calculateFare(input)).rejects.toThrow(
+        /surcharge.*minor units/i
+      );
+    });
+
+    it("floors a legitimate flat fare discount before percentage surcharges", async () => {
+      rules = [
+        rule(
+          "advance_purchase",
+          { minDaysBeforeDeparture: 0 },
+          { id: 1, priceAdjustment: -20000 }
+        ),
+        rule("surcharges", { surchargeType: "YQ", percentage: 5 }, { id: 2 }),
+      ];
+      expect(await calculateFare(input)).toMatchObject({
+        adjustedFare: 0,
+        surcharges: 0,
+        taxes: 0,
+        totalPerPassenger: 0,
+        totalAmount: 0,
+      });
+    });
+
+    it("preserves a valid signed discount on a positive surcharge", async () => {
+      rules = [
+        rule(
+          "surcharges",
+          { surchargeType: "YQ", fixedAmount: 500 },
+          { priceAdjustment: -100 }
+        ),
+      ];
+      expect(await calculateFare(input)).toMatchObject({
+        adjustedFare: 10000,
+        surcharges: 400,
+        taxes: 1560,
+        totalPerPassenger: 11960,
+      });
+    });
+
+    it.each(["-1.000", "NaN", "Infinity", "1invalid", ""])(
+      "rejects an invalid rule price multiplier %s",
+      async priceMultiplier => {
+        rules = [
+          rule(
+            "advance_purchase",
+            { minDaysBeforeDeparture: 0 },
+            { priceMultiplier }
+          ),
+        ];
+        await expect(calculateFare(input)).rejects.toThrow(/price multiplier/i);
+        await expect(validateBookingRules(validation)).rejects.toThrow(
+          /price multiplier/i
+        );
+      }
+    );
+
+    it.each([
+      [
+        "seasonality",
+        {
+          season: "overflow",
+          periodStart: "2030-01-01",
+          periodEnd: "2030-02-01",
+          seasonMultiplier: 1e308,
+        },
+      ],
+      ["surcharges", { surchargeType: "YQ", percentage: 1e308 }],
+    ] as const)(
+      "rejects finite %s inputs whose computed money overflows",
+      async (category, conditions) => {
+        rules = [rule(category, conditions)];
+        await expect(calculateFare(input)).rejects.toThrow(/minor units/i);
+      }
+    );
+
+    it("rejects an unsafe passenger total even when one passenger's fare is safe", async () => {
+      fareClass.basePriceMultiplier = "400000000000.000";
+      await expect(
+        calculateFare({ ...input, passengerCount: 3 })
+      ).rejects.toThrow(/total amount.*minor units/i);
+    });
+
+    it("rejects overflow when adding valid individual change fee contributions", async () => {
+      rules = [
+        rule("penalties", {
+          penaltyType: "change",
+          fixedFee: Number.MAX_SAFE_INTEGER,
+        }),
+      ];
+      await expect(
+        calculateChangeFee({
+          fareClassId: 2,
+          bookingDate: validation.bookingDate,
+          changeDate: departureDate,
+        })
+      ).rejects.toThrow(/total change fee.*minor units/i);
+    });
+
+    it.each([
+      { blackoutPeriods: [{ from: "2030-01-14", to: "2030-01-15" }] },
+      { periods: [{ start: "2030-01-14", end: "2030-01-15" }] },
+      {
+        blackoutPeriods: [{ start: "2030-01-01", end: "2030-01-02" }],
+        periods: [{ from: "2030-01-14", to: "2030-01-15" }],
+      },
+    ])("enforces every accepted blackout alias: %j", async conditions => {
+      rules = [rule("blackout_dates", conditions)];
+      await expect(calculateFare(input)).rejects.toThrow(/blackout period/);
+      expect(await validateBookingRules(validation)).toMatchObject({
+        valid: false,
+        violations: [{ category: "blackout_dates" }],
+      });
+    });
+
+    it("rejects incomplete periods in either array even when the other array is valid", async () => {
+      rules = [
+        rule("blackout_dates", {
+          blackoutPeriods: [{ start: "2030-01-01", end: "2030-01-02" }],
+          periods: [{}],
+        }),
+      ];
+      await expect(calculateFare(input)).rejects.toThrow(/conditions/);
+      await expect(validateBookingRules(validation)).rejects.toThrow(
+        /conditions/
+      );
+    });
+
+    it.each(["invalid", "2030-02-30", ""])(
+      "rejects an invalid return date instead of bypassing stay rules: %s",
+      async returnDate => {
+        rules = [rule("minimum_stay", { minNights: 2 })];
+        await expect(calculateFare({ ...input, returnDate })).rejects.toThrow(
+          /Invalid return date/
+        );
+        await expect(
+          validateBookingRules({ ...validation, returnDate })
+        ).rejects.toThrow(/Invalid return date/);
+      }
+    );
+
+    it.each(["invalid", "2030-02-30", new Date(NaN)])(
+      "rejects an invalid booking date before rule evaluation: %s",
+      async bookingDate => {
+        rules = [rule("advance_purchase", { minDaysBeforeDeparture: 7 })];
+        await expect(
+          validateBookingRules({ ...validation, bookingDate })
+        ).rejects.toThrow(/Invalid booking date/);
+      }
+    );
+
+    it.each(["bookingDate", "changeDate"] as const)(
+      "rejects an invalid %s before calculating a change fee",
+      async field => {
+        await expect(
+          calculateChangeFee({
+            fareClassId: 2,
+            bookingDate: validation.bookingDate,
+            changeDate: departureDate,
+            [field]: "invalid",
+          })
+        ).rejects.toThrow(/Invalid (booking|change) date/);
+      }
+    );
+
+    it("accepts a matching ISO calendar day but evaluates rules at the actual departure instant", async () => {
+      rules = [
+        rule("blackout_dates", {
+          blackoutPeriods: [
+            { start: "2030-01-14T11:00:00Z", end: "2030-01-14T13:00:00Z" },
+          ],
+        }),
+      ];
+      await expect(
+        calculateFare({ ...input, departureDate: "2030-01-14" })
+      ).rejects.toThrow(/blackout period/);
+      rules = [];
+      expect(
+        await calculateFare({ ...input, departureDate: "2030-01-14" })
+      ).toEqual(await calculateFare(input));
+    });
+  });
+
+  it.each(["{", "null", "[]", '"invalid"', "false", "123"])(
+    "refuses malformed persisted conditions %s in quotes, validation and change fees",
+    async conditions => {
+      rules = [rule("penalties", {}, { conditions })];
+      await expect(calculateFare(input)).rejects.toThrow(
+        /conditions.*JSON object/i
+      );
+      await expect(validateBookingRules(validation)).rejects.toThrow(
+        /conditions.*JSON object/i
+      );
+      await expect(
+        calculateChangeFee({
+          fareClassId: 2,
+          bookingDate: validation.bookingDate,
+          changeDate: departureDate,
+        })
+      ).rejects.toThrow(/conditions.*JSON object/i);
+    }
+  );
+
+  it("refuses an unsupported persisted cabin instead of quoting economy", async () => {
+    fareClass.cabinClass = "unsupported" as FareClass["cabinClass"];
+    await expect(calculateFare(input)).rejects.toThrow(
+      /Unsupported cabin class/
+    );
+  });
+
+  it.each(["advance_purchase", "penalties", "surcharges"] as const)(
+    "refuses a persisted %s object that omits its category's required fields",
+    async category => {
+      rules = [rule(category, {})];
+      await expect(calculateFare(input)).rejects.toThrow(
+        /conditions must include/
+      );
+      await expect(validateBookingRules(validation)).rejects.toThrow(
+        /conditions must include/
+      );
+    }
+  );
+
+  it.each([
+    ["surcharges", { surchargeType: "YQ", fixedAmount: -20000 }],
+    ["surcharges", { surchargeType: "YQ", fixedAmount: "499" }],
+    ["surcharges", { surchargeType: "unknown", fixedAmount: 500 }],
+    ["children_discount", { passengerType: "child", discountPercentage: 101 }],
+    ["penalties", { penaltyType: "change", fixedFee: -500 }],
+    [
+      "blackout_dates",
+      { blackoutPeriods: [{ start: "2030-02-30", end: "2030-03-01" }] },
+    ],
+    [
+      "blackout_dates",
+      { blackoutPeriods: [{ start: "2030-02-02", end: "2030-02-01" }] },
+    ],
+  ] as const)(
+    "rejects malformed typed %s conditions before computing money",
+    async (category, conditions) => {
+      rules = [rule(category, conditions)];
+      await expect(calculateFare(input)).rejects.toThrow(/conditions/);
+      await expect(validateBookingRules(validation)).rejects.toThrow(
+        /conditions/
+      );
+      if (category === "penalties")
+        await expect(
+          calculateChangeFee({
+            fareClassId: 2,
+            bookingDate: validation.bookingDate,
+            changeDate: departureDate,
+          })
+        ).rejects.toThrow(/conditions/);
+    }
+  );
+
+  it.each([
+    { originId: 30 },
+    { destinationId: 40 },
+    { departureDate: "2030-01-15T12:00:00Z" },
+    { departureDate: "invalid" },
+  ])(
+    "binds the requested route and departure to the selected flight: %j",
+    async changed => {
+      await expect(calculateFare({ ...input, ...changed })).rejects.toThrow(
+        /does not match the selected flight/
+      );
+    }
+  );
+
+  it("refuses a fare class from another airline even when it exists and is active", async () => {
+    fareClass.airlineId = 8;
+    await expect(calculateFare(input)).rejects.toThrow(
+      /Fare class airline does not match/
+    );
+  });
+
   it.each([
     ["economy", 10000],
     ["premium_economy", 10000],
@@ -143,7 +580,7 @@ describe("fare quote arithmetic and ordered rule behavior", () => {
       ),
       rule(
         "surcharges",
-        { fixedAmount: 300, percentage: 5 },
+        { surchargeType: "YQ", fixedAmount: 300, percentage: 5 },
         { id: 3, priceAdjustment: 50 }
       ),
       rule(
@@ -217,6 +654,7 @@ describe("fare quote arithmetic and ordered rule behavior", () => {
         { priceMultiplier: "0.500" }
       ),
       rule("seasonality", {
+        season: "fixture",
         periodStart: "2030-02-01",
         periodEnd: "2030-03-01",
         seasonMultiplier: 2,
@@ -226,7 +664,7 @@ describe("fare quote arithmetic and ordered rule behavior", () => {
         maxPassengers: 4,
         discountPercentage: 50,
       }),
-      rule("surcharges", { fixedAmount: 0 }),
+      rule("surcharges", { surchargeType: "YQ", fixedAmount: 0 }),
     ];
     const quote = await calculateFare(input);
     expect(quote).toMatchObject({
@@ -375,7 +813,11 @@ describe("booking validation and change-fee results", () => {
       ),
       rule("day_time", { allowedDaysOfWeek: [2] }, { id: 5 }),
       rule("eligibility", { requireCorporateId: true }, { id: 6 }),
-      rule("group_discount", { minPassengers: 3, maxPassengers: 4 }, { id: 7 }),
+      rule(
+        "group_discount",
+        { minPassengers: 3, maxPassengers: 4, discountPercentage: 10 },
+        { id: 7 }
+      ),
     ];
     const result = await validateBookingRules({
       ...validation,

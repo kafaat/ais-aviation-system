@@ -20,6 +20,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, isAuthenticated } = useAuth();
   const [pathname] = useLocation();
   const search = useRawSearch();
+  const hash = typeof window === "undefined" ? "" : window.location.hash;
 
   if (loading) {
     return (
@@ -31,7 +32,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!isAuthenticated || !user) {
     return (
-      <Redirect to={loginPath(`${pathname}${search ? `?${search}` : ""}`)} />
+      <Redirect
+        to={loginPath(`${pathname}${search ? `?${search}` : ""}${hash}`)}
+      />
     );
   }
 

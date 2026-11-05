@@ -20,7 +20,7 @@ import {
   seatInventory,
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
-import { assertBookingOwnership } from "./access-control.service";
+import { assertBookingOwnership, assertTenant } from "./access-control.service";
 import {
   assertDepartureOpen,
   lockDepartureContext,
@@ -67,6 +67,11 @@ export const boardingPassPayloadSchema = z.object({
   itineraryDigest: z.string().regex(/^[a-f0-9]{64}$/),
 });
 export type BoardingPassPayload = z.infer<typeof boardingPassPayloadSchema>;
+export type BoardingPassActor = {
+  userId: number;
+  role?: string;
+  tenantId: number | null;
+};
 export type VerifyResult =
   | {
       valid: true;
@@ -260,14 +265,21 @@ export function bcbpSecurityData(
 }
 export async function issueBoardingPass(
   input: { bookingId: number; passengerId: number; flightId?: number },
-  ctx: { userId: number; role?: string },
+  ctx: BoardingPassActor,
   opts: { expiresInSeconds?: number; source?: BcbpSource } = {}
 ): Promise<{ token: string; payload: BoardingPassPayload; bcbp: string }> {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
-  await assertBookingOwnership(input.bookingId, ctx.userId, ctx.role);
+  await assertBookingOwnership(input.bookingId, ctx.userId, ctx.role, {
+    tenantId: ctx.tenantId,
+  });
   return db.transaction(async tx => {
     const active = await activePayload(tx, input);
+    // Bind every locked resource to the caller's current airline. Ownership
+    // alone is insufficient after an account or passenger changes tenant.
+    assertTenant(active.context.booking.tenantId, ctx.tenantId, ctx.role);
+    assertTenant(active.passenger.tenantId, ctx.tenantId, ctx.role);
+    assertTenant(active.context.flight.tenantId, ctx.tenantId, ctx.role);
     const { payload, seat } = active;
     const secondsToDeparture = Math.floor(
       (Date.parse(payload.departureTime) - Date.now()) / 1000

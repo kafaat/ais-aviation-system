@@ -102,6 +102,8 @@ jobs:
           server/__tests__/standard-report-schedules-mysql.test.ts
           server/__tests__/auth-session-mysql.test.ts
           server/__tests__/financial-authority-mysql.test.ts
+          server/__tests__/fare-rules-acceptance-mysql.test.ts
+          server/__tests__/apis-seats-acceptance-mysql.test.ts
           server/__tests__/operations-inventory-mysql.test.ts
           server/__tests__/flight-delivery-mysql.test.ts
           server/__tests__/api-process-mysql.test.ts

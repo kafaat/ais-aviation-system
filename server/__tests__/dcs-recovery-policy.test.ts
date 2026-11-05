@@ -196,7 +196,7 @@ describe("limited station recovery after cutoff or flight cancellation", () => {
     "recovers offload on $label and invalidates the previous pass",
     async ({ status, late }) => {
       await prepare("offload");
-      const pass = await issueBoardingPass(key, { userId: 7 });
+      const pass = await issueBoardingPass(key, { userId: 7, tenantId: 1 });
       flight().status = status;
       if (late) afterDeparture();
       const result = await transition("offload");

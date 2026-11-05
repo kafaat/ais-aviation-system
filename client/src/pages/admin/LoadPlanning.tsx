@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -144,17 +144,21 @@ export default function LoadPlanning() {
 function LoadPlanTab({ flightId }: { flightId: number }) {
   const { t } = useTranslation();
   const _utils = trpc.useUtils();
+  const currentFlightId = useRef(flightId);
+  currentFlightId.current = flightId;
 
   const {
     data: plan,
     isLoading: planLoading,
+    isFetching: planFetching,
     error: planError,
     refetch: refetchPlan,
   } = trpc.loadPlanning.get.useQuery({ flightId }, { enabled: flightId > 0 });
 
   const {
     data: validation,
-    isLoading: validationLoading,
+    isFetching: validationFetching,
+    error: validationError,
     refetch: refetchValidation,
   } = trpc.loadPlanning.validate.useQuery(
     { flightId },
@@ -162,29 +166,49 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
   );
 
   const createMutation = trpc.loadPlanning.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (_result, variables) => {
+      if (variables.flightId !== currentFlightId.current) return;
+      await refetchPlan();
+      if (variables.flightId !== currentFlightId.current) return;
       toast.success(t("loadPlanning.planCreated", "Load plan created"));
-      refetchPlan();
     },
-    onError: err => toast.error(err.message),
+    onError: (err, variables) => {
+      if (variables.flightId === currentFlightId.current)
+        toast.error(err.message);
+    },
   });
 
   const optimizeMutation = trpc.loadPlanning.optimize.useMutation({
-    onSuccess: () => {
+    onSuccess: async (_result, variables) => {
+      if (variables.flightId !== currentFlightId.current) return;
+      await refetchPlan();
+      if (variables.flightId !== currentFlightId.current) return;
+      await refetchValidation();
+      if (variables.flightId !== currentFlightId.current) return;
       toast.success(t("loadPlanning.optimized", "Load distribution optimized"));
-      refetchPlan();
-      refetchValidation();
     },
-    onError: err => toast.error(err.message),
+    onError: (err, variables) => {
+      if (variables.flightId === currentFlightId.current)
+        toast.error(err.message);
+    },
   });
 
   const finalizeMutation = trpc.loadPlanning.finalize.useMutation({
-    onSuccess: () => {
+    onSuccess: async (_result, variables) => {
+      if (variables.flightId !== currentFlightId.current) return;
+      await refetchPlan();
+      if (variables.flightId !== currentFlightId.current) return;
       toast.success(t("loadPlanning.finalized", "Load plan finalized"));
-      refetchPlan();
     },
-    onError: err => toast.error(err.message),
+    onError: (err, variables) => {
+      if (variables.flightId === currentFlightId.current)
+        toast.error(err.message);
+    },
   });
+  const commandPending =
+    createMutation.isPending ||
+    optimizeMutation.isPending ||
+    finalizeMutation.isPending;
 
   if (!flightId) {
     return (
@@ -264,7 +288,10 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
               size="sm"
               onClick={() => optimizeMutation.mutate({ flightId })}
               disabled={
-                optimizeMutation.isPending || plan.status === "finalized"
+                commandPending ||
+                planFetching ||
+                validationFetching ||
+                plan.status === "finalized"
               }
               className="gap-2"
             >
@@ -275,7 +302,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
               variant="outline"
               size="sm"
               onClick={() => refetchValidation()}
-              disabled={validationLoading}
+              disabled={commandPending || planFetching || validationFetching}
               className="gap-2"
             >
               <CheckCircle className="h-4 w-4" />
@@ -285,7 +312,12 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
               size="sm"
               onClick={() => finalizeMutation.mutate({ flightId })}
               disabled={
-                finalizeMutation.isPending || plan.status === "finalized"
+                commandPending ||
+                planFetching ||
+                validationFetching ||
+                !!validationError ||
+                !validation?.valid ||
+                plan.status === "finalized"
               }
               className="gap-2"
             >
@@ -297,36 +329,40 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
       </Card>
 
       {/* Validation Status */}
-      {validation && (
-        <Card
-          className={`p-4 border-2 shadow-sm rounded-xl ${validation.valid ? "border-green-500" : "border-red-500"}`}
-        >
-          <div className="flex items-start gap-3">
-            {validation.valid ? (
-              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-            ) : (
-              <XCircle className="h-5 w-5 text-red-500 mt-0.5" />
-            )}
-            <div className="flex-1">
-              <p className="font-semibold">
-                {validation.valid
-                  ? t("loadPlanning.validationPass", "Validation Passed")
-                  : t("loadPlanning.validationFail", "Validation Failed")}
-              </p>
-              {validation.errors.map((err: string, i: number) => (
-                <p key={`err-${i}`} className="text-sm text-red-600">
-                  {err}
+      {validationError && <p role="alert">{validationError.message}</p>}
+      {validation &&
+        !validationError &&
+        !validationFetching &&
+        !planFetching && (
+          <Card
+            className={`p-4 border-2 shadow-sm rounded-xl ${validation.valid ? "border-green-500" : "border-red-500"}`}
+          >
+            <div className="flex items-start gap-3">
+              {validation.valid ? (
+                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-500 mt-0.5" />
+              )}
+              <div className="flex-1">
+                <p className="font-semibold">
+                  {validation.valid
+                    ? t("loadPlanning.validationPass", "Validation Passed")
+                    : t("loadPlanning.validationFail", "Validation Failed")}
                 </p>
-              ))}
-              {validation.warnings.map((warn: string, i: number) => (
-                <p key={`warn-${i}`} className="text-sm text-amber-600">
-                  {warn}
-                </p>
-              ))}
+                {validation.errors.map((err: string, i: number) => (
+                  <p key={`err-${i}`} className="text-sm text-red-600">
+                    {err}
+                  </p>
+                ))}
+                {validation.warnings.map((warn: string, i: number) => (
+                  <p key={`warn-${i}`} className="text-sm text-amber-600">
+                    {warn}
+                  </p>
+                ))}
+              </div>
             </div>
-          </div>
-        </Card>
-      )}
+          </Card>
+        )}
 
       {/* Weight Summary */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

@@ -674,7 +674,8 @@ function ReportWorkspace({
       downloadFile(output.content, output.filename, output.contentType);
       setMessage(copy.downloaded);
     } catch (error) {
-      setActionError(errorText(error, copy.exportError));
+      if (requestRevision === revision.current)
+        setActionError(errorText(error, copy.exportError));
     }
   }
 

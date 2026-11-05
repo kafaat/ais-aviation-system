@@ -11,7 +11,7 @@
  * @version 1.0.0
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -151,28 +151,52 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
   const [qrImage, setQrImage] = useState("");
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [copiedBackup, setCopiedBackup] = useState(false);
+  const active = useRef(true);
+  const secretCopyTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
+  const backupCopyTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
+
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      // AccountPrivacy unmounts enrollment on completion/cancel and Profile
+      // remounts that panel for a new user. Ignore work from the old account.
+      active.current = false;
+      clearTimeout(secretCopyTimeout.current);
+      clearTimeout(backupCopyTimeout.current);
+    };
+  }, []);
 
   // tRPC mutations
   const setupMutation = trpc.mfa.setup.useMutation({
     gcTime: 0,
     onSuccess: async (data: SetupData) => {
+      if (!active.current) return;
       setSetupData(data);
       // Encode locally; the provisioning URI contains the TOTP secret.
-      setQrImage(
-        await QRCode.toDataURL(data.qrCodeUrl, { width: 224 }).catch(() => "")
-      );
+      const image = await QRCode.toDataURL(data.qrCodeUrl, {
+        width: 224,
+      }).catch(() => "");
+      if (active.current) setQrImage(image);
     },
     onError: () => {
+      if (!active.current) return;
       toast.error(t.setupError);
     },
   });
 
   const verifyMutation = trpc.mfa.verify.useMutation({
+    gcTime: 0,
     onSuccess: () => {
+      if (!active.current) return;
       toast.success(t.mfaEnabled);
       setStep(3);
     },
     onError: () => {
+      if (!active.current) return;
       toast.error(t.verifyError);
       setVerificationCode("");
     },
@@ -182,11 +206,16 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
     if (!setupData) return;
     try {
       await navigator.clipboard.writeText(setupData.secret);
+      if (!active.current) return;
       setCopiedSecret(true);
       toast.success(t.copiedKey);
-      setTimeout(() => setCopiedSecret(false), 2000);
+      clearTimeout(secretCopyTimeout.current);
+      secretCopyTimeout.current = setTimeout(
+        () => setCopiedSecret(false),
+        2000
+      );
     } catch {
-      // Fallback: select text
+      if (!active.current) return;
       toast.error("Failed to copy");
     }
   };
@@ -201,10 +230,16 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
     try {
       const text = setupData.backupCodes.join("\n");
       await navigator.clipboard.writeText(text);
+      if (!active.current) return;
       setCopiedBackup(true);
       toast.success(t.copiedCodes);
-      setTimeout(() => setCopiedBackup(false), 2000);
+      clearTimeout(backupCopyTimeout.current);
+      backupCopyTimeout.current = setTimeout(
+        () => setCopiedBackup(false),
+        2000
+      );
     } catch {
+      if (!active.current) return;
       toast.error("Failed to copy");
     }
   };
