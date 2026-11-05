@@ -18,7 +18,7 @@ UI-05, UI-07 and CAP-01.
 | Original acceptance still partial |        4 | OPS-06, UI-05, UI-07 and CAP-01 have the specific remaining conditions below.                                        |
 | Total                             |       38 | Candidate counts describe findings, not test cases or formally verified closures.                                    |
 
-**Implementation revision: `328888c81a22459450d9c3990c3ecf67ee835d42`.**
+**Implementation revision: `7fe9fd9aab69d2f5ce35f39d06732b72e933a091`.**
 
 The implementation revision is published on
 `codex/native-gap-acceptance-20261105`, based on main
@@ -59,6 +59,58 @@ Counts belong to their individual attempts. Shared suites, targeted reruns,
 repeated scenarios and related unit cases overlap and must not be summed into
 a new whole-repository result. Failed harness assertions remain retained and
 classified; they are not relabeled as production defects.
+
+## First integrated CI attempt and coverage correction
+
+[PR285's first integrated attempt](https://github.com/kafaat/ais-aviation-system/actions/runs/42031524440)
+tested synthetic merge `ba5d9b9bb663e9a296d4817b17cf506828836304`, tree
+`8714c61bc456095af0c8be81f5fcab47b03cbdf5`, from head
+`7339b201946109f09124912ca682206c76f62da9`. The execution manifest records a
+clean source and **5,297/5,297 passing tests in 386 files**, with no pending or
+todo cases. Vitest exited 0, but the evidence wrapper exited 1 with
+`LCOV_INVALID_NUMBER`: the producer emitted `BRDA:908,108,1,-3` for
+`server/services/order-servicing.service.ts`. The original Istanbul JSON also
+contains `[7, -3]`; this was not an artifact edit or a failed application test.
+
+That attempt remains **failed**. Its seven base artifacts are retained without
+alteration; the three partition files, partition manifest and inventory
+sidecar were not produced. Browser and application-build jobs did not run
+because they depend on the failed test job. The coverage ZIP is artifact
+`13416678525`, SHA-256
+`3ad33fb98e977595eddfcce48f3517d5e989e7fc3c26cd394b6b743995004936`.
+
+The separate [native gates](https://github.com/kafaat/ais-aviation-system/actions/runs/42031524583)
+passed **402/402 in 21 files on each of MySQL 8.0 and 9.7**, including all 49
+revalidation cases, 109 report cases, seven wallet crossings, three worker
+cases, three signed webhook HTTP cases, 14 mail cases and 16 API process cases.
+These results do not turn the failed coverage attempt into accepted evidence.
+
+A minimal TypeScript reproduction using the installed Vitest 4.1.12/V8
+reproduced the same `[7, -3]`. An independent raw `node:inspector` capture
+identified the underlying ranges; all raw V8 counts were nonnegative. After a short-circuited `Boolean(revalidation) || await exchange()` expression,
+V8's continuation range counted four awaits while the following conditional
+body counted all seven invocations. The mapper subtracted those ranges for
+the implicit else. An explicit `let` plus conditional assignment preserves
+the four exchange calls, seven subsequent transfer calls, short-circuit
+behavior and results while producing nonnegative counts.
+
+The published correction applies that explicit control flow and makes evidence
+rejection codes and the manifest path visible in the CI log. It keeps the
+coverage provider, configuration and parser unchanged, and preserves the
+original failed artifacts. The [LCOV format contract](https://github.com/linux-test-project/lcov/blob/master/docs/man/geninfo.rst)
+rejects negative hit counts; accepting signed values or clamping the original
+record would not establish correct measurement. Local reproduction evidence is
+retained under `ais-evidence/coverage-negative-repro/`.
+
+A targeted native run on the corrected source passed **49/49 revalidation
+cases**, with no pending or todo cases. Its V8 report contained no invalid or
+negative hits across 805 sources; the unchanged partition validator accepted
+495 server, 288 client and 22 shared records and reconciled the summary.
+The process still exited 1 because this selected-file run cannot meet the
+unchanged full-project and per-file coverage floors. It is targeted behavior
+and measurement evidence, not a passing full-coverage gate. Cleanup receipt
+`ais-evidence/runtime/20261105T131738507452Z/receipt.json` records MySQL and Redis
+exit 0. Acceptance still awaits the corrected source's complete CI and sidecar.
 
 ## All 38 findings mapped
 

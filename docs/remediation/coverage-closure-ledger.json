@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "baseline": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
-  "source_revision": "328888c81a22459450d9c3990c3ecf67ee835d42",
+  "source_revision": "7fe9fd9aab69d2f5ce35f39d06732b72e933a091",
   "policy": "The source_revision identifies the published implementation under review. Thirty-three functional findings have locally complete original acceptance, META-01 still requires final same-source CI and its scope inventory, and four original findings remain partial for explicit policy, physical or source conditions. accepted_sha and acceptance_run stay null until the original criteria and required CI are verified on the actual tested source.",
   "findings": [
     {
@@ -131,7 +131,12 @@
         "Publish the source-bound excluded-file inventory with reasons and verify its eligible file set against measured coverage.",
         "Accept the final same-source CI manifest, unit/native results and browser results with actual synthetic merge SHA/tree, commands, runtime/provider versions, timestamps and exit codes. PR284 evidence is historical for this wave."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "local_receipts": [
+        "pr285-ci-artifacts/coverage/artifact-inspection.json",
+        "coverage-negative-repro/raw-v8/raw-inspector-coverage.json"
+      ],
+      "local_observation": "PR285's first integrated runner passed 5297/5297, but the evidence wrapper correctly rejected a producer-generated negative branch count. Only seven base artifacts exist for that failed attempt; partitions and the inventory sidecar were not produced. The unchanged original artifact is retained, not repaired or relabeled as a pass. Corrected-source CI remains required."
     },
     {
       "id": "BE-03",
@@ -1063,7 +1068,7 @@
     "original_criteria_field": "findings[].original_acceptance copied verbatim from original-gap-workbook-rows.json",
     "audit_evidence_revision": "0eb7bc528987b08b659b5663386b093b64c45dc0",
     "local_evidence_root": "../ais-evidence (workspace artifacts; not a GitHub acceptance run)",
-    "code_revision": "328888c81a22459450d9c3990c3ecf67ee835d42",
+    "code_revision": "7fe9fd9aab69d2f5ce35f39d06732b72e933a091",
     "baseline_revision": "d68881c2128267cee31c7ebbca4a4e3eaeff5b14",
     "source_identity_note": "code_revision identifies the published implementation under review. The actual CI acceptance source may be a synthetic PR merge commit and must be taken from its execution manifest, not inferred from the implementation or branch head.",
     "formal_status_counts": {
@@ -1169,9 +1174,49 @@
     },
     "no_current_acceptance_sha_or_run": true,
     "test_count_policy": "Counts belong to individual attempts. Shared suites, targeted reruns and overlapping unit groups are not summed into a new whole-repository result. Historical full_unit_attempt and local_checks are retained only in previous_followup.",
-    "historical_followup_field": "previous_followup"
+    "historical_followup_field": "previous_followup",
+    "previous_implementation_revision": "328888c81a22459450d9c3990c3ecf67ee835d42",
+    "integrated_attempts": [
+      {
+        "pr": 285,
+        "head": "7339b201946109f09124912ca682206c76f62da9",
+        "actual_source": "ba5d9b9bb663e9a296d4817b17cf506828836304",
+        "tree": "8714c61bc456095af0c8be81f5fcab47b03cbdf5",
+        "run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42031524440",
+        "status": "failed_evidence_validation",
+        "tests": {
+          "total": 5297,
+          "passed": 5297,
+          "failed": 0,
+          "pending": 0,
+          "todo": 0,
+          "files": 386
+        },
+        "runner_exit_code": 0,
+        "wrapper_exit_code": 1,
+        "evidence_errors": ["LCOV_INVALID_NUMBER"],
+        "invalid_record": "BRDA:908,108,1,-3",
+        "invalid_record_source": "server/services/order-servicing.service.ts",
+        "coverage_artifact": {
+          "id": 13416678525,
+          "sha256": "3ad33fb98e977595eddfcce48f3517d5e989e7fc3c26cd394b6b743995004936"
+        },
+        "native_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42031524583",
+        "native_each_mysql_leg": {
+          "versions": ["8.0", "9.7"],
+          "files": 21,
+          "passed": 402,
+          "failed": 0,
+          "pending": 0,
+          "todo": 0
+        },
+        "browser": "not_run_because_required_test_job_failed",
+        "source_dirty": false,
+        "correction": "Replace the short-circuited Boolean(revalidation) || await exchangeLocalCoupons expression with an equivalent explicit let/if. A real Vitest/V8 minimal reproduction and independent raw-inspector evidence locate the async continuation range causing a false implicit-else count. Preserve parser strictness, provider/configuration and all original artifact bytes. Add diagnostic logging of evidence error codes and the manifest path."
+      }
+    ]
   },
-  "implementation_commit": "328888c81a22459450d9c3990c3ecf67ee835d42",
+  "implementation_commit": "7fe9fd9aab69d2f5ce35f39d06732b72e933a091",
   "previous_followup": {
     "date": "2026-11-05",
     "document": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
