@@ -160,6 +160,20 @@ class RouteErrorBoundary extends Component<
     console.error("Component stack:", errorInfo.componentStack);
   }
 
+  handleRetry = () => {
+    // React.lazy retains a rejected import. A new document is needed to fetch
+    // that asset again after a transient network failure or deployment update.
+    if (
+      /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS/i.test(
+        this.state.error?.message ?? ""
+      )
+    ) {
+      window.location.reload();
+      return;
+    }
+    this.setState({ hasError: false, error: null });
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -188,7 +202,7 @@ class RouteErrorBoundary extends Component<
             </p>
             <div className="flex gap-3 justify-center">
               <button
-                onClick={() => this.setState({ hasError: false, error: null })}
+                onClick={this.handleRetry}
                 className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 {i18next.t("errorBoundary.tryAgain")}

@@ -1,5 +1,5 @@
 import { BaggageCloseout } from "@/components/BaggageCloseout";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { downloadFile } from "@/lib/downloadFile";
 import { escapeCSV } from "@shared/csv";
 import { trpc } from "@/lib/trpc";
@@ -628,6 +628,7 @@ function CrewTab() {
           <Button
             className="mt-4"
             disabled={
+              createMutation.isPending ||
               !form.employeeId ||
               !form.firstName ||
               !form.lastName ||
@@ -728,26 +729,69 @@ function LoadPlanTab() {
   const [aircraftTypeId, setAircraftTypeId] = useState("");
   const [fuelWeight, setFuelWeight] = useState("");
 
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
+  const parsedFlightId =
+    Number.isSafeInteger(Number(flightId)) && Number(flightId) > 0
+      ? Number(flightId)
+      : 0;
+  const input = {
+    flightId: parsedFlightId,
+    aircraftTypeId: Number(aircraftTypeId),
+    fuelWeight: Number(fuelWeight),
+  };
+  const validInput = Boolean(
+    input.flightId &&
+    Number.isSafeInteger(input.aircraftTypeId) &&
+    input.aircraftTypeId > 0 &&
+    fuelWeight.trim() &&
+    Number.isFinite(input.fuelWeight) &&
+    input.fuelWeight >= 0
+  );
+  const inputFingerprint = JSON.stringify(input);
+  const currentInput = useRef(inputFingerprint);
+  currentInput.current = inputFingerprint;
   const { data: aircraftList } = trpc.dcs.getAircraftTypes.useQuery();
-  const { data: existingPlan } = trpc.dcs.getLoadPlan.useQuery(
+  const { data: storedPlan, refetch } = trpc.dcs.getLoadPlan.useQuery(
     { flightId: parsedFlightId },
     { enabled: parsedFlightId > 0 }
   );
+  const existingPlan =
+    storedPlan?.flightId === parsedFlightId &&
+    (!aircraftTypeId || storedPlan.aircraftTypeId === input.aircraftTypeId) &&
+    (!fuelWeight || storedPlan.fuelWeight === input.fuelWeight)
+      ? storedPlan
+      : undefined;
 
   const calculateMutation = trpc.dcs.createLoadPlan.useMutation({
-    onSuccess: () =>
-      toast.success(t("dcs.loadPlan.created", "Load plan calculated")),
-    onError: err => toast.error(err.message),
+    onSuccess: (_result, variables) => {
+      if (JSON.stringify(variables) !== currentInput.current) return;
+      toast.success(t("dcs.loadPlan.created", "Load plan calculated"));
+    },
+    onError: (err, variables) => {
+      if (JSON.stringify(variables) !== currentInput.current) return;
+      toast.error(err.message);
+    },
   });
+  const wb =
+    validInput &&
+    JSON.stringify(calculateMutation.variables) === inputFingerprint
+      ? calculateMutation.data
+      : undefined;
 
   const approveMutation = trpc.dcs.approveLoadPlan.useMutation({
-    onSuccess: () =>
-      toast.success(t("dcs.loadPlan.approved", "Load plan approved")),
-    onError: err => toast.error(err.message),
+    onSuccess: async (_result, variables) => {
+      if (variables.loadPlanId !== wb?.id) return;
+      const approvedInput = inputFingerprint;
+      calculateMutation.reset();
+      await refetch();
+      if (approvedInput !== currentInput.current) return;
+      toast.success(t("dcs.loadPlan.approved", "Load plan approved"));
+    },
+    onError: (err, variables) => {
+      if (variables.loadPlanId !== wb?.id) return;
+      toast.error(err.message);
+    },
   });
-
-  const wb = calculateMutation.data;
+  const busy = calculateMutation.isPending || approveMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -795,14 +839,10 @@ function LoadPlanTab() {
         </div>
         <Button
           className="mt-4"
-          disabled={!parsedFlightId || !aircraftTypeId || !fuelWeight}
-          onClick={() =>
-            calculateMutation.mutate({
-              flightId: parsedFlightId,
-              aircraftTypeId: parseInt(aircraftTypeId),
-              fuelWeight: parseInt(fuelWeight),
-            })
-          }
+          disabled={!validInput || busy}
+          onClick={() => {
+            if (validInput && !busy) calculateMutation.mutate(input);
+          }}
         >
           <Weight className="h-4 w-4 mr-2" />
           {t("dcs.loadPlan.calculateBtn", "Calculate")}
@@ -968,7 +1008,10 @@ function LoadPlanTab() {
 
           {wb.safety.withinLimits && (
             <Button
-              onClick={() => approveMutation.mutate({ loadPlanId: wb.id })}
+              disabled={busy}
+              onClick={() => {
+                if (!busy) approveMutation.mutate({ loadPlanId: wb.id });
+              }}
               className="gap-2"
             >
               <CheckCircle className="h-4 w-4" />
@@ -1045,6 +1088,43 @@ function AircraftTab() {
     },
     onError: err => toast.error(err.message),
   });
+  const aircraftInput = {
+    code: form.code,
+    name: form.name,
+    manufacturer: form.manufacturer,
+    maxTakeoffWeight: Number(form.maxTakeoffWeight),
+    maxLandingWeight: Number(form.maxLandingWeight),
+    maxZeroFuelWeight: Number(form.maxZeroFuelWeight),
+    operatingEmptyWeight: Number(form.operatingEmptyWeight),
+    maxPayload: Number(form.maxPayload),
+    maxFuelCapacity: Number(form.maxFuelCapacity),
+    totalSeats: Number(form.totalSeats),
+    economySeats: Number(form.economySeats),
+    businessSeats: Number(form.businessSeats),
+  };
+  const validAircraft = Boolean(
+    form.code.trim().length >= 2 &&
+    form.name.trim() &&
+    form.manufacturer.trim() &&
+    [
+      form.maxTakeoffWeight,
+      form.maxLandingWeight,
+      form.maxZeroFuelWeight,
+      form.operatingEmptyWeight,
+      form.maxPayload,
+      form.maxFuelCapacity,
+    ].every(
+      value =>
+        value.trim() && Number.isFinite(Number(value)) && Number(value) > 0
+    ) &&
+    [form.totalSeats, form.economySeats, form.businessSeats].every(
+      value =>
+        value.trim() &&
+        Number.isSafeInteger(Number(value)) &&
+        Number(value) >= 0
+    ) &&
+    aircraftInput.totalSeats > 0
+  );
 
   return (
     <div className="space-y-4">
@@ -1177,28 +1257,11 @@ function AircraftTab() {
           </div>
           <Button
             className="mt-4"
-            disabled={
-              !form.code ||
-              !form.name ||
-              !form.manufacturer ||
-              !form.maxTakeoffWeight
-            }
-            onClick={() =>
-              createMutation.mutate({
-                code: form.code,
-                name: form.name,
-                manufacturer: form.manufacturer,
-                maxTakeoffWeight: parseInt(form.maxTakeoffWeight),
-                maxLandingWeight: parseInt(form.maxLandingWeight),
-                maxZeroFuelWeight: parseInt(form.maxZeroFuelWeight),
-                operatingEmptyWeight: parseInt(form.operatingEmptyWeight),
-                maxPayload: parseInt(form.maxPayload),
-                maxFuelCapacity: parseInt(form.maxFuelCapacity),
-                totalSeats: parseInt(form.totalSeats),
-                economySeats: parseInt(form.economySeats),
-                businessSeats: parseInt(form.businessSeats),
-              })
-            }
+            disabled={!validAircraft || createMutation.isPending}
+            onClick={() => {
+              if (validAircraft && !createMutation.isPending)
+                createMutation.mutate(aircraftInput);
+            }}
           >
             {t("dcs.aircraft.save", "Save")}
           </Button>

@@ -20,6 +20,7 @@ import {
 } from "../../drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 
 // ============================================================================
 // Types
@@ -303,114 +304,129 @@ export async function collectPassengerInfo(
  * Checks required fields, document expiry, and data format.
  */
 export async function validateAPISData(passengerId: number) {
-  const db = await requireDb();
-
-  // Get APIS data
-  const rows = await db.execute(sql`
-    SELECT * FROM apis_data WHERE passenger_id = ${passengerId} LIMIT 1
+  const database = await requireDb();
+  return database.transaction(async db => {
+    // Keep validation bound to the document that was read. A competing collection
+    // waits for this row lock, then resets validation for its replacement document.
+    const rows = await db.execute(sql`
+    SELECT apis_data.*,
+      CAST(date_of_birth AS CHAR) AS date_of_birth,
+      CAST(expiry_date AS CHAR) AS expiry_date
+    FROM apis_data WHERE passenger_id = ${passengerId} LIMIT 1 FOR UPDATE
   `);
 
-  const apisRows = (
-    rows as unknown as Array<Array<Record<string, unknown>>>
-  )[0];
-  if (!apisRows || apisRows.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message:
-        "No APIS data found for this passenger. Please submit travel document information first.",
-    });
-  }
-
-  const apisData = apisRows[0];
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  // Validate required base fields
-  const requiredFields: Array<{ key: string; label: string }> = [
-    { key: "document_type", label: "Document type" },
-    { key: "document_number", label: "Document number" },
-    { key: "issuing_country", label: "Issuing country" },
-    { key: "nationality", label: "Nationality" },
-    { key: "date_of_birth", label: "Date of birth" },
-    { key: "gender", label: "Gender" },
-    { key: "expiry_date", label: "Document expiry date" },
-    { key: "given_names", label: "Given names" },
-    { key: "surname", label: "Surname" },
-  ];
-
-  for (const field of requiredFields) {
-    if (!apisData[field.key]) {
-      errors.push(`${field.label} is required`);
+    const apisRows = (
+      rows as unknown as Array<Array<Record<string, unknown>>>
+    )[0];
+    if (!apisRows || apisRows.length === 0) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message:
+          "No APIS data found for this passenger. Please submit travel document information first.",
+      });
     }
-  }
 
-  // Validate document number format (alphanumeric, 5-20 chars)
-  const docNumber = apisData["document_number"] as string | null;
-  if (docNumber && !/^[A-Za-z0-9]{5,20}$/.test(docNumber)) {
-    errors.push("Document number must be 5-20 alphanumeric characters");
-  }
+    const apisData = apisRows[0];
+    const errors: string[] = [];
+    const warnings: string[] = [];
 
-  // Validate country codes (ISO 3166-1 alpha-2 or alpha-3)
-  const countryFields = ["issuing_country", "nationality", "residence_country"];
-  for (const field of countryFields) {
-    const value = apisData[field] as string | null;
-    if (value && !/^[A-Z]{2,3}$/.test(value)) {
-      errors.push(
-        `${field.replace(/_/g, " ")} must be a valid ISO country code (2-3 uppercase letters)`
-      );
+    // Validate required base fields
+    const requiredFields: Array<{ key: string; label: string }> = [
+      { key: "document_type", label: "Document type" },
+      { key: "document_number", label: "Document number" },
+      { key: "issuing_country", label: "Issuing country" },
+      { key: "nationality", label: "Nationality" },
+      { key: "date_of_birth", label: "Date of birth" },
+      { key: "gender", label: "Gender" },
+      { key: "expiry_date", label: "Document expiry date" },
+      { key: "given_names", label: "Given names" },
+      { key: "surname", label: "Surname" },
+    ];
+
+    for (const field of requiredFields) {
+      const value = apisData[field.key];
+      if (!value || (typeof value === "string" && !value.trim())) {
+        errors.push(`${field.label} is required`);
+      }
     }
-  }
 
-  // Validate gender
-  const gender = apisData["gender"] as string | null;
-  if (gender && !["M", "F", "U"].includes(gender)) {
-    errors.push("Gender must be M (Male), F (Female), or U (Undisclosed)");
-  }
-
-  // Basic expiry validation; country-specific admission is a separate sourced decision.
-  const expiryDate = apisData["expiry_date"]
-    ? new Date(apisData["expiry_date"] as string)
-    : null;
-  if (expiryDate) {
-    const now = new Date();
-    if (expiryDate <= now) {
-      errors.push("Travel document has expired");
-    } else {
-      warnings.push(
-        "Format validation does not determine admission; current itinerary-specific operator document clearance is required."
-      );
+    // Validate document number format (alphanumeric, 5-20 chars)
+    const docNumber = apisData["document_number"] as string | null;
+    if (docNumber && !/^[A-Za-z0-9]{5,20}$/.test(docNumber)) {
+      errors.push("Document number must be 5-20 alphanumeric characters");
     }
-  }
 
-  // Validate date of birth is in the past
-  const dob = apisData["date_of_birth"]
-    ? new Date(apisData["date_of_birth"] as string)
-    : null;
-  if (dob && dob >= new Date()) {
-    errors.push("Date of birth must be in the past");
-  }
+    // Validate country codes (ISO 3166-1 alpha-2 or alpha-3)
+    const countryFields = [
+      "issuing_country",
+      "nationality",
+      "residence_country",
+    ];
+    for (const field of countryFields) {
+      const value = apisData[field] as string | null;
+      if (value && !/^[A-Z]{2,3}$/.test(value)) {
+        errors.push(
+          `${field.replace(/_/g, " ")} must be a valid ISO country code (2-3 uppercase letters)`
+        );
+      }
+    }
 
-  const isValid = errors.length === 0;
+    // Validate gender
+    const gender = apisData["gender"] as string | null;
+    if (gender && !["M", "F", "U"].includes(gender)) {
+      errors.push("Gender must be M (Male), F (Female), or U (Undisclosed)");
+    }
 
-  // Update status if valid
-  if (isValid) {
-    await db.execute(sql`
+    // SQL DATE values are civil dates, not instants. Read the original characters
+    // so mysql2 cannot normalize an impossible legacy date before validation.
+    // Compare both at UTC day precision: expiry after today, birth no later than today.
+    // Admission still requires a separate sourced operator clearance.
+    const today = new Date().toISOString().slice(0, 10);
+    const calendarDate = z.iso.date();
+    const expiryDate = calendarDate.safeParse(apisData["expiry_date"]);
+    if (apisData["expiry_date"]) {
+      if (!expiryDate.success) {
+        errors.push("Document expiry date must be a valid calendar date");
+      } else if (expiryDate.data <= today) {
+        errors.push("Travel document has expired");
+      } else {
+        warnings.push(
+          "Format validation does not determine admission; current itinerary-specific operator document clearance is required."
+        );
+      }
+    }
+
+    const dob = calendarDate.safeParse(apisData["date_of_birth"]);
+    if (apisData["date_of_birth"]) {
+      if (!dob.success) {
+        errors.push("Date of birth must be a valid calendar date");
+      } else if (dob.data > today) {
+        errors.push("Date of birth cannot be in the future");
+      }
+    }
+
+    const isValid = errors.length === 0;
+
+    // Update status if valid
+    if (isValid) {
+      await db.execute(sql`
       UPDATE apis_data
       SET status = 'validated', validated_at = ${new Date()}, updated_at = ${new Date()}
       WHERE passenger_id = ${passengerId}
     `);
-  }
+    }
 
-  return {
-    passengerId,
-    valid: isValid,
-    status: isValid
-      ? ("validated" as APISDataStatus)
-      : ("complete" as APISDataStatus),
-    errors,
-    warnings,
-    validatedAt: isValid ? new Date().toISOString() : null,
-  };
+    return {
+      passengerId,
+      valid: isValid,
+      status: isValid
+        ? ("validated" as APISDataStatus)
+        : ("complete" as APISDataStatus),
+      errors,
+      warnings,
+      validatedAt: isValid ? new Date().toISOString() : null,
+    };
+  });
 }
 
 // ============================================================================

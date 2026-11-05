@@ -142,6 +142,7 @@ function BookingForm({
     if (allocation.data && loadedAllocation.current !== key) {
       loadedAllocation.current = key;
       setSelectedAncillaries([]);
+      setSelectedSeats([]);
       setPassengers(
         Array.from({ length: allocation.data.passengers }, () => ({
           type: "adult" as const,

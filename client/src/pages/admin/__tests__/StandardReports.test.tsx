@@ -822,6 +822,7 @@ describe("standard report workspace", () => {
       expected: "Enter a name for the saved report.",
     },
     { field: "time", value: "", expected: "Enter a valid UTC run time." },
+    { field: "time", value: "24:00", expected: "Enter a valid UTC run time." },
     {
       field: "days",
       value: "0",
@@ -842,6 +843,11 @@ describe("standard report workspace", () => {
       value: "",
       expected: "Choose between 1 and 366 complete UTC days.",
     },
+    {
+      field: "days",
+      value: "not-a-number",
+      expected: "Choose between 1 and 366 complete UTC days.",
+    },
   ])(
     "rejects invalid saved configuration $field=$value before sending a mutation",
     async ({ field, value, expected }) => {
@@ -857,6 +863,9 @@ describe("standard report workspace", () => {
         fireEvent.change(screen.getByLabelText("Run time (UTC)"), {
           target: { value },
         });
+        // The native time input rejects 24:00 and exposes an empty value.
+        if (value === "24:00")
+          expect(screen.getByLabelText("Run time (UTC)")).toHaveValue("");
       }
       if (field === "days") {
         fireEvent.click(
@@ -865,6 +874,11 @@ describe("standard report workspace", () => {
         fireEvent.change(screen.getByLabelText("Number of previous days"), {
           target: { value },
         });
+        // Invalid numeric text is likewise normalized by the real input.
+        if (value === "not-a-number")
+          expect(screen.getByLabelText("Number of previous days")).toHaveValue(
+            null
+          );
       }
       // Exercise the submit handler even if native constraint validation is
       // bypassed; the application must reject before it constructs a mutation.
@@ -1029,9 +1043,9 @@ describe("standard report workspace", () => {
       throw new Error("Output temporarily unavailable");
     };
     fireEvent.click(button);
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "The report could not be downloaded."
-    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The report could not be downloaded.");
+    expect(alert).toHaveTextContent("Output temporarily unavailable");
     expect(downloadFile).not.toHaveBeenCalled();
     expect(button).toBeEnabled();
     handlers["standardReports.downloadRun"] = original;
@@ -1136,6 +1150,50 @@ describe("standard report workspace", () => {
           recordCount: 1,
         })
       );
+      expect(downloadFile).not.toHaveBeenCalled();
+      expect(screen.queryByText("Report downloaded.")).not.toBeInTheDocument();
+    }
+  );
+
+  it.each(["filters", "report"])(
+    "discards a saved download error that arrives after %s change",
+    async change => {
+      runs = [makeRun()];
+      const response = deferred<unknown>();
+      handlers["standardReports.downloadRun"] = () => response.promise;
+      visit();
+      await screen.findByTestId("standard-report-option-55");
+      fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Download Morning payments" })
+      );
+      await waitFor(() =>
+        expect(
+          calls.filter(call => call.path === "standardReports.downloadRun")
+        ).toHaveLength(1)
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Report catalog" }));
+      if (change === "filters") {
+        const startDate = await screen.findByLabelText("Start date (UTC)");
+        fireEvent.change(startDate, { target: { value: "2026-10-01" } });
+        expect(startDate).toHaveValue("2026-10-01");
+      } else {
+        fireEvent.click(screen.getByTestId("standard-report-option-22"));
+        expect(
+          screen.getByTestId("standard-report-definition")
+        ).toHaveTextContent("Flight ID");
+      }
+      fireEvent.click(screen.getByRole("button", { name: "Run history" }));
+      const button = await screen.findByRole("button", {
+        name: "Download Morning payments",
+      });
+      await waitFor(() => expect(button).toBeDisabled());
+      await act(async () =>
+        response.reject(new Error("Previous report download failed"))
+      );
+      // Wait for the mutation to settle before asserting absence of its error.
+      await waitFor(() => expect(button).toBeEnabled());
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       expect(downloadFile).not.toHaveBeenCalled();
       expect(screen.queryByText("Report downloaded.")).not.toBeInTheDocument();
     }

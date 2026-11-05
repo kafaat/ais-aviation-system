@@ -111,6 +111,7 @@
     "search": "Search",
     "login": "Login",
     "logout": "Logout",
+    "logoutError": "We couldn't confirm sign-out. Please try again.",
     "loading": "Loading...",
     "error": "An error occurred",
     "success": "Operation successful",

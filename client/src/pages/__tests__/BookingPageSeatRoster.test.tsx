@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -154,7 +155,7 @@ beforeEach(() => {
 
 function prepare(path = "/booking/42?adults=2", names = ["Aisha", "Yara"]) {
   const location = memoryLocation({ path, record: true });
-  render(
+  const workspace = () => (
     <Router hook={location.hook}>
       <TooltipProvider>
         <Switch>
@@ -168,6 +169,14 @@ function prepare(path = "/booking/42?adults=2", names = ["Aisha", "Yara"]) {
       </TooltipProvider>
     </Router>
   );
+  const view = render(workspace());
+  fillPassengers(names);
+  return Object.assign(location, {
+    refresh: () => view.rerender(workspace()),
+  });
+}
+
+function fillPassengers(names: string[]) {
   for (const [index, firstName] of names.entries()) {
     fireEvent.change(screen.getAllByLabelText(/booking.firstName/)[index], {
       target: { value: firstName },
@@ -176,7 +185,19 @@ function prepare(path = "/booking/42?adults=2", names = ["Aisha", "Yara"]) {
       target: { value: "Journey" },
     });
   }
-  return location;
+}
+
+function addExtra(passengerIndex: number, quantity: number) {
+  fireEvent.change(screen.getByTestId("ancillary-passenger"), {
+    target: { value: String(passengerIndex) },
+  });
+  fireEvent.change(screen.getByTestId("ancillary-product"), {
+    target: { value: "11" },
+  });
+  fireEvent.change(screen.getByTestId("ancillary-quantity"), {
+    target: { value: String(quantity) },
+  });
+  fireEvent.click(screen.getByTestId("ancillary-add"));
 }
 
 const seat = (number: string) =>
@@ -188,8 +209,9 @@ const remove = (number: number) =>
     screen.getByRole("button", { name: `booking.removePassenger ${number}` })
   );
 
-async function submit() {
-  fireEvent.click(screen.getByRole("button", { name: "Refresh fare offer" }));
+async function submit(refreshOffer = true) {
+  if (refreshOffer)
+    fireEvent.click(screen.getByRole("button", { name: "Refresh fare offer" }));
   const complete = screen.getByRole("button", {
     name: "booking.completeBooking",
   });
@@ -367,5 +389,154 @@ it.each(["waitlistId", "groupBookingId"])(
       expect(command.offerId).toBeUndefined();
       expect(command.priceLockId).toBeUndefined();
     }
+  }
+);
+
+it("removes the middle of three passengers without moving another passenger's seat or extras", async () => {
+  prepare("/booking/42?adults=3", ["Aisha", "Yara", "Sara"]);
+  for (const [index, number] of ["12A", "12B", "12C"].entries()) {
+    fireEvent.click(seat(number));
+    addExtra(index, index + 1);
+  }
+  remove(2);
+  expect(seat("12A")).toHaveAttribute("aria-pressed", "true");
+  expect(seat("12B")).toHaveAttribute("aria-pressed", "false");
+  expect(seat("12C")).toHaveAttribute("aria-pressed", "true");
+  const extras = within(screen.getByTestId("ancillary-review"));
+  expect(extras.getAllByRole("listitem")).toHaveLength(2);
+  expect(extras.getByText(/Aisha Journey/)).toHaveTextContent("1 ×");
+  expect(extras.getByText(/Sara Journey/)).toHaveTextContent("3 ×");
+  expect(extras.queryByText(/Yara/)).not.toBeInTheDocument();
+  expect(await submit()).toEqual([
+    {
+      type: "adult",
+      firstName: "Aisha",
+      lastName: "Journey",
+      seatNumber: "12A",
+    },
+    {
+      type: "adult",
+      firstName: "Sara",
+      lastName: "Journey",
+      seatNumber: "12C",
+    },
+  ]);
+  expect(calls.create.mock.calls[0][0].ancillaries).toEqual([
+    {
+      passengerIndex: 0,
+      segmentIndex: 0,
+      ancillaryServiceId: 11,
+      quantity: 1,
+      unitPrice: 1500,
+      totalPrice: 1500,
+    },
+    {
+      passengerIndex: 1,
+      segmentIndex: 0,
+      ancillaryServiceId: 11,
+      quantity: 3,
+      unitPrice: 1500,
+      totalPrice: 4500,
+    },
+  ]);
+});
+
+it("keeps an unknown booking key for an unchanged retry and replaces it when only extras change", async () => {
+  calls.create
+    .mockRejectedValueOnce(new Error("Response lost"))
+    .mockRejectedValueOnce(new Error("Still unknown"));
+  prepare();
+  fireEvent.click(seat("12A"));
+  addExtra(0, 1);
+  fireEvent.click(screen.getByRole("button", { name: "Refresh fare offer" }));
+  const complete = screen.getByRole("button", {
+    name: "booking.completeBooking",
+  });
+  await waitFor(() => expect(complete).toBeEnabled());
+  fireEvent.click(complete);
+  await waitFor(() => expect(calls.create).toHaveBeenCalledTimes(1));
+  fireEvent.click(complete);
+  await waitFor(() => expect(calls.create).toHaveBeenCalledTimes(2));
+  const original = calls.create.mock.calls[0][0];
+  expect(calls.create.mock.calls[1][0]).toEqual(original);
+  fireEvent.click(
+    within(screen.getByTestId("ancillary-review")).getByRole("button", {
+      name: "Remove",
+    })
+  );
+  addExtra(0, 2);
+  fireEvent.click(complete);
+  await screen.findByText("Owned checkout");
+  const changed = calls.create.mock.calls[2][0];
+  expect(changed.idempotencyKey).not.toBe(original.idempotencyKey);
+  expect(changed.sessionId).toBe(changed.idempotencyKey);
+  expect(changed.passengers).toEqual(original.passengers);
+  expect(changed.offerId).toBe(original.offerId);
+  expect(changed.ancillaries).toEqual([
+    { ...original.ancillaries[0], quantity: 2, totalPrice: 3000 },
+  ]);
+});
+
+it.each(["waitlistId", "groupBookingId"])(
+  "clears the prior roster's seats and extras when a delayed %s allocation arrives",
+  async allocation => {
+    const route = prepare(`/booking/42?adults=2&${allocation}=5`);
+    fireEvent.click(seat("12A"));
+    fireEvent.click(seat("12B"));
+    addExtra(1, 2);
+    expect(screen.getByTestId("ancillary-review")).toHaveTextContent("Yara");
+    calls.allocation = { passengers: 3, totalAmount: 18000 };
+    route.refresh();
+    expect(screen.getAllByLabelText(/booking.firstName/)).toHaveLength(3);
+    for (const input of screen.getAllByLabelText(/booking.firstName/))
+      expect(input).toHaveValue("");
+    expect(screen.queryByTestId("ancillary-review")).not.toBeInTheDocument();
+    expect(seat("12A")).toHaveAttribute("aria-pressed", "false");
+    expect(seat("12B")).toHaveAttribute("aria-pressed", "false");
+    fillPassengers(["New One", "New Two", "New Three"]);
+    fireEvent.click(
+      screen.getByRole("button", { name: "booking.addPassenger" })
+    );
+    remove(2);
+    expect(screen.getAllByLabelText(/booking.firstName/)).toHaveLength(3);
+    await submit(allocation !== "groupBookingId");
+    expect(calls.create.mock.calls[0][0]).toMatchObject({
+      [allocation]: 5,
+      passengers: [
+        { firstName: "New One", seatNumber: undefined },
+        { firstName: "New Two", seatNumber: undefined },
+        { firstName: "New Three", seatNumber: undefined },
+      ],
+      ancillaries: undefined,
+    });
+  }
+);
+
+it.each(["waitlistId", "groupBookingId"])(
+  "starts a clean roster when navigating from one %s allocation to another",
+  async allocation => {
+    calls.allocation = { passengers: 3, totalAmount: 18000 };
+    const route = prepare(`/booking/42?${allocation}=5`, [
+      "Aisha",
+      "Yara",
+      "Sara",
+    ]);
+    fireEvent.click(seat("12A"));
+    addExtra(1, 2);
+    calls.allocation = { passengers: 2, totalAmount: 14000 };
+    act(() => route.navigate(`/booking/42?${allocation}=6`));
+    expect(screen.getAllByLabelText(/booking.firstName/)).toHaveLength(2);
+    expect(screen.queryByTestId("ancillary-review")).not.toBeInTheDocument();
+    expect(seat("12A")).toHaveAttribute("aria-pressed", "false");
+    fillPassengers(["New One", "New Two"]);
+    addExtra(1, 1);
+    await submit(allocation !== "groupBookingId");
+    expect(calls.create.mock.calls[0][0]).toMatchObject({
+      [allocation]: 6,
+      passengers: [{ firstName: "New One" }, { firstName: "New Two" }],
+      ancillaries: [
+        { passengerIndex: 1, quantity: 1, unitPrice: 1500, totalPrice: 1500 },
+      ],
+    });
   }
 );

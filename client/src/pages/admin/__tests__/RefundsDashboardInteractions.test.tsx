@@ -151,6 +151,66 @@ describe("refund dashboard interactions through real tRPC hooks", () => {
 
   it("refreshes detail, queue, statistics, history and trends after real resume mutations", async () => {
     let phase: PlanStatus = "review_required";
+    const statsByPhase: Record<PlanStatus, typeof stats> = {
+      review_required: { ...stats, reviewRequiredAmount: 9000 },
+      processing: {
+        ...stats,
+        pendingRefunds: 4,
+        pendingRefundAmount: 12001,
+        reviewRequiredRefunds: 0,
+        reviewRequiredAmount: 0,
+      },
+      completed: {
+        ...stats,
+        totalRefunds: 3,
+        refundedBookings: 2,
+        totalRefundedAmount: 16501,
+        refundRate: 50,
+        reviewRequiredRefunds: 0,
+        reviewRequiredAmount: 0,
+        retainedCancellationFees: 3500,
+      },
+    };
+    const displayedStats = {
+      review_required: {
+        totalRefunds: ["2"],
+        refundedAmount: ["75.01"],
+        refundedBookings: ["1"],
+        refundRate: ["25.0%"],
+        pendingPayers: ["3", "30.01 common.sar"],
+        reviewPayers: ["1", "90.00 common.sar"],
+        retainedFees: ["25.00 common.sar"],
+      },
+      processing: {
+        totalRefunds: ["2"],
+        refundedAmount: ["75.01"],
+        refundedBookings: ["1"],
+        refundRate: ["25.0%"],
+        pendingPayers: ["4", "120.01 common.sar"],
+        reviewPayers: ["0", "0.00 common.sar"],
+        retainedFees: ["25.00 common.sar"],
+      },
+      completed: {
+        totalRefunds: ["3"],
+        refundedAmount: ["165.01"],
+        refundedBookings: ["2"],
+        refundRate: ["50.0%"],
+        pendingPayers: ["3", "30.01 common.sar"],
+        reviewPayers: ["0", "0.00 common.sar"],
+        retainedFees: ["35.00 common.sar"],
+      },
+    };
+    const expectDisplayedStats = (expectedPhase: PlanStatus) => {
+      for (const [label, values] of Object.entries(displayedStats[expectedPhase])) {
+        const card = screen
+          .getByText(`admin.refunds.${label}`)
+          .closest<HTMLElement>('[data-slot="card"]');
+        expect(card).not.toBeNull();
+        for (const value of values)
+          expect(within(card!).getByText(value, { exact: true })).toBeVisible();
+      }
+    };
+    handlers["refunds.getStats"] = () => statsByPhase[phase];
     handlers["refunds.splitCancellation"] = () => detail(phase);
     handlers["refunds.splitCancellationQueue"] = input => ({
       items:
@@ -164,6 +224,7 @@ describe("refund dashboard interactions through real tRPC hooks", () => {
       return { status: phase };
     };
     const page = await visit();
+    await waitFor(() => expectDisplayedStats("review_required"));
     const dialog = await openDetail();
     const endpoints = [
       "splitCancellation",
@@ -172,7 +233,7 @@ describe("refund dashboard interactions through real tRPC hooks", () => {
       "getHistory",
       "getTrends",
     ];
-    for (const next of ["processing", "completed"]) {
+    for (const next of ["processing", "completed"] as const) {
       const before = endpoints.map(path => page.calls(path).length);
       fireEvent.click(
         within(dialog).getByRole("button", {
@@ -189,6 +250,7 @@ describe("refund dashboard interactions through real tRPC hooks", () => {
           expect(page.calls(path)).toHaveLength(before[index] + 1)
         )
       );
+      await waitFor(() => expectDisplayedStats(next));
     }
     expect(
       page.calls("resumeSplitCancellation").map(call => call.input)

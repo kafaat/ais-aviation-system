@@ -277,6 +277,41 @@ it("reports the server capability refusal without displaying a calculated result
   expect(screen.getByText(i18n.t("dcs.loadTrainingNotice"))).toBeVisible();
 });
 
+it.each(["resolved", "rejected"])(
+  "ignores a pending calculation for a changed aircraft when it is %s",
+  async outcome => {
+    const response = deferred<ReturnType<typeof calculation>>();
+    const { requests } = visit({
+      "dcs.getAircraftTypes": () => [
+        { id: 4, code: "TEST", name: "Synthetic trainer" },
+        { id: 5, code: "NEXT", name: "Replacement trainer" },
+      ],
+      "weightBalance.calculate": () => response.promise,
+    });
+    await prepare();
+    fireEvent.click(calculateButton());
+    await waitFor(() =>
+      expect(
+        requests.filter(r => r.path === "weightBalance.calculate")
+      ).toHaveLength(1)
+    );
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+    fireEvent.click(
+      await screen.findByRole("option", { name: "NEXT - Replacement trainer" })
+    );
+    await act(async () => {
+      if (outcome === "resolved") response.resolve(calculation());
+      else response.reject(new Error("Previous aircraft was removed"));
+    });
+    await waitFor(() => expect(calculateButton()).toBeEnabled());
+    expect(
+      screen.queryByText(i18n.t("wb.result.withinLimits"))
+    ).not.toBeInTheDocument();
+    expect(notices.success).not.toHaveBeenCalled();
+    expect(notices.error).not.toHaveBeenCalled();
+  }
+);
+
 it("checks limits only on request and shows failed margins, warnings and errors from that response", async () => {
   const { requests } = visit({
     "weightBalance.checkLimits": () => ({

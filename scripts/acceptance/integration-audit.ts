@@ -264,7 +264,7 @@ try {
     async () => {
       const before = await issueBoardingPass(
         { bookingId: id + 2, passengerId: id + 40 },
-        { userId: id }
+        { userId: id, tenantId: id }
       );
       assert.equal(verifyBoardingPass(before.token).valid, true);
       await db
@@ -273,7 +273,7 @@ try {
         .where(eq(s.bookings.id, id + 2));
       const after = await issueBoardingPass(
         { bookingId: id + 2, passengerId: id + 40 },
-        { userId: id }
+        { userId: id, tenantId: id }
       );
       assert.equal(verifyBoardingPass(after.token).valid, true);
       return {

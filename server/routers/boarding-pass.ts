@@ -36,6 +36,7 @@ export const boardingPassRouter = router({
       return await issueBoardingPass(input, {
         userId: ctx.user.id,
         role: ctx.user.role,
+        tenantId: ctx.tenantId,
       });
     }),
 

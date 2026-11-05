@@ -237,9 +237,11 @@ it("reports a rejected finalization without changing the displayed plan status",
     },
   });
   enterFlight();
-  fireEvent.click(
-    await screen.findByRole("button", { name: i18n.t("loadPlanning.finalize") })
-  );
+  const finalize = await screen.findByRole("button", {
+    name: i18n.t("loadPlanning.finalize"),
+  });
+  await waitFor(() => expect(finalize).toBeEnabled());
+  fireEvent.click(finalize);
   await waitFor(() =>
     expect(notices.error).toHaveBeenCalledWith(
       "Compartment reconciliation required"
@@ -279,3 +281,215 @@ it("reads the selected aircraft layout and derives only training ULD estimates f
   expect(screen.getByText(/2x PMC/)).toBeVisible();
   expect(screen.getByText(i18n.t("dcs.loadTrainingNotice"))).toBeVisible();
 });
+
+it("requires a passing current validation before finalization and waits for optimization and its refreshed validation", async () => {
+  const optimization = deferred<ReturnType<typeof plan>>();
+  const validation = deferred<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+  }>();
+  let optimized = false;
+  const { requests } = visit({
+    "loadPlanning.get": () => plan(optimized ? "optimized" : "draft"),
+    "loadPlanning.validate": () =>
+      optimized
+        ? validation.promise
+        : {
+            valid: false,
+            errors: ["Synthetic forward hold exceeds limit"],
+            warnings: [],
+          },
+    "loadPlanning.optimize": () => optimization.promise,
+    "loadPlanning.finalize": () => {
+      throw new Error("Operator changed the load plan");
+    },
+  });
+  enterFlight();
+  await screen.findByText("Synthetic forward hold exceeds limit");
+  const finalize = screen.getByRole("button", {
+    name: i18n.t("loadPlanning.finalize"),
+  });
+  expect(finalize).toBeDisabled();
+  fireEvent.click(finalize);
+  fireEvent.click(
+    screen.getByRole("button", { name: i18n.t("loadPlanning.optimize") })
+  );
+  await waitFor(() =>
+    expect(
+      requests.filter(r => r.path === "loadPlanning.optimize")
+    ).toHaveLength(1)
+  );
+  expect(finalize).toBeDisabled();
+  optimized = true;
+  await act(async () => optimization.resolve(plan("optimized")));
+  await screen.findByText("optimized");
+  await waitFor(() =>
+    expect(
+      requests.filter(r => r.path === "loadPlanning.validate")
+    ).toHaveLength(2)
+  );
+  expect(finalize).toBeDisabled();
+  fireEvent.click(finalize);
+  expect(requests.filter(r => r.path === "loadPlanning.finalize")).toEqual([]);
+  await act(async () =>
+    validation.resolve({ valid: true, errors: [], warnings: [] })
+  );
+  await waitFor(() => expect(finalize).toBeEnabled());
+  notices.success.mockClear();
+  fireEvent.click(finalize);
+  await waitFor(() =>
+    expect(notices.error).toHaveBeenCalledWith("Operator changed the load plan")
+  );
+  expect(screen.getByText("optimized")).toBeVisible();
+  expect(screen.queryByText("finalized")).not.toBeInTheDocument();
+  expect(notices.success).not.toHaveBeenCalled();
+});
+
+it("does not trust cached passing validation while a new validation is pending or rejected", async () => {
+  const response = deferred<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+  }>();
+  let reads = 0;
+  const { requests } = visit({
+    "loadPlanning.validate": () =>
+      ++reads === 1
+        ? {
+            valid: true,
+            errors: [],
+            warnings: [],
+          }
+        : response.promise,
+  });
+  enterFlight();
+  await screen.findByText(i18n.t("loadPlanning.validationPass"));
+  const finalize = screen.getByRole("button", {
+    name: i18n.t("loadPlanning.finalize"),
+  });
+  expect(finalize).toBeEnabled();
+  fireEvent.click(
+    screen.getByRole("button", { name: i18n.t("loadPlanning.validate") })
+  );
+  await waitFor(() =>
+    expect(
+      requests.filter(r => r.path === "loadPlanning.validate")
+    ).toHaveLength(2)
+  );
+  expect(finalize).toBeDisabled();
+  expect(
+    screen.queryByText(i18n.t("loadPlanning.validationPass"))
+  ).not.toBeInTheDocument();
+  await act(async () =>
+    response.reject(new Error("Current loading cannot be validated"))
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Current loading cannot be validated"
+  );
+  expect(finalize).toBeDisabled();
+  fireEvent.click(finalize);
+  expect(requests.filter(r => r.path === "loadPlanning.finalize")).toEqual([]);
+});
+
+it("does not announce an old flight optimization as success for a newly selected flight", async () => {
+  const response = deferred<ReturnType<typeof plan>>();
+  const { requests } = visit({
+    "loadPlanning.get": input => ({
+      ...plan(),
+      flightId: (input as { flightId: number }).flightId,
+    }),
+    "loadPlanning.optimize": () => response.promise,
+  });
+  enterFlight();
+  await screen.findByText(i18n.t("loadPlanning.validationPass"));
+  fireEvent.click(
+    screen.getByRole("button", { name: i18n.t("loadPlanning.optimize") })
+  );
+  await waitFor(() =>
+    expect(
+      requests.filter(r => r.path === "loadPlanning.optimize")
+    ).toHaveLength(1)
+  );
+  enterFlight("8");
+  await screen.findByText("draft");
+  await act(async () => response.resolve(plan("optimized")));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: i18n.t("loadPlanning.optimize") })
+    ).toBeEnabled()
+  );
+  expect(notices.success).not.toHaveBeenCalled();
+  expect(screen.queryByText("optimized")).not.toBeInTheDocument();
+  expect(requests.filter(r => r.path === "loadPlanning.optimize")).toEqual([
+    { path: "loadPlanning.optimize", input: { flightId: 7 } },
+  ]);
+});
+
+it.each(["resolved", "rejected"])(
+  "keeps the selected aircraft layout when an earlier pending layout request is %s",
+  async outcome => {
+    const previous = deferred<{
+      aircraftType: typeof aircraft & { isWidebody: boolean };
+      totalMaxWeight: number;
+      totalMaxVolume: number;
+      compartments: (typeof compartment)[];
+    }>();
+    const replacement = { id: 5, code: "NEXT", name: "Replacement trainer" };
+    const { requests } = visit({
+      "dcs.getAircraftTypes": () => [aircraft, replacement],
+      "loadPlanning.getCompartments": input =>
+        (input as { aircraftTypeId: number }).aircraftTypeId === 4
+          ? previous.promise
+          : {
+              aircraftType: { ...replacement, isWidebody: false },
+              totalMaxWeight: 500000,
+              totalMaxVolume: 2000,
+              compartments: [
+                {
+                  ...compartment,
+                  id: 6,
+                  name: "Replacement aft hold",
+                  compartmentCode: "AFT",
+                  position: "aft",
+                },
+              ],
+            },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: i18n.t("loadPlanning.tabs.compartments"),
+      })
+    );
+    await choose(screen.getByRole("combobox"), "TEST - Synthetic trainer");
+    await waitFor(() =>
+      expect(
+        requests.filter(r => r.path === "loadPlanning.getCompartments")
+      ).toHaveLength(1)
+    );
+    await choose(screen.getByRole("combobox"), "NEXT - Replacement trainer");
+    expect(await screen.findByText("Replacement aft hold")).toBeVisible();
+    await act(async () => {
+      if (outcome === "resolved")
+        previous.resolve({
+          aircraftType: { ...aircraft, isWidebody: true },
+          totalMaxWeight: 1000000,
+          totalMaxVolume: 4000,
+          compartments: [compartment],
+        });
+      else
+        previous.reject(new Error("Previous aircraft layout no longer exists"));
+    });
+    expect(screen.getByText("Replacement aft hold")).toBeVisible();
+    expect(screen.getByText("Narrowbody")).toBeVisible();
+    expect(screen.queryByText("Forward fixture hold")).not.toBeInTheDocument();
+    expect(screen.queryByText("Widebody")).not.toBeInTheDocument();
+    expect(notices.error).not.toHaveBeenCalled();
+    expect(
+      requests.filter(r => r.path === "loadPlanning.getCompartments")
+    ).toEqual([
+      { path: "loadPlanning.getCompartments", input: { aircraftTypeId: 4 } },
+      { path: "loadPlanning.getCompartments", input: { aircraftTypeId: 5 } },
+    ]);
+  }
+);

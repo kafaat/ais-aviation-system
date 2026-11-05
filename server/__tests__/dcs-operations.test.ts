@@ -515,7 +515,7 @@ describe("flight closure and transactional failure", () => {
 describe("passenger attendance, denial and scan binding", () => {
   it("guards all old mutation/verification paths while boarded and preserves retry identity", async () => {
     await checkIn();
-    const pass = await issueBoardingPass(key, { userId: 7 });
+    const pass = await issueBoardingPass(key, { userId: 7, tenantId: 1 });
     const input = {
       ...key,
       action: "board" as const,
@@ -551,7 +551,7 @@ describe("passenger attendance, denial and scan binding", () => {
 
   it("retains denial across offload and requires allow plus fresh check-in", async () => {
     await checkIn();
-    const pass = await issueBoardingPass(key, { userId: 7 });
+    const pass = await issueBoardingPass(key, { userId: 7, tenantId: 1 });
     await transition("deny");
     expect((await verifyActiveBoardingPass(pass.token)).valid).toBe(false);
     await expect(changeSeat(11, "1A", "2A", 3, 4)).rejects.toThrow("denied");
@@ -611,7 +611,7 @@ describe("passenger attendance, denial and scan binding", () => {
       { ...key, passengerId: 5, seatNumber: "1B", ...command() },
       actor
     );
-    const pass = await issueBoardingPass(key, { userId: 7 });
+    const pass = await issueBoardingPass(key, { userId: 7, tenantId: 1 });
     for (const boardingPassToken of [pass.token, pass.bcbp])
       await expect(
         transitionDcsPassenger(
@@ -637,7 +637,7 @@ describe("passenger attendance, denial and scan binding", () => {
         actor
       )
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-    const current = await issueBoardingPass(key, { userId: 7 });
+    const current = await issueBoardingPass(key, { userId: 7, tenantId: 1 });
     expect(
       (
         await transitionDcsPassenger(
@@ -877,7 +877,7 @@ describe("station reports and controlled desk commands", () => {
       const target = { ...key, flightId: targetFlightId };
       if (targetFlightId !== key.flightId)
         await checkInDcsPassenger({ ...target, ...command() }, actor);
-      const pass = await issueBoardingPass(target, { userId: 7 });
+      const pass = await issueBoardingPass(target, { userId: 7, tenantId: 1 });
       await transition("board");
       await changeDcsFlightState(
         { flightId: key.flightId, action: "close", ...command() },
@@ -972,9 +972,9 @@ describe("station reports and controlled desk commands", () => {
           actor
         )
       ).rejects.toThrow(/departure reconciliation/i);
-      await expect(issueBoardingPass(target, { userId: 7 })).rejects.toThrow(
-        /departure reconciliation/i
-      );
+      await expect(
+        issueBoardingPass(target, { userId: 7, tenantId: 1 })
+      ).rejects.toThrow(/departure reconciliation/i);
       expect((await verifyActiveBoardingPass(pass.token)).valid).toBe(false);
       expect((await verifyActiveBoardingPass(pass.bcbp)).valid).toBe(false);
       await expect(
@@ -1048,7 +1048,7 @@ describe("station reports and controlled desk commands", () => {
       refundedAmount: 10000,
     });
     expect((await checkIn()).state).toBe("checked_in");
-    const pass = await issueBoardingPass(key, { userId: 7 });
+    const pass = await issueBoardingPass(key, { userId: 7, tenantId: 1 });
     expect((await verifyActiveBoardingPass(pass.token)).valid).toBe(true);
     expect((await transition("board")).state).toBe("boarded");
   });

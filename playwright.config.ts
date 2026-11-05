@@ -1,5 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Independent acceptance phases keep their receipts instead of overwriting the
+// first run. Defaults preserve the normal developer and CI report locations.
+const resultsDirectory = process.env.AIS_E2E_REPORT_DIR || "test-results";
+const htmlDirectory =
+  process.env.AIS_E2E_HTML_REPORT_DIR || "playwright-report";
+
 /**
  * Playwright Configuration for E2E Tests
  * See https://playwright.dev/docs/test-configuration
@@ -38,18 +44,18 @@ export default defineConfig({
   reporter: process.env.CI
     ? [
         ["list"],
-        ["json", { outputFile: "test-results/results.json" }],
-        ["html", { open: "never" }],
+        ["json", { outputFile: `${resultsDirectory}/results.json` }],
+        ["html", { outputFolder: htmlDirectory, open: "never" }],
         ["github"],
       ]
     : [
-        ["html", { open: "on-failure" }],
+        ["html", { outputFolder: htmlDirectory, open: "on-failure" }],
         ["list"],
-        ["json", { outputFile: "test-results/results.json" }],
+        ["json", { outputFile: `${resultsDirectory}/results.json` }],
       ],
 
   /* Output directory for test artifacts */
-  outputDir: "test-results",
+  outputDir: resultsDirectory,
 
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
