@@ -1,5 +1,26 @@
 # Changelog
 
+## What's Changed in v1.37.1
+
+<!-- ais-release-source: 10a3f5e83bad2d7726841becc15f421d1a5b8727 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(ci): refresh release proposals and verify tag deployment (#282) (146a88d)
+- fix: enforce fare and document boundaries and recover client flows (#284) (d68881c)
+- fix: close native payment and process acceptance gaps (#285) (10a3f5e)
+
+### Other Changes
+
+- test(ci): gate 38 gap closures and 99 report classifications on evidence (#281) (0eb7bc5)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.37.0...v1.37.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.37.0
 
 ### Features
