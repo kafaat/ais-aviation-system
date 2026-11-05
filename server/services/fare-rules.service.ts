@@ -35,6 +35,7 @@ import {
 } from "../../drizzle/schema";
 import { createServiceLogger } from "../_core/logger";
 import { getFlightRbdAvailability } from "./rbd-inventory.service";
+import { z } from "zod";
 
 const log = createServiceLogger("fare-rules");
 
@@ -177,12 +178,16 @@ export interface BlackoutDatesConditions {
   blackoutPeriods?: Array<{
     start?: string;
     end?: string;
+    from?: string;
+    to?: string;
     reason?: string;
   }>;
-  /** Legacy format: `periods` with `{from, to}` keys */
+  /** Legacy array name; both supported endpoint aliases are normalized. */
   periods?: Array<{
-    from: string;
-    to: string;
+    start?: string;
+    end?: string;
+    from?: string;
+    to?: string;
     reason?: string;
   }>;
 }
@@ -289,6 +294,306 @@ const RULE_CATEGORY_ORDER: RuleCategory[] = [
   "group_discount",
 ];
 
+const nonNegativeNumber = z.number().nonnegative();
+const countOrAmount = nonNegativeNumber.int();
+const percentageDiscount = nonNegativeNumber.max(100);
+const calendarDate = z
+  .string()
+  .refine(
+    value =>
+      z.iso.date().safeParse(value).success ||
+      z.iso.datetime({ offset: true }).safeParse(value).success,
+    "Expected a valid ISO calendar date or timestamp"
+  );
+
+/** Calendar periods include their full final UTC day; timestamps stay exact. */
+function periodBoundaryMillis(value: string, end: boolean): number {
+  const instant = Date.parse(value);
+  return end && z.iso.date().safeParse(value).success
+    ? instant + 86_400_000 - 1
+    : instant;
+}
+
+const blackoutPeriod = z
+  .object({
+    start: calendarDate.optional(),
+    end: calendarDate.optional(),
+    from: calendarDate.optional(),
+    to: calendarDate.optional(),
+  })
+  .passthrough()
+  .refine(value => {
+    const start = value.start ?? value.from;
+    const end = value.end ?? value.to;
+    return Boolean(
+      start &&
+      end &&
+      periodBoundaryMillis(start, false) <= periodBoundaryMillis(end, true) &&
+      (!value.start ||
+        !value.from ||
+        Date.parse(value.start) === Date.parse(value.from)) &&
+      (!value.end ||
+        !value.to ||
+        periodBoundaryMillis(value.end, true) ===
+          periodBoundaryMillis(value.to, true))
+    );
+  }, "Blackout period requires consistent, ordered start/end (or from/to) dates");
+
+// Validate supported fields on both write and read. Unknown metadata is kept
+// for compatibility; malformed numeric/date values never become a free fare,
+// a negative surcharge or a silently ignored travel restriction.
+const conditionShapes: Record<RuleCategory, z.ZodType> = {
+  eligibility: z
+    .object({
+      passengerTypes: z.array(z.enum(["adult", "child", "infant"])).optional(),
+      minAge: nonNegativeNumber.optional(),
+      maxAge: nonNegativeNumber.optional(),
+      residenceCountries: z.array(z.string().regex(/^[A-Z]{2}$/)).optional(),
+      requireCorporateId: z.boolean().optional(),
+      requireLoyaltyMembership: z.boolean().optional(),
+      minLoyaltyTier: z.string().min(1).optional(),
+    })
+    .passthrough(),
+  day_time: z
+    .object({
+      allowedDaysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+      departureTimeFrom: z
+        .string()
+        .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
+        .optional(),
+      departureTimeTo: z
+        .string()
+        .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
+        .optional(),
+    })
+    .passthrough(),
+  seasonality: z
+    .object({
+      season: z.string().min(1),
+      periodStart: calendarDate,
+      periodEnd: calendarDate,
+      seasonMultiplier: nonNegativeNumber.optional(),
+    })
+    .passthrough()
+    .refine(
+      value =>
+        periodBoundaryMillis(value.periodStart, false) <=
+        periodBoundaryMillis(value.periodEnd, true),
+      "Season ends before it starts"
+    ),
+  flight_application: z
+    .object({
+      flightNumbers: z.array(z.string().min(1)).optional(),
+      aircraftTypes: z.array(z.string().min(1)).optional(),
+      directOnly: z.boolean().optional(),
+    })
+    .passthrough(),
+  advance_purchase: z
+    .object({
+      minDaysBeforeDeparture: countOrAmount,
+      maxDaysBeforeDeparture: countOrAmount.optional(),
+    })
+    .passthrough()
+    .refine(
+      value =>
+        value.maxDaysBeforeDeparture === undefined ||
+        value.maxDaysBeforeDeparture >= value.minDaysBeforeDeparture,
+      "Advance purchase maximum is below its minimum"
+    ),
+  minimum_stay: z
+    .object({
+      minNights: countOrAmount.optional(),
+      minDays: countOrAmount.optional(),
+      minStayDays: countOrAmount.optional(),
+      requireSaturdayNight: z.boolean().optional(),
+    })
+    .passthrough(),
+  maximum_stay: z
+    .object({
+      maxNights: countOrAmount.optional(),
+      maxDays: countOrAmount.optional(),
+      maxStayDays: countOrAmount.optional(),
+    })
+    .passthrough(),
+  stopovers: z
+    .object({
+      freeStopoverCount: countOrAmount.optional(),
+      additionalStopoverFee: countOrAmount.optional(),
+      maxStopoverHours: nonNegativeNumber.optional(),
+    })
+    .passthrough(),
+  transfers: z
+    .object({
+      transfersAllowed: z.boolean().optional(),
+      maxTransfers: countOrAmount.optional(),
+      minConnectionMinutes: nonNegativeNumber.optional(),
+      maxConnectionMinutes: nonNegativeNumber.optional(),
+    })
+    .passthrough(),
+  combinations: z
+    .object({
+      combinable: z.boolean().optional(),
+      allowedFareClasses: z.array(z.string().min(1)).optional(),
+      endOnEndAllowed: z.boolean().optional(),
+    })
+    .passthrough(),
+  blackout_dates: z
+    .object({
+      blackoutPeriods: z.array(blackoutPeriod).optional(),
+      periods: z.array(blackoutPeriod).optional(),
+    })
+    .passthrough(),
+  surcharges: z
+    .object({
+      surchargeType: z.enum(["YQ", "YR", "fuel", "insurance", "security"]),
+      fixedAmount: countOrAmount.optional(),
+      percentage: nonNegativeNumber.optional(),
+    })
+    .passthrough(),
+  penalties: z
+    .object({
+      penaltyType: z.enum(["change", "cancel", "no_show"]),
+      fixedFee: countOrAmount.optional(),
+      percentageFee: nonNegativeNumber.optional(),
+      hoursBeforeDeparture: nonNegativeNumber.optional(),
+      nonRefundable: z.boolean().optional(),
+      changeTiers: z
+        .array(
+          z
+            .object({ withinHours: nonNegativeNumber, fee: countOrAmount })
+            .passthrough()
+        )
+        .optional(),
+    })
+    .passthrough(),
+  children_discount: z
+    .object({
+      passengerType: z.enum(["child", "infant"]),
+      discountPercentage: percentageDiscount,
+      minAge: nonNegativeNumber.optional(),
+      maxAge: nonNegativeNumber.optional(),
+      seatIncluded: z.boolean().optional(),
+    })
+    .passthrough(),
+  group_discount: z
+    .object({
+      minPassengers: countOrAmount.min(2),
+      maxPassengers: countOrAmount.optional(),
+      discountPercentage: percentageDiscount,
+    })
+    .passthrough()
+    .refine(
+      value =>
+        value.maxPassengers === undefined ||
+        value.maxPassengers >= value.minPassengers,
+      "Group maximum is below its minimum"
+    ),
+};
+
+function parseFareDate(value: string | Date, label: string): Date {
+  if (value instanceof Date) {
+    if (Number.isFinite(value.getTime())) return new Date(value);
+  } else if (calendarDate.safeParse(value).success) {
+    return new Date(value);
+  }
+  throw new Error(
+    `Invalid ${label} date: expected an ISO calendar date or timestamp`
+  );
+}
+
+/**
+ * Preserve the caller's date-vs-timestamp meaning before the router converts
+ * validity input to a Date. Validity columns have whole-second precision, so
+ * persist the final second of a calendar day without rounding into tomorrow.
+ * An explicit timestamp, including midnight or an offset, is never extended.
+ */
+export function parseFareRuleValidityDate(
+  value: string,
+  boundary: "start" | "end"
+): Date {
+  const date = parseFareDate(value, `rule validity ${boundary}`);
+  if (boundary === "end" && z.iso.date().safeParse(value).success) {
+    date.setTime(periodBoundaryMillis(value, true));
+    date.setUTCMilliseconds(0);
+  }
+  return date;
+}
+
+function minorUnits(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new Error(`${label} must be non-negative safe integer minor units`);
+  return value;
+}
+
+function priceMultiplier(value: string, label: string): number {
+  const parsed = Number(value);
+  if (value.trim() === "" || !Number.isFinite(parsed) || parsed < 0)
+    throw new Error(
+      `${label} price multiplier must be finite and non-negative`
+    );
+  return parsed;
+}
+
+function assertRulePricing(
+  rule: Pick<
+    InsertFareRule,
+    "ruleCategory" | "priceMultiplier" | "priceAdjustment"
+  >
+): void {
+  if (!RULE_CATEGORY_ORDER.includes(rule.ruleCategory))
+    throw new Error(
+      `Unsupported fare rule category: ${String(rule.ruleCategory)}`
+    );
+  priceMultiplier(rule.priceMultiplier ?? "1.000", "Fare rule");
+  if (!Number.isSafeInteger(rule.priceAdjustment ?? 0))
+    throw new Error(
+      "Fare rule price adjustment must be safe integer minor units"
+    );
+}
+
+function adjustFare(
+  amount: number,
+  multiplier: number,
+  adjustment: number
+): number {
+  const multiplied = minorUnits(
+    Math.round(amount * multiplier),
+    "Adjusted fare"
+  );
+  const adjusted = multiplied + adjustment;
+  if (!Number.isSafeInteger(adjusted))
+    throw new Error("Adjusted fare must be safe integer minor units");
+  // Flat discounts may exhaust the fare, but never create a negative base for
+  // a later percentage surcharge or discount.
+  return Math.max(0, adjusted);
+}
+
+function assertFareFlightContext(
+  flight: Pick<
+    typeof flights.$inferSelect,
+    "originId" | "destinationId" | "departureTime"
+  >,
+  params: { originId: number; destinationId: number; departureDate: string }
+): Date {
+  if (
+    flight.originId !== params.originId ||
+    flight.destinationId !== params.destinationId
+  )
+    throw new Error("Requested fare route does not match the selected flight");
+  const requested = calendarDate.safeParse(params.departureDate);
+  const departure = parseFareDate(flight.departureTime, "scheduled departure");
+  const matches =
+    requested.success &&
+    (z.iso.date().safeParse(params.departureDate).success
+      ? params.departureDate === departure.toISOString().slice(0, 10)
+      : Date.parse(params.departureDate) === departure.getTime());
+  if (!matches)
+    throw new Error(
+      "Requested fare departure does not match the selected flight"
+    );
+  return departure;
+}
+
 /**
  * Get the cabin class base price from a flight.
  * Falls back to economy price for premium_economy and business price
@@ -310,8 +615,9 @@ function getFlightBasePrice(
     case "premium_economy":
       return flight.economyPrice;
     case "economy":
-    default:
       return flight.economyPrice;
+    default:
+      throw new Error(`Unsupported cabin class: ${String(cabinClass)}`);
   }
 }
 
@@ -332,24 +638,34 @@ function getFlightAvailableSeats(
       return flight.businessAvailable;
     case "premium_economy":
     case "economy":
-    default:
       return flight.economyAvailable;
+    default:
+      throw new Error(`Unsupported cabin class: ${String(cabinClass)}`);
   }
 }
 
 /**
- * Safely parse a JSON string from the conditions column.
+ * Parse a conditions object without silently dropping a persisted rule.
  *
  * @param conditionsText - Raw JSON text from the database
- * @returns Parsed object or null on parse failure
+ * @returns Parsed conditions object
+ * @throws Error for malformed JSON, scalars, arrays or null
  */
-function parseConditions<T>(conditionsText: string): T | null {
+function parseConditions<T>(
+  conditionsText: string,
+  category?: RuleCategory
+): T {
+  let value: unknown;
   try {
-    return JSON.parse(conditionsText) as T;
+    value = JSON.parse(conditionsText);
   } catch {
-    log.warn("Failed to parse fare rule conditions JSON");
-    return null;
+    throw new Error("Fare rule conditions must be a valid JSON object");
   }
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Fare rule conditions must be a valid JSON object");
+  if (category)
+    validateConditionsSchema(category, value as Record<string, unknown>);
+  return value as T;
 }
 
 /**
@@ -364,6 +680,8 @@ function validateConditionsSchema(
   category: RuleCategory,
   conditions: Record<string, unknown>
 ): void {
+  if (!RULE_CATEGORY_ORDER.includes(category))
+    throw new Error(`Unsupported fare rule category: ${String(category)}`);
   switch (category) {
     case "advance_purchase": {
       if (
@@ -401,16 +719,23 @@ function validateConditionsSchema(
         );
       }
 
-      const periods = hasNewFormat
-        ? (conditions.blackoutPeriods as Array<Record<string, unknown>>)
-        : (conditions.periods as Array<Record<string, unknown>>);
+      const periods = [
+        ...(Array.isArray(conditions.blackoutPeriods)
+          ? conditions.blackoutPeriods
+          : []),
+        ...(Array.isArray(conditions.periods) ? conditions.periods : []),
+      ] as Array<Record<string, unknown>>;
 
       for (const period of periods) {
+        if (!period || typeof period !== "object" || Array.isArray(period))
+          throw new Error(
+            "blackout_dates conditions must include valid date periods"
+          );
         const hasStart = period.start || period.from;
         const hasEnd = period.end || period.to;
         if (!hasStart || !hasEnd) {
           throw new Error(
-            "Each blackout period must include start/end (or from/to) date strings"
+            "Each blackout period in conditions must include start/end (or from/to) date strings"
           );
         }
       }
@@ -495,6 +820,11 @@ function validateConditionsSchema(
     default:
       break;
   }
+  const validated = conditionShapes[category].safeParse(conditions);
+  if (!validated.success)
+    throw new Error(
+      `Invalid ${category} conditions: ${validated.error.issues.map(issue => `${issue.path.join(".") || "rule"}: ${issue.message}`).join("; ")}`
+    );
 }
 
 /**
@@ -540,18 +870,15 @@ function normalizeBlackoutPeriods(
 ): Array<{ start: string; end: string; reason?: string }> {
   const result: Array<{ start: string; end: string; reason?: string }> = [];
 
-  if (cond.blackoutPeriods) {
-    for (const p of cond.blackoutPeriods) {
-      if (p.start && p.end) {
-        result.push({ start: p.start, end: p.end, reason: p.reason });
-      }
-    }
-  }
-
-  if (cond.periods) {
-    for (const p of cond.periods) {
-      result.push({ start: p.from, end: p.to, reason: p.reason });
-    }
+  for (const period of [
+    ...(cond.blackoutPeriods ?? []),
+    ...(cond.periods ?? []),
+  ]) {
+    const start = period.start ?? period.from;
+    const end = period.end ?? period.to;
+    if (!start || !end)
+      throw new Error("Blackout conditions require both period endpoints");
+    result.push({ start, end, reason: period.reason });
   }
 
   return result;
@@ -906,16 +1233,15 @@ export async function createFareRule(
   if (fareClass.length === 0) {
     throw new Error(`Fare class with id ${data.fareClassId} not found`);
   }
+  if (fareClass[0].airlineId !== data.airlineId)
+    throw new Error("Fare rule airline does not match its fare class");
 
   // Parse and validate conditions JSON
-  let conditionsObj: Record<string, unknown>;
-  try {
-    conditionsObj = JSON.parse(data.conditions);
-  } catch {
-    throw new Error("conditions must be a valid JSON string");
-  }
-
+  const conditionsObj = parseConditions<Record<string, unknown>>(
+    data.conditions
+  );
   validateConditionsSchema(data.ruleCategory, conditionsObj);
+  assertRulePricing(data);
 
   const result = await db.insert(fareRules).values({
     ...data,
@@ -958,18 +1284,27 @@ export async function updateFareRule(
     throw new Error(`Fare rule with id ${id} not found`);
   }
 
-  // If conditions are being updated, validate them
-  if (data.conditions !== undefined) {
-    let conditionsObj: Record<string, unknown>;
-    try {
-      conditionsObj = JSON.parse(data.conditions);
-    } catch {
-      throw new Error("conditions must be a valid JSON string");
-    }
+  if (data.fareClassId !== undefined || data.airlineId !== undefined) {
+    const targetId = data.fareClassId ?? existing[0].fareClassId;
+    const [target] = await db
+      .select()
+      .from(fareClasses)
+      .where(eq(fareClasses.id, targetId))
+      .limit(1);
+    if (!target) throw new Error(`Fare class with id ${targetId} not found`);
+    if (target.airlineId !== (data.airlineId ?? existing[0].airlineId))
+      throw new Error("Fare rule airline does not match its fare class");
+  }
 
+  // A category-only edit must also validate the retained conditions.
+  if (data.conditions !== undefined || data.ruleCategory !== undefined) {
+    const conditionsObj = parseConditions<Record<string, unknown>>(
+      data.conditions ?? existing[0].conditions
+    );
     const category = data.ruleCategory ?? existing[0].ruleCategory;
     validateConditionsSchema(category, conditionsObj);
   }
+  assertRulePricing({ ...existing[0], ...data });
 
   await db.update(fareRules).set(data).where(eq(fareRules.id, id));
 
@@ -1126,7 +1461,7 @@ export async function getApplicableRules(
   const db = transaction ?? (await getDb());
   if (!db) throw new Error("Database not available");
 
-  const referenceDate = date ?? new Date();
+  const referenceDate = parseFareDate(date ?? new Date(), "reference");
 
   const baseConditions = [
     eq(fareRules.fareClassId, fareClassId),
@@ -1239,6 +1574,13 @@ export async function calculateFare(params: {
   const flight = flightResult[0];
 
   // Step 2: Get fare class for multiplier and cabin class
+  const departureDate = assertFareFlightContext(flight, params);
+  const returnDate =
+    params.returnDate !== undefined
+      ? parseFareDate(params.returnDate, "return")
+      : undefined;
+  if (!Number.isSafeInteger(params.passengerCount) || params.passengerCount < 1)
+    throw new Error("Passenger count must be a positive safe integer");
   const fareClassResult = await db
     .select()
     .from(fareClasses)
@@ -1252,18 +1594,22 @@ export async function calculateFare(params: {
   }
 
   const fc = fareClassResult[0];
+  if (fc.airlineId !== flight.airlineId)
+    throw new Error("Fare class airline does not match the selected flight");
 
   // Step 3: Calculate base fare using cabin-appropriate price
-  const baseFare = getFlightBasePrice(flight, fc.cabinClass);
+  const baseFare = minorUnits(
+    getFlightBasePrice(flight, fc.cabinClass),
+    "Base fare"
+  );
   const fareClassMultiplier = fc.basePriceMultiplier ?? "1.000";
-  let adjustedFare = Math.round(baseFare * parseFloat(fareClassMultiplier));
+  let adjustedFare = adjustFare(
+    baseFare,
+    priceMultiplier(fareClassMultiplier, "Fare class"),
+    0
+  );
 
   // Step 4: Retrieve all applicable fare rules
-  const departureDate = new Date(params.departureDate);
-  const returnDate = params.returnDate
-    ? new Date(params.returnDate)
-    : undefined;
-
   const applicableRules = await getApplicableRules(
     params.fareClassId,
     params.originId,
@@ -1274,6 +1620,9 @@ export async function calculateFare(params: {
   // Group rules by category for ordered processing
   const rulesByCategory: Partial<Record<RuleCategory, FareRule[]>> = {};
   for (const rule of applicableRules) {
+    assertRulePricing(rule);
+    if (rule.airlineId !== fc.airlineId)
+      throw new Error("Fare rule airline does not match its fare class");
     if (!rulesByCategory[rule.ruleCategory]) {
       rulesByCategory[rule.ruleCategory] = [];
     }
@@ -1302,12 +1651,12 @@ export async function calculateFare(params: {
 
     for (const rule of rulesInCategory) {
       const conditions = parseConditions<Record<string, unknown>>(
-        rule.conditions
+        rule.conditions,
+        rule.ruleCategory
       );
-      if (!conditions) continue;
 
       const ruleMultiplierStr = rule.priceMultiplier ?? "1.000";
-      const ruleMultiplier = parseFloat(ruleMultiplierStr);
+      const ruleMultiplier = priceMultiplier(ruleMultiplierStr, "Fare rule");
       const ruleAdjustment = rule.priceAdjustment ?? 0;
 
       switch (category) {
@@ -1401,8 +1750,11 @@ export async function calculateFare(params: {
 
           // Apply pricing from the rule record
           const preFare = adjustedFare;
-          adjustedFare = Math.round(adjustedFare * ruleMultiplier);
-          adjustedFare += ruleAdjustment;
+          adjustedFare = adjustFare(
+            adjustedFare,
+            ruleMultiplier,
+            ruleAdjustment
+          );
           const totalRuleAdjustment = adjustedFare - preFare;
 
           appliedRules.push({
@@ -1419,16 +1771,15 @@ export async function calculateFare(params: {
         case "seasonality": {
           const cond = conditions as unknown as SeasonalityConditions;
           const depTime = departureDate.getTime();
-          const periodStart = new Date(cond.periodStart).getTime();
-          const periodEnd = new Date(cond.periodEnd).getTime();
+          const periodStart = periodBoundaryMillis(cond.periodStart, false);
+          const periodEnd = periodBoundaryMillis(cond.periodEnd, true);
 
           if (depTime >= periodStart && depTime <= periodEnd) {
             // Apply seasonal multiplier from conditions, falling back to
             // rule-level multiplier
             const seasonMult = cond.seasonMultiplier ?? ruleMultiplier;
             const preFare = adjustedFare;
-            adjustedFare = Math.round(adjustedFare * seasonMult);
-            adjustedFare += ruleAdjustment;
+            adjustedFare = adjustFare(adjustedFare, seasonMult, ruleAdjustment);
             const totalRuleAdjustment = adjustedFare - preFare;
 
             appliedRules.push({
@@ -1449,8 +1800,8 @@ export async function calculateFare(params: {
           const depTime = departureDate.getTime();
 
           for (const period of periods) {
-            const blackoutStart = new Date(period.start).getTime();
-            const blackoutEnd = new Date(period.end).getTime();
+            const blackoutStart = periodBoundaryMillis(period.start, false);
+            const blackoutEnd = periodBoundaryMillis(period.end, true);
             if (depTime >= blackoutStart && depTime <= blackoutEnd) {
               throw new Error(
                 `Departure date falls within a blackout period${period.reason ? ` (${period.reason})` : ""} for fare class ${fc.code} (rule: ${rule.ruleName})`
@@ -1560,9 +1911,13 @@ export async function calculateFare(params: {
             );
           }
           surchargeAmount += ruleAdjustment;
+          minorUnits(surchargeAmount, "Surcharge");
 
           if (surchargeAmount !== 0) {
-            totalSurcharges += surchargeAmount;
+            totalSurcharges = minorUnits(
+              totalSurcharges + surchargeAmount,
+              "Total surcharges"
+            );
             appliedRules.push({
               ruleId: rule.id,
               ruleName: rule.ruleName,
@@ -1593,10 +1948,13 @@ export async function calculateFare(params: {
           if (cond.passengerType === params.passengerType) {
             const discountMultiplier = 1 - cond.discountPercentage / 100;
             const preFare = adjustedFare;
-            adjustedFare = Math.round(adjustedFare * discountMultiplier);
+            adjustedFare = adjustFare(adjustedFare, discountMultiplier, 0);
             // Also apply rule-level pricing
-            adjustedFare = Math.round(adjustedFare * ruleMultiplier);
-            adjustedFare += ruleAdjustment;
+            adjustedFare = adjustFare(
+              adjustedFare,
+              ruleMultiplier,
+              ruleAdjustment
+            );
             const totalRuleAdjustment = adjustedFare - preFare;
 
             appliedRules.push({
@@ -1622,9 +1980,12 @@ export async function calculateFare(params: {
           if (meetsMin && meetsMax) {
             const discountMultiplier = 1 - cond.discountPercentage / 100;
             const preFare = adjustedFare;
-            adjustedFare = Math.round(adjustedFare * discountMultiplier);
-            adjustedFare = Math.round(adjustedFare * ruleMultiplier);
-            adjustedFare += ruleAdjustment;
+            adjustedFare = adjustFare(adjustedFare, discountMultiplier, 0);
+            adjustedFare = adjustFare(
+              adjustedFare,
+              ruleMultiplier,
+              ruleAdjustment
+            );
             const totalRuleAdjustment = adjustedFare - preFare;
 
             appliedRules.push({
@@ -1655,12 +2016,21 @@ export async function calculateFare(params: {
   adjustedFare = Math.max(0, adjustedFare);
 
   // Step 8: Calculate taxes (15% VAT on fare + surcharges)
-  const taxableAmount = adjustedFare + totalSurcharges;
-  const taxes = Math.round(taxableAmount * 0.15);
+  const taxableAmount = minorUnits(
+    adjustedFare + totalSurcharges,
+    "Taxable amount"
+  );
+  const taxes = minorUnits(Math.round(taxableAmount * 0.15), "Taxes");
 
   // Step 9: Compute totals
-  const totalPerPassenger = adjustedFare + totalSurcharges + taxes;
-  const totalAmount = totalPerPassenger * params.passengerCount;
+  const totalPerPassenger = minorUnits(
+    taxableAmount + taxes,
+    "Total per passenger"
+  );
+  const totalAmount = minorUnits(
+    totalPerPassenger * params.passengerCount,
+    "Total amount"
+  );
 
   return {
     baseFare,
@@ -1711,19 +2081,22 @@ export async function validateBookingRules(params: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const departureDate =
-    params.departureDate instanceof Date
-      ? params.departureDate
-      : new Date(params.departureDate);
-  const bookingDate =
-    params.bookingDate instanceof Date
-      ? params.bookingDate
-      : new Date(params.bookingDate);
-  const returnDate = params.returnDate
-    ? params.returnDate instanceof Date
-      ? params.returnDate
-      : new Date(params.returnDate)
-    : undefined;
+  const [fareClass] = await db
+    .select()
+    .from(fareClasses)
+    .where(
+      and(eq(fareClasses.id, params.fareClassId), eq(fareClasses.active, true))
+    )
+    .limit(1);
+  if (!fareClass)
+    throw new Error(`Fare class with id ${params.fareClassId} not found`);
+
+  const departureDate = parseFareDate(params.departureDate, "departure");
+  const bookingDate = parseFareDate(params.bookingDate, "booking");
+  const returnDate =
+    params.returnDate !== undefined
+      ? parseFareDate(params.returnDate, "return")
+      : undefined;
 
   // Fetch all applicable rules
   const applicableRules = await getApplicableRules(
@@ -1741,10 +2114,13 @@ export async function validateBookingRules(params: {
   }> = [];
 
   for (const rule of applicableRules) {
+    assertRulePricing(rule);
+    if (rule.airlineId !== fareClass.airlineId)
+      throw new Error("Fare rule airline does not match its fare class");
     const conditions = parseConditions<Record<string, unknown>>(
-      rule.conditions
+      rule.conditions,
+      rule.ruleCategory
     );
-    if (!conditions) continue;
 
     switch (rule.ruleCategory) {
       // ---- Advance Purchase (Cat 5) ----
@@ -1840,8 +2216,8 @@ export async function validateBookingRules(params: {
         const depTime = departureDate.getTime();
 
         for (const period of periods) {
-          const periodStart = new Date(period.start).getTime();
-          const periodEnd = new Date(period.end).getTime();
+          const periodStart = periodBoundaryMillis(period.start, false);
+          const periodEnd = periodBoundaryMillis(period.end, true);
           if (depTime >= periodStart && depTime <= periodEnd) {
             violations.push({
               ruleId: rule.id,
@@ -1978,6 +2354,8 @@ export async function calculateChangeFee(params: {
 }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const changeDate = parseFareDate(params.changeDate, "change");
+  const bookingDate = parseFareDate(params.bookingDate, "booking");
 
   // Get fare class
   const fareClassResult = await db
@@ -2005,7 +2383,7 @@ export async function calculateChangeFee(params: {
     };
   }
 
-  const baseFee = fc.changeFee ?? 0;
+  const baseFee = minorUnits(fc.changeFee ?? 0, "Base change fee");
   let additionalFees = 0;
   const appliedRules: Array<{
     ruleId: number;
@@ -2014,7 +2392,6 @@ export async function calculateChangeFee(params: {
   }> = [];
 
   // Get penalty rules for this fare class
-  const changeDate = new Date(params.changeDate);
   const penaltyRules = await db
     .select()
     .from(fareRules)
@@ -2030,8 +2407,13 @@ export async function calculateChangeFee(params: {
     .orderBy(asc(fareRules.id));
 
   for (const rule of penaltyRules) {
-    const conditions = parseConditions<PenaltyConditions>(rule.conditions);
-    if (!conditions) continue;
+    assertRulePricing(rule);
+    if (rule.airlineId !== fc.airlineId)
+      throw new Error("Fare rule airline does not match its fare class");
+    const conditions = parseConditions<PenaltyConditions>(
+      rule.conditions,
+      rule.ruleCategory
+    );
 
     // Only process "change" penalties for change fee calculation
     if (conditions.penaltyType !== "change") continue;
@@ -2039,7 +2421,6 @@ export async function calculateChangeFee(params: {
     let ruleFeeContribution = 0;
 
     // Check time-based fee tiers
-    const bookingDate = new Date(params.bookingDate);
     const hoursUntilChange = Math.floor(
       (changeDate.getTime() - bookingDate.getTime()) / (1000 * 60 * 60)
     );
@@ -2063,8 +2444,12 @@ export async function calculateChangeFee(params: {
       ruleFeeContribution += rule.priceAdjustment;
     }
 
+    minorUnits(ruleFeeContribution, "Change fee contribution");
     if (ruleFeeContribution > 0) {
-      additionalFees += ruleFeeContribution;
+      additionalFees = minorUnits(
+        additionalFees + ruleFeeContribution,
+        "Additional change fees"
+      );
       appliedRules.push({
         ruleId: rule.id,
         ruleName: rule.ruleName,
@@ -2078,7 +2463,7 @@ export async function calculateChangeFee(params: {
     changeable: true,
     baseFee,
     additionalFees,
-    totalFee: baseFee + additionalFees,
+    totalFee: minorUnits(baseFee + additionalFees, "Total change fee"),
     currency: "SAR",
     rules: appliedRules,
   };
@@ -2153,6 +2538,7 @@ export async function compareFareClasses(params: {
   const flight = flightResult[0];
 
   // Get availability data for nested availability
+  assertFareFlightContext(flight, params);
   const availData = await getFareClassAvailability(params.flightId);
   const availMap = new Map<
     number,

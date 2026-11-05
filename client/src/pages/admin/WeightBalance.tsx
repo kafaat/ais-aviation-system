@@ -423,7 +423,10 @@ function CalculateTab() {
         t("wb.calculated", "Weight & Balance calculated successfully")
       );
     },
-    onError: (err: { message: string }) => toast.error(err.message),
+    onError: (err: { message: string }, variables) => {
+      if (JSON.stringify(variables) !== inputFingerprint) return;
+      toast.error(err.message);
+    },
   });
 
   // A previous or late response describes the submitted inputs, not edits made

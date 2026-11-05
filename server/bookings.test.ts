@@ -1,4 +1,4 @@
-import { describe, expect, it, afterAll } from "vitest";
+import { describe, expect, it, afterAll, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { bookings, type User } from "../drizzle/schema";
@@ -27,7 +27,7 @@ function createAuthenticatedContext(): TrpcContext {
       protocol: "https",
       headers: {},
     } as TrpcContext["req"],
-    res: {} as TrpcContext["res"],
+    res: { setHeader: vi.fn() } as unknown as TrpcContext["res"],
   };
 }
 
@@ -60,7 +60,7 @@ describe.skipIf(!dbAvailable)("Booking APIs", () => {
     const publicCaller = appRouter.createCaller({
       user: undefined,
       req: { protocol: "https", headers: {} } as TrpcContext["req"],
-      res: {} as TrpcContext["res"],
+      res: { setHeader: vi.fn() } as unknown as TrpcContext["res"],
     });
 
     const flights = await publicCaller.flights.search({
@@ -116,7 +116,7 @@ describe.skipIf(!dbAvailable)("Booking APIs", () => {
         protocol: "https",
         headers: {},
       } as TrpcContext["req"],
-      res: {} as TrpcContext["res"],
+      res: { setHeader: vi.fn() } as unknown as TrpcContext["res"],
     };
     const caller = appRouter.createCaller(ctx);
 

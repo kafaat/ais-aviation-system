@@ -505,7 +505,8 @@ export const seatMapRouter = router({
 
       return await seatMapService.generateBoardingPass(
         input.flightId,
-        input.passengerId
+        input.passengerId,
+        { userId: ctx.user.id, role: ctx.user.role, tenantId: ctx.tenantId }
       );
     }),
 

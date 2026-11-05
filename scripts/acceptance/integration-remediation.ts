@@ -279,7 +279,7 @@ try {
       await assert.rejects(
         issueBoardingPass(
           { bookingId: id + 2, passengerId: id + 40 },
-          { userId: id }
+          { userId: id, tenantId: id }
         )
       );
       const { eticketRouter } = await import("../../server/routers/eticket");
@@ -300,11 +300,11 @@ try {
       await checkIn(id + 3, id + 2, id + 40, "1B");
       const first = await issueBoardingPass(
         { bookingId: id + 2, passengerId: id + 40, flightId: id + 2 },
-        { userId: id }
+        { userId: id, tenantId: id }
       );
       const second = await issueBoardingPass(
         { bookingId: id + 2, passengerId: id + 40, flightId: id + 3 },
-        { userId: id }
+        { userId: id, tenantId: id }
       );
       assert.equal((await verifyActiveBoardingPass(first.token)).valid, true);
       assert.equal((await verifyActiveBoardingPass(second.token)).valid, true);
@@ -402,7 +402,7 @@ try {
       await assert.rejects(
         issueBoardingPass(
           { bookingId: id + 2, passengerId: id + 40 },
-          { userId: id }
+          { userId: id, tenantId: id }
         )
       );
       await db

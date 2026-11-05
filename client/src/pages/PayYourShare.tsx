@@ -160,6 +160,9 @@ function AlreadyPaid({ payerName }: { payerName: string }) {
   );
 }
 
+// Checkout preserves these unpaid states until provider-verified settlement.
+const unpaidStatuses = new Set(["pending", "email_sent", "failed"]);
+
 export function PayYourShare() {
   const { t, i18n } = useTranslation();
   const [, params] = useRoute("/pay/:token/:status?");
@@ -179,14 +182,15 @@ export function PayYourShare() {
     { paymentToken },
     {
       enabled: !!paymentToken && paymentToken.length === 64,
-      // Only a pending provider return can still settle. Terminal results,
+      // Only an unpaid provider return can still settle. Terminal results,
       // missing links and failed queries must not keep verification polling.
       refetchInterval: query => {
         const details = query.state.data;
         return successStatus &&
           sessionId &&
           query.state.status === "success" &&
-          details?.status === "pending" &&
+          details &&
+          unpaidStatuses.has(details.status) &&
           !details.cancellation &&
           (!details.expiresAt || new Date(details.expiresAt) > new Date())
           ? 3000
@@ -317,7 +321,7 @@ export function PayYourShare() {
   }
 
   // Resolve cancellation and expiry before the transient provider-return view.
-  if (successStatus && sessionId && paymentDetails.status === "pending") {
+  if (successStatus && sessionId && unpaidStatuses.has(paymentDetails.status)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div

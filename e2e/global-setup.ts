@@ -111,7 +111,7 @@ export default async function globalSetup(config: FullConfig) {
   await promoteAdminUsers();
   const cleanup = await prepareBrowserSessions(config);
   console.info(
-    "[e2e-setup] Four real regular/reporting/admin/ops UI logins and consent complete"
+    "[e2e-setup] Selected real browser sessions and consent complete"
   );
   return cleanup;
 }

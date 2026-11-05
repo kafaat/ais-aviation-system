@@ -7,6 +7,7 @@ import {
   generateBoardingPassPDF,
 } from "../services/eticket.service";
 import { readTicketDocument } from "../services/ticket-documents.service";
+import { assertBookingOwnership } from "../services/access-control.service";
 import {
   issueBoardingPass,
   verifyActiveBoardingPass,
@@ -46,7 +47,13 @@ export const eticketRouter = router({
     )
     .output(responseContracts.generateBoardingPass)
     .mutation(async ({ ctx, input }) => {
-      const issued = await issueBoardingPass(input, { userId: ctx.user.id });
+      // PDF downloads remain owner-only, including for platform administrators.
+      await assertBookingOwnership(input.bookingId, ctx.user.id);
+      const issued = await issueBoardingPass(input, {
+        userId: ctx.user.id,
+        role: ctx.user.role,
+        tenantId: ctx.tenantId,
+      });
       const document = await readTicketDocument(
         input.bookingId,
         input.passengerId,

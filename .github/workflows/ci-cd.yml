@@ -623,7 +623,33 @@ jobs:
           CI: true
           E2E_BASE_URL: http://localhost:3000
           AIS_DISPOSABLE_DATABASE: true
-        run: pnpm exec playwright test e2e/ci-smoke.spec.ts e2e/hardening-journeys.spec.ts e2e/agency-owner.spec.ts e2e/vrs-report-exports.spec.ts e2e/standard-reports.spec.ts e2e/vrs-kiosk-tags.spec.ts e2e/extra-seat.spec.ts e2e/agency-commissions.spec.ts e2e/multi-city-fare.spec.ts e2e/vrs-baggage-admission.spec.ts e2e/agency-credit.spec.ts e2e/local-ticket-revalidation.spec.ts --project=chromium
+        run: pnpm exec playwright test e2e/ci-smoke.spec.ts e2e/hardening-journeys.spec.ts e2e/agency-owner.spec.ts e2e/vrs-report-exports.spec.ts e2e/standard-reports.spec.ts e2e/vrs-kiosk-tags.spec.ts e2e/extra-seat.spec.ts e2e/agency-commissions.spec.ts e2e/multi-city-fare.spec.ts e2e/vrs-baggage-admission.spec.ts e2e/agency-credit.spec.ts e2e/local-ticket-revalidation.spec.ts e2e/payer-terminal-acceptance.spec.ts e2e/auth-recovery-acceptance.spec.ts e2e/booking-dialog-acceptance.spec.ts --project=chromium
+
+      # Logout must revoke a real session without invalidating the shared
+      # sessions used by the funded journeys. A fresh app and owned Redis DB
+      # retain the production login quota for this independent phase.
+      - name: Run isolated logout acceptance
+        env:
+          BAGGAGE_AIRLINE_NUMERIC_CODE: "123"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+          REDIS_URL: redis://127.0.0.1:6379/4
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+          VITE_APP_ID: ais-aviation-system-test
+          OAUTH_SERVER_URL: http://localhost:3000
+          OWNER_OPEN_ID: test-owner-open-id
+          BUILT_IN_FORGE_API_URL: https://api.example.com
+          BUILT_IN_FORGE_API_KEY: test-forge-api-key
+          AUTH_SERVICE_URL: http://localhost:8000
+          CI: true
+          E2E_BASE_URL: http://localhost:3000
+          AIS_DISPOSABLE_DATABASE: true
+          AIS_E2E_SESSION_ACCOUNTS: regular,reporting
+          AIS_E2E_REPORT_DIR: test-results/auth-logout
+          AIS_E2E_HTML_REPORT_DIR: playwright-report/auth-logout
+        run: pnpm exec playwright test e2e/auth-logout-acceptance.spec.ts --project=chromium
 
       - name: Upload E2E test results
         if: always()
@@ -649,11 +675,15 @@ jobs:
           echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f test-results/results.json ]; then
-            TOTAL=$(jq -r '[(.stats.expected // 0), (.stats.unexpected // 0), (.stats.flaky // 0), (.stats.skipped // 0)] | add' test-results/results.json)
-            PASSED=$(jq -r '.stats.expected // 0' test-results/results.json)
-            FAILED=$(jq -r '.stats.unexpected // 0' test-results/results.json)
-            FLAKY=$(jq -r '.stats.flaky // 0' test-results/results.json)
-            SKIPPED=$(jq -r '.stats.skipped // 0' test-results/results.json)
+            REPORTS=(test-results/results.json)
+            if [ -f test-results/auth-logout/results.json ]; then
+              REPORTS+=(test-results/auth-logout/results.json)
+            fi
+            TOTAL=$(jq -sr '[.[] | (.stats.expected // 0), (.stats.unexpected // 0), (.stats.flaky // 0), (.stats.skipped // 0)] | add' "${REPORTS[@]}")
+            PASSED=$(jq -sr '[.[] | .stats.expected // 0] | add' "${REPORTS[@]}")
+            FAILED=$(jq -sr '[.[] | .stats.unexpected // 0] | add' "${REPORTS[@]}")
+            FLAKY=$(jq -sr '[.[] | .stats.flaky // 0] | add' "${REPORTS[@]}")
+            SKIPPED=$(jq -sr '[.[] | .stats.skipped // 0] | add' "${REPORTS[@]}")
             echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
             echo "| Total | ${TOTAL} |" >> $GITHUB_STEP_SUMMARY

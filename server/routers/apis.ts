@@ -78,12 +78,12 @@ export const apisRouter = router({
           .min(2)
           .max(3)
           .transform(v => v.toUpperCase()),
-        dateOfBirth: z.string().refine(val => !isNaN(Date.parse(val)), {
-          message: "Invalid date format for date of birth",
+        dateOfBirth: z.iso.date({
+          error: "Invalid date format for date of birth",
         }),
         gender: z.enum(["M", "F", "U"]),
-        expiryDate: z.string().refine(val => !isNaN(Date.parse(val)), {
-          message: "Invalid date format for expiry date",
+        expiryDate: z.iso.date({
+          error: "Invalid date format for expiry date",
         }),
         givenNames: z.string().min(1, "Given names are required").max(100),
         surname: z.string().min(1, "Surname is required").max(100),

@@ -324,3 +324,246 @@ it("drops a supervisor-only proposal when the mounted operator loses that role",
   expect(screen.getByLabelText("Station action")).toHaveValue("no_rec");
   expect(request(fixture, "dcsOperations.confirmDowngrade")).toEqual([]);
 });
+
+it("opens a station case, links the selected passenger and closes DCS only after refreshed server receipts", async () => {
+  let opened = false;
+  let linked = false;
+  let closed = false;
+  const fixture = await visit({
+    "dcsOperations.stationReport": () => ({
+      ...report(),
+      cases: opened
+        ? [
+            {
+              id: 97,
+              kind: "go_show",
+              stationReference: "CASE-97",
+              dismissed: false,
+              resolvedPassengerId: linked ? 82 : null,
+            },
+          ]
+        : [],
+      closedAt: closed ? new Date("2030-01-01T09:30:00Z") : null,
+    }),
+    "dcsOperations.openCase": () => {
+      opened = true;
+      return { eventId: 97 };
+    },
+    "dcsOperations.resolveCase": () => {
+      linked = true;
+      return { eventId: 98 };
+    },
+    "dcsOperations.finalize": () => {
+      closed = true;
+      return { eventId: 99 };
+    },
+  });
+  mode("go_show");
+  fireEvent.change(screen.getByLabelText("Station case reference"), {
+    target: { value: "case-97" },
+  });
+  setReason();
+  fireEvent.click(screen.getByRole("button", { name: "Save station action" }));
+  await elapse();
+  expect(screen.getByRole("listitem")).toHaveTextContent(
+    "CASE-97 · Go Show case · Open"
+  );
+  mode("resolve");
+  fireEvent.change(screen.getByLabelText("Open case"), {
+    target: { value: "97" },
+  });
+  fireEvent.change(screen.getByLabelText("Flight passenger"), {
+    target: { value: "82" },
+  });
+  setReason();
+  fireEvent.click(screen.getByRole("button", { name: "Save station action" }));
+  await elapse();
+  expect(screen.getByRole("listitem")).toHaveTextContent("Reservation linked");
+  expect(
+    screen.queryByRole("option", { name: "CASE-97" })
+  ).not.toBeInTheDocument();
+  mode("close");
+  setReason();
+  fireEvent.click(screen.getByRole("button", { name: "Save station action" }));
+  await elapse();
+  expect(screen.getByText(/DCS closed/)).toHaveTextContent(
+    "2030-01-01T09:30:00.000Z"
+  );
+  expect(
+    screen.getByRole("button", { name: "Save station action" })
+  ).toBeDisabled();
+  expect(request(fixture, "dcsOperations.resolveCase")[0].input).toMatchObject({
+    ...base,
+    caseId: 97,
+    bookingId: 72,
+    passengerId: 82,
+  });
+  expect(request(fixture, "dcsOperations.finalize")[0].input).toMatchObject({
+    ...base,
+    action: "close",
+  });
+  expect(state.success).toHaveBeenCalledTimes(3);
+});
+
+it.each(["actor", "tenant", "role"])(
+  "cannot accept a pending downgrade quote after the displayed %s changes",
+  async changed => {
+    const response = deferred<{ eventId: number; refundDue: number }>();
+    const fixture = await visit({
+      "dcsOperations.quoteDowngrade": () => response.promise,
+      "dcsOperations.openCase": () => ({ eventId: 102 }),
+    });
+    mode("downgrade");
+    fireEvent.change(screen.getByLabelText("Flight passenger"), {
+      target: { value: "81" },
+    });
+    setReason();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Quote fare difference" })
+    );
+    await elapse();
+    expect(request(fixture, "dcsOperations.quoteDowngrade")).toHaveLength(1);
+    state.user = {
+      ...state.user,
+      ...(changed === "actor"
+        ? { id: 18 }
+        : changed === "tenant"
+          ? { tenantId: 5 }
+          : { role: "ops" }),
+    };
+    fixture.rerender(panel());
+    await elapse();
+    await act(async () => response.resolve({ eventId: 101, refundDue: 5000 }));
+    await elapse();
+    expect(
+      screen.queryByRole("button", { name: "Confirm reviewed cabin downgrade" })
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Station action")).toHaveValue("no_rec");
+    expect(screen.getByLabelText("Reason for station action")).toHaveValue("");
+    expect(request(fixture, "dcsOperations.confirmDowngrade")).toEqual([]);
+    expect(state.success).not.toHaveBeenCalled();
+    if (changed === "role") {
+      expect(
+        screen.queryByRole("option", { name: "Review cabin downgrade" })
+      ).not.toBeInTheDocument();
+    } else {
+      fireEvent.change(screen.getByLabelText("Station case reference"), {
+        target: { value: "scope-102" },
+      });
+      setReason();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Save station action" })
+      );
+      await elapse();
+      expect(request(fixture, "dcsOperations.openCase")[0].input).toMatchObject(
+        {
+          expectedActorId: state.user.id,
+          expectedTenantId: state.user.tenantId,
+        }
+      );
+    }
+  }
+);
+
+it.each(["FORBIDDEN", "PRECONDITION_FAILED"])(
+  "keeps a rejected downgrade unconfirmed when the server returns %s after the quote was reviewed",
+  async code => {
+    const fixture = await visit({
+      "dcsOperations.quoteDowngrade": () => ({
+        eventId: 103,
+        refundDue: 12345,
+      }),
+      "dcsOperations.confirmDowngrade": () => {
+        throw Object.assign(
+          new Error("Cabin entitlement or permission changed"),
+          { code }
+        );
+      },
+    });
+    mode("downgrade");
+    fireEvent.change(screen.getByLabelText("Flight passenger"), {
+      target: { value: "81" },
+    });
+    setReason();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Quote fare difference" })
+    );
+    await elapse();
+    expect(screen.getByRole("status")).toHaveTextContent("123.45");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm reviewed cabin downgrade" })
+    );
+    await elapse();
+    expect(
+      request(fixture, "dcsOperations.confirmDowngrade")[0].input
+    ).toMatchObject({
+      ...base,
+      passengerId: 81,
+      bookingId: 71,
+      quoteEventId: 103,
+      expectedRefund: 12345,
+    });
+    expect(state.error).toHaveBeenCalledWith(
+      "Cabin entitlement or permission changed"
+    );
+    expect(state.success).not.toHaveBeenCalled();
+    expect(request(fixture, "dcsOperations.stationReport")).toHaveLength(1);
+  }
+);
+
+it("refreshes seat information only after an accepted replacement layout and does not claim success for a rejected stale map", async () => {
+  let seat = "2A";
+  const fixture = await visit({
+    "dcsOperations.stationReport": () => ({
+      ...report(),
+      items: [
+        {
+          passengerId: 81,
+          name: "First Traveler",
+          seat,
+          category: "ssr",
+          code: "WCHR",
+          status: "confirmed",
+          note: null,
+        },
+      ],
+    }),
+    "dcsOperations.remapSeats": input => {
+      if ((input as { seatMapId: number }).seatMapId === 15)
+        throw Object.assign(
+          new Error("Equipment layout changed; reload the seat plan"),
+          { code: "PRECONDITION_FAILED" }
+        );
+      seat = "12C";
+      return { eventId: 104 };
+    },
+  });
+  expect(screen.getByRole("cell", { name: "2A" })).toBeVisible();
+  mode("remap");
+  fireEvent.change(screen.getByLabelText("Airline seat plan ID"), {
+    target: { value: "15" },
+  });
+  setReason();
+  fireEvent.click(screen.getByRole("button", { name: "Save station action" }));
+  await elapse();
+  expect(state.error).toHaveBeenCalledWith(
+    "Equipment layout changed; reload the seat plan"
+  );
+  expect(state.success).not.toHaveBeenCalled();
+  expect(screen.getByRole("cell", { name: "2A" })).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Airline seat plan ID"), {
+    target: { value: "16" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save station action" }));
+  await elapse();
+  expect(screen.getByRole("cell", { name: "12C" })).toBeVisible();
+  expect(screen.queryByRole("cell", { name: "2A" })).not.toBeInTheDocument();
+  const remaps = request(fixture, "dcsOperations.remapSeats");
+  expect(remaps).toHaveLength(2);
+  expect(remaps[0].input).toMatchObject({ ...base, seatMapId: 15 });
+  expect(remaps[1].input).toMatchObject({ ...base, seatMapId: 16 });
+  expect(
+    (remaps[1].input as { idempotencyKey: string }).idempotencyKey
+  ).not.toBe((remaps[0].input as { idempotencyKey: string }).idempotencyKey);
+  expect(state.success).toHaveBeenCalledOnce();
+});

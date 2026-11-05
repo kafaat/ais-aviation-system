@@ -24,6 +24,20 @@ type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
  * This keeps retries within the real IP login quota without disabling it. */
 export async function prepareBrowserSessions(config: FullConfig) {
   disposableDatabaseUrl();
+  const configuredAccounts = process.env.AIS_E2E_SESSION_ACCOUNTS;
+  const selectedAccounts =
+    configuredAccounts !== undefined
+      ? configuredAccounts.split(",").map(value => {
+          const account = value.trim();
+          if (!accounts.includes(account as (typeof accounts)[number])) {
+            throw new Error(`Unknown E2E session account: ${account}`);
+          }
+          return account as (typeof accounts)[number];
+        })
+      : accounts;
+  if (new Set(selectedAccounts).size !== selectedAccounts.length) {
+    throw new Error("E2E session accounts must not be repeated");
+  }
   const directory = await mkdtemp(join(tmpdir(), "ais-e2e-sessions-"));
   let browser: Browser | undefined;
   try {
@@ -31,7 +45,7 @@ export async function prepareBrowserSessions(config: FullConfig) {
       config.projects.find(project => project.name === "chromium")?.use
         .launchOptions
     );
-    for (const account of accounts) {
+    for (const account of selectedAccounts) {
       const context = await browser.newContext({
         baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
       });

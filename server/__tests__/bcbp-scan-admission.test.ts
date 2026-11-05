@@ -28,6 +28,7 @@ function itinerary() {
       {
         id: 3,
         userId: 7,
+        tenantId: 1,
         flightId: 11,
         status: "confirmed",
         paymentStatus: "paid",
@@ -40,6 +41,7 @@ function itinerary() {
       {
         id: 4,
         bookingId: 3,
+        tenantId: 1,
         firstName: "Sample",
         lastName: "Traveler",
         type: "adult",
@@ -54,6 +56,7 @@ function itinerary() {
     ],
     flights: flightIds.map((id, i) => ({
       id,
+      tenantId: 1,
       flightNumber: "SV" + id,
       airlineId: 1,
       originId: i + 1,
@@ -89,7 +92,7 @@ function itinerary() {
 async function issued(flightId: number) {
   return issueBoardingPass(
     { bookingId: 3, passengerId: 4, flightId },
-    { userId: 7 }
+    { userId: 7, tenantId: 1 }
   );
 }
 const flipLast = (s: string) => s.slice(0, -1) + (s.endsWith("0") ? "1" : "0");

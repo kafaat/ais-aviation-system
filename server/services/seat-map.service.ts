@@ -9,7 +9,10 @@ import {
   assertDcsOpen,
   refreshBookingCheckIn,
 } from "./departure-control.service";
-import { issueBoardingPass } from "./boarding-pass.service";
+import {
+  issueBoardingPass,
+  type BoardingPassActor,
+} from "./boarding-pass.service";
 import {
   assertDcsPassengerMutable,
   writeDcsPassengerState,
@@ -1419,7 +1422,8 @@ export async function undoCheckIn(
  */
 export async function generateBoardingPass(
   flightId: number,
-  passengerId: number
+  passengerId: number,
+  actor: BoardingPassActor
 ): Promise<BoardingPassData> {
   const db = await requireDb();
 
@@ -1542,13 +1546,16 @@ export async function generateBoardingPass(
     bcbp,
   } = await issueBoardingPass(
     { bookingId: booking.id, passengerId, flightId },
-    { userId: booking.userId }
+    actor
   );
 
   if (
     payload.flightNumber !== fd.flightNumber ||
     payload.departureTime !== fd.departureTime.toISOString() ||
     payload.seatNumber !== seat.seatNumber ||
+    payload.cabinClass !== seat.cabinClass ||
+    payload.sequence !== seat.boardingSequence ||
+    payload.checkInNonce !== seat.checkInNonce ||
     payload.passengerName !==
       `${passenger.firstName} ${passenger.lastName}`.trim()
   )
@@ -1578,10 +1585,10 @@ export async function generateBoardingPass(
       ticketNumber: passenger.ticketNumber,
     },
     seat: {
-      seatNumber: seat.seatNumber,
-      cabinClass: seat.cabinClass,
+      seatNumber: payload.seatNumber,
+      cabinClass: payload.cabinClass,
       boardingGroup: seat.boardingGroup,
-      boardingSequence: seat.boardingSequence,
+      boardingSequence: payload.sequence,
     },
     gate: gateNumber,
     boardingTime,

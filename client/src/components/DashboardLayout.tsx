@@ -64,6 +64,7 @@ import {
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
@@ -633,7 +634,11 @@ function DashboardLayoutContent({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={logout}
+                  onClick={() => {
+                    void logout().catch(() => {
+                      toast.error(t("common.logoutError"));
+                    });
+                  }}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="me-2 h-4 w-4" aria-hidden="true" />

@@ -542,7 +542,10 @@ export async function printBoardingPass(
       code: "NOT_FOUND",
       message: "Passenger booking unavailable",
     });
-  const data = await generateBoardingPass(flightId ?? b.flightId, passengerId);
+  const data = await generateBoardingPass(flightId ?? b.flightId, passengerId, {
+    userId: b.userId,
+    tenantId: b.tenantId,
+  });
   const [flight] = await db
     .select()
     .from(flights)

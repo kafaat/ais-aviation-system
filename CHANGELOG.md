@@ -2,12 +2,13 @@
 
 ## What's Changed in v1.37.1
 
-<!-- ais-release-source: 146a88db5b0cd31d3309274c5cdb516ec917b838 -->
+<!-- ais-release-source: d68881c2128267cee31c7ebbca4a4e3eaeff5b14 -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
 
 - fix(ci): refresh release proposals and verify tag deployment (#282) (146a88d)
+- fix: enforce fare and document boundaries and recover client flows (#284) (d68881c)
 
 ### Other Changes
 

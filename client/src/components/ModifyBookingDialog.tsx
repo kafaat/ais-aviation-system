@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TRPCClientError } from "@trpc/client";
 import { airlineSupportUrl } from "@/lib/airline-support";
@@ -32,6 +32,27 @@ interface Props {
   };
 }
 
+type ModificationCommand = { fingerprint: string; key: string };
+
+function readModificationCommand(slot: string): ModificationCommand | null {
+  const raw = sessionStorage.getItem(slot);
+  if (raw === null) return null;
+  const value: unknown = JSON.parse(raw);
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("fingerprint" in value) ||
+    typeof value.fingerprint !== "string" ||
+    !("key" in value) ||
+    typeof value.key !== "string" ||
+    !/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(
+      value.key
+    )
+  )
+    throw new Error("Saved modification request identity is invalid");
+  return { fingerprint: value.fingerprint, key: value.key };
+}
+
 export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
@@ -45,7 +66,18 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
   const [unknown, setUnknown] = useState(false);
   const [seatReview, setSeatReview] = useState(false);
   const support = airlineSupportUrl();
-  const command = useRef<{ fingerprint: string; key: string } | null>(null);
+  const identity = trpc.auth.me.useQuery(undefined, {
+    enabled: open,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const commandSlot = identity.data
+    ? `ais:modification:${identity.data.tenantId ?? "global"}:${identity.data.id}:${booking.id}`
+    : null;
+  const acknowledgeCommand = (key: string | undefined) => {
+    if (commandSlot && key && readModificationCommand(commandSlot)?.key === key)
+      sessionStorage.removeItem(commandSlot);
+  };
   const context = trpc.modifications.exchangeContext.useQuery(
     { bookingId: booking.id },
     { enabled: open, refetchOnMount: "always" }
@@ -79,7 +111,9 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
   const checkout = trpc.payments.createModificationCheckout.useMutation();
   const confirm = trpc.ndc.confirmNoChargeService.useMutation();
   const cancel = trpc.ndc.cancelPaidService.useMutation();
-  const disabled = busy || context.isFetching || unknown || !!context.error;
+  const readError = context.error || identity.error;
+  const disabled =
+    busy || context.isFetching || unknown || !!readError || !identity.data;
   const expiry = pending?.expiresAt?.getTime() ?? 0;
   const [elapsedExpiry, setElapsedExpiry] = useState<number | null>(null);
   useEffect(() => {
@@ -102,8 +136,11 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
       currency: "SAR",
     }).format(value / 100);
   const refresh = async () => {
-    const result = await context.refetch();
-    setUnknown(!!result.error);
+    const [result, owner] = await Promise.all([
+      context.refetch(),
+      identity.refetch(),
+    ]);
+    setUnknown(!!result.error || !!owner.error);
     if (result.data?.latest?.status === "completed")
       await utils.bookings.myBookings.invalidate();
   };
@@ -130,18 +167,24 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
     }
   };
   const request = async () => {
-    if (!sector || pending || disabled) return;
+    if (!sector || pending || disabled || !commandSlot) return;
     const fingerprint = JSON.stringify({
       booking: booking.id,
       sector: sector.flightId,
       replacement,
       mode,
     });
-    if (command.current?.fingerprint !== fingerprint)
-      command.current = { fingerprint, key: crypto.randomUUID() };
+    const saved = readModificationCommand(commandSlot);
+    const command =
+      saved?.fingerprint === fingerprint
+        ? saved
+        : { fingerprint, key: crypto.randomUUID() };
+    // Persist before sending: a missing response or a page reload must retain
+    // this identity until the server acknowledges the same request.
+    sessionStorage.setItem(commandSlot, JSON.stringify(command));
     const input = {
       bookingId: booking.id,
-      idempotencyKey: command.current.key,
+      idempotencyKey: command.key,
     };
     if (mode === "upgrade") await upgrade.mutateAsync(input);
     else if (replacement)
@@ -151,11 +194,13 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
         ...(mode === "revalidate" ? { intent: "revalidate" as const } : {}),
         replaceFlightId: sector.flightId,
       });
+    acknowledgeCommand(command.key);
     setConsent(null);
     await refresh();
   };
   const accept = async () => {
-    if (!canConfirm || disabled || expiry <= Date.now()) return;
+    if (!canConfirm || disabled || expiry <= Date.now() || !commandSlot) return;
+    const key = readModificationCommand(commandSlot)?.key;
     if (pending.totalCost > 0) {
       const result = await checkout.mutateAsync({
         bookingId: booking.id,
@@ -164,18 +209,20 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
       });
       if (!result.url)
         throw new Error(t("modifyBooking.exchange.paymentUnavailable"));
+      acknowledgeCommand(key);
       window.location.assign(result.url);
     } else {
       await confirm.mutateAsync({ modificationId: pending.modificationId });
       setConsent(null);
-      command.current = null;
+      acknowledgeCommand(key);
       await refresh();
     }
   };
   const discard = async () => {
-    if (!pending || disabled) return;
+    if (!pending || disabled || !commandSlot) return;
+    const key = readModificationCommand(commandSlot)?.key;
     await cancel.mutateAsync({ modificationId: pending.modificationId });
-    command.current = null;
+    acknowledgeCommand(key);
     setConsent(null);
     await refresh();
   };
@@ -216,7 +263,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
             )}
           </p>
         )}
-        {(unknown || context.error) && (
+        {(unknown || readError) && (
           <p role="alert">{t("modifyBooking.exchange.lookupFirst")}</p>
         )}
         {latest && !pending && (
@@ -247,7 +294,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
             )}
           </div>
         )}
-        {context.data && !pending && !unknown && !context.error && (
+        {context.data && !pending && !unknown && !readError && (
           <div className="space-y-4">
             <div className="flex gap-2">
               <Button
@@ -457,7 +504,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
           >
             {t("common.close")}
           </Button>
-          {(latest || unknown || context.error) && (
+          {(latest || unknown || readError) && (
             <Button
               variant="outline"
               disabled={busy || context.isFetching}
