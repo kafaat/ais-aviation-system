@@ -17,6 +17,16 @@ export function chromiumSandboxEnv(
     return environment;
   }
 
+  // Ubuntu's installed Chrome binary has its own user-namespace profile.
+  // Do not force the legacy SUID helper for that exact binary. An explicitly
+  // selected helper must still pass the validation below.
+  if (
+    source.AIS_TEST_CHROMIUM_BIN === "/opt/google/chrome/chrome" &&
+    source.CHROME_DEVEL_SANDBOX === undefined
+  ) {
+    return environment;
+  }
+
   // Ubuntu restricts user namespaces for downloaded Playwright executables.
   // Chromium documents its installed SUID helper as the alternative that does
   // not disable AppArmor or Chromium's sandbox. Limit this to hosted Linux CI.

@@ -675,7 +675,30 @@ jobs:
           AIS_DISPOSABLE_DATABASE: true
           AIS_E2E_REPORT_DIR: test-results/ui05
           AIS_E2E_HTML_REPORT_DIR: playwright-report/ui05
-        run: pnpm exec playwright test --config playwright.ui05.config.ts --project=chromium
+          # Use the installed Ubuntu browser profile with Chromium sandboxing.
+          AIS_TEST_CHROMIUM_BIN: /opt/google/chrome/chrome
+        run: |
+          # Fail closed if this runner cannot launch the same sandboxed browser.
+          test -x "$AIS_TEST_CHROMIUM_BIN"
+          "$AIS_TEST_CHROMIUM_BIN" --version
+          node --import tsx --input-type=module <<'NODE'
+          import { chromium } from "@playwright/test";
+          import { chromiumSandboxEnv } from "./e2e/fixtures/chromium-sandbox-env.ts";
+
+          const browser = await chromium.launch({
+            executablePath: process.env.AIS_TEST_CHROMIUM_BIN,
+            chromiumSandbox: true,
+            env: chromiumSandboxEnv(),
+          });
+          try {
+            const page = await browser.newPage();
+            await page.goto("about:blank");
+            console.info(`UI05 sandboxed browser preflight passed: ${browser.version()}`);
+          } finally {
+            await browser.close();
+          }
+          NODE
+          pnpm exec playwright test --config playwright.ui05.config.ts --project=chromium
 
       - name: Upload E2E test results
         if: always()

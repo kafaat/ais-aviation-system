@@ -33,6 +33,74 @@ describe("hosted Chromium sandbox environment", () => {
     expect(boundary.stat).toHaveBeenCalledWith(standard);
   });
 
+  it("uses installed Chrome without injecting or inspecting a helper", () => {
+    const source = {
+      ...hosted,
+      AIS_TEST_CHROMIUM_BIN: "/opt/google/chrome/chrome",
+    };
+    const result = chromiumSandboxEnv(source, "linux");
+    expect(result).toEqual(source);
+    expect(result).not.toHaveProperty("CHROME_DEVEL_SANDBOX");
+    expect(boundary.stat).not.toHaveBeenCalled();
+  });
+
+  it("validates an explicit helper even for installed Chrome", () => {
+    const source = {
+      ...hosted,
+      AIS_TEST_CHROMIUM_BIN: "/opt/google/chrome/chrome",
+      CHROME_DEVEL_SANDBOX: standard,
+    };
+    expect(chromiumSandboxEnv(source, "linux")).toEqual(source);
+    expect(boundary.stat).toHaveBeenCalledWith(standard);
+  });
+
+  it("rejects an explicit unsafe helper even for installed Chrome", () => {
+    boundary.stat.mockReturnValue({
+      isFile: () => true,
+      uid: 0,
+      mode: 0o100755,
+    });
+    expect(() =>
+      chromiumSandboxEnv(
+        {
+          ...hosted,
+          AIS_TEST_CHROMIUM_BIN: "/opt/google/chrome/chrome",
+          CHROME_DEVEL_SANDBOX: standard,
+        },
+        "linux"
+      )
+    ).toThrow("unsafe ownership or mode");
+    expect(boundary.stat).toHaveBeenCalledWith(standard);
+  });
+
+  it("rejects an explicitly empty helper even for installed Chrome", () => {
+    expect(() =>
+      chromiumSandboxEnv(
+        {
+          ...hosted,
+          AIS_TEST_CHROMIUM_BIN: "/opt/google/chrome/chrome",
+          CHROME_DEVEL_SANDBOX: "",
+        },
+        "linux"
+      )
+    ).toThrow("absolute path");
+    expect(boundary.stat).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "/opt/google/chrome/chrome-headless",
+    "/tmp/opt/google/chrome/chrome",
+    "/opt/google/chrome/../chrome/chrome",
+  ])("retains helper checks for other executable paths: %s", executable => {
+    expect(
+      chromiumSandboxEnv(
+        { ...hosted, AIS_TEST_CHROMIUM_BIN: executable },
+        "linux"
+      )
+    ).toHaveProperty("CHROME_DEVEL_SANDBOX", standard);
+    expect(boundary.stat).toHaveBeenCalledWith(standard);
+  });
+
   it.each(["darwin", "win32"] as const)(
     "leaves %s browser environment unchanged",
     platform => {
