@@ -1,0 +1,19 @@
+{
+  "status": "FAIL",
+  "startedAt": "2026-11-05T16:42:12.484229+00:00",
+  "commit": "e0bb535d3dadb6f8e64de97a73b848568a3e207b",
+  "harnessSha256": "b694a9f538577c0f694024179e2f529e4215a8db7e33e76fb6c2fd2644bbaf92",
+  "scope": "Three actual browser/HTTP/MySQL acceptance cases; isolated synthetic fixtures, no provider or production-gateway proof",
+  "oldServiceResourcesAccessed": false,
+  "syntheticCredentialsOnly": true,
+  "ports": {
+    "mysql": 59967,
+    "redis": 36411,
+    "api": 60639
+  },
+  "failureType": "RuntimeError",
+  "failure": "acceptance failed with exit 1; preserved receipt /workspace/scratch/1e0211cd0153/ais-ui-native-lab/evidence/acceptance.receipt.json",
+  "endedAt": "2026-11-05T16:42:44.199115+00:00",
+  "cleanupPassed": true,
+  "cleanupSha256": "5b2277777253f75d81076e594ff0f8a16bd83b449c7ee8deedfe426c7f28e983"
+}

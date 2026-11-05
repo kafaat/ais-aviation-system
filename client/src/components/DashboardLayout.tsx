@@ -67,6 +67,7 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { ThemeToggle } from "./ThemeToggle";
+import { ServiceNavigation } from "./ServiceNavigation";
 import { Button } from "./ui/button";
 
 interface MenuItem {
@@ -659,20 +660,19 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset className="bg-gradient-to-br from-background via-background to-muted/10">
-        {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40 shadow-sm">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="h-9 w-9 rounded-lg" />
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">
-                  {activeMenuItem
-                    ? t(activeMenuItem.labelKey)
-                    : t("common.appName")}
-                </span>
-              </div>
+        <div className="flex border-b min-h-14 items-center justify-between gap-3 bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40 shadow-sm">
+          <div className="flex items-center gap-3">
+            {isMobile && <SidebarTrigger className="h-9 w-9 rounded-lg" />}
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-foreground">
+                {activeMenuItem
+                  ? t(activeMenuItem.labelKey)
+                  : t("common.appName")}
+              </span>
             </div>
           </div>
-        )}
+          <ServiceNavigation />
+        </div>
         <main id="main-content" className="flex-1 p-4 md:p-6" role="main">
           {children}
         </main>

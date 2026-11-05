@@ -17,7 +17,8 @@ describe("refund detail authority boundary", () => {
     expect(source).toContain(
       "getRefundDetails(refundId: string, actor: RefundActor)"
     );
-    expect(source).toContain('actor.role !== "admin"');
+    expect(source).toContain('import { isAdmin } from "./rbac.service"');
+    expect(source).toContain("if (!isAdmin(actor.role))");
     expect(source).toContain("refund.payment_intent");
     expect(source).toContain("bookings.stripePaymentIntentId");
     expect(source).toContain("bookings.userId");

@@ -103,7 +103,7 @@ export const stripeEvents = mysqlTable("stripe_events", {
 **1. إعداد Webhook في Stripe Dashboard:**
 
 ```
-URL: https://api.ais.example.com/webhooks/stripe
+URL: https://api.ais.example.com/api/stripe/webhook
 Events: payment_intent.succeeded, payment_intent.payment_failed,
         charge.refunded, checkout.session.completed, checkout.session.expired
 ```
@@ -445,7 +445,7 @@ docker exec -it ais_api_1 npm run db:migrate
 
 1. اذهب إلى Stripe Dashboard
 2. Developers → Webhooks
-3. Add endpoint: `https://api.ais.example.com/webhooks/stripe`
+3. Add endpoint: `https://api.ais.example.com/api/stripe/webhook`
 4. Select events:
    - `payment_intent.succeeded`
    - `payment_intent.payment_failed`
@@ -462,7 +462,7 @@ docker exec -it ais_api_1 npm run db:migrate
 
 ```bash
 # استخدم Stripe CLI
-stripe listen --forward-to localhost:3000/webhooks/stripe
+stripe listen --forward-to localhost:3000/api/stripe/webhook
 
 # Test event
 stripe trigger payment_intent.succeeded

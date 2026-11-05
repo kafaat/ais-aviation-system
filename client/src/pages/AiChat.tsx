@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { passengerRightsSource } from "@shared/passenger-policy";
+import { loginPath } from "@shared/return-to";
 import { airlineSupportUrl } from "@/lib/airline-support";
 import { formatFlightTime } from "@/lib/flight-time";
 import { Button } from "@/components/ui/button";
@@ -225,7 +226,9 @@ export default function AiChat() {
           <p className="text-muted-foreground mb-4">
             {t("aiChat.loginDescription")}
           </p>
-          <Button onClick={() => navigate("/")}>{t("common.login")}</Button>
+          <Button asChild>
+            <Link href={loginPath("/ai-chat")}>{t("common.login")}</Link>
+          </Button>
         </Card>
       </div>
     );

@@ -40,7 +40,6 @@ import {
   CheckCircle2,
   XCircle,
   Percent,
-  Plus,
   UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -197,12 +196,6 @@ export default function CorporateDashboard() {
           <p className="text-muted-foreground mb-6">
             {t("corporate.noAccountDescription")}
           </p>
-          <Link href="/corporate">
-            <Button>
-              <Plus className="h-4 w-4 me-2" />
-              {t("corporate.registerAccount")}
-            </Button>
-          </Link>
         </Card>
       </div>
     );

@@ -26,21 +26,6 @@ export function SiteFooter() {
             <h4 className="font-semibold mb-4">{t("footer.quickLinks")}</h4>
             <ul className="space-y-2 text-sm text-gray-400">
               <li>
-                <Link href="/" className="hover:text-white transition-colors">
-                  {t("footer.about")}
-                </Link>
-              </li>
-              <li>
-                <Link href="/" className="hover:text-white transition-colors">
-                  {t("footer.contact")}
-                </Link>
-              </li>
-              <li>
-                <Link href="/" className="hover:text-white transition-colors">
-                  {t("footer.terms")}
-                </Link>
-              </li>
-              <li>
                 <Link
                   href="/privacy-policy"
                   className="hover:text-white transition-colors"

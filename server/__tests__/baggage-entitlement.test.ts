@@ -113,22 +113,53 @@ describe("baggage entitlement authority", () => {
     expect(JSON.stringify(rows)).not.toContain("pi_bag");
     expect(JSON.stringify(rows)).not.toContain("fundingReference");
   });
-  it("rejects another owner and an administrator from another tenant", async () => {
-    const db = transactionMemory(seed).db;
-    await expect(
-      listOwnedBaggageEntitlements(db, 7, { id: 2, role: "user", tenantId: 3 })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(
-      listOwnedBaggageEntitlements(db, 7, { id: 2, role: "admin", tenantId: 4 })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(
-      await listOwnedBaggageEntitlements(db, 7, {
-        id: 2,
-        role: "admin",
-        tenantId: 3,
-      })
-    ).toHaveLength(4);
-  });
+  it.each(["user", "finance", "airline_admin", "ops", "support"])(
+    "rejects a nonowner %s before presenting allowance",
+    async role => {
+      await expect(
+        listOwnedBaggageEntitlements(transactionMemory(seed).db, 7, {
+          id: 2,
+          role,
+          tenantId: 3,
+        })
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  );
+  it.each([
+    ["admin", 3],
+    ["super_admin", 3],
+    ["admin", null],
+    ["super_admin", null],
+  ] as const)(
+    "lets nonowner %s present allowance with tenant scope %s",
+    async (role, tenantId) => {
+      seed.booking_ancillaries.push(paidBaggage());
+      const rows = await listOwnedBaggageEntitlements(
+        transactionMemory(seed).db,
+        7,
+        { id: 2, role, tenantId }
+      );
+      expect(rows).toHaveLength(4);
+      expect(
+        rows.find(row => row.passengerId === 11 && row.segmentId === 21)
+          ?.totalWeightGrams
+      ).toBe(33000);
+      expect(JSON.stringify(rows)).not.toContain("pi_bag");
+      expect(JSON.stringify(rows)).not.toContain("fundingReference");
+    }
+  );
+  it.each(["admin", "super_admin"])(
+    "rejects %s from another tenant before presenting allowance",
+    async role => {
+      await expect(
+        listOwnedBaggageEntitlements(transactionMemory(seed).db, 7, {
+          id: 2,
+          role,
+          tenantId: 4,
+        })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    }
+  );
   it("does not present a cancelled booking as an active allowance", async () => {
     seed.bookings[0].status = "cancelled";
     expect(

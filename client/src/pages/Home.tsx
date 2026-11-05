@@ -28,6 +28,7 @@ import {
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SiteFooter } from "@/components/SiteFooter";
+import { ServiceNavigation } from "@/components/ServiceNavigation";
 import { SearchHistory } from "@/components/SearchHistory";
 import { SmartSuggestions } from "@/components/SmartSuggestions";
 import { MultiCitySearch, Segment } from "@/components/MultiCitySearch";
@@ -285,6 +286,7 @@ export default function Home() {
             </nav>
 
             <div className="flex items-center gap-2">
+              <ServiceNavigation />
               <ThemeToggle />
               <LanguageSwitcher />
               {user ? (

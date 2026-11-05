@@ -1,0 +1,554 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "frontend": [
+    {
+      "id": "FE-01",
+      "priority": "P2",
+      "title": "Five supported standalone pages have no in-app entry point",
+      "routes": [
+        "/notifications",
+        "/saved-passengers",
+        "/track-flight",
+        "/baggage",
+        "/ai-chat"
+      ],
+      "status": "confirmed_static",
+      "impact": "Users must know the URLs; NotificationBell is not imported anywhere, so its only /notifications link cannot be reached. Saved passenger autofill is connected inside BookingPage, but the management page has no inbound entry.",
+      "evidence": [
+        {
+          "file": "client/src/App.tsx",
+          "line": 363,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L363-L413",
+          "end_line": 413
+        },
+        {
+          "file": "client/src/App.tsx",
+          "line": 664,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L664-L668",
+          "end_line": 668
+        },
+        {
+          "file": "client/src/components/DashboardLayout.tsx",
+          "line": 80,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L80-L89",
+          "end_line": 89
+        },
+        {
+          "file": "client/src/components/NotificationBell.tsx",
+          "line": 12,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/NotificationBell.tsx#L12-L24",
+          "end_line": 24
+        },
+        {
+          "file": "client/src/components/NotificationDropdown.tsx",
+          "line": 281,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/NotificationDropdown.tsx#L281"
+        }
+      ],
+      "fix_scope": "Add shared navigation for existing public/account services; preserve auth guards."
+    },
+    {
+      "id": "FE-02",
+      "priority": "P2",
+      "title": "AI chat login action returns to home",
+      "status": "confirmed_static",
+      "evidence": [
+        {
+          "file": "client/src/pages/AiChat.tsx",
+          "line": 217,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AiChat.tsx#L217-L229",
+          "end_line": 229
+        }
+      ],
+      "impact": "Unauthenticated visitor clicks Login but remains unauthenticated on the homepage.",
+      "fix_scope": "Use loginPath(/ai-chat) and prove routing/return target."
+    },
+    {
+      "id": "FE-03",
+      "priority": "P2",
+      "title": "Footer About, Contact and Terms links all point to home",
+      "status": "confirmed_static",
+      "evidence": [
+        {
+          "file": "client/src/components/SiteFooter.tsx",
+          "line": 25,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L25-L42",
+          "end_line": 42
+        }
+      ],
+      "impact": "Named links do not reach the described content.",
+      "fix_scope": "Remove misleading placeholders unless verified destination exists; retain privacy/accessibility."
+    },
+    {
+      "id": "FE-04",
+      "priority": "P2",
+      "title": "Corporate workspace has no general menu entry and registration link loops",
+      "status": "confirmed_static_with_backend_deeplink",
+      "evidence": [
+        {
+          "file": "client/src/pages/corporate/CorporateDashboard.tsx",
+          "line": 188,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/corporate/CorporateDashboard.tsx#L188-L207",
+          "end_line": 207
+        },
+        {
+          "file": "server/services/corporate-invitations.service.ts",
+          "line": 112,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/services/corporate-invitations.service.ts#L112-L119",
+          "end_line": 119
+        }
+      ],
+      "impact": "Corporate members depend on a known URL or an invitation notification; Register Corporate Account links to the same no-account page.",
+      "qualification": "Corporate invitations do create a notification deep-link to /corporate, so onboarding is not categorically absent. The notification UI itself lacks a discoverable entry before FE-01 is fixed.",
+      "fix_scope": "Offer workspace entry only for actual membership or pending invitations; separately remove/implement registration loop."
+    },
+    {
+      "id": "FE-05",
+      "priority": "P2",
+      "title": "Group booking request page is routable but has no inbound link",
+      "status": "confirmed_static",
+      "routes": ["/group-booking/:id"],
+      "evidence": [
+        {
+          "file": "client/src/App.tsx",
+          "line": 358,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L358-L362",
+          "end_line": 362
+        },
+        {
+          "file": "client/src/pages/GroupBookingRequest.tsx",
+          "line": 28,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/GroupBookingRequest.tsx#L28-L35",
+          "end_line": 35
+        }
+      ],
+      "impact": "The request flow requires manually knowing a flight-specific URL; MyGroups is linked only after submitting a request.",
+      "fix_scope": "Add an authorized flight-context entry, after checking request eligibility and minimum group size."
+    },
+    {
+      "id": "FE-06",
+      "priority": "P2",
+      "title": "Error reporting fallback confirms notification without sending",
+      "status": "confirmed_static_conditional",
+      "evidence": [
+        {
+          "file": "client/src/components/ErrorBoundary.tsx",
+          "line": 76,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/ErrorBoundary.tsx#L76-L99",
+          "end_line": 99
+        },
+        {
+          "file": "client/src/i18n/locales/en.json",
+          "line": 1021,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/i18n/locales/en.json#L1021"
+        },
+        {
+          "file": "client/src/lib/sentry.ts",
+          "line": 23,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/lib/sentry.ts#L23-L31",
+          "end_line": 31
+        }
+      ],
+      "impact": "When telemetry is unconfigured, Report Error logs to browser console and tells the user the team was notified.",
+      "fix_scope": "Give truthful local fallback or use a verified reporting path."
+    },
+    {
+      "id": "FE-07",
+      "priority": "P3",
+      "title": "Duplicate admin analytics page is not imported",
+      "status": "confirmed_static",
+      "evidence": [
+        {
+          "file": "client/src/pages/admin/AnalyticsDashboard.tsx",
+          "line": 39,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/AnalyticsDashboard.tsx#L39-L53",
+          "end_line": 53
+        },
+        {
+          "file": "client/src/App.tsx",
+          "line": 438,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L438-L444",
+          "end_line": 444
+        }
+      ],
+      "impact": "Dead page can overstate UI coverage in filename-based inventories; /analytics uses the other page and remains functional.",
+      "fix_scope": "Classify as unused duplicate; do not add duplicate route."
+    },
+    {
+      "id": "FE-08",
+      "priority": "P3",
+      "title": "Voucher edit control is permanently disabled",
+      "status": "confirmed_static",
+      "evidence": [
+        {
+          "file": "client/src/pages/admin/VoucherManagement.tsx",
+          "line": 516,
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/VoucherManagement.tsx#L516-L523",
+          "end_line": 523
+        }
+      ],
+      "impact": "An edit icon is rendered but offers no action. Creation and deactivation are wired.",
+      "fix_scope": "Remove unsupported affordance or implement a separately authorized edit flow."
+    }
+  ],
+  "backend": [
+    {
+      "id": "B01",
+      "classification": "confirmed-authority-mismatch",
+      "severity": "high",
+      "status": "baseline; assigned narrow fix",
+      "title": "Refund API excludes super_admin while the UI and canonical platform role helper allow it",
+      "evidence": [
+        {
+          "file": "server/routers/refunds.ts",
+          "line": 40
+        },
+        {
+          "file": "server/routers/refunds.ts",
+          "line": 164
+        },
+        {
+          "file": "server/services/refunds.service.ts",
+          "line": 90
+        },
+        {
+          "file": "server/services/refunds.service.ts",
+          "line": 95
+        },
+        {
+          "file": "server/services/refunds.service.ts",
+          "line": 419
+        },
+        {
+          "file": "server/services/split-refund.service.ts",
+          "line": 48
+        },
+        {
+          "file": "server/services/split-refund.service.ts",
+          "line": 798
+        },
+        {
+          "file": "server/services/rbac.service.ts",
+          "line": 220
+        }
+      ],
+      "interpretation": "Align platform-administrator checks with canonical isAdmin; retain ordinary owner and tenant predicates."
+    },
+    {
+      "id": "B02",
+      "classification": "unwired-provider-transport-component",
+      "severity": "scope-boundary",
+      "title": "Aviation transmission lifecycle is not imported by the API or worker",
+      "file": "server/services/aviation-message-transmission.service.ts",
+      "evidence": [
+        {
+          "file": "server/services/aviation-message-transmission.service.ts",
+          "line": 19
+        },
+        {
+          "file": "server/services/aviation-message-transmission.service.ts",
+          "line": 123
+        },
+        {
+          "file": "server/services/aviation-message-transmission.service.ts",
+          "line": 169
+        },
+        {
+          "file": "scripts/acceptance/handler-station.ts",
+          "line": 25
+        },
+        {
+          "file": "docs/architecture/service-catalog.json",
+          "line": 501
+        }
+      ],
+      "interpretation": "The sole unwired service is a Type B transport lifecycle helper used by acceptance scripts/tests. No runtime consumer or worker adapter invokes it. Its environment flag alone does not connect a transport. This is an external-integration implementation boundary, not a missing customer page; the catalog correctly labels it unwired."
+    },
+    {
+      "id": "B03",
+      "classification": "legacy-documentation-route-drift",
+      "severity": "medium",
+      "title": "Legacy native webhook wrapper is unmounted while older guides still recommend its URL",
+      "evidence": [
+        {
+          "file": "server/routes/webhooks.ts",
+          "line": 1
+        },
+        {
+          "file": "server/_core/index.ts",
+          "line": 116
+        },
+        {
+          "file": "docs/P0_IMPROVEMENTS_IMPLEMENTED.md",
+          "line": 448
+        },
+        {
+          "file": "docs/PRODUCTION_GRADE_V2_IMPLEMENTED.md",
+          "line": 76
+        }
+      ],
+      "interpretation": "Canonical Stripe processing is connected at /api/stripe/webhook and through the tRPC compatibility wrapper. /webhooks/stripe is not mounted by current startup. Historical guides must not be used as a current route inventory; no payment-handler absence is claimed."
+    },
+    {
+      "id": "B04",
+      "classification": "confirmed-human-api-only-operation",
+      "severity": "medium",
+      "title": "Settlement-review list and corrective refund are connected administrator operations without a reachable UI caller",
+      "procedures": [
+        "payments.settlementReviews",
+        "payments.refundSettlementReview"
+      ],
+      "evidence": [
+        {
+          "file": "server/routers/payments.ts",
+          "line": 81
+        },
+        {
+          "file": "server/routers/payments.ts",
+          "line": 94
+        },
+        {
+          "file": "server/services/settlement-review.service.ts",
+          "line": 7
+        }
+      ],
+      "interpretation": "Human remediation of collected payments requiring review; both REST and tRPC exist. A staff workbench is a meaningful UI candidate. This is API-only workflow coverage, not an unmounted backend."
+    },
+    {
+      "id": "B05",
+      "classification": "confirmed-human-api-only-prerequisite",
+      "severity": "medium",
+      "title": "Bag return grant provisioning is not called by reachable UI although returnBag is",
+      "procedures": [
+        "dcsOperations.setBagReturnGrant",
+        "dcsOperations.returnBag"
+      ],
+      "evidence": [
+        {
+          "file": "server/routers/dcs-operations.ts",
+          "line": 115
+        },
+        {
+          "file": "server/routers/dcs-operations.ts",
+          "line": 119
+        }
+      ],
+      "interpretation": "Grant provisioning is an airline/platform-admin operation, while actual handback is an ops operation. Existing API provisioning is documented; missing UI provisioning should not be fixed by weakening the grant requirement."
+    },
+    {
+      "id": "B06",
+      "classification": "capability-status-interpretation",
+      "severity": "informational",
+      "title": "Mounted and implemented are not equivalent to provider-ready",
+      "evidence": [
+        {
+          "file": "server/services/capability-catalog.service.ts",
+          "line": 182
+        },
+        {
+          "file": "server/services/demo-capability.ts",
+          "line": 4
+        },
+        {
+          "file": "server/services/hotel-fulfillment.service.ts",
+          "line": 194
+        },
+        {
+          "file": "server/services/apis.service.ts",
+          "line": 1111
+        },
+        {
+          "file": "server/routers/payments.ts",
+          "line": 199
+        }
+      ],
+      "interpretation": "Catalog contains10 implemented,8 demo,4 blocked capabilities. available is computed from implementation/demo mode, not deployed credentials or certification. Hotel fulfillment is implemented but default disabled; authority submission and alternate payment settlement refuse unavailable operations. Do not create misleading live UI for these gates."
+    }
+  ],
+  "additional_frontend_coverage": [
+    {
+      "id": "FE-09",
+      "priority": "P2",
+      "title": "Individual saved-flight list has no reachable add action",
+      "detail": "FavoritesPage mounts the individual-flight list but FavoriteButton is not imported. SearchResults card hearts call favorites.add with originId/destinationId; no reachable call sends flightId to favorites.addFlight.",
+      "ui_files": [
+        "client/src/components/FavoriteButton.tsx",
+        "client/src/components/FlightFavorites.tsx",
+        "client/src/pages/FavoritesPage.tsx",
+        "client/src/pages/SearchResults.tsx"
+      ],
+      "frontend_call_site_ids": [
+        "C0149",
+        "C0150",
+        "C0151",
+        "C0152",
+        "C0153",
+        "C0161",
+        "C0162",
+        "C0163"
+      ],
+      "contracts": [
+        {
+          "procedure": "favorites.addFlight",
+          "type": "mutation",
+          "builder": "protectedProcedure",
+          "source": {
+            "path": "server/routers/favorites.ts",
+            "line": 14,
+            "end_line": 26,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/favorites.ts#L14-L26"
+          }
+        },
+        {
+          "procedure": "favorites.isFlightFavorited",
+          "type": "query",
+          "builder": "protectedProcedure",
+          "source": {
+            "path": "server/routers/favorites.ts",
+            "line": 57,
+            "end_line": 69,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/favorites.ts#L57-L69"
+          }
+        },
+        {
+          "procedure": "favorites.getFlights",
+          "type": "query",
+          "builder": "protectedProcedure",
+          "source": {
+            "path": "server/routers/favorites.ts",
+            "line": 48,
+            "end_line": 52,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/favorites.ts#L48-L52"
+          }
+        },
+        {
+          "procedure": "favorites.removeFlight",
+          "type": "mutation",
+          "builder": "protectedProcedure",
+          "source": {
+            "path": "server/routers/favorites.ts",
+            "line": 31,
+            "end_line": 43,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/favorites.ts#L31-L43"
+          }
+        }
+      ]
+    },
+    {
+      "id": "FE-10",
+      "priority": "P2",
+      "title": "Review creation is reachable; review reading and stats are not",
+      "detail": "MyBookings uses ReviewForm for creation. FlightReviewsSection and ReviewsList are not imported by the app, so existing reviews, summary ratings, and helpful votes lack a reachable UI.",
+      "ui_files": [
+        "client/src/pages/MyBookings.tsx",
+        "client/src/components/ReviewForm.tsx",
+        "client/src/components/FlightReviewsSection.tsx",
+        "client/src/components/ReviewsList.tsx"
+      ],
+      "frontend_call_site_ids": [
+        "C0242",
+        "C0243",
+        "C0164",
+        "C0165",
+        "C0244",
+        "C0245",
+        "C0246",
+        "C0247"
+      ],
+      "contracts": [
+        {
+          "procedure": "reviews.create",
+          "type": "mutation",
+          "builder": "protectedProcedure",
+          "source": {
+            "path": "server/routers/reviews.ts",
+            "line": 10,
+            "end_line": 29,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/reviews.ts#L10-L29"
+          }
+        },
+        {
+          "procedure": "reviews.getFlightReviews",
+          "type": "query",
+          "builder": "publicProcedure",
+          "source": {
+            "path": "server/routers/reviews.ts",
+            "line": 34,
+            "end_line": 50,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/reviews.ts#L34-L50"
+          }
+        },
+        {
+          "procedure": "reviews.getFlightStats",
+          "type": "query",
+          "builder": "publicProcedure",
+          "source": {
+            "path": "server/routers/reviews.ts",
+            "line": 55,
+            "end_line": 64,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/reviews.ts#L55-L64"
+          }
+        },
+        {
+          "procedure": "reviews.canReview",
+          "type": "query",
+          "builder": "protectedProcedure",
+          "source": {
+            "path": "server/routers/reviews.ts",
+            "line": 175,
+            "end_line": 187,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/reviews.ts#L175-L187"
+          }
+        },
+        {
+          "procedure": "reviews.markHelpful",
+          "type": "mutation",
+          "builder": "protectedProcedure",
+          "source": {
+            "path": "server/routers/reviews.ts",
+            "line": 126,
+            "end_line": 135,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/reviews.ts#L126-L135"
+          }
+        }
+      ]
+    },
+    {
+      "id": "FE-11",
+      "priority": "coverage",
+      "title": "Price calendar and flexible-date component chain is not mounted",
+      "detail": "The legacy SearchForm imports these components but is not part of the App import graph. Current Home uses its own search form; normal/round-trip/multi-city search are wired.",
+      "ui_files": [
+        "client/src/components/SearchForm.tsx",
+        "client/src/components/PriceCalendar.tsx",
+        "client/src/components/FlexibleDateSearch.tsx"
+      ],
+      "frontend_call_site_ids": ["C0237", "C0160", "C0238"],
+      "contracts": [
+        {
+          "procedure": "priceCalendar.getMonthlyPrices",
+          "type": "query",
+          "builder": "publicProcedure",
+          "source": {
+            "path": "server/routers/price-calendar.ts",
+            "line": 15,
+            "end_line": 48,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-calendar.ts#L15-L48"
+          }
+        },
+        {
+          "procedure": "priceCalendar.getFlexiblePrices",
+          "type": "query",
+          "builder": "publicProcedure",
+          "source": {
+            "path": "server/routers/price-calendar.ts",
+            "line": 54,
+            "end_line": 93,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-calendar.ts#L54-L93"
+          }
+        }
+      ]
+    }
+  ]
+}

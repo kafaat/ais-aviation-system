@@ -12,6 +12,7 @@ import {
   paymentReceipts,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
+import { isAdmin } from "./rbac.service";
 
 export const MAX_BAG_WEIGHT_GRAMS = 32000;
 
@@ -31,7 +32,7 @@ export async function listOwnedBaggageEntitlements(
     (actor.tenantId != null && booking.tenantId !== actor.tenantId)
   )
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-  if (booking.userId !== actor.id && actor.role !== "admin")
+  if (booking.userId !== actor.id && !isAdmin(actor.role))
     throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
   if (booking.status === "cancelled") return [];
   const people = await tx

@@ -1018,7 +1018,7 @@
     "technicalDetails": "Technical Details",
     "errorApology": "We apologize for the inconvenience. An unexpected error has occurred.",
     "persistentError": "If this problem persists, please contact our support team.",
-    "reportConfirmation": "Thank you for reporting this error. Our team has been notified and will look into it."
+    "reportUnavailable": "The error report could not be sent. You can try again or return to the home page."
   },
   "sms": {
     "receiveNotifications": "Receive SMS notifications",
@@ -1513,7 +1513,7 @@
     "title": "Corporate Travel",
     "dashboardSubtitle": "Manage your corporate travel account",
     "noAccount": "No Corporate Account",
-    "noAccountDescription": "You are not a member of a corporate travel account. Register your company or contact your administrator.",
+    "noAccountDescription": "Ask your company’s travel administrator to invite you. Pending invitations appear in the corporate workspace.",
     "registerAccount": "Register Corporate Account",
     "accountPending": "Account Pending Approval",
     "accountPendingDescription": "Your corporate account is awaiting admin approval. You will be notified when it is activated.",

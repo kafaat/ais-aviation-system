@@ -13,6 +13,9 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import { BaggageEntitlement } from "@/components/BaggageEntitlement";
 import { PassengerTravelDocuments } from "@/components/PassengerTravelDocuments";
+import { useRawSearch } from "@/lib/useRawSearch";
+import { loginPath } from "@shared/return-to";
+import { readCheckInLink, validCheckInCode } from "@shared/check-in-link";
 
 function BoardingPass({
   bookingId,
@@ -147,13 +150,31 @@ function BoardingPass({
   );
 }
 export default function CheckIn() {
+  const search = useRawSearch();
+  const { user, isAuthenticated } = useAuth();
+  return (
+    <CheckInForm
+      key={JSON.stringify([user?.id, user?.tenantId, search])}
+      search={search}
+      isAuthenticated={isAuthenticated}
+    />
+  );
+}
+
+function CheckInForm({
+  search,
+  isAuthenticated,
+}: {
+  search: string;
+  isAuthenticated: boolean;
+}) {
   const { t } = useTranslation();
-  const { isAuthenticated } = useAuth();
+  const [linkTarget, setLinkTarget] = useState(() => readCheckInLink(search));
   const [pnr, setPnr] = useState(() => {
+    if (linkTarget?.kind === "pnr") return linkTarget.value;
+    if (linkTarget) return "";
     const issuedPnr: unknown = window.history.state?.checkInPnr;
-    return typeof issuedPnr === "string" && /^[A-Z0-9]{6}$/.test(issuedPnr)
-      ? issuedPnr
-      : "";
+    return validCheckInCode(issuedPnr) ? issuedPnr : "";
   });
   const [searched, setSearched] = useState(pnr);
   const [flightId, setFlightId] = useState<number>();
@@ -163,10 +184,55 @@ export default function CheckIn() {
   }>();
   const [excluded, setExcluded] = useState<number[]>([]);
   const utils = trpc.useUtils();
-  const booking = trpc.bookings.getByPNR.useQuery(
-    { pnr: searched },
-    { enabled: isAuthenticated && searched.length === 6, retry: false }
+  const legacyReference =
+    linkTarget?.kind === "bookingReference" ? linkTarget.value : null;
+  const ownedBookings = trpc.bookings.myBookings.useQuery(undefined, {
+    enabled: isAuthenticated && legacyReference !== null,
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+  });
+  // Never reinterpret an old booking reference as a PNR. Resolve only a current
+  // authenticated owner's list, not a cached result while it is refreshing.
+  const legacyPnr =
+    isAuthenticated &&
+    legacyReference &&
+    !ownedBookings.isFetching &&
+    !ownedBookings.isPaused &&
+    !ownedBookings.error
+      ? ownedBookings.data?.find(
+          row => row.bookingReference === legacyReference
+        )?.pnr
+      : undefined;
+  const lookupPnr = legacyReference
+    ? validCheckInCode(legacyPnr)
+      ? legacyPnr
+      : ""
+    : searched;
+  useEffect(() => {
+    if (legacyReference && validCheckInCode(legacyPnr)) setPnr(legacyPnr);
+  }, [legacyReference, legacyPnr]);
+  const bookingQuery = trpc.bookings.getByPNR.useQuery(
+    { pnr: lookupPnr },
+    {
+      enabled: isAuthenticated && validCheckInCode(lookupPnr),
+      retry: false,
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: "always",
+    }
   );
+  const booking = {
+    ...bookingQuery,
+    data:
+      !isAuthenticated ||
+      bookingQuery.isFetching ||
+      bookingQuery.isPaused ||
+      bookingQuery.error
+        ? undefined
+        : bookingQuery.data,
+  };
   const states = trpc.bookings.getDepartureState.useQuery(
     { bookingId: booking.data?.id ?? 0 },
     { enabled: Boolean(booking.data), retry: false }
@@ -206,7 +272,9 @@ export default function CheckIn() {
     return (
       <main className="container py-10">
         <p>{t("checkIn.loginRequiredDesc")}</p>
-        <Link href="/login">{t("common.login")}</Link>
+        <Link href={loginPath(`/check-in${search ? `?${search}` : ""}`)}>
+          {t("common.login")}
+        </Link>
       </main>
     );
   return (
@@ -216,13 +284,14 @@ export default function CheckIn() {
         className="flex items-end gap-3 print:hidden"
         onSubmit={event => {
           event.preventDefault();
-          if (pnr.length !== 6) {
+          if (!validCheckInCode(pnr)) {
             toast.error(t("checkIn.invalidPnr"));
             return;
           }
           setFlightId(undefined);
           setSelection(undefined);
           setExcluded([]);
+          setLinkTarget(null);
           setSearched(pnr);
         }}
       >
@@ -232,12 +301,31 @@ export default function CheckIn() {
             id="pnr"
             value={pnr}
             maxLength={6}
-            onChange={e => setPnr(e.target.value.toUpperCase())}
+            onChange={e => {
+              setPnr(e.target.value.toUpperCase());
+              if (linkTarget) {
+                setLinkTarget(null);
+                setSearched("");
+              }
+            }}
           />
         </div>
         <Button type="submit">{t("checkIn.search")}</Button>
       </form>
-      {(booking.isLoading || states.isLoading) && searched && (
+      {linkTarget?.kind === "invalid" && (
+        <p role="alert">{t("checkIn.invalidPnr")}</p>
+      )}
+      {legacyReference && ownedBookings.isError && (
+        <p role="alert">{ownedBookings.error.message}</p>
+      )}
+      {legacyReference &&
+        ownedBookings.isSuccess &&
+        !ownedBookings.isFetching &&
+        !validCheckInCode(legacyPnr) && (
+          <p role="alert">{t("checkIn.notFound")}</p>
+        )}
+      {((legacyReference && ownedBookings.isLoading) ||
+        ((booking.isLoading || states.isLoading) && lookupPnr)) && (
         <p role="status">{t("common.loading")}</p>
       )}
       {(booking.error || states.error) && (
@@ -346,6 +434,7 @@ export default function CheckIn() {
                           !passengers.data?.length
                         }
                         onClick={() => {
+                          if (!booking.data) return;
                           checkIn.mutate({
                             bookingId: booking.data.id,
                             flightId: leg.flightId,

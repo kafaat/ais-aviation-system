@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
   protectedProcedure,
+  adminProcedure,
   airlineFinanceProcedure,
   router,
 } from "../_core/trpc";
@@ -26,25 +27,13 @@ import { bookings, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { auditRefund } from "../services/audit.service";
 import { assertBookingOwnership } from "../services/access-control.service";
+import { isAdmin } from "../services/rbac.service";
 import {
   getSplitRefundCancellation,
   reserveSplitRefundCancellation,
   resumeSplitRefundCancellation,
   listSplitRefundCancellations,
 } from "../services/split-refund.service";
-
-/**
- * Admin-only procedure
- */
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Admin access required",
-    });
-  }
-  return next({ ctx });
-});
 
 /**
  * Refunds Router
@@ -161,7 +150,7 @@ export const refundsRouter = router({
     )
     .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
-      if (input.amount !== undefined && ctx.user.role !== "admin") {
+      if (input.amount !== undefined && !isAdmin(ctx.user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Only admins can override the refund amount",
@@ -220,7 +209,7 @@ export const refundsRouter = router({
         tags: ["Refunds", "Admin"],
         summary: "Create refund (admin)",
         description:
-          "Admin endpoint to create a refund for any booking. Allows overriding the calculated refund amount. Requires admin role.",
+          "Admin endpoint to create a refund for any booking. Allows overriding the calculated refund amount. Requires a platform administrator role.",
         protect: true,
       },
     })

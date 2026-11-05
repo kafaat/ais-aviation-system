@@ -1,0 +1,5542 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "interpretation": "70 explicit routes. The auxiliary BrandIdentity route and catch-all are separate. Route guards are wrappers, not a complete page/service authorization proof. Missing static navigation needs manual review of generated links, provider emails and intentional entry points.",
+  "routes": [
+    {
+      "path": "/",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 257,
+        "end_line": 257,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L257"
+      },
+      "page_files": ["client/src/pages/Home.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/App.tsx",
+            "line": 211,
+            "end_line": 211,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L211"
+          },
+          "kind": "location_assignment",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityResults.tsx",
+            "line": 193,
+            "end_line": 193,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MultiCityResults.tsx#L193"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityResults.tsx",
+            "line": 229,
+            "end_line": 229,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MultiCityResults.tsx#L229"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Notifications.tsx",
+            "line": 266,
+            "end_line": 266,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Notifications.tsx#L266"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AdminDashboard.tsx",
+            "line": 123,
+            "end_line": 123,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AdminDashboard.tsx#L123"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AdminDashboard.tsx",
+            "line": 147,
+            "end_line": 147,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AdminDashboard.tsx#L147"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/DcsDesk.tsx",
+            "line": 266,
+            "end_line": 266,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/DcsDesk.tsx#L266"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/LiveFlightTracking.tsx",
+            "line": 155,
+            "end_line": 155,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/LiveFlightTracking.tsx#L155"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 76,
+            "end_line": 76,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/SearchResults.tsx#L76"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 373,
+            "end_line": 373,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/SearchResults.tsx#L373"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 462,
+            "end_line": 462,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/SearchResults.tsx#L462"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityCheckout.tsx",
+            "line": 73,
+            "end_line": 73,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MultiCityCheckout.tsx#L73"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/KioskBagTag.tsx",
+            "line": 142,
+            "end_line": 142,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/KioskBagTag.tsx#L142"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/EmbedSearch.tsx",
+            "line": 102,
+            "end_line": 102,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/EmbedSearch.tsx#L102"
+          },
+          "kind": "jsx_a_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/EmbedSearch.tsx",
+            "line": 108,
+            "end_line": 108,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/EmbedSearch.tsx#L108"
+          },
+          "kind": "jsx_a_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AgentPortal.tsx",
+            "line": 593,
+            "end_line": 593,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AgentPortal.tsx#L593"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/GateManagement.tsx",
+            "line": 174,
+            "end_line": 174,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/GateManagement.tsx#L174"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 331,
+            "end_line": 331,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyBookings.tsx#L331"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 504,
+            "end_line": 504,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyBookings.tsx#L504"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/PassengerPriority.tsx",
+            "line": 908,
+            "end_line": 908,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/PassengerPriority.tsx#L908"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/StandardReports.tsx",
+            "line": 277,
+            "end_line": 277,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/StandardReports.tsx#L277"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/DataWarehouse.tsx",
+            "line": 373,
+            "end_line": 373,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/DataWarehouse.tsx#L373"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/ReportsDashboard.tsx",
+            "line": 204,
+            "end_line": 204,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/ReportsDashboard.tsx#L204"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/CompensationManagement.tsx",
+            "line": 1144,
+            "end_line": 1144,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/CompensationManagement.tsx#L1144"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/EmergencyHotelManagement.tsx",
+            "line": 1138,
+            "end_line": 1138,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/EmergencyHotelManagement.tsx#L1138"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/APISManagement.tsx",
+            "line": 1267,
+            "end_line": 1267,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/APISManagement.tsx#L1267"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/VoucherManagement.tsx",
+            "line": 135,
+            "end_line": 135,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/VoucherManagement.tsx#L135"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/ManageBooking.tsx",
+            "line": 39,
+            "end_line": 39,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/ManageBooking.tsx#L39"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/BookingPage.tsx",
+            "line": 587,
+            "end_line": 587,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/BookingPage.tsx#L587"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 130,
+            "end_line": 130,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/GroupBookingRequest.tsx#L130"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 168,
+            "end_line": 168,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/GroupBookingRequest.tsx#L168"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AccessibilityStatement.tsx",
+            "line": 21,
+            "end_line": 21,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AccessibilityStatement.tsx#L21"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 297,
+            "end_line": 297,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/RebookPage.tsx#L297"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AnalyticsDashboard.tsx",
+            "line": 283,
+            "end_line": 283,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AnalyticsDashboard.tsx#L283"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AnalyticsDashboard.tsx",
+            "line": 314,
+            "end_line": 314,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AnalyticsDashboard.tsx#L314"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 93,
+            "end_line": 93,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PrivacyPolicy.tsx#L93"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 110,
+            "end_line": 110,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PrivacyPolicy.tsx#L110"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 139,
+            "end_line": 139,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PrivacyPolicy.tsx#L139"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 13,
+            "end_line": 13,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/NotFound.tsx#L13"
+          },
+          "kind": "imperative_navigation",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 22,
+            "end_line": 22,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/NotFound.tsx#L22"
+          },
+          "kind": "navigation_data",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 23,
+            "end_line": 23,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/NotFound.tsx#L23"
+          },
+          "kind": "navigation_data",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CodeshareFlights.tsx",
+            "line": 24,
+            "end_line": 24,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/CodeshareFlights.tsx#L24"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 207,
+            "end_line": 207,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyWaitlist.tsx#L207"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 255,
+            "end_line": 255,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyWaitlist.tsx#L255"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 228,
+            "end_line": 228,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AiChat.tsx#L228"
+          },
+          "kind": "imperative_navigation",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 245,
+            "end_line": 245,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AiChat.tsx#L245"
+          },
+          "kind": "imperative_navigation",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 327,
+            "end_line": 327,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AiChat.tsx#L327"
+          },
+          "kind": "imperative_navigation",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AirlineConsole.tsx",
+            "line": 28,
+            "end_line": 28,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AirlineConsole.tsx#L28"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SavedPassengers.tsx",
+            "line": 117,
+            "end_line": 117,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/SavedPassengers.tsx#L117"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/ErrorBoundary.tsx",
+            "line": 103,
+            "end_line": 103,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/ErrorBoundary.tsx#L103"
+          },
+          "kind": "location_assignment",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 81,
+            "end_line": 81,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L81"
+          },
+          "kind": "navigation_data",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/AdminRoute.tsx",
+            "line": 39,
+            "end_line": 39,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/AdminRoute.tsx#L39"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/OperationalReadState.tsx",
+            "line": 21,
+            "end_line": 21,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/OperationalReadState.tsx#L21"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 29,
+            "end_line": 29,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L29"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 34,
+            "end_line": 34,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L34"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 39,
+            "end_line": 39,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L39"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0045",
+        "C0253",
+        "C0256",
+        "C0257",
+        "C0258",
+        "C0316",
+        "C0399"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "ibePublic.config",
+        "reference.airports",
+        "suggestions.deals",
+        "suggestions.forUser",
+        "suggestions.popular"
+      ]
+    },
+    {
+      "path": "/embed/search",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 258,
+        "end_line": 258,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L258"
+      },
+      "page_files": ["client/src/pages/EmbedSearch.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": ["C0045", "C0316", "C0392", "C0393"],
+      "procedure_ids": ["ibePublic.config", "reference.airports"]
+    },
+    {
+      "path": "/login",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 259,
+        "end_line": 259,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L259"
+      },
+      "page_files": ["client/src/pages/Login.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 300,
+            "end_line": 300,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L300"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CheckIn.tsx",
+            "line": 209,
+            "end_line": 209,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/CheckIn.tsx#L209"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Notifications.tsx",
+            "line": 248,
+            "end_line": 248,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Notifications.tsx#L248"
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AdminDashboard.tsx",
+            "line": 105,
+            "end_line": 105,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AdminDashboard.tsx#L105"
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 301,
+            "end_line": 301,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyBookings.tsx#L301"
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 134,
+            "end_line": 134,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/RebookPage.tsx#L134"
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AnalyticsDashboard.tsx",
+            "line": 268,
+            "end_line": 268,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AnalyticsDashboard.tsx#L268"
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 189,
+            "end_line": 189,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyWaitlist.tsx#L189"
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/JoinWaitlistDialog.tsx",
+            "line": 79,
+            "end_line": 79,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/JoinWaitlistDialog.tsx#L79"
+          },
+          "kind": "location_assignment",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 337,
+            "end_line": 337,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L337"
+          },
+          "kind": "location_assignment",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0191",
+        "C0192",
+        "C0193",
+        "C0194",
+        "C0316",
+        "C0405",
+        "C0406",
+        "C0407",
+        "C0408",
+        "C0409"
+      ],
+      "procedure_ids": [
+        "auth.completeMfa",
+        "auth.login",
+        "auth.logoutCookie",
+        "auth.me",
+        "auth.register"
+      ]
+    },
+    {
+      "path": "/codeshare-flights",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 264,
+        "end_line": 264,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L264"
+      },
+      "page_files": ["client/src/pages/CodeshareFlights.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 75,
+            "end_line": 75,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L75"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/codeshare-flights",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": ["C0045", "C0316", "C0380", "C0381"],
+      "procedure_ids": [
+        "codeshare.getCodeshareFlights",
+        "ibePublic.config",
+        "reference.airlines"
+      ]
+    },
+    {
+      "path": "/search",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 265,
+        "end_line": 265,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L265"
+      },
+      "page_files": ["client/src/pages/SearchResults.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/PriceAlerts.tsx",
+            "line": 333,
+            "end_line": 333,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PriceAlerts.tsx#L333"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search?from=${item.origin.id}&to=${item.destination.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 137,
+            "end_line": 137,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L137"
+          },
+          "kind": "imperative_navigation",
+          "target": "/search?${params.toString()}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CompareFlights.tsx",
+            "line": 36,
+            "end_line": 36,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/CompareFlights.tsx#L36"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CompareFlights.tsx",
+            "line": 87,
+            "end_line": 87,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/CompareFlights.tsx#L87"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateDashboard.tsx",
+            "line": 478,
+            "end_line": 478,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/corporate/CorporateDashboard.tsx#L478"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/FavoritesPage.tsx",
+            "line": 52,
+            "end_line": 52,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/FavoritesPage.tsx#L52"
+          },
+          "kind": "imperative_navigation",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 174,
+            "end_line": 174,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/GroupBookingRequest.tsx#L174"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 82,
+            "end_line": 82,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L82"
+          },
+          "kind": "navigation_data",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 67,
+            "end_line": 67,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L67"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SearchHistory.tsx",
+            "line": 157,
+            "end_line": 157,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SearchHistory.tsx#L157"
+          },
+          "kind": "imperative_navigation",
+          "target": "/search?${params.toString()}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0045",
+        "C0105",
+        "C0185",
+        "C0186",
+        "C0239",
+        "C0240",
+        "C0253",
+        "C0301",
+        "C0316",
+        "C0468",
+        "C0469",
+        "C0470",
+        "C0471"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "favorites.add",
+        "favorites.getAll",
+        "flights.search",
+        "flights.statusBatch",
+        "ibePublic.config",
+        "ibePublic.displayRate",
+        "priceLock.create",
+        "reference.airports",
+        "waitlist.join"
+      ]
+    },
+    {
+      "path": "/booking/multi-city",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 270,
+        "end_line": 270,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L270"
+      },
+      "page_files": ["client/src/pages/MultiCityCheckout.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityResults.tsx",
+            "line": 171,
+            "end_line": 171,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MultiCityResults.tsx#L171"
+          },
+          "kind": "imperative_navigation",
+          "target": "/booking/multi-city?${context}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0027",
+        "C0028",
+        "C0105",
+        "C0181",
+        "C0254",
+        "C0316",
+        "C0418",
+        "C0419",
+        "C0420"
+      ],
+      "procedure_ids": [
+        "ancillary.getAvailable",
+        "auth.logoutCookie",
+        "auth.me",
+        "flights.getById",
+        "ibePublic.displayRate",
+        "multiCity.calculatePrice",
+        "multiCity.create",
+        "seatMap.getFlightSeatMap"
+      ]
+    },
+    {
+      "path": "/booking/:id",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 275,
+        "end_line": 275,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L275"
+      },
+      "page_files": ["client/src/pages/BookingPage.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityResults.tsx",
+            "line": 171,
+            "end_line": 171,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MultiCityResults.tsx#L171"
+          },
+          "kind": "imperative_navigation",
+          "target": "/booking/multi-city?${context}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 818,
+            "end_line": 818,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/SearchResults.tsx#L818"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=economy&search=${encodeURIComponent(search)}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 884,
+            "end_line": 884,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/SearchResults.tsx#L884"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=business&search=${encodeURIComponent(search)}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 937,
+            "end_line": 937,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/SearchResults.tsx#L937"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=${fare.cabinClass}&fareClassCode=${encodeURIComponent(fare.code)}&search=${encodeURIComponent(search)}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 195,
+            "end_line": 195,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/GroupBookingRequest.tsx#L195"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flightId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 70,
+            "end_line": 70,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/RebookPage.tsx#L70"
+          },
+          "kind": "imperative_navigation",
+          "target": "/booking/${flightId}?class=${rebookData?.cabinClass}&rebook=${bookingId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyGroups.tsx",
+            "line": 39,
+            "end_line": 39,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyGroups.tsx#L39"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${g.flightId}?class=${g.cabinClass}&groupBookingId=${g.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CodeshareFlights.tsx",
+            "line": 103,
+            "end_line": 103,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/CodeshareFlights.tsx#L103"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.flightId}?class=${option.cabinClass}&codeshareAllotmentId=${option.allotmentId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 97,
+            "end_line": 97,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyWaitlist.tsx#L97"
+          },
+          "kind": "location_assignment",
+          "target": "/booking/${data.flightId}?class=${data.cabinClass}&waitlistId=${data.waitlistId}&passengers=${data.passengers}&fromWaitlist=true",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 466,
+            "end_line": 466,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AiChat.tsx#L466"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${s.flightId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightCompare.tsx",
+            "line": 514,
+            "end_line": 514,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/FlightCompare.tsx#L514"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=economy",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightCompare.tsx",
+            "line": 527,
+            "end_line": 527,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/FlightCompare.tsx#L527"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=business",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightPreviewDialog.tsx",
+            "line": 262,
+            "end_line": 262,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/FlightPreviewDialog.tsx#L262"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=economy",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightPreviewDialog.tsx",
+            "line": 310,
+            "end_line": 310,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/FlightPreviewDialog.tsx#L310"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=business",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SmartSuggestions.tsx",
+            "line": 181,
+            "end_line": 181,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SmartSuggestions.tsx#L181"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${suggestion.flightId}?class=economy",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightFavorites.tsx",
+            "line": 189,
+            "end_line": 189,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/FlightFavorites.tsx#L189"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${item.flight.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0027",
+        "C0028",
+        "C0045",
+        "C0056",
+        "C0105",
+        "C0252",
+        "C0254",
+        "C0282",
+        "C0283",
+        "C0316",
+        "C0352",
+        "C0353",
+        "C0354",
+        "C0355",
+        "C0356",
+        "C0357",
+        "C0358",
+        "C0359",
+        "C0360",
+        "C0361",
+        "C0362",
+        "C0363",
+        "C0364",
+        "C0365",
+        "C0366",
+        "C0367"
+      ],
+      "procedure_ids": [
+        "ancillary.getAvailable",
+        "auth.logoutCookie",
+        "auth.me",
+        "bookings.create",
+        "bookings.getAllocation",
+        "favorites.add",
+        "favorites.getAll",
+        "flights.getById",
+        "ibePublic.config",
+        "ibePublic.displayRate",
+        "priceLock.checkLock",
+        "priceQuote.createOffer",
+        "rebooking.getRebookData",
+        "reference.airports",
+        "savedPassengers.add",
+        "savedPassengers.getAll",
+        "seatMap.getFlightSeatMap",
+        "travelScenarios.getCarbonOffset",
+        "travelScenarios.getTravelRequirements",
+        "userPreferences.getMyPreferences"
+      ]
+    },
+    {
+      "path": "/manage-booking",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 280,
+        "end_line": 280,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L280"
+      },
+      "page_files": ["client/src/pages/ManageBooking.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 242,
+            "end_line": 242,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L242"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/manage-booking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 311,
+            "end_line": 311,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L311"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/manage-booking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 83,
+            "end_line": 83,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L83"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/manage-booking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": ["C0316", "C0416", "C0417"],
+      "procedure_ids": ["manageBooking.lookup"]
+    },
+    {
+      "path": "/checkout/:bookingId",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 281,
+        "end_line": 281,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L281"
+      },
+      "page_files": ["client/src/pages/CheckoutResume.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/App.tsx",
+            "line": 234,
+            "end_line": 234,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L234"
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/checkout/${encodeURIComponent(params?.id ?? \"\")}?canceled=true",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityCheckout.tsx",
+            "line": 165,
+            "end_line": 165,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MultiCityCheckout.tsx#L165"
+          },
+          "kind": "imperative_navigation",
+          "target": "/checkout/${result.bookingId}?${preferenceParams(searchPreferences(search))}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AgentPortal.tsx",
+            "line": 73,
+            "end_line": 73,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AgentPortal.tsx#L73"
+          },
+          "kind": "imperative_navigation",
+          "target": "/checkout/${result.bookingId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 805,
+            "end_line": 805,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyBookings.tsx#L805"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/checkout/${booking.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/BookingPage.tsx",
+            "line": 477,
+            "end_line": 477,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/BookingPage.tsx#L477"
+          },
+          "kind": "imperative_navigation",
+          "target": "/checkout/${booking.bookingId}?${preferenceParams(searchPreferences(search))}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/BookingPage.tsx",
+            "line": 551,
+            "end_line": 551,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/BookingPage.tsx#L551"
+          },
+          "kind": "imperative_navigation",
+          "target": "/checkout/${booking.bookingId}?${context}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0105",
+        "C0266",
+        "C0267",
+        "C0286",
+        "C0287",
+        "C0288",
+        "C0316",
+        "C0374",
+        "C0375",
+        "C0376",
+        "C0377",
+        "C0378",
+        "C0379"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "ibePublic.displayRate",
+        "payments.createCheckoutSession",
+        "payments.getCheckoutState",
+        "splitPayments.getStatus",
+        "splitPayments.initiate",
+        "vouchers.applyVoucher",
+        "wallet.balance",
+        "wallet.pay"
+      ]
+    },
+    {
+      "path": "/agent",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 288,
+        "end_line": 288,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L288"
+      },
+      "page_files": ["client/src/pages/AgentPortal.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 317,
+            "end_line": 317,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L317"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/agent",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 99,
+            "end_line": 99,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L99"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/agent",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0322",
+        "C0323",
+        "C0324",
+        "C0325",
+        "C0326",
+        "C0327"
+      ],
+      "procedure_ids": [
+        "agentPortal.agencies",
+        "agentPortal.createBooking",
+        "agentPortal.dashboard",
+        "agentPortal.search"
+      ]
+    },
+    {
+      "path": "/my-bookings",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 293,
+        "end_line": 293,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L293"
+      },
+      "page_files": ["client/src/pages/MyBookings.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 247,
+            "end_line": 247,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L247"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityCheckout.tsx",
+            "line": 276,
+            "end_line": 276,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MultiCityCheckout.tsx#L276"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateDashboard.tsx",
+            "line": 498,
+            "end_line": 498,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/corporate/CorporateDashboard.tsx#L498"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/ManageBooking.tsx",
+            "line": 222,
+            "end_line": 222,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/ManageBooking.tsx#L222"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 60,
+            "end_line": 60,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/RebookPage.tsx#L60"
+          },
+          "kind": "imperative_navigation",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 153,
+            "end_line": 153,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/RebookPage.tsx#L153"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 173,
+            "end_line": 173,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/RebookPage.tsx#L173"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyGroups.tsx",
+            "line": 32,
+            "end_line": 32,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyGroups.tsx#L32"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 115,
+            "end_line": 115,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PrivacyPolicy.tsx#L115"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CheckoutResume.tsx",
+            "line": 350,
+            "end_line": 350,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/CheckoutResume.tsx#L350"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 24,
+            "end_line": 24,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/NotFound.tsx#L24"
+          },
+          "kind": "navigation_data",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 493,
+            "end_line": 493,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyWaitlist.tsx#L493"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 406,
+            "end_line": 406,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AiChat.tsx#L406"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings?exchange=${booking.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 412,
+            "end_line": 412,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AiChat.tsx#L412"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 83,
+            "end_line": 83,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L83"
+          },
+          "kind": "navigation_data",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 91,
+            "end_line": 91,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L91"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0033",
+        "C0041",
+        "C0042",
+        "C0043",
+        "C0044",
+        "C0051",
+        "C0052",
+        "C0053",
+        "C0054",
+        "C0055",
+        "C0057",
+        "C0058",
+        "C0059",
+        "C0060",
+        "C0061",
+        "C0106",
+        "C0107",
+        "C0108",
+        "C0109",
+        "C0110",
+        "C0111",
+        "C0112",
+        "C0113",
+        "C0184",
+        "C0195",
+        "C0196",
+        "C0197",
+        "C0198",
+        "C0199",
+        "C0200",
+        "C0201",
+        "C0202",
+        "C0203",
+        "C0204",
+        "C0208",
+        "C0209",
+        "C0210",
+        "C0211",
+        "C0212",
+        "C0213",
+        "C0214",
+        "C0215",
+        "C0216",
+        "C0217",
+        "C0218",
+        "C0219",
+        "C0220",
+        "C0242",
+        "C0243",
+        "C0259",
+        "C0260",
+        "C0261",
+        "C0262",
+        "C0263",
+        "C0264",
+        "C0265",
+        "C0268",
+        "C0269",
+        "C0270",
+        "C0271",
+        "C0286",
+        "C0287",
+        "C0288",
+        "C0301",
+        "C0316",
+        "C0424"
+      ],
+      "procedure_ids": [
+        "ancillary.addToBooking",
+        "ancillary.getAvailable",
+        "ancillary.getBookingAncillaries",
+        "ancillary.removeFromBooking",
+        "auth.logoutCookie",
+        "auth.me",
+        "bookings.baggageEntitlements",
+        "bookings.getDepartureState",
+        "bookings.getPassengers",
+        "bookings.myBookings",
+        "compensation.checkEligibility",
+        "compensation.claimTargets",
+        "compensation.fileClaim",
+        "compensation.getMyClaims",
+        "disruptions.getAlternatives",
+        "disruptions.myDisruptions",
+        "eticket.generateBoardingPass",
+        "eticket.generateCalendarEvent",
+        "eticket.generateETicket",
+        "flights.getById",
+        "flights.search",
+        "flights.statusBatch",
+        "modifications.exchangeContext",
+        "modifications.requestChangeDate",
+        "modifications.requestUpgrade",
+        "ndc.cancelPaidService",
+        "ndc.confirmNoChargeService",
+        "payments.createModificationCheckout",
+        "refunds.calculateCancellationFee",
+        "refunds.cancelSplitBooking",
+        "refunds.checkRefundable",
+        "refunds.create",
+        "refunds.resumeSplitCancellation",
+        "refunds.splitCancellation",
+        "reviews.create",
+        "seatMap.getFlightSeatMap",
+        "specialServices.cancelService",
+        "specialServices.getAvailableServices",
+        "specialServices.getBookingServices",
+        "specialServices.requestService",
+        "travelScenarios.getShareableItinerary",
+        "vouchers.myCredits",
+        "vouchers.useCredits",
+        "wallet.balance",
+        "wallet.pay"
+      ]
+    },
+    {
+      "path": "/kiosk",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 300,
+        "end_line": 300,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L300"
+      },
+      "page_files": ["client/src/pages/KioskBagTag.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 107,
+            "end_line": 107,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L107"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/kiosk",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": ["C0316", "C0400", "C0401", "C0402"],
+      "procedure_ids": ["kiosk.reprintRegisteredTag"]
+    },
+    {
+      "path": "/check-in",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 301,
+        "end_line": 301,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L301"
+      },
+      "page_files": ["client/src/pages/CheckIn.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 252,
+            "end_line": 252,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L252"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 785,
+            "end_line": 785,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyBookings.tsx#L785"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 120,
+            "end_line": 120,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PrivacyPolicy.tsx#L120"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 25,
+            "end_line": 25,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/NotFound.tsx#L25"
+          },
+          "kind": "navigation_data",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 87,
+            "end_line": 87,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L87"
+          },
+          "kind": "navigation_data",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 115,
+            "end_line": 115,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L115"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0010",
+        "C0011",
+        "C0012",
+        "C0033",
+        "C0041",
+        "C0232",
+        "C0233",
+        "C0254",
+        "C0316",
+        "C0368",
+        "C0369",
+        "C0370",
+        "C0371",
+        "C0372",
+        "C0373"
+      ],
+      "procedure_ids": [
+        "ancillary.getBookingAncillaries",
+        "apis.getMyAPISStatus",
+        "apis.getMyJourneyStatus",
+        "apis.getRequirements",
+        "apis.submitInfo",
+        "auth.logoutCookie",
+        "auth.me",
+        "bookings.baggageEntitlements",
+        "bookings.checkIn",
+        "bookings.getByPNR",
+        "bookings.getDepartureState",
+        "bookings.getPassengers",
+        "seatMap.getBoardingPass",
+        "seatMap.getFlightSeatMap"
+      ]
+    },
+    {
+      "path": "/airline/dcs",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 306,
+        "end_line": 306,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L306"
+      },
+      "page_files": ["client/src/pages/DcsDesk.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 414,
+            "end_line": 414,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L414"
+          },
+          "kind": "navigation_data",
+          "target": "/airline/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0032",
+        "C0080",
+        "C0081",
+        "C0082",
+        "C0083",
+        "C0084",
+        "C0085",
+        "C0086",
+        "C0087",
+        "C0088",
+        "C0089",
+        "C0090",
+        "C0091",
+        "C0092",
+        "C0093",
+        "C0094",
+        "C0095",
+        "C0096",
+        "C0097",
+        "C0098",
+        "C0099",
+        "C0100",
+        "C0101",
+        "C0102",
+        "C0103",
+        "C0104",
+        "C0316",
+        "C0382",
+        "C0383",
+        "C0384",
+        "C0385",
+        "C0386",
+        "C0387",
+        "C0388",
+        "C0389",
+        "C0390",
+        "C0391"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "baggage.correctWeight",
+        "baggage.flightCloseout",
+        "baggage.register",
+        "baggage.registrationSummary",
+        "dcsOperations.addOsi",
+        "dcsOperations.blockSeats",
+        "dcsOperations.changeFlightState",
+        "dcsOperations.checkIn",
+        "dcsOperations.confirmDowngrade",
+        "dcsOperations.dismissCase",
+        "dcsOperations.finalize",
+        "dcsOperations.getDesk",
+        "dcsOperations.openCase",
+        "dcsOperations.quoteDowngrade",
+        "dcsOperations.remapSeats",
+        "dcsOperations.resolveCase",
+        "dcsOperations.returnBag",
+        "dcsOperations.stationReport",
+        "dcsOperations.transition",
+        "operations.airlineFlights"
+      ]
+    },
+    {
+      "path": "/airline",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 313,
+        "end_line": 313,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L313"
+      },
+      "page_files": ["client/src/pages/AirlineConsole.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 391,
+            "end_line": 391,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L391"
+          },
+          "kind": "navigation_data",
+          "target": "/airline",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0032",
+        "C0046",
+        "C0047",
+        "C0048",
+        "C0049",
+        "C0050",
+        "C0074",
+        "C0182",
+        "C0183",
+        "C0235",
+        "C0236",
+        "C0255",
+        "C0272",
+        "C0273",
+        "C0274",
+        "C0293",
+        "C0294",
+        "C0295",
+        "C0316",
+        "C0333",
+        "C0334",
+        "C0335"
+      ],
+      "procedure_ids": [
+        "admin.updateFlightStatus",
+        "auth.logoutCookie",
+        "auth.me",
+        "baggage.flightCloseout",
+        "bspReporting.comparePayout",
+        "bspReporting.importEvidence",
+        "bspReporting.ledgerDraft",
+        "bspReporting.reconcileEvidence",
+        "bspReporting.stageDailyRet",
+        "operations.airlineFlights",
+        "refunds.refundInternalFunding",
+        "revenueAccounting.couponMonthReview",
+        "revenueAccounting.prepareZatcaDraft",
+        "revenueAccounting.zatcaDraftAvailability",
+        "supplierFinance.record",
+        "supplierFinance.review"
+      ]
+    },
+    {
+      "path": "/profile",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 320,
+        "end_line": 320,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L320"
+      },
+      "page_files": ["client/src/pages/Profile.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 258,
+            "end_line": 258,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L258"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PaymentHistory.tsx",
+            "line": 73,
+            "end_line": 73,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PaymentHistory.tsx#L73"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SavedPassengers.tsx",
+            "line": 137,
+            "end_line": 137,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/SavedPassengers.tsx#L137"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 88,
+            "end_line": 88,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L88"
+          },
+          "kind": "navigation_data",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 622,
+            "end_line": 622,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L622"
+          },
+          "kind": "imperative_navigation",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0013",
+        "C0014",
+        "C0015",
+        "C0016",
+        "C0017",
+        "C0018",
+        "C0019",
+        "C0020",
+        "C0021",
+        "C0022",
+        "C0023",
+        "C0029",
+        "C0030",
+        "C0031",
+        "C0187",
+        "C0188",
+        "C0189",
+        "C0190",
+        "C0316",
+        "C0456",
+        "C0457",
+        "C0458"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "gdpr.cancelDeletion",
+        "gdpr.confirmDeletion",
+        "gdpr.deleteAccount",
+        "gdpr.exportData",
+        "gdpr.getDeletionStatus",
+        "gdpr.getExportHistory",
+        "mfa.getStatus",
+        "mfa.setup",
+        "mfa.verify",
+        "travelScenarios.getAutoCheckIn",
+        "travelScenarios.setAutoCheckIn",
+        "userPreferences.getMyPreferences",
+        "userPreferences.updateMyPreferences"
+      ]
+    },
+    {
+      "path": "/loyalty",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 327,
+        "end_line": 327,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L327"
+      },
+      "page_files": ["client/src/pages/LoyaltyDashboard.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 265,
+            "end_line": 265,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L265"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/loyalty",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 86,
+            "end_line": 86,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L86"
+          },
+          "kind": "navigation_data",
+          "target": "/loyalty",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 629,
+            "end_line": 629,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L629"
+          },
+          "kind": "imperative_navigation",
+          "target": "/loyalty",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0138",
+        "C0139",
+        "C0140",
+        "C0141",
+        "C0142",
+        "C0143",
+        "C0144",
+        "C0145",
+        "C0146",
+        "C0147",
+        "C0148",
+        "C0316",
+        "C0410",
+        "C0411",
+        "C0412",
+        "C0413",
+        "C0414",
+        "C0415"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "familyPool.addMember",
+        "familyPool.contributeMiles",
+        "familyPool.createGroup",
+        "familyPool.deleteGroup",
+        "familyPool.myGroup",
+        "familyPool.removeMember",
+        "loyalty.myAccount",
+        "loyalty.myTransactions",
+        "loyalty.redeemMiles",
+        "mfa.getStatus"
+      ]
+    },
+    {
+      "path": "/favorites",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 332,
+        "end_line": 332,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L332"
+      },
+      "page_files": ["client/src/pages/FavoritesPage.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/PriceAlerts.tsx",
+            "line": 145,
+            "end_line": 145,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/PriceAlerts.tsx#L145"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/favorites",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 587,
+            "end_line": 587,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L587"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/favorites",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 84,
+            "end_line": 84,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L84"
+          },
+          "kind": "navigation_data",
+          "target": "/favorites",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0154",
+        "C0155",
+        "C0156",
+        "C0157",
+        "C0158",
+        "C0159",
+        "C0161",
+        "C0162",
+        "C0163",
+        "C0316"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "favorites.delete",
+        "favorites.getAll",
+        "favorites.getFlights",
+        "favorites.removeFlight",
+        "favorites.update"
+      ]
+    },
+    {
+      "path": "/price-alerts",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 339,
+        "end_line": 339,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L339"
+      },
+      "page_files": ["client/src/pages/PriceAlerts.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/FavoritesPage.tsx",
+            "line": 213,
+            "end_line": 213,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/FavoritesPage.tsx#L213"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/price-alerts",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 85,
+            "end_line": 85,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L85"
+          },
+          "kind": "navigation_data",
+          "target": "/price-alerts",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0075",
+        "C0076",
+        "C0077",
+        "C0316",
+        "C0449",
+        "C0450",
+        "C0451",
+        "C0452",
+        "C0453",
+        "C0454",
+        "C0455"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "priceAlerts.create",
+        "priceAlerts.delete",
+        "priceAlerts.getAll",
+        "priceAlerts.toggle",
+        "priceAlerts.updatePrice",
+        "reference.airports"
+      ]
+    },
+    {
+      "path": "/compare",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 346,
+        "end_line": 346,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L346"
+      },
+      "page_files": ["client/src/pages/CompareFlights.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/CompareBar.tsx",
+            "line": 127,
+            "end_line": 127,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/CompareBar.tsx#L127"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/compare",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/CompareBar.tsx",
+            "line": 234,
+            "end_line": 234,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/CompareBar.tsx#L234"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/compare",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [],
+      "procedure_ids": []
+    },
+    {
+      "path": "/my-groups",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 351,
+        "end_line": 351,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L351"
+      },
+      "page_files": ["client/src/pages/MyGroups.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 171,
+            "end_line": 171,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/GroupBookingRequest.tsx#L171"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-groups",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": ["C0316", "C0425"],
+      "procedure_ids": ["groupBookings.myAllocations"]
+    },
+    {
+      "path": "/group-booking/:id",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 358,
+        "end_line": 358,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L358"
+      },
+      "page_files": ["client/src/pages/GroupBookingRequest.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0394",
+        "C0395",
+        "C0396",
+        "C0397",
+        "C0398"
+      ],
+      "procedure_ids": [
+        "flights.getById",
+        "groupBookings.calculateDiscount",
+        "groupBookings.getDiscountTiers",
+        "groupBookings.submitRequest"
+      ]
+    },
+    {
+      "path": "/saved-passengers",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 363,
+        "end_line": 363,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L363"
+      },
+      "page_files": ["client/src/pages/SavedPassengers.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0248",
+        "C0249",
+        "C0250",
+        "C0251",
+        "C0316",
+        "C0463",
+        "C0464",
+        "C0465",
+        "C0466",
+        "C0467"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "savedPassengers.add",
+        "savedPassengers.delete",
+        "savedPassengers.getAll",
+        "savedPassengers.setDefault",
+        "savedPassengers.update"
+      ]
+    },
+    {
+      "path": "/notifications",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 370,
+        "end_line": 370,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L370"
+      },
+      "page_files": ["client/src/pages/Notifications.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0433",
+        "C0434",
+        "C0435",
+        "C0436",
+        "C0437",
+        "C0438",
+        "C0439",
+        "C0440",
+        "C0441",
+        "C0442",
+        "C0443"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "notifications.delete",
+        "notifications.deleteAll",
+        "notifications.list",
+        "notifications.markAllAsRead",
+        "notifications.markAsRead",
+        "notifications.unreadCount"
+      ]
+    },
+    {
+      "path": "/my-waitlist",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 377,
+        "end_line": 377,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L377"
+      },
+      "page_files": ["client/src/pages/MyWaitlist.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/JoinWaitlistDialog.tsx",
+            "line": 144,
+            "end_line": 144,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/JoinWaitlistDialog.tsx#L144"
+          },
+          "kind": "jsx_a_href",
+          "target": "/my-waitlist",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0426",
+        "C0427",
+        "C0428",
+        "C0429",
+        "C0430",
+        "C0431",
+        "C0432"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "waitlist.acceptOffer",
+        "waitlist.cancel",
+        "waitlist.declineOffer",
+        "waitlist.myWaitlist"
+      ]
+    },
+    {
+      "path": "/multi-city",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 384,
+        "end_line": 384,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L384"
+      },
+      "page_files": ["client/src/pages/MultiCityResults.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 132,
+            "end_line": 132,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L132"
+          },
+          "kind": "imperative_navigation",
+          "target": "/multi-city?${params.toString()}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 165,
+            "end_line": 165,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L165"
+          },
+          "kind": "imperative_navigation",
+          "target": "/multi-city?${params.toString()}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0045",
+        "C0105",
+        "C0316",
+        "C0421",
+        "C0422",
+        "C0423"
+      ],
+      "procedure_ids": [
+        "ibePublic.config",
+        "ibePublic.displayRate",
+        "multiCity.calculatePrice",
+        "multiCity.search"
+      ]
+    },
+    {
+      "path": "/track-flight",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 389,
+        "end_line": 389,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L389"
+      },
+      "page_files": ["client/src/pages/LiveFlightTracking.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": ["C0316", "C0403", "C0404"],
+      "procedure_ids": [
+        "flightTracking.activeFlights",
+        "flightTracking.trackByNumber"
+      ]
+    },
+    {
+      "path": "/rebook/:bookingId",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 394,
+        "end_line": 394,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L394"
+      },
+      "page_files": ["client/src/pages/RebookPage.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 924,
+            "end_line": 924,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/MyBookings.tsx#L924"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/rebook/${booking.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0459",
+        "C0460",
+        "C0461",
+        "C0462"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "rebooking.getRebookData",
+        "rebooking.quickRebook",
+        "rebooking.searchFlights"
+      ]
+    },
+    {
+      "path": "/payment-history",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 401,
+        "end_line": 401,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L401"
+      },
+      "page_files": ["client/src/pages/PaymentHistory.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/WalletBookingPayment.tsx",
+            "line": 32,
+            "end_line": 32,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/WalletBookingPayment.tsx#L32"
+          },
+          "kind": "imperative_navigation",
+          "target": "/payment-history?wallet=history",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0289",
+        "C0290",
+        "C0291",
+        "C0292",
+        "C0316",
+        "C0447",
+        "C0448"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "payments.getHistory",
+        "payments.getStats",
+        "wallet.balance",
+        "wallet.topUp",
+        "wallet.transactions"
+      ]
+    },
+    {
+      "path": "/ai-chat",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 409,
+        "end_line": 409,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L409"
+      },
+      "page_files": ["client/src/pages/AiChat.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0328",
+        "C0329",
+        "C0330",
+        "C0331",
+        "C0332"
+      ],
+      "procedure_ids": [
+        "aiChat.getQuickReplies",
+        "aiChat.sendMessage",
+        "aiChat.startConversation",
+        "auth.logoutCookie",
+        "auth.me"
+      ]
+    },
+    {
+      "path": "/accessibility",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 416,
+        "end_line": 416,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L416"
+      },
+      "page_files": ["client/src/pages/AccessibilityStatement.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 53,
+            "end_line": 53,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L53"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/accessibility",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": ["C0045", "C0316"],
+      "procedure_ids": ["ibePublic.config"]
+    },
+    {
+      "path": "/privacy-policy",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 417,
+        "end_line": 417,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L417"
+      },
+      "page_files": ["client/src/pages/PrivacyPolicy.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 45,
+            "end_line": 45,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/SiteFooter.tsx#L45"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/privacy-policy",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/CookieConsent.tsx",
+            "line": 380,
+            "end_line": 380,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/CookieConsent.tsx#L380"
+          },
+          "kind": "jsx_a_href",
+          "target": "/privacy-policy",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0045",
+        "C0068",
+        "C0069",
+        "C0070",
+        "C0316"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "consent.getMyConsent",
+        "consent.recordConsent",
+        "ibePublic.config"
+      ]
+    },
+    {
+      "path": "/pay/:token/:status?",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 424,
+        "end_line": 424,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L424"
+      },
+      "page_files": ["client/src/pages/PayYourShare.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": ["C0316", "C0444", "C0445", "C0446"],
+      "procedure_ids": [
+        "splitPayments.createPayerCheckout",
+        "splitPayments.getPayerDetails"
+      ]
+    },
+    {
+      "path": "/admin",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 431,
+        "end_line": 431,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L431"
+      },
+      "page_files": ["client/src/pages/AdminDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 273,
+            "end_line": 273,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L273"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/OperationsControl.tsx",
+            "line": 122,
+            "end_line": 122,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/OperationsControl.tsx#L122"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/DisasterRecovery.tsx",
+            "line": 54,
+            "end_line": 54,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/DisasterRecovery.tsx#L54"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/DeletedBookings.tsx",
+            "line": 54,
+            "end_line": 54,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/DeletedBookings.tsx#L54"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/IROPSCommandCenter.tsx",
+            "line": 159,
+            "end_line": 159,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/IROPSCommandCenter.tsx#L159"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/DcsDashboard.tsx",
+            "line": 44,
+            "end_line": 44,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/DcsDashboard.tsx#L44"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 93,
+            "end_line": 93,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L93"
+          },
+          "kind": "navigation_data",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0275",
+        "C0276",
+        "C0277",
+        "C0278",
+        "C0279",
+        "C0280",
+        "C0281",
+        "C0316",
+        "C0318",
+        "C0319",
+        "C0320",
+        "C0321"
+      ],
+      "procedure_ids": [
+        "admin.createFlight",
+        "auth.logoutCookie",
+        "auth.me",
+        "reference.airlines",
+        "reference.airports",
+        "tenants.assignUser",
+        "tenants.create",
+        "tenants.list",
+        "tenants.setStatus"
+      ]
+    },
+    {
+      "path": "/analytics",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 438,
+        "end_line": 438,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L438"
+      },
+      "page_files": ["client/src/pages/AnalyticsDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 278,
+            "end_line": 278,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/Home.tsx#L278"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/analytics",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 97,
+            "end_line": 97,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L97"
+          },
+          "kind": "navigation_data",
+          "target": "/analytics",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0336",
+        "C0337",
+        "C0338",
+        "C0339",
+        "C0340",
+        "C0341",
+        "C0342",
+        "C0343",
+        "C0344",
+        "C0345",
+        "C0346",
+        "C0347",
+        "C0348",
+        "C0349"
+      ],
+      "procedure_ids": [
+        "analytics.getAncillaryMetrics",
+        "analytics.getAncillaryRevenueByCategory",
+        "analytics.getBookingTrends",
+        "analytics.getFlightOccupancy",
+        "analytics.getKPIs",
+        "analytics.getPopularAncillaries",
+        "analytics.getPopularDestinations",
+        "analytics.getRevenueOverTime",
+        "auth.logoutCookie",
+        "auth.me",
+        "reports.exportBookingsCSV",
+        "reports.exportBookingsExcel",
+        "reports.generateBookingsPDF"
+      ]
+    },
+    {
+      "path": "/admin/refunds",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 445,
+        "end_line": 445,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L445"
+      },
+      "page_files": ["client/src/pages/admin/RefundsDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 115,
+            "end_line": 115,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L115"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/refunds",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0114",
+        "C0115",
+        "C0116",
+        "C0117",
+        "C0118",
+        "C0119",
+        "C0120",
+        "C0121",
+        "C0122",
+        "C0123",
+        "C0124",
+        "C0125",
+        "C0126",
+        "C0127",
+        "C0128",
+        "C0129",
+        "C0130",
+        "C0131",
+        "C0132",
+        "C0133",
+        "C0134",
+        "C0135",
+        "C0136",
+        "C0137",
+        "C0182",
+        "C0183",
+        "C0268",
+        "C0269",
+        "C0270",
+        "C0271",
+        "C0316",
+        "C0697",
+        "C0698",
+        "C0699",
+        "C0700",
+        "C0701"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "refunds.cancelSplitBooking",
+        "refunds.getHistory",
+        "refunds.getStats",
+        "refunds.getTrends",
+        "refunds.refundInternalFunding",
+        "refunds.resumeSplitCancellation",
+        "refunds.splitCancellation",
+        "refunds.splitCancellationQueue",
+        "reports.exportBookingsCSV",
+        "reports.exportBookingsExcel",
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.exportRefundsCSV",
+        "reports.exportRefundsExcel",
+        "reports.exportRevenueCSV",
+        "reports.exportRevenueExcel",
+        "reports.generateBookingsPDF",
+        "reports.generateFlightPerformancePDF",
+        "reports.generateRefundsPDF",
+        "reports.generateRevenuePDF"
+      ]
+    },
+    {
+      "path": "/admin/reports",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 452,
+        "end_line": 452,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L452"
+      },
+      "page_files": ["client/src/pages/admin/ReportsDashboard.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/admin/StandardReports.tsx",
+            "line": 719,
+            "end_line": 719,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/StandardReports.tsx#L719"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 103,
+            "end_line": 103,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L103"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 397,
+            "end_line": 397,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L397"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0114",
+        "C0115",
+        "C0116",
+        "C0117",
+        "C0118",
+        "C0119",
+        "C0120",
+        "C0121",
+        "C0122",
+        "C0123",
+        "C0124",
+        "C0125",
+        "C0126",
+        "C0127",
+        "C0128",
+        "C0129",
+        "C0130",
+        "C0131",
+        "C0132",
+        "C0133",
+        "C0134",
+        "C0135",
+        "C0136",
+        "C0137",
+        "C0316",
+        "C0702",
+        "C0703",
+        "C0704",
+        "C0705",
+        "C0706",
+        "C0707",
+        "C0708",
+        "C0709",
+        "C0710",
+        "C0711",
+        "C0712",
+        "C0713",
+        "C0714",
+        "C0715",
+        "C0716",
+        "C0717",
+        "C0718",
+        "C0719",
+        "C0720",
+        "C0721",
+        "C0722",
+        "C0723",
+        "C0724",
+        "C0725"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "reports.exportBookingsCSV",
+        "reports.exportBookingsExcel",
+        "reports.exportFlightPerformanceCSV",
+        "reports.exportFlightPerformanceExcel",
+        "reports.exportRefundsCSV",
+        "reports.exportRefundsExcel",
+        "reports.exportRevenueCSV",
+        "reports.exportRevenueExcel",
+        "reports.generateBookingsPDF",
+        "reports.generateFlightPerformancePDF",
+        "reports.generateRefundsPDF",
+        "reports.generateRevenuePDF"
+      ]
+    },
+    {
+      "path": "/admin/standard-reports",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 459,
+        "end_line": 459,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L459"
+      },
+      "page_files": ["client/src/pages/admin/StandardReports.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/admin/ReportsDashboard.tsx",
+            "line": 213,
+            "end_line": 213,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/ReportsDashboard.tsx#L213"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/standard-reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 109,
+            "end_line": 109,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L109"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/standard-reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 403,
+            "end_line": 403,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L403"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/standard-reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0315",
+        "C0316",
+        "C0747",
+        "C0748",
+        "C0749",
+        "C0750",
+        "C0751",
+        "C0752",
+        "C0753",
+        "C0754",
+        "C0755",
+        "C0756",
+        "C0757",
+        "C0758",
+        "C0759",
+        "C0760",
+        "C0761",
+        "C0762",
+        "C0763"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "standardReports.catalog",
+        "standardReports.deleteTemplate",
+        "standardReports.downloadRun",
+        "standardReports.export",
+        "standardReports.run",
+        "standardReports.runTemplate",
+        "standardReports.runs",
+        "standardReports.saveTemplate",
+        "standardReports.setTemplateEnabled",
+        "standardReports.templates"
+      ]
+    },
+    {
+      "path": "/admin/group-bookings",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 466,
+        "end_line": 466,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L466"
+      },
+      "page_files": ["client/src/pages/admin/GroupBookingsManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 121,
+            "end_line": 121,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L121"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/group-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0619",
+        "C0620",
+        "C0621",
+        "C0622",
+        "C0623",
+        "C0624"
+      ],
+      "procedure_ids": [
+        "groupBookings.approve",
+        "groupBookings.getStats",
+        "groupBookings.list",
+        "groupBookings.reject"
+      ]
+    },
+    {
+      "path": "/admin/vouchers",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 473,
+        "end_line": 473,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L473"
+      },
+      "page_files": ["client/src/pages/admin/VoucherManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 169,
+            "end_line": 169,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L169"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/vouchers",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0779",
+        "C0780",
+        "C0781",
+        "C0782",
+        "C0783",
+        "C0784"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "vouchers.create",
+        "vouchers.deactivate",
+        "vouchers.getAll",
+        "vouchers.getAllCredits"
+      ]
+    },
+    {
+      "path": "/admin/gates",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 480,
+        "end_line": 480,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L480"
+      },
+      "page_files": ["client/src/pages/admin/GateManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 157,
+            "end_line": 157,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L157"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/gates",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0607",
+        "C0608",
+        "C0609",
+        "C0610",
+        "C0611",
+        "C0612",
+        "C0613",
+        "C0614",
+        "C0615",
+        "C0616",
+        "C0617",
+        "C0618"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "gates.createGate",
+        "gates.deleteGate",
+        "gates.getAirportGates",
+        "gates.getGateSchedule",
+        "gates.getStats",
+        "gates.updateGateCompatibility",
+        "gates.updateGateStatus",
+        "reference.airports"
+      ]
+    },
+    {
+      "path": "/admin/dcs",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 487,
+        "end_line": 487,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L487"
+      },
+      "page_files": ["client/src/pages/admin/DcsDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/admin/CrewAssignment.tsx",
+            "line": 159,
+            "end_line": 159,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/CrewAssignment.tsx#L159"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/LoadPlanning.tsx",
+            "line": 49,
+            "end_line": 49,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/LoadPlanning.tsx#L49"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/WeightBalance.tsx",
+            "line": 300,
+            "end_line": 300,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/WeightBalance.tsx#L300"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 163,
+            "end_line": 163,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L163"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0032",
+        "C0316",
+        "C0560",
+        "C0561",
+        "C0562",
+        "C0563",
+        "C0564",
+        "C0565",
+        "C0566",
+        "C0567",
+        "C0568",
+        "C0569",
+        "C0570",
+        "C0571",
+        "C0572",
+        "C0573",
+        "C0574"
+      ],
+      "procedure_ids": [
+        "baggage.flightCloseout",
+        "dcs.approveLoadPlan",
+        "dcs.createAircraftType",
+        "dcs.createCrewMember",
+        "dcs.createLoadPlan",
+        "dcs.getAircraftTypes",
+        "dcs.getCrewMembers",
+        "dcs.getFlightManifest",
+        "dcs.getLoadPlan",
+        "dcs.getStats"
+      ]
+    },
+    {
+      "path": "/admin/deleted-bookings",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 494,
+        "end_line": 494,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L494"
+      },
+      "page_files": ["client/src/pages/admin/DeletedBookings.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 175,
+            "end_line": 175,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L175"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/deleted-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0575",
+        "C0576",
+        "C0577",
+        "C0578",
+        "C0579",
+        "C0580"
+      ],
+      "procedure_ids": [
+        "softDelete.getDeletedBookings",
+        "softDelete.getDeletedCount",
+        "softDelete.purgeDeleted",
+        "softDelete.restoreBooking"
+      ]
+    },
+    {
+      "path": "/admin/baggage",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 501,
+        "end_line": 501,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L501"
+      },
+      "page_files": ["client/src/pages/admin/BaggageManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 127,
+            "end_line": 127,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L127"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/baggage",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0501",
+        "C0502",
+        "C0503",
+        "C0504",
+        "C0505",
+        "C0506",
+        "C0507"
+      ],
+      "procedure_ids": [
+        "baggage.adminGetAll",
+        "baggage.adminGetStats",
+        "baggage.adminMarkFound",
+        "baggage.adminTrack",
+        "baggage.adminUpdateStatus"
+      ]
+    },
+    {
+      "path": "/admin/corporate",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 508,
+        "end_line": 508,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L508"
+      },
+      "page_files": ["client/src/pages/admin/CorporateManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 133,
+            "end_line": 133,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L133"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/corporate",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0521",
+        "C0522",
+        "C0523",
+        "C0524",
+        "C0525",
+        "C0526",
+        "C0527",
+        "C0528",
+        "C0529"
+      ],
+      "procedure_ids": [
+        "corporate.activateAccount",
+        "corporate.getAccountStats",
+        "corporate.listAccounts",
+        "corporate.suspendAccount",
+        "corporate.updateAccount"
+      ]
+    },
+    {
+      "path": "/admin/ai-pricing",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 515,
+        "end_line": 515,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L515"
+      },
+      "page_files": ["client/src/pages/admin/AIPricingDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 145,
+            "end_line": 145,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L145"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/ai-pricing",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0472",
+        "C0473",
+        "C0474",
+        "C0475",
+        "C0476",
+        "C0477"
+      ],
+      "procedure_ids": [
+        "aiPricing.forecastDemand",
+        "aiPricing.getABTests",
+        "aiPricing.getDashboard",
+        "aiPricing.getSegments",
+        "aiPricing.setEnabled"
+      ]
+    },
+    {
+      "path": "/admin/travel-agents",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 522,
+        "end_line": 522,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L522"
+      },
+      "page_files": ["client/src/pages/admin/TravelAgentManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 139,
+            "end_line": 139,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L139"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/travel-agents",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0024",
+        "C0025",
+        "C0026",
+        "C0316",
+        "C0764",
+        "C0765",
+        "C0766",
+        "C0767",
+        "C0768",
+        "C0769",
+        "C0770",
+        "C0771",
+        "C0772",
+        "C0773",
+        "C0774",
+        "C0775",
+        "C0776",
+        "C0777",
+        "C0778"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "travelAgent.approveCredit",
+        "travelAgent.assignOwner",
+        "travelAgent.creditBalance",
+        "travelAgent.getAgentStats",
+        "travelAgent.getPendingCommissions",
+        "travelAgent.list",
+        "travelAgent.regenerateCredentials",
+        "travelAgent.register",
+        "travelAgent.updateCommissionRate",
+        "travelAgent.updateCommissionStatus",
+        "travelAgent.updateStatus"
+      ]
+    },
+    {
+      "path": "/admin/overbooking",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 529,
+        "end_line": 529,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L529"
+      },
+      "page_files": ["client/src/pages/admin/OverbookingManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 151,
+            "end_line": 151,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L151"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/overbooking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0682",
+        "C0683",
+        "C0684",
+        "C0685",
+        "C0686",
+        "C0687",
+        "C0688",
+        "C0689"
+      ],
+      "procedure_ids": [
+        "inventory.createOverbookingConfig",
+        "inventory.getDeniedBoardingRecords",
+        "inventory.getOverbookingConfigs",
+        "inventory.getRecommendedOverbooking",
+        "inventory.updateDeniedBoardingStatus"
+      ]
+    },
+    {
+      "path": "/admin/bsp-reporting",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 538,
+        "end_line": 538,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L538"
+      },
+      "page_files": ["client/src/pages/admin/BSPReporting.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 262,
+            "end_line": 262,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L262"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/bsp-reporting",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0046",
+        "C0047",
+        "C0048",
+        "C0049",
+        "C0050",
+        "C0235",
+        "C0236",
+        "C0255",
+        "C0293",
+        "C0294",
+        "C0295",
+        "C0316"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "bspReporting.comparePayout",
+        "bspReporting.importEvidence",
+        "bspReporting.ledgerDraft",
+        "bspReporting.reconcileEvidence",
+        "bspReporting.stageDailyRet",
+        "revenueAccounting.prepareZatcaDraft",
+        "revenueAccounting.zatcaDraftAvailability"
+      ]
+    },
+    {
+      "path": "/admin/crew-assignment",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 545,
+        "end_line": 545,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L545"
+      },
+      "page_files": ["client/src/pages/admin/CrewAssignment.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/admin/OperationsControl.tsx",
+            "line": 136,
+            "end_line": 136,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/OperationsControl.tsx#L136"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/crew-assignment",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 188,
+            "end_line": 188,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L188"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/crew-assignment",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0530",
+        "C0531",
+        "C0532",
+        "C0533",
+        "C0534",
+        "C0535",
+        "C0536",
+        "C0537",
+        "C0538",
+        "C0539",
+        "C0540",
+        "C0541",
+        "C0542",
+        "C0543",
+        "C0544",
+        "C0545",
+        "C0546",
+        "C0547",
+        "C0548"
+      ],
+      "procedure_ids": [
+        "crew.assignToFlight",
+        "crew.checkAvailability",
+        "crew.checkFTL",
+        "crew.findReplacement",
+        "crew.getFlightCrew",
+        "crew.getMembers",
+        "crew.getSchedule",
+        "crew.removeFromFlight",
+        "crew.validateRequirements"
+      ]
+    },
+    {
+      "path": "/admin/data-warehouse",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 552,
+        "end_line": 552,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L552"
+      },
+      "page_files": ["client/src/pages/admin/DataWarehouse.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 268,
+            "end_line": 268,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L268"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/data-warehouse",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0549",
+        "C0550",
+        "C0551",
+        "C0552",
+        "C0553",
+        "C0554",
+        "C0555",
+        "C0556",
+        "C0557",
+        "C0558",
+        "C0559"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "dataWarehouse.createExport",
+        "dataWarehouse.createSchedule",
+        "dataWarehouse.deleteSchedule",
+        "dataWarehouse.getETLStatus",
+        "dataWarehouse.getExports",
+        "dataWarehouse.getSchedules",
+        "dataWarehouse.updateSchedule"
+      ]
+    },
+    {
+      "path": "/admin/irops",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 559,
+        "end_line": 559,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L559"
+      },
+      "page_files": ["client/src/pages/admin/IROPSCommandCenter.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/admin/OperationsControl.tsx",
+            "line": 133,
+            "end_line": 133,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/OperationsControl.tsx#L133"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/irops",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 182,
+            "end_line": 182,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L182"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/irops",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0625",
+        "C0626",
+        "C0627",
+        "C0628",
+        "C0629",
+        "C0630",
+        "C0631",
+        "C0632",
+        "C0633",
+        "C0634",
+        "C0635",
+        "C0636",
+        "C0637"
+      ],
+      "procedure_ids": [
+        "irops.escalate",
+        "irops.getActiveDisruptions",
+        "irops.getAffectedPassengers",
+        "irops.getConnectionsAtRisk",
+        "irops.getDashboard",
+        "irops.getRecoveryMetrics",
+        "irops.resolveEvent",
+        "irops.sendNotification",
+        "irops.triggerAutoProtection"
+      ]
+    },
+    {
+      "path": "/admin/revenue-accounting",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 566,
+        "end_line": 566,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L566"
+      },
+      "page_files": ["client/src/pages/admin/RevenueAccounting.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 250,
+            "end_line": 250,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L250"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/revenue-accounting",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0074",
+        "C0316",
+        "C0726",
+        "C0727",
+        "C0728",
+        "C0729",
+        "C0730",
+        "C0731",
+        "C0732",
+        "C0733",
+        "C0734",
+        "C0735"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "revenueAccounting.couponMonthReview",
+        "revenueAccounting.generateReport",
+        "revenueAccounting.getAncillaryRevenue",
+        "revenueAccounting.getDashboard",
+        "revenueAccounting.getDeferredRevenue",
+        "revenueAccounting.getReports",
+        "revenueAccounting.getRevenueByChannel",
+        "revenueAccounting.getRevenueByClass",
+        "revenueAccounting.getRevenueByRoute",
+        "revenueAccounting.getYieldAnalysis"
+      ]
+    },
+    {
+      "path": "/admin/seat-economics",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 573,
+        "end_line": 573,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L573"
+      },
+      "page_files": ["client/src/pages/admin/SeatEconomics.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/admin/OperationsControl.tsx",
+            "line": 139,
+            "end_line": 139,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/OperationsControl.tsx#L139"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/seat-economics",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 256,
+            "end_line": 256,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L256"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/seat-economics",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": ["C0316", "C0744", "C0745", "C0746"],
+      "procedure_ids": [
+        "agentGovernance.getAiCostBreakdown",
+        "seatEconomics.getByBooking",
+        "seatEconomics.getByFlight"
+      ]
+    },
+    {
+      "path": "/admin/operations",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 580,
+        "end_line": 580,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L580"
+      },
+      "page_files": ["client/src/pages/admin/OperationsControl.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/AdminDashboard.tsx",
+            "line": 135,
+            "end_line": 135,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/AdminDashboard.tsx#L135"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/operations",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/ReaccommodationAdvisory.tsx",
+            "line": 169,
+            "end_line": 169,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/ReaccommodationAdvisory.tsx#L169"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/operations?bookingIds=${bookings.join(\",\")}&candidateIds=${candidates.join(\",\")}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0167",
+        "C0168",
+        "C0169",
+        "C0170",
+        "C0171",
+        "C0229",
+        "C0230",
+        "C0231",
+        "C0316",
+        "C0660",
+        "C0661",
+        "C0662",
+        "C0663",
+        "C0664",
+        "C0665",
+        "C0666",
+        "C0667",
+        "C0668",
+        "C0669",
+        "C0670",
+        "C0671",
+        "C0672",
+        "C0673",
+        "C0674",
+        "C0675",
+        "C0676",
+        "C0677",
+        "C0678",
+        "C0679",
+        "C0680",
+        "C0681"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "aviationIntegrations.acceptCrewRules",
+        "aviationIntegrations.assignRotation",
+        "aviationIntegrations.flightEconomics",
+        "aviationIntegrations.ingestMaintenance",
+        "aviationIntegrations.premiumResults",
+        "irops.approveRecovery",
+        "irops.executeRecovery",
+        "irops.proposeRecovery",
+        "irops.recoveryPlans",
+        "operations.acknowledgeAlert",
+        "operations.alertDispatches",
+        "operations.dashboard",
+        "operations.integrationConfiguration",
+        "operations.lineageRuns",
+        "operations.replayEvent",
+        "operations.retryCancellation",
+        "weather.flightAdvisory",
+        "weather.mapStation",
+        "weather.refresh"
+      ]
+    },
+    {
+      "path": "/admin/sla",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 585,
+        "end_line": 585,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L585"
+      },
+      "page_files": ["client/src/pages/admin/SLADashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 275,
+            "end_line": 275,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L275"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/sla",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0736",
+        "C0737",
+        "C0738",
+        "C0739",
+        "C0740",
+        "C0741",
+        "C0742",
+        "C0743"
+      ],
+      "procedure_ids": [
+        "sla.acknowledgeAlert",
+        "sla.generateReport",
+        "sla.getAlerts",
+        "sla.getReports",
+        "sla.getSLADashboard",
+        "sla.getTargets"
+      ]
+    },
+    {
+      "path": "/admin/compensation",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 592,
+        "end_line": 592,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L592"
+      },
+      "page_files": ["client/src/pages/admin/CompensationManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 243,
+            "end_line": 243,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L243"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/compensation",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0512",
+        "C0513",
+        "C0514",
+        "C0515",
+        "C0516",
+        "C0517",
+        "C0518",
+        "C0519",
+        "C0520"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "compensation.getAllClaims",
+        "compensation.getFlightLiability",
+        "compensation.getRules",
+        "compensation.getStats",
+        "compensation.processClaim",
+        "compensation.updateRule"
+      ]
+    },
+    {
+      "path": "/admin/weight-balance",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 599,
+        "end_line": 599,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L599"
+      },
+      "page_files": ["client/src/pages/admin/WeightBalance.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 194,
+            "end_line": 194,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L194"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/weight-balance",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0062",
+        "C0063",
+        "C0064",
+        "C0065",
+        "C0066",
+        "C0067",
+        "C0316",
+        "C0785",
+        "C0786",
+        "C0787",
+        "C0788",
+        "C0789"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "dcs.getAircraftTypes",
+        "weightBalance.assignAircraft",
+        "weightBalance.calculate",
+        "weightBalance.evaluateDraft",
+        "weightBalance.generateLoadSheet",
+        "weightBalance.reviewFlight",
+        "weightBalance.verifyCurrentDraft"
+      ]
+    },
+    {
+      "path": "/admin/disaster-recovery",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 606,
+        "end_line": 606,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L606"
+      },
+      "page_files": ["client/src/pages/admin/DisasterRecovery.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 281,
+            "end_line": 281,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L281"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/disaster-recovery",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0581",
+        "C0582",
+        "C0583",
+        "C0584",
+        "C0585",
+        "C0586",
+        "C0587",
+        "C0588",
+        "C0589",
+        "C0590",
+        "C0591",
+        "C0592",
+        "C0593",
+        "C0594",
+        "C0595"
+      ],
+      "procedure_ids": [
+        "disasterRecovery.createIncident",
+        "disasterRecovery.getAllRunbooks",
+        "disasterRecovery.getBackupSchedule",
+        "disasterRecovery.getBackupStatus",
+        "disasterRecovery.getDashboard",
+        "disasterRecovery.getIncidents",
+        "disasterRecovery.getRecoveryPlan",
+        "disasterRecovery.getTestHistory",
+        "disasterRecovery.resolveIncident",
+        "disasterRecovery.testFailover",
+        "disasterRecovery.triggerBackup"
+      ]
+    },
+    {
+      "path": "/admin/load-planning",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 613,
+        "end_line": 613,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L613"
+      },
+      "page_files": ["client/src/pages/admin/LoadPlanning.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 200,
+            "end_line": 200,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L200"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/load-planning",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0642",
+        "C0643",
+        "C0644",
+        "C0645",
+        "C0646",
+        "C0647",
+        "C0648",
+        "C0649",
+        "C0650",
+        "C0651",
+        "C0652",
+        "C0653",
+        "C0654",
+        "C0655",
+        "C0656",
+        "C0657",
+        "C0658",
+        "C0659"
+      ],
+      "procedure_ids": [
+        "dcs.getAircraftTypes",
+        "loadPlanning.amend",
+        "loadPlanning.assignCompartment",
+        "loadPlanning.create",
+        "loadPlanning.finalize",
+        "loadPlanning.get",
+        "loadPlanning.getCompartments",
+        "loadPlanning.optimize",
+        "loadPlanning.updateBulk",
+        "loadPlanning.validate"
+      ]
+    },
+    {
+      "path": "/admin/apis",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 620,
+        "end_line": 620,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L620"
+      },
+      "page_files": ["client/src/pages/admin/APISManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 207,
+            "end_line": 207,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L207"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/apis",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0478",
+        "C0479",
+        "C0480",
+        "C0481",
+        "C0482",
+        "C0483",
+        "C0484",
+        "C0485",
+        "C0486",
+        "C0487",
+        "C0488",
+        "C0489",
+        "C0490",
+        "C0491",
+        "C0492",
+        "C0493"
+      ],
+      "procedure_ids": [
+        "apis.flagIncomplete",
+        "apis.generateMessage",
+        "apis.getFlightStatus",
+        "apis.getRequirements",
+        "apis.getSubmissionCapability",
+        "apis.getSubmissions",
+        "apis.submitToAuthorities",
+        "apis.validatePassenger",
+        "auth.logoutCookie",
+        "auth.me"
+      ]
+    },
+    {
+      "path": "/admin/biometric",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 627,
+        "end_line": 627,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L627"
+      },
+      "page_files": ["client/src/pages/admin/BiometricBoarding.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 213,
+            "end_line": 213,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L213"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/biometric",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0508",
+        "C0509",
+        "C0510",
+        "C0511"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "biometric.configureGate",
+        "biometric.getEvents",
+        "biometric.getGateStatus"
+      ]
+    },
+    {
+      "path": "/admin/kiosk",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 634,
+        "end_line": 634,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L634"
+      },
+      "page_files": ["client/src/pages/admin/KioskManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 219,
+            "end_line": 219,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L219"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/kiosk",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0316",
+        "C0638",
+        "C0639",
+        "C0640",
+        "C0641"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "kiosk.getAnalytics",
+        "kiosk.getDevices",
+        "kiosk.registerDevice"
+      ]
+    },
+    {
+      "path": "/admin/bag-drop",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 641,
+        "end_line": 641,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L641"
+      },
+      "page_files": ["client/src/pages/admin/BagDropManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 225,
+            "end_line": 225,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L225"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/bag-drop",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0033",
+        "C0041",
+        "C0316",
+        "C0499",
+        "C0500"
+      ],
+      "procedure_ids": [
+        "ancillary.getBookingAncillaries",
+        "auth.logoutCookie",
+        "auth.me",
+        "bagDrop.getAnalytics",
+        "bagDrop.getUnits",
+        "bookings.baggageEntitlements"
+      ]
+    },
+    {
+      "path": "/admin/emergency-hotel",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 648,
+        "end_line": 648,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L648"
+      },
+      "page_files": ["client/src/pages/admin/EmergencyHotelManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 231,
+            "end_line": 231,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L231"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/emergency-hotel",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0173",
+        "C0174",
+        "C0175",
+        "C0176",
+        "C0177",
+        "C0178",
+        "C0179",
+        "C0180",
+        "C0316",
+        "C0596",
+        "C0597",
+        "C0598",
+        "C0599",
+        "C0600",
+        "C0601",
+        "C0602",
+        "C0603",
+        "C0604",
+        "C0605",
+        "C0606"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "emergencyHotel.addHotel",
+        "emergencyHotel.approveProviderQuote",
+        "emergencyHotel.bookRoom",
+        "emergencyHotel.cancelBooking",
+        "emergencyHotel.getCosts",
+        "emergencyHotel.getFlightHotelBookings",
+        "emergencyHotel.getHotels",
+        "emergencyHotel.prepareProviderQuote",
+        "emergencyHotel.updateHotel"
+      ]
+    },
+    {
+      "path": "/admin/passenger-priority",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 655,
+        "end_line": 655,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L655"
+      },
+      "page_files": ["client/src/pages/admin/PassengerPriority.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 237,
+            "end_line": 237,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/DashboardLayout.tsx#L237"
+          },
+          "kind": "navigation_data",
+          "target": "/admin/passenger-priority",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0241",
+        "C0316",
+        "C0690",
+        "C0691",
+        "C0692",
+        "C0693",
+        "C0694",
+        "C0695",
+        "C0696"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "passengerPriority.getRebookingOrder",
+        "passengerPriority.getRules",
+        "passengerPriority.rankPassengers",
+        "passengerPriority.reaccommodationAdvisory",
+        "passengerPriority.updateRule"
+      ]
+    },
+    {
+      "path": "/baggage",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 664,
+        "end_line": 664,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L664"
+      },
+      "page_files": ["client/src/pages/BaggageStatus.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0034",
+        "C0035",
+        "C0316",
+        "C0350",
+        "C0351"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "baggage.custody",
+        "baggage.reportLost",
+        "baggage.track"
+      ]
+    },
+    {
+      "path": "/corporate",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 671,
+        "end_line": 671,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L671"
+      },
+      "page_files": ["client/src/pages/corporate/CorporateDashboard.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateBookings.tsx",
+            "line": 206,
+            "end_line": 206,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/corporate/CorporateBookings.tsx#L206"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateBookings.tsx",
+            "line": 226,
+            "end_line": 226,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/corporate/CorporateBookings.tsx#L226"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0001",
+        "C0002",
+        "C0003",
+        "C0071",
+        "C0072",
+        "C0073",
+        "C0316",
+        "C0798",
+        "C0799",
+        "C0800",
+        "C0801",
+        "C0802",
+        "C0803",
+        "C0804",
+        "C0805",
+        "C0806",
+        "C0807"
+      ],
+      "procedure_ids": [
+        "auth.logoutCookie",
+        "auth.me",
+        "corporate.acceptInvitation",
+        "corporate.approveBooking",
+        "corporate.getBookings",
+        "corporate.getMyAccount",
+        "corporate.getStats",
+        "corporate.getUsers",
+        "corporate.inviteUser",
+        "corporate.myInvitations",
+        "corporate.rejectBooking"
+      ]
+    },
+    {
+      "path": "/corporate/bookings",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 678,
+        "end_line": 678,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L678"
+      },
+      "page_files": ["client/src/pages/corporate/CorporateBookings.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateDashboard.tsx",
+            "line": 331,
+            "end_line": 331,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/corporate/CorporateDashboard.tsx#L331"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate/bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateDashboard.tsx",
+            "line": 488,
+            "end_line": 488,
+            "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/corporate/CorporateDashboard.tsx#L488"
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate/bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ],
+      "frontend_call_site_ids": [
+        "C0316",
+        "C0790",
+        "C0791",
+        "C0792",
+        "C0793",
+        "C0794",
+        "C0795",
+        "C0796",
+        "C0797"
+      ],
+      "procedure_ids": [
+        "corporate.approveBooking",
+        "corporate.getBookings",
+        "corporate.getMyAccount",
+        "corporate.payInvoice",
+        "corporate.rejectBooking"
+      ]
+    },
+    {
+      "path": "/404",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 687,
+        "end_line": 687,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L687"
+      },
+      "page_files": ["client/src/pages/NotFound.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": [],
+      "procedure_ids": []
+    }
+  ],
+  "auxiliary": [
+    {
+      "path": "/^\\/(?:login|booking\\/multi-city|checkout\\/[^/]+|payment-history)\\/?$/",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 243,
+        "end_line": 243,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L243"
+      },
+      "page_files": [],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": true,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": [],
+      "procedure_ids": []
+    }
+  ],
+  "catch_all": [
+    {
+      "path": null,
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 688,
+        "end_line": 688,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/App.tsx#L688"
+      },
+      "page_files": ["client/src/pages/NotFound.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [],
+      "frontend_call_site_ids": [],
+      "procedure_ids": []
+    }
+  ]
+}

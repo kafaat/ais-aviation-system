@@ -239,6 +239,22 @@ it("removes the deleted passenger's seat while preserving the remaining passenge
   ]);
 });
 
+it("continues booking without promising an unimplemented per-booking SMS subscription", async () => {
+  prepare();
+  expect(
+    screen.queryByLabelText("sms.receiveNotifications")
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("sms.notificationDescription")
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByPlaceholderText("sms.phoneNumberPlaceholder")
+  ).not.toBeInTheDocument();
+  await submit();
+  expect(calls.create.mock.calls[0][0]).not.toHaveProperty("smsNotification");
+  expect(calls.create.mock.calls[0][0]).not.toHaveProperty("smsPhoneNumber");
+});
+
 it("clears a removed passenger's only selection and does not restore it when another seat is chosen", async () => {
   prepare();
   fireEvent.click(seat("12A"));

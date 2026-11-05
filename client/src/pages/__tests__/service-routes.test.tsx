@@ -101,6 +101,11 @@ it.each([
   "renders only the permitted airline workspace for %s",
   async (role, allowed, forbidden) => {
     visit("/airline", role);
+    // Await the actual route chunk before timing UI/data readiness. The first
+    // cold Vite transform can otherwise consume the assertion's entire wait
+    // while App is still showing its Suspense fallback under parallel load.
+    await import("../AirlineConsole");
+    await vi.dynamicImportSettled();
     await screen.findByRole("heading", { name: allowed }, { timeout: 6000 });
     expect(
       screen.getByRole("button", { name: i18n.t("nav.reports") })

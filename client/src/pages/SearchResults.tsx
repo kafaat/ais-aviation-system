@@ -2,6 +2,7 @@ import { BrandIdentity } from "@/components/BrandIdentity";
 import { readSearchPreferences as searchPreferences } from "@/lib/ibe-display-context";
 import { useEffect, useState, useMemo } from "react";
 import { adjacentSearch, travelerTypes } from "@shared/ibe-search";
+import { loginPath } from "@shared/return-to";
 import { DisplayCurrencyEstimate } from "@/components/DisplayCurrencyEstimate";
 import { Link, Redirect } from "wouter";
 import { useRawSearch } from "@/lib/useRawSearch";
@@ -40,6 +41,7 @@ import {
   ArrowLeftRight,
   Scale,
   Eye,
+  Users,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -945,6 +947,25 @@ function SearchResultsContent({ search }: { search: string }) {
                                 </Button>
                               ))}
                             </div>
+                          )}
+                          {flight.economyAvailable >= 10 && (
+                            <Button
+                              asChild
+                              variant="ghost"
+                              size="sm"
+                              className="mt-3 w-full"
+                            >
+                              <Link
+                                href={
+                                  user
+                                    ? `/group-booking/${flight.id}`
+                                    : loginPath(`/group-booking/${flight.id}`)
+                                }
+                              >
+                                <Users className="h-4 w-4" aria-hidden="true" />
+                                {t("groupBooking.title")}
+                              </Link>
+                            </Button>
                           )}
                         </div>
                       </div>
