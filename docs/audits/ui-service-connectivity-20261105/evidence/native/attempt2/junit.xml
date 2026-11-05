@@ -1,0 +1,420 @@
+<testsuites id="" name="" tests="3" failures="0" skipped="0" errors="0" time="17.986217">
+<testsuite name="ui-service-connectivity.spec.ts" timestamp="2026-11-05T16:45:28.900Z" hostname="chromium" tests="3" failures="0" skipped="0" time="15.999" errors="0">
+<testcase name="authenticated service navigation reaches notifications and exposes only eligible corporate entry" classname="ui-service-connectivity.spec.ts" time="10.518">
+<system-out>
+<![CDATA[[OAuth] Initialized with baseURL: http://127.0.0.1:55373
+[2026-11-05 16:45:32.308 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_initialized"
+    [35mconnectionLimit[39m: 20
+    [35mmaxIdle[39m: 10
+    [35mmessage[39m: "Database connection pool initialized"
+[2026-11-05 16:45:32.321 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_created"
+    [35mmessage[39m: "New pool connection created"
+[2026-11-05 16:45:32.324 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:32.353 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:32.357 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:32.358 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:32.359 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:32.363 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_closed"
+    [35mmessage[39m: "Database connection pool closed"
+[2026-11-05 16:45:35.490 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_initialized"
+    [35mconnectionLimit[39m: 20
+    [35mmaxIdle[39m: 10
+    [35mmessage[39m: "Database connection pool initialized"
+[2026-11-05 16:45:35.503 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_created"
+    [35mmessage[39m: "New pool connection created"
+[2026-11-05 16:45:35.506 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:35.521 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:35.526 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:35.526 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:35.527 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:35.530 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_closed"
+    [35mmessage[39m: "Database connection pool closed"
+[2026-11-05 16:45:37.927 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_initialized"
+    [35mconnectionLimit[39m: 20
+    [35mmaxIdle[39m: 10
+    [35mmessage[39m: "Database connection pool initialized"
+[2026-11-05 16:45:37.932 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_created"
+    [35mmessage[39m: "New pool connection created"
+[2026-11-05 16:45:37.934 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:37.945 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:37.951 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:37.953 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:37.954 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:37.957 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_closed"
+    [35mmessage[39m: "Database connection pool closed"
+]]>
+</system-out>
+</testcase>
+<testcase name="super_admin reads native refund reporting while finance remains forbidden" classname="ui-service-connectivity.spec.ts" time="1.563">
+<system-out>
+<![CDATA[[2026-11-05 16:45:40.930 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_initialized"
+    [35mconnectionLimit[39m: 20
+    [35mmaxIdle[39m: 10
+    [35mmessage[39m: "Database connection pool initialized"
+[2026-11-05 16:45:40.938 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_created"
+    [35mmessage[39m: "New pool connection created"
+[2026-11-05 16:45:40.941 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:40.953 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:40.968 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:40.981 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:41.012 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:41.013 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_closed"
+    [35mmessage[39m: "Database connection pool closed"
+[2026-11-05 16:45:41.874 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_initialized"
+    [35mconnectionLimit[39m: 20
+    [35mmaxIdle[39m: 10
+    [35mmessage[39m: "Database connection pool initialized"
+[2026-11-05 16:45:41.881 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_created"
+    [35mmessage[39m: "New pool connection created"
+[2026-11-05 16:45:41.884 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:41.891 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:41.892 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:41.893 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:41.894 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:41.895 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_closed"
+    [35mmessage[39m: "Database connection pool closed"
+]]>
+</system-out>
+</testcase>
+<testcase name="check-in PNR and legacy reference links resolve only the native booking owner without mutations" classname="ui-service-connectivity.spec.ts" time="3.918">
+<system-out>
+<![CDATA[[2026-11-05 16:45:42.472 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_initialized"
+    [35mconnectionLimit[39m: 20
+    [35mmaxIdle[39m: 10
+    [35mmessage[39m: "Database connection pool initialized"
+[2026-11-05 16:45:42.476 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_created"
+    [35mmessage[39m: "New pool connection created"
+[2026-11-05 16:45:42.477 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:42.484 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:42.485 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:42.486 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:42.487 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:42.488 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_closed"
+    [35mmessage[39m: "Database connection pool closed"
+[2026-11-05 16:45:43.782 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_initialized"
+    [35mconnectionLimit[39m: 20
+    [35mmaxIdle[39m: 10
+    [35mmessage[39m: "Database connection pool initialized"
+[2026-11-05 16:45:43.791 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_created"
+    [35mmessage[39m: "New pool connection created"
+[2026-11-05 16:45:43.792 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:43.800 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:43.803 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:43.804 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:43.804 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:43.805 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_closed"
+    [35mmessage[39m: "Database connection pool closed"
+[2026-11-05 16:45:44.924 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_initialized"
+    [35mconnectionLimit[39m: 20
+    [35mmaxIdle[39m: 10
+    [35mmessage[39m: "Database connection pool initialized"
+[2026-11-05 16:45:44.932 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_created"
+    [35mmessage[39m: "New pool connection created"
+[2026-11-05 16:45:44.933 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:44.942 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:44.943 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:44.944 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:44.945 +0000] [34mDEBUG[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_connection_released"
+    [35mmessage[39m: "Pool connection released"
+[2026-11-05 16:45:44.947 +0000] [32mINFO[39m: [36m [database] [39m
+    [35mservice[39m: "database"
+    [35mversion[39m: "1.0.0"
+    [35menv[39m: "test"
+    [35mevent[39m: "pool_closed"
+    [35mmessage[39m: "Database connection pool closed"
+]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>

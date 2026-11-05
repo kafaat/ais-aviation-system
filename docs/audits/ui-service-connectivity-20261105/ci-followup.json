@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "initial_ci": {
+    "head": "34c3169823525f28db4d2f4cfdadbb0d6082dbc8",
+    "run_url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42069287575",
+    "unit_result": {
+      "total": 5456,
+      "passed": 5455,
+      "failed": 1
+    },
+    "files": {
+      "total": 392,
+      "passed": 391,
+      "failed": 1
+    },
+    "security_matches": 3,
+    "build": "skipped",
+    "e2e": "skipped",
+    "details": "evidence/ci-followup/ci-initial-run.json"
+  },
+  "refund_test_correction": {
+    "changed_file": "server/routers/refund-detail-authority.test.ts",
+    "sha256": "728b696b764d76de234a16298b75c2546e41509a17304c463dbadc4dd01210dc",
+    "production_code_changed": false,
+    "focused_passed": 63,
+    "focused_failed": 0,
+    "focused_skipped": 0,
+    "prior_distinct_tests": 272,
+    "overlap": 60,
+    "additional_distinct_tests": 3,
+    "distinct_union": 275,
+    "distinct_files": 16,
+    "receipt": "evidence/ci-followup/refund-detail-authority.receipt.json",
+    "results": "evidence/ci-followup/refund-detail-authority.results.json",
+    "meaning": "The stale source-string assertion now requires the canonical isAdmin import and guard; actor/payment/owner/NOT_FOUND checks remain. Existing runtime authority tests passed."
+  },
+  "gitleaks_correction": {
+    "version": "8.24.3",
+    "archive_sha256": "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c",
+    "original_scan": {
+      "base": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+      "head": "34c3169823525f28db4d2f4cfdadbb0d6082dbc8",
+      "matches": 3,
+      "exit_code": 2
+    },
+    "corrected_same_range": {
+      "matches": 0,
+      "exit_code": 0,
+      "receipt": "evidence/ci-followup/gitleaks-after-policy.receipt.json"
+    },
+    "classification": "Three exact SHA-256 digests of public build assets, independently recalculated from the asset bytes.",
+    "asset_proof": "evidence/ci-followup/asset-digest-proof.json",
+    "policy_file": ".gitleaks.toml",
+    "policy_sha256": "b474c6d40630d61c2c99a1e7a9654129990685a79e7d47b370f9f4dcce51ceca",
+    "probe_file": "scripts/ci/probe-gitleaks-policy.py",
+    "probe_sha256": "1b8f3a2a6ee6db5f373fa7a2921308cf4dc0e6710e0a659d8dee16124ec3b415",
+    "exception": {
+      "rule": "generic-api-key",
+      "condition": "AND",
+      "path": "docs/audits/ui-service-connectivity-20261105/evidence/native/attempt2/source-binding.json",
+      "regex_target": "secret",
+      "exact_anchored_values": 3,
+      "whole_file_exemption": false,
+      "commit_dependent": false
+    },
+    "policy_probe": {
+      "result": "PASS",
+      "passed": 16,
+      "checks": [
+        "idempotency_fixture",
+        "logger_fixture",
+        "credential_alone",
+        "same_line_idempotency",
+        "same_line_logger",
+        "separate_line",
+        "unrecognised_idempotency",
+        "fixture_prefix_is_not_exempt",
+        "native_public_js_digest",
+        "native_public_brotli_digest",
+        "native_public_gzip_digest",
+        "different_value_in_receipt",
+        "different_value_on_digest_line",
+        "known_digest_outside_receipt",
+        "prefixed_digest_is_not_exempt",
+        "suffixed_digest_is_not_exempt"
+      ],
+      "detectedControls": 11,
+      "historyModes": ["new_root_commit", "rewritten_root_commit"],
+      "providerCalls": 0
+    },
+    "probe_receipt": "evidence/ci-followup/gitleaks-policy-probe.json"
+  },
+  "native_evidence_preservation": {
+    "candidate": "c09c4195aa40efbfb812316f7175bad7616b4a50",
+    "runtime_source_changed": false,
+    "native_spec_changed": false,
+    "bound_files_verified": 387,
+    "missing_files": 0,
+    "digest_mismatches": 0,
+    "extra_dist_files": 0,
+    "raw_binding_sha256": "e17334428c554125d7a71cc9d01210090166a51ad6b1750f94a538a6424998d2",
+    "original_validation": "validation.json",
+    "meaning": "The original three native journeys remain the recorded execution; no new native execution is claimed by this follow-up."
+  },
+  "evidence_manifest": "ci-followup-evidence-manifest.json",
+  "published_ci": "The current PR head must pass its own required checks; initial-run and local evidence are not substituted for that verdict.",
+  "pr_url": "https://github.com/kafaat/ais-aviation-system/pull/288"
+}

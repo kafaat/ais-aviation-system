@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRefund,
+  getRefundDetails,
   isBookingRefundable,
   type RefundActor,
 } from "./refunds.service";
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   limit: vi.fn(),
   update: vi.fn(),
   refund: vi.fn(),
+  retrieveRefund: vi.fn(),
   listRefunds: vi.fn(),
   calculateFee: vi.fn(),
   settle: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock("../stripe", () => ({
     refunds: {
       create: mocks.refund,
       list: mocks.listRefunds,
+      retrieve: mocks.retrieveRefund,
     },
   },
 }));
@@ -63,6 +66,7 @@ vi.mock("./notification.service", () => ({ notifyRefundProcessed: vi.fn() }));
 
 const owner = { id: 1, role: "user" };
 const admin = { id: 2, role: "admin" };
+const superAdmin = { id: 2, role: "super_admin" };
 const input = { bookingId: 10, userId: 1 };
 const booking = {
   id: 10,
@@ -186,11 +190,22 @@ describe("refund service authorization", () => {
     }
   );
 
-  it("rejects a user impersonating the declared booking owner", async () => {
-    await expect(
-      createRefund(input, { id: 99, role: "user" })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  it.each(["user", "finance", "airline_admin"])(
+    "rejects a non-owner %s impersonating the declared booking owner",
+    async role => {
+      await expect(createRefund(input, { id: 99, role })).rejects.toMatchObject(
+        { code: "FORBIDDEN" }
+      );
 
+      expect(mocks.getDb).not.toHaveBeenCalled();
+      expectNoFinancialWrites();
+    }
+  );
+
+  it("rejects a finance owner's privileged amount override", async () => {
+    await expect(
+      createRefund({ ...input, amount: 10000 }, { id: 1, role: "finance" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(mocks.getDb).not.toHaveBeenCalled();
     expectNoFinancialWrites();
   });
@@ -204,7 +219,7 @@ describe("refund service authorization", () => {
     expectNoFinancialWrites();
   });
 
-  it.each([owner, admin])(
+  it.each([owner, admin, superAdmin])(
     "verifies the actual booking owner for actor %j",
     async actor => {
       mocks.limit.mockReset().mockResolvedValue([{ ...booking, userId: 99 }]);
@@ -213,6 +228,40 @@ describe("refund service authorization", () => {
         code: "FORBIDDEN",
       });
 
+      expectNoFinancialWrites();
+    }
+  );
+
+  it.each(["admin", "super_admin"])(
+    "allows platform administrator %s to inspect a refund across owners",
+    async role => {
+      mocks.retrieveRefund.mockResolvedValue({
+        id: "re_other_owner",
+        amount: 9000,
+        status: "succeeded",
+        reason: "requested_by_customer",
+        created: 1,
+        payment_intent: "pi_other_owner",
+      });
+      await expect(
+        getRefundDetails("re_other_owner", { id: 2, role })
+      ).resolves.toMatchObject({ id: "re_other_owner", amount: 9000 });
+      expect(mocks.getDb).not.toHaveBeenCalled();
+      expectNoFinancialWrites();
+    }
+  );
+
+  it.each(["user", "finance", "airline_admin"])(
+    "conceals another owner's refund from %s",
+    async role => {
+      mocks.retrieveRefund.mockResolvedValue({
+        id: "re_other_owner",
+        payment_intent: "pi_other_owner",
+      });
+      mocks.limit.mockReset().mockResolvedValue([]);
+      await expect(
+        getRefundDetails("re_other_owner", { id: 99, role })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expectNoFinancialWrites();
     }
   );
@@ -294,25 +343,28 @@ describe("refund amount validation", () => {
     );
   });
 
-  it("allows a valid override from the authenticated admin", async () => {
-    const result = await createRefund({ ...input, amount: 10000 }, admin);
+  it.each([admin, superAdmin])(
+    "allows a valid override from the authenticated platform administrator %j",
+    async actor => {
+      const result = await createRefund({ ...input, amount: 10000 }, actor);
 
-    expect(result.amount).toBe(10000);
-    expect(result.cumulativeRefundedAmount).toBe(10000);
-    expect(result.remainingRefundableAmount).toBe(0);
-    expect(mocks.refund).toHaveBeenCalledWith(
-      {
-        payment_intent: "pi_test",
-        amount: 10000,
-        reason: "requested_by_customer",
-        metadata: {
-          bookingId: "10",
-          refundOperationId: "booking-10-refund-10000",
+      expect(result.amount).toBe(10000);
+      expect(result.cumulativeRefundedAmount).toBe(10000);
+      expect(result.remainingRefundableAmount).toBe(0);
+      expect(mocks.refund).toHaveBeenCalledWith(
+        {
+          payment_intent: "pi_test",
+          amount: 10000,
+          reason: "requested_by_customer",
+          metadata: {
+            bookingId: "10",
+            refundOperationId: "booking-10-refund-10000",
+          },
         },
-      },
-      { idempotencyKey: "booking-10-refund-10000" }
-    );
-  });
+        { idempotencyKey: "booking-10-refund-10000" }
+      );
+    }
+  );
 
   it("rejects a refund that exceeds the provider-confirmed remaining balance", async () => {
     mocks.refundsState.push(refundRecord("re_prior", 3000));

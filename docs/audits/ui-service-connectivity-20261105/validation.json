@@ -1,0 +1,103 @@
+{
+  "schema_version": 2,
+  "baseline_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "status": "local_validation_passed",
+  "recorded_at": "2026-11-05T16:48:48.801164+00:00",
+  "inventory_projection": {
+    "status": "passed",
+    "evidence": "normalization-checks.json",
+    "scope": "Static inventory join and count integrity, separate from runtime proof."
+  },
+  "implementation_validation": {
+    "status": "passed",
+    "focused_tests": {
+      "passed": 272,
+      "failed": 0,
+      "skipped": 0,
+      "files": 15,
+      "aggregation": "Two disjoint file sets: 233 tests in 13 files plus 39 tests in 2 files. Earlier overlapping runs are not added.",
+      "receipts": [
+        "evidence/checks/focused-final-2.results.json",
+        "evidence/checks/bag-drop-role-after.results.json"
+      ],
+      "scope": "Component tests use controlled tRPC responses; router/service tests use isolated data/provider fixtures. These do not prove all 844 procedures in a database-backed browser."
+    },
+    "checks": {
+      "application_types": {
+        "status": "passed",
+        "receipt": "evidence/checks/typecheck-main-final.receipt.json",
+        "duration_seconds": 133.597,
+        "non_documentation_files_changed_during_run": []
+      },
+      "e2e_types": {
+        "status": "passed",
+        "receipt": "evidence/checks/typecheck-e2e-final.receipt.json",
+        "duration_seconds": 48.133,
+        "non_documentation_files_changed_during_run": []
+      },
+      "lint": {
+        "status": "passed",
+        "receipt": "evidence/checks/lint-final.receipt.json",
+        "duration_seconds": 3.644,
+        "non_documentation_files_changed_during_run": []
+      },
+      "format": {
+        "status": "passed",
+        "receipt": "evidence/checks/format-final.receipt.json",
+        "duration_seconds": 4.335,
+        "non_documentation_files_changed_during_run": []
+      },
+      "build": {
+        "status": "passed",
+        "receipt": "evidence/checks/build-final.receipt.json",
+        "duration_seconds": 46.196,
+        "non_documentation_files_changed_during_run": []
+      }
+    },
+    "source_notes": [
+      "Main typecheck and build ran against final production code; only audit documentation was finalized concurrently.",
+      "E2E typecheck passed before the final string-only shortening of synthetic openId. That fixture-only correction is covered by the subsequent successful native run and file lint/format.",
+      "The native-tested candidate is an exact clean local commit; subsequent packaging edits contain documentation/evidence and a narrowly scoped raw-receipt formatting exclusion only."
+    ]
+  },
+  "native_acceptance": {
+    "status": "passed",
+    "candidate_commit": "c09c4195aa40efbfb812316f7175bad7616b4a50",
+    "candidate_tree": "3138f02720e27a43faf59065d2d2a82683794312",
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "retries": 0,
+    "playwright_duration_seconds": 17.986217,
+    "receipts": [
+      "evidence/native/attempt2/native-run.receipt.json",
+      "evidence/native/attempt2/source-binding.json",
+      "evidence/native/attempt2/selected-tests.json",
+      "evidence/native/attempt2/test-results.json",
+      "evidence/native/attempt2/junit.xml",
+      "evidence/native/attempt2/cleanup.json"
+    ],
+    "proven_scope": [
+      "Authenticated Home navigation reaches Notifications; actual membership and invitation reads control Corporate Travel entry and the matching company page.",
+      "Native refund report reads accept super_admin; finance is rejected by the mounted API and UI; selected business records are unchanged.",
+      "New PNR and legacy booking-reference links select the correct owned booking when identifiers differ; another owner receives FORBIDDEN and another tenant NOT_FOUND; opening links does not issue check-in or change selected booking/seat/financial state."
+    ],
+    "prior_attempt": {
+      "status": "failed_in_fixture_setup",
+      "passed": 0,
+      "not_started": 2,
+      "diagnosis": "Synthetic openId exceeded varchar(64). Only the fixed prefix was shortened; no production change or rebuild was needed. Attempt 2 used new owned resources.",
+      "evidence": "evidence/native/attempt1/failure-diagnosis.json"
+    },
+    "cleanup_passed": true,
+    "limits": [
+      "No live payment, messaging, authority or airport-device acceptance.",
+      "No production gateway or deployed UI configuration was exercised.",
+      "SMS control removal, group request submission, error-report fallback and Bag Drop read roles have component/router/service evidence, not separate new native journeys in this three-case run."
+    ]
+  },
+  "remote_checks_and_publication": {
+    "status": "to_be_observed_on_published_head",
+    "note": "This committed record proves the local candidate. Consult the pull request checks for exact remote-head CI; no merge or deployment is claimed here."
+  }
+}

@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "source_catalog": {
+    "path": "server/services/capability-catalog.service.ts",
+    "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/services/capability-catalog.service.ts"
+  },
+  "interpretation": "Implementation labels are the repository catalog, not deployed readiness. Demo/blocked capabilities and credential, certification, device or authority boundaries must remain explicit.",
+  "records": [
+    {
+      "id": "hotelFulfillment",
+      "implementation": "implemented",
+      "owner": "hotel-fulfillment.service",
+      "consumer": "emergencyHotel and hotelFulfillment scheduled task",
+      "requirement": "Default disabled; Hotelbeds single adult/room, net SAR, explicit quote and hotel mapping approval; sandbox confirmation is not a real stay. Live credentials, certification, local fees/transport and property acceptance remain operator responsibilities."
+    },
+    {
+      "id": "ndcUnpaidServicing",
+      "implementation": "implemented",
+      "owner": "ndc-unpaid.service and booking-invoice.service",
+      "consumer": "ndc.changeOrder and ndc.addServices",
+      "requirement": "Unpaid pending invoice, no active checkout, same airline/tenant SAR economy or business offer, canonical passengers; no EMD or external fulfillment certification"
+    },
+    {
+      "id": "ndcPaidServicing",
+      "implementation": "implemented",
+      "owner": "order-servicing.service and payment-settlement.service",
+      "consumer": "ndc.quotePaidService, ndc.confirmNoChargeService and payments.createModificationCheckout",
+      "requirement": "Local paid SAR itinerary exchange and catalog entitlements before check-in; same tenant/airline and cabin across up to six segments, no unresolved ancillary fulfillment. Original Stripe payer refund receipts required for a lower fare."
+    },
+    {
+      "id": "ndcExternalFulfillment",
+      "implementation": "blocked",
+      "owner": "contracted ticket/EMD provider",
+      "consumer": "order servicing fulfillment",
+      "requirement": "Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts"
+    },
+    {
+      "id": "kioskHardware",
+      "implementation": "blocked",
+      "owner": "kiosk.service",
+      "consumer": "kiosk",
+      "requirement": "Authenticated device heartbeat and physical printer/scanner acceptance; digital documents are separate"
+    },
+    {
+      "id": "dcsDispatch",
+      "implementation": "demo",
+      "owner": "dcs.service",
+      "consumer": "dcs",
+      "requirement": "Verified departure-control provider and dispatch acceptance"
+    },
+    {
+      "id": "dcsCounterLifecycle",
+      "implementation": "implemented",
+      "owner": "dcs-operations.service and departure-control.service",
+      "consumer": "dcsOperations and /airline/dcs",
+      "requirement": "Tenant-scoped paid passenger/flight check-in, open/close/reopen, board/deplane/deny/allow/offload with transactional command receipts and actor/reason history. New travel retains document, seat and time-window rules. Deplane/offload may correct current attendance after the schedule cutoff or flight cancellation while funding, active-segment, tenant, seat and baggage guards remain required; completed/refunded cases require reconciliation. An unresolved counter bag blocks offload until signed handback. The desk supports station cases, scoped APFAX, seat blocking and remapping, eligible quoted downgrades, supervised DCS closure and observed OUT. Authority, station device and dispatch acceptance remain external."
+    },
+    {
+      "id": "staffBaggageRegistration",
+      "implementation": "implemented",
+      "owner": "baggage-registration.service and baggage-custody.service",
+      "consumer": "baggage.register, baggage.registrationSummary and /airline/dcs",
+      "requirement": "Scoped airline staff, exact confirmed passenger/flight/segment, current check-in, funded cumulative allowance and payload-bound transactional idempotency. Configured carrier numeric code required; ambiguous legacy baggage requires review. Counter receipts do not replace signed device custody or certified hardware acceptance."
+    },
+    {
+      "id": "gdsSynchronization",
+      "implementation": "demo",
+      "owner": "gds.service",
+      "consumer": "gds",
+      "requirement": "Contracted GDS connection and round-trip order synchronization"
+    },
+    {
+      "id": "biometricIdentity",
+      "implementation": "demo",
+      "owner": "biometric.service",
+      "consumer": "biometric",
+      "requirement": "Approved biometric processor, measured verification and privacy controls"
+    },
+    {
+      "id": "multiRegionFailover",
+      "implementation": "demo",
+      "owner": "multi-region.service",
+      "consumer": "multiRegion",
+      "requirement": "Infrastructure adapter, replication evidence and controlled failover drill"
+    },
+    {
+      "id": "apisSubmission",
+      "implementation": "blocked",
+      "owner": "apis.service",
+      "consumer": "apis.submit",
+      "requirement": "Authority transport, credentials, acknowledgement and rejection fixtures"
+    },
+    {
+      "id": "alternatePayments",
+      "implementation": "blocked",
+      "owner": "payment-providers",
+      "consumer": "payments",
+      "requirement": "Invoice/session binding, amount/currency verification, settlement and refund acceptance for each provider"
+    },
+    {
+      "id": "bagDropHardware",
+      "implementation": "demo",
+      "owner": "bag-drop.service",
+      "consumer": "bagDrop",
+      "requirement": "Certified scale, printer, conveyor and device heartbeat adapter"
+    },
+    {
+      "id": "bcbpBoardingPass",
+      "implementation": "implemented",
+      "owner": "boarding-pass.service and bcbp.service",
+      "consumer": "boardingPass, seatMap.getBoardingPass, eticket.generateBoardingPass, kiosk.printBoardingPass and bagDrop.scanPass",
+      "requirement": "IATA Resolution 792 M1 string (BCBP version 6 conditional items, HMAC security data) rendered as PDF417 beside the signed QR, round-trip tested with committed sample vectors; acceptance by the airport's CUSS/CUPPS/gate readers and independently captured scanner reads remain external evidence"
+    },
+    {
+      "id": "weightBalance",
+      "implementation": "demo",
+      "owner": "weight-balance.service",
+      "consumer": "weightBalance",
+      "requirement": "Approved aircraft data, calculation validation and operational sign-off"
+    },
+    {
+      "id": "loadPlanning",
+      "implementation": "demo",
+      "owner": "load-planning.service",
+      "consumer": "loadPlanning",
+      "requirement": "Aircraft configuration, measured cargo and approved dispatch workflow"
+    },
+    {
+      "id": "disasterRecovery",
+      "implementation": "demo",
+      "owner": "disaster-recovery.service",
+      "consumer": "disasterRecovery",
+      "requirement": "Infrastructure adapter and observed restore/failover exercise"
+    },
+    {
+      "id": "warehouseExports",
+      "implementation": "implemented",
+      "owner": "data-warehouse.service",
+      "consumer": "dataWarehouse and authenticated download",
+      "requirement": "Migration applied; shared database and authorized export owner"
+    },
+    {
+      "id": "eventInbox",
+      "implementation": "implemented",
+      "owner": "event-inbox.service",
+      "consumer": "outbox and notifications",
+      "requirement": "Migration applied; local transaction or authenticated receiver acknowledgement"
+    },
+    {
+      "id": "scheduledTasks",
+      "implementation": "implemented",
+      "owner": "scheduled-task.service",
+      "consumer": "cron and operations",
+      "requirement": "Shared database lease and observed lastSuccessAt"
+    },
+    {
+      "id": "slaObservations",
+      "implementation": "implemented",
+      "owner": "sla-monitoring.service",
+      "consumer": "slaMonitoring",
+      "requirement": "Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA"
+    }
+  ]
+}

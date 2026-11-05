@@ -1,0 +1,3222 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "generated_rest": [
+    {
+      "procedure": "auth.me",
+      "method": "GET",
+      "path": "/api/rest/auth/me",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 167,
+        "end_line": 191,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L167-L191"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.logoutCookie",
+      "method": "POST",
+      "path": "/api/rest/auth/logout-cookie",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 196,
+        "end_line": 213,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L196-L213"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.register",
+      "method": "POST",
+      "path": "/api/rest/auth/register",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 218,
+        "end_line": 280,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L218-L280"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.login",
+      "method": "POST",
+      "path": "/api/rest/auth/login",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 286,
+        "end_line": 336,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L286-L336"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.completeMfa",
+      "method": "POST",
+      "path": "/api/rest/auth/mfa/complete",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 338,
+        "end_line": 366,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L338-L366"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.refreshToken",
+      "method": "POST",
+      "path": "/api/rest/auth/refresh",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 372,
+        "end_line": 441,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L372-L441"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.logout",
+      "method": "POST",
+      "path": "/api/rest/auth/logout",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 446,
+        "end_line": 464,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L446-L464"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.logoutAllDevices",
+      "method": "POST",
+      "path": "/api/rest/auth/logout-all",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 470,
+        "end_line": 507,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L470-L507"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.getActiveSessions",
+      "method": "GET",
+      "path": "/api/rest/auth/sessions",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 513,
+        "end_line": 582,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L513-L582"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.revokeSession",
+      "method": "DELETE",
+      "path": "/api/rest/auth/sessions/{sessionId}",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 588,
+        "end_line": 611,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L588-L611"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "auth.verifyToken",
+      "method": "GET",
+      "path": "/api/rest/auth/verify",
+      "source": {
+        "path": "server/routers/auth.ts",
+        "line": 617,
+        "end_line": 676,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/auth.ts#L617-L676"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "flights.search",
+      "method": "GET",
+      "path": "/api/rest/flights/search",
+      "source": {
+        "path": "server/routers/flights.ts",
+        "line": 55,
+        "end_line": 114,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/flights.ts#L55-L114"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "flights.getById",
+      "method": "GET",
+      "path": "/api/rest/flights/{id}",
+      "source": {
+        "path": "server/routers/flights.ts",
+        "line": 120,
+        "end_line": 135,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/flights.ts#L120-L135"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "flights.getStatusHistory",
+      "method": "GET",
+      "path": "/api/rest/flights/{flightId}/status-history",
+      "source": {
+        "path": "server/routers/flights.ts",
+        "line": 140,
+        "end_line": 155,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/flights.ts#L140-L155"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "flights.popularRoutes",
+      "method": "GET",
+      "path": "/api/rest/flights/popular-routes",
+      "source": {
+        "path": "server/routers/flights.ts",
+        "line": 161,
+        "end_line": 188,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/flights.ts#L161-L188"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "flights.suggestedDestinations",
+      "method": "GET",
+      "path": "/api/rest/flights/suggested-destinations",
+      "source": {
+        "path": "server/routers/flights.ts",
+        "line": 194,
+        "end_line": 219,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/flights.ts#L194-L219"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "bookings.create",
+      "method": "POST",
+      "path": "/api/rest/bookings",
+      "source": {
+        "path": "server/routers/bookings.ts",
+        "line": 47,
+        "end_line": 139,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bookings.ts#L47-L139"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "bookings.myBookings",
+      "method": "GET",
+      "path": "/api/rest/bookings/my",
+      "source": {
+        "path": "server/routers/bookings.ts",
+        "line": 141,
+        "end_line": 156,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bookings.ts#L141-L156"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "bookings.getByPNR",
+      "method": "GET",
+      "path": "/api/rest/bookings/pnr/{pnr}",
+      "source": {
+        "path": "server/routers/bookings.ts",
+        "line": 158,
+        "end_line": 188,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bookings.ts#L158-L188"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "bookings.getPassengers",
+      "method": "GET",
+      "path": "/api/rest/bookings/{bookingId}/passengers",
+      "source": {
+        "path": "server/routers/bookings.ts",
+        "line": 190,
+        "end_line": 223,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bookings.ts#L190-L223"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "bookings.cancel",
+      "method": "POST",
+      "path": "/api/rest/bookings/{bookingId}/cancel",
+      "source": {
+        "path": "server/routers/bookings.ts",
+        "line": 225,
+        "end_line": 283,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bookings.ts#L225-L283"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "bookings.checkIn",
+      "method": "POST",
+      "path": "/api/rest/bookings/{bookingId}/check-in",
+      "source": {
+        "path": "server/routers/bookings.ts",
+        "line": 472,
+        "end_line": 546,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/bookings.ts#L472-L546"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "manageBooking.lookup",
+      "method": "POST",
+      "path": "/api/rest/manage-booking/lookup",
+      "source": {
+        "path": "server/routers/manage-booking.ts",
+        "line": 13,
+        "end_line": 50,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/manage-booking.ts#L13-L50"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "payments.getCheckoutState",
+      "method": "GET",
+      "path": "/api/rest/payments/checkout/{bookingId}",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 65,
+        "end_line": 80,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L65-L80"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "payments.settlementReviews",
+      "method": "GET",
+      "path": "/api/rest/admin/payments/settlement-reviews",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 81,
+        "end_line": 93,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L81-L93"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "payments.refundSettlementReview",
+      "method": "POST",
+      "path": "/api/rest/admin/payments/settlement-reviews/{paymentIntentId}/refund",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 94,
+        "end_line": 115,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L94-L115"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "payments.expireCheckoutSession",
+      "method": "POST",
+      "path": "/api/rest/payments/checkout/{bookingId}/expire",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 116,
+        "end_line": 130,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L116-L130"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "payments.createCheckoutSession",
+      "method": "POST",
+      "path": "/api/rest/payments/checkout",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 154,
+        "end_line": 201,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L154-L201"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "payments.verifySession",
+      "method": "GET",
+      "path": "/api/rest/payments/verify/{sessionId}",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 408,
+        "end_line": 498,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L408-L498"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "payments.create",
+      "method": "POST",
+      "path": "/api/rest/payments",
+      "source": {
+        "path": "server/routers/payments.ts",
+        "line": 504,
+        "end_line": 540,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/payments.ts#L504-L540"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.splitCancellation",
+      "method": "GET",
+      "path": "/api/rest/bookings/{bookingId}/split-cancellation",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 69,
+        "end_line": 83,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L69-L83"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.cancelSplitBooking",
+      "method": "POST",
+      "path": "/api/rest/bookings/{bookingId}/split-cancellation",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 85,
+        "end_line": 110,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L85-L110"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.resumeSplitCancellation",
+      "method": "POST",
+      "path": "/api/rest/bookings/{bookingId}/split-cancellation/resume",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 112,
+        "end_line": 134,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L112-L134"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.create",
+      "method": "POST",
+      "path": "/api/rest/refunds",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 138,
+        "end_line": 210,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L138-L210"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.adminCreate",
+      "method": "POST",
+      "path": "/api/rest/admin/refunds",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 215,
+        "end_line": 273,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L215-L273"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.getDetails",
+      "method": "GET",
+      "path": "/api/rest/refunds/{refundId}",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 278,
+        "end_line": 294,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L278-L294"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.checkRefundable",
+      "method": "GET",
+      "path": "/api/rest/refunds/check/{bookingId}",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 299,
+        "end_line": 317,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L299-L317"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.calculateCancellationFee",
+      "method": "GET",
+      "path": "/api/rest/refunds/calculate-fee/{bookingId}",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 322,
+        "end_line": 382,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L322-L382"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.getCancellationPolicy",
+      "method": "GET",
+      "path": "/api/rest/refunds/policy",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 387,
+        "end_line": 402,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L387-L402"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.getStats",
+      "method": "GET",
+      "path": "/api/rest/admin/refunds/stats",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 407,
+        "end_line": 422,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L407-L422"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.getHistory",
+      "method": "GET",
+      "path": "/api/rest/admin/refunds/history",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 427,
+        "end_line": 460,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L427-L460"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "refunds.getTrends",
+      "method": "GET",
+      "path": "/api/rest/admin/refunds/trends",
+      "source": {
+        "path": "server/routers/refunds.ts",
+        "line": 465,
+        "end_line": 480,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/refunds.ts#L465-L480"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "loyalty.myAccount",
+      "method": "GET",
+      "path": "/api/rest/loyalty/account",
+      "source": {
+        "path": "server/routers/loyalty.ts",
+        "line": 31,
+        "end_line": 46,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L31-L46"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "loyalty.myTransactions",
+      "method": "GET",
+      "path": "/api/rest/loyalty/transactions",
+      "source": {
+        "path": "server/routers/loyalty.ts",
+        "line": 51,
+        "end_line": 71,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L51-L71"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "loyalty.redeemMiles",
+      "method": "POST",
+      "path": "/api/rest/loyalty/redeem",
+      "source": {
+        "path": "server/routers/loyalty.ts",
+        "line": 76,
+        "end_line": 116,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L76-L116"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "loyalty.awardBonusMiles",
+      "method": "POST",
+      "path": "/api/rest/admin/loyalty/award",
+      "source": {
+        "path": "server/routers/loyalty.ts",
+        "line": 125,
+        "end_line": 155,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L125-L155"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "loyalty.reverseMilesForBooking",
+      "method": "POST",
+      "path": "/api/rest/admin/loyalty/reverse",
+      "source": {
+        "path": "server/routers/loyalty.ts",
+        "line": 160,
+        "end_line": 186,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L160-L186"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "loyalty.processExpiredMiles",
+      "method": "POST",
+      "path": "/api/rest/admin/loyalty/process-expired",
+      "source": {
+        "path": "server/routers/loyalty.ts",
+        "line": 191,
+        "end_line": 206,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L191-L206"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "loyalty.getUserAccount",
+      "method": "GET",
+      "path": "/api/rest/admin/loyalty/users/{userId}",
+      "source": {
+        "path": "server/routers/loyalty.ts",
+        "line": 211,
+        "end_line": 231,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L211-L231"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "loyalty.getUserTransactions",
+      "method": "GET",
+      "path": "/api/rest/admin/loyalty/users/{userId}/transactions",
+      "source": {
+        "path": "server/routers/loyalty.ts",
+        "line": 236,
+        "end_line": 260,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/loyalty.ts#L236-L260"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "health.check",
+      "method": "GET",
+      "path": "/api/rest/health",
+      "source": {
+        "path": "server/routers/health.ts",
+        "line": 20,
+        "end_line": 35,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/health.ts#L20-L35"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "health.ready",
+      "method": "GET",
+      "path": "/api/rest/health/ready",
+      "source": {
+        "path": "server/routers/health.ts",
+        "line": 42,
+        "end_line": 63,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/health.ts#L42-L63"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "health.live",
+      "method": "GET",
+      "path": "/api/rest/health/live",
+      "source": {
+        "path": "server/routers/health.ts",
+        "line": 70,
+        "end_line": 85,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/health.ts#L70-L85"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "groupBookings.submitRequest",
+      "method": "POST",
+      "path": "/api/rest/group-bookings/request",
+      "source": {
+        "path": "server/routers/group-bookings.ts",
+        "line": 46,
+        "end_line": 99,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L46-L99"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "groupBookings.calculateDiscount",
+      "method": "GET",
+      "path": "/api/rest/group-bookings/calculate-discount",
+      "source": {
+        "path": "server/routers/group-bookings.ts",
+        "line": 104,
+        "end_line": 152,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L104-L152"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "groupBookings.list",
+      "method": "GET",
+      "path": "/api/rest/group-bookings",
+      "source": {
+        "path": "server/routers/group-bookings.ts",
+        "line": 157,
+        "end_line": 183,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L157-L183"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "groupBookings.getStats",
+      "method": "GET",
+      "path": "/api/rest/group-bookings/stats",
+      "source": {
+        "path": "server/routers/group-bookings.ts",
+        "line": 188,
+        "end_line": 202,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L188-L202"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "groupBookings.getById",
+      "method": "GET",
+      "path": "/api/rest/group-bookings/{id}",
+      "source": {
+        "path": "server/routers/group-bookings.ts",
+        "line": 207,
+        "end_line": 234,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L207-L234"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "groupBookings.approve",
+      "method": "POST",
+      "path": "/api/rest/group-bookings/{id}/approve",
+      "source": {
+        "path": "server/routers/group-bookings.ts",
+        "line": 239,
+        "end_line": 281,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L239-L281"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "groupBookings.reject",
+      "method": "POST",
+      "path": "/api/rest/group-bookings/{id}/reject",
+      "source": {
+        "path": "server/routers/group-bookings.ts",
+        "line": 286,
+        "end_line": 321,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L286-L321"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "groupBookings.getDiscountTiers",
+      "method": "GET",
+      "path": "/api/rest/group-bookings/discount-tiers",
+      "source": {
+        "path": "server/routers/group-bookings.ts",
+        "line": 326,
+        "end_line": 361,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/group-bookings.ts#L326-L361"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.list",
+      "method": "GET",
+      "path": "/api/rest/notifications",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 14,
+        "end_line": 57,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L14-L57"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.unreadCount",
+      "method": "GET",
+      "path": "/api/rest/notifications/unread-count",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 62,
+        "end_line": 80,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L62-L80"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.markAsRead",
+      "method": "POST",
+      "path": "/api/rest/notifications/{id}/read",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 85,
+        "end_line": 107,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L85-L107"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.markAllAsRead",
+      "method": "POST",
+      "path": "/api/rest/notifications/read-all",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 112,
+        "end_line": 130,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L112-L130"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.delete",
+      "method": "DELETE",
+      "path": "/api/rest/notifications/{id}",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 135,
+        "end_line": 157,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L135-L157"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.deleteAll",
+      "method": "DELETE",
+      "path": "/api/rest/notifications/all",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 162,
+        "end_line": 176,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L162-L176"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.create",
+      "method": "POST",
+      "path": "/api/rest/admin/notifications",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 185,
+        "end_line": 222,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L185-L222"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.createBulk",
+      "method": "POST",
+      "path": "/api/rest/admin/notifications/bulk",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 227,
+        "end_line": 268,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L227-L268"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.getUserNotifications",
+      "method": "GET",
+      "path": "/api/rest/admin/notifications/users/{userId}",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 273,
+        "end_line": 297,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L273-L297"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "notifications.cleanup",
+      "method": "POST",
+      "path": "/api/rest/admin/notifications/cleanup",
+      "source": {
+        "path": "server/routers/notifications.ts",
+        "line": 302,
+        "end_line": 327,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/notifications.ts#L302-L327"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiCity.search",
+      "method": "POST",
+      "path": "/api/rest/multi-city/search",
+      "source": {
+        "path": "server/routers/multi-city.ts",
+        "line": 17,
+        "end_line": 46,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-city.ts#L17-L46"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiCity.calculatePrice",
+      "method": "GET",
+      "path": "/api/rest/multi-city/calculate-price",
+      "source": {
+        "path": "server/routers/multi-city.ts",
+        "line": 52,
+        "end_line": 104,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-city.ts#L52-L104"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiCity.create",
+      "method": "POST",
+      "path": "/api/rest/multi-city/book",
+      "source": {
+        "path": "server/routers/multi-city.ts",
+        "line": 110,
+        "end_line": 198,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-city.ts#L110-L198"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiCity.getSegments",
+      "method": "GET",
+      "path": "/api/rest/multi-city/bookings/{bookingId}/segments",
+      "source": {
+        "path": "server/routers/multi-city.ts",
+        "line": 204,
+        "end_line": 226,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-city.ts#L204-L226"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiCity.isMultiCity",
+      "method": "GET",
+      "path": "/api/rest/multi-city/bookings/{bookingId}/is-multi-city",
+      "source": {
+        "path": "server/routers/multi-city.ts",
+        "line": 231,
+        "end_line": 251,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-city.ts#L231-L251"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.join",
+      "method": "POST",
+      "path": "/api/rest/waitlist/join",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 14,
+        "end_line": 55,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L14-L55"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.getPosition",
+      "method": "GET",
+      "path": "/api/rest/waitlist/position",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 60,
+        "end_line": 85,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L60-L85"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.myWaitlist",
+      "method": "GET",
+      "path": "/api/rest/waitlist/my",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 90,
+        "end_line": 105,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L90-L105"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.acceptOffer",
+      "method": "POST",
+      "path": "/api/rest/waitlist/accept",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 110,
+        "end_line": 130,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L110-L130"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.declineOffer",
+      "method": "POST",
+      "path": "/api/rest/waitlist/decline",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 135,
+        "end_line": 155,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L135-L155"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.cancel",
+      "method": "POST",
+      "path": "/api/rest/waitlist/cancel",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 160,
+        "end_line": 182,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L160-L182"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.updateNotifications",
+      "method": "PUT",
+      "path": "/api/rest/waitlist/notifications",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 187,
+        "end_line": 214,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L187-L214"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.getFlightWaitlist",
+      "method": "GET",
+      "path": "/api/rest/admin/waitlist/flight/{flightId}",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 223,
+        "end_line": 243,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L223-L243"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.offerSeat",
+      "method": "POST",
+      "path": "/api/rest/admin/waitlist/offer",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 248,
+        "end_line": 268,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L248-L268"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.processWaitlist",
+      "method": "POST",
+      "path": "/api/rest/admin/waitlist/process",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 273,
+        "end_line": 293,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L273-L293"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.processExpiredOffers",
+      "method": "POST",
+      "path": "/api/rest/admin/waitlist/process-expired",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 298,
+        "end_line": 313,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L298-L313"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "waitlist.getStats",
+      "method": "GET",
+      "path": "/api/rest/admin/waitlist/stats",
+      "source": {
+        "path": "server/routers/waitlist.ts",
+        "line": 318,
+        "end_line": 333,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/waitlist.ts#L318-L333"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.initiate",
+      "method": "POST",
+      "path": "/api/rest/split-payments/initiate",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 39,
+        "end_line": 104,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L39-L104"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.getStatus",
+      "method": "GET",
+      "path": "/api/rest/split-payments/status/{bookingId}",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 110,
+        "end_line": 151,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L110-L151"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.sendRequest",
+      "method": "POST",
+      "path": "/api/rest/split-payments/send-request",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 156,
+        "end_line": 174,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L156-L174"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.resendRequest",
+      "method": "POST",
+      "path": "/api/rest/split-payments/resend-request",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 179,
+        "end_line": 200,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L179-L200"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.sendAllRequests",
+      "method": "POST",
+      "path": "/api/rest/split-payments/send-all-requests",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 205,
+        "end_line": 226,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L205-L226"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.cancelSplit",
+      "method": "POST",
+      "path": "/api/rest/split-payments/cancel-split",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 231,
+        "end_line": 250,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L231-L250"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.cancelAll",
+      "method": "POST",
+      "path": "/api/rest/split-payments/cancel-all",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 255,
+        "end_line": 274,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L255-L274"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.getPayerDetails",
+      "method": "GET",
+      "path": "/api/rest/split-payments/pay/{paymentToken}",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 279,
+        "end_line": 325,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L279-L325"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.createPayerCheckout",
+      "method": "POST",
+      "path": "/api/rest/split-payments/checkout",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 330,
+        "end_line": 350,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L330-L350"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "splitPayments.checkAllPaid",
+      "method": "GET",
+      "path": "/api/rest/split-payments/check-all-paid/{bookingId}",
+      "source": {
+        "path": "server/routers/split-payments.ts",
+        "line": 355,
+        "end_line": 374,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/split-payments.ts#L355-L374"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.createAccount",
+      "method": "POST",
+      "path": "/api/rest/corporate/accounts",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 76,
+        "end_line": 115,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L76-L115"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.listAccounts",
+      "method": "GET",
+      "path": "/api/rest/corporate/accounts",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 120,
+        "end_line": 145,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L120-L145"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.getAccountById",
+      "method": "GET",
+      "path": "/api/rest/corporate/accounts/{id}",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 150,
+        "end_line": 176,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L150-L176"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.activateAccount",
+      "method": "POST",
+      "path": "/api/rest/corporate/accounts/{id}/activate",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 181,
+        "end_line": 214,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L181-L214"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.suspendAccount",
+      "method": "POST",
+      "path": "/api/rest/corporate/accounts/{id}/suspend",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 219,
+        "end_line": 249,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L219-L249"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.updateAccount",
+      "method": "PUT",
+      "path": "/api/rest/corporate/accounts/{id}",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 254,
+        "end_line": 292,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L254-L292"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.getMyAccount",
+      "method": "GET",
+      "path": "/api/rest/corporate/my-account",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 301,
+        "end_line": 316,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L301-L316"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.addUser",
+      "method": "POST",
+      "path": "/api/rest/corporate/accounts/{accountId}/users",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 321,
+        "end_line": 373,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L321-L373"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.getUsers",
+      "method": "GET",
+      "path": "/api/rest/corporate/accounts/{accountId}/users",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 378,
+        "end_line": 411,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L378-L411"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.removeUser",
+      "method": "DELETE",
+      "path": "/api/rest/corporate/users/{corporateUserId}",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 416,
+        "end_line": 472,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L416-L472"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.updateUserRole",
+      "method": "PUT",
+      "path": "/api/rest/corporate/users/{corporateUserId}/role",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 477,
+        "end_line": 539,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L477-L539"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.createBooking",
+      "method": "POST",
+      "path": "/api/rest/corporate/bookings",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 548,
+        "end_line": 607,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L548-L607"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.approveBooking",
+      "method": "POST",
+      "path": "/api/rest/corporate/bookings/{id}/approve",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 612,
+        "end_line": 649,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L612-L649"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.rejectBooking",
+      "method": "POST",
+      "path": "/api/rest/corporate/bookings/{id}/reject",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 654,
+        "end_line": 693,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L654-L693"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.getBookings",
+      "method": "GET",
+      "path": "/api/rest/corporate/bookings",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 698,
+        "end_line": 732,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L698-L732"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.getStats",
+      "method": "GET",
+      "path": "/api/rest/corporate/stats",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 737,
+        "end_line": 762,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L737-L762"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "corporate.getAccountStats",
+      "method": "GET",
+      "path": "/api/rest/corporate/accounts/{id}/stats",
+      "source": {
+        "path": "server/routers/corporate.ts",
+        "line": 767,
+        "end_line": 787,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/corporate.ts#L767-L787"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "priceCalendar.getMonthlyPrices",
+      "method": "GET",
+      "path": "/api/rest/price-calendar/monthly",
+      "source": {
+        "path": "server/routers/price-calendar.ts",
+        "line": 15,
+        "end_line": 48,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-calendar.ts#L15-L48"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "priceCalendar.getFlexiblePrices",
+      "method": "GET",
+      "path": "/api/rest/price-calendar/flexible",
+      "source": {
+        "path": "server/routers/price-calendar.ts",
+        "line": 54,
+        "end_line": 93,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-calendar.ts#L54-L93"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "priceCalendar.getAvailableMonths",
+      "method": "GET",
+      "path": "/api/rest/price-calendar/available-months",
+      "source": {
+        "path": "server/routers/price-calendar.ts",
+        "line": 99,
+        "end_line": 130,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-calendar.ts#L99-L130"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.register",
+      "method": "POST",
+      "path": "/api/rest/admin/travel-agents",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 129,
+        "end_line": 145,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L129-L145"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.list",
+      "method": "GET",
+      "path": "/api/rest/admin/travel-agents",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 150,
+        "end_line": 173,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L150-L173"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.getById",
+      "method": "GET",
+      "path": "/api/rest/admin/travel-agents/{id}",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 178,
+        "end_line": 197,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L178-L197"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.regenerateCredentials",
+      "method": "POST",
+      "path": "/api/rest/admin/travel-agents/{id}/regenerate-credentials",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 202,
+        "end_line": 218,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L202-L218"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.updateStatus",
+      "method": "PATCH",
+      "path": "/api/rest/admin/travel-agents/{id}/status",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 223,
+        "end_line": 244,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L223-L244"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.updateCommissionRate",
+      "method": "PATCH",
+      "path": "/api/rest/admin/travel-agents/{id}/commission",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 249,
+        "end_line": 273,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L249-L273"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.getAgentStats",
+      "method": "GET",
+      "path": "/api/rest/admin/travel-agents/{id}/stats",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 278,
+        "end_line": 294,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L278-L294"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.getPendingCommissions",
+      "method": "GET",
+      "path": "/api/rest/admin/travel-agents/commissions/pending",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 299,
+        "end_line": 317,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L299-L317"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.updateCommissionStatus",
+      "method": "PATCH",
+      "path": "/api/rest/admin/travel-agents/commissions/{id}/status",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 322,
+        "end_line": 344,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L322-L344"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.validateCredentials",
+      "method": "POST",
+      "path": "/api/rest/agent-api/auth/validate",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 352,
+        "end_line": 382,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L352-L382"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.searchFlights",
+      "method": "POST",
+      "path": "/api/rest/agent-api/flights/search",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 387,
+        "end_line": 422,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L387-L422"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.createBooking",
+      "method": "POST",
+      "path": "/api/rest/agent-api/bookings",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 427,
+        "end_line": 462,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L427-L462"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.getBookings",
+      "method": "POST",
+      "path": "/api/rest/agent-api/bookings/list",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 467,
+        "end_line": 502,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L467-L502"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.calculateCommission",
+      "method": "POST",
+      "path": "/api/rest/agent-api/commission/calculate",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 507,
+        "end_line": 542,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L507-L542"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.getStats",
+      "method": "POST",
+      "path": "/api/rest/agent-api/stats",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 547,
+        "end_line": 578,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L547-L578"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "travelAgent.getApiDocumentation",
+      "method": "GET",
+      "path": "/api/rest/agent-api/docs",
+      "source": {
+        "path": "server/routers/travel-agent.ts",
+        "line": 585,
+        "end_line": 702,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/travel-agent.ts#L585-L702"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.getMyLogs",
+      "method": "GET",
+      "path": "/api/rest/sms/logs",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 19,
+        "end_line": 64,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L19-L64"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.getPreferences",
+      "method": "GET",
+      "path": "/api/rest/sms/preferences",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 69,
+        "end_line": 87,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L69-L87"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.listLogs",
+      "method": "GET",
+      "path": "/api/rest/admin/sms/logs",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 96,
+        "end_line": 139,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L96-L139"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.getStats",
+      "method": "GET",
+      "path": "/api/rest/admin/sms/stats",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 144,
+        "end_line": 158,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L144-L158"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.sendTest",
+      "method": "POST",
+      "path": "/api/rest/admin/sms/test",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 163,
+        "end_line": 203,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L163-L203"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.resend",
+      "method": "POST",
+      "path": "/api/rest/admin/sms/{id}/resend",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 208,
+        "end_line": 232,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L208-L232"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.sendBulk",
+      "method": "POST",
+      "path": "/api/rest/admin/sms/bulk",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 237,
+        "end_line": 272,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L237-L272"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.getUserLogs",
+      "method": "GET",
+      "path": "/api/rest/admin/sms/users/{userId}/logs",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 277,
+        "end_line": 301,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L277-L301"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.getTemplates",
+      "method": "GET",
+      "path": "/api/rest/admin/sms/templates",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 306,
+        "end_line": 320,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L306-L320"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "sms.sendTemplated",
+      "method": "POST",
+      "path": "/api/rest/admin/sms/send-templated",
+      "source": {
+        "path": "server/routers/sms.ts",
+        "line": 325,
+        "end_line": 385,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/sms.ts#L325-L385"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.getFlightGate",
+      "method": "GET",
+      "path": "/api/rest/gates/flight/{flightId}",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 19,
+        "end_line": 38,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L19-L38"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.getAirportGates",
+      "method": "GET",
+      "path": "/api/rest/gates/airport/{airportId}",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 43,
+        "end_line": 62,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L43-L62"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.getAvailableGates",
+      "method": "GET",
+      "path": "/api/rest/gates/available",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 71,
+        "end_line": 95,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L71-L95"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.assignGate",
+      "method": "POST",
+      "path": "/api/rest/gates/assign",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 100,
+        "end_line": 134,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L100-L134"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.updateGateAssignment",
+      "method": "PUT",
+      "path": "/api/rest/gates/assignment",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 139,
+        "end_line": 175,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L139-L175"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.releaseGate",
+      "method": "POST",
+      "path": "/api/rest/gates/release",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 180,
+        "end_line": 205,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L180-L205"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.getGateSchedule",
+      "method": "GET",
+      "path": "/api/rest/gates/schedule",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 210,
+        "end_line": 230,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L210-L230"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.createGate",
+      "method": "POST",
+      "path": "/api/rest/gates",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 235,
+        "end_line": 273,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L235-L273"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.updateGateStatus",
+      "method": "PATCH",
+      "path": "/api/rest/gates/{gateId}/status",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 278,
+        "end_line": 300,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L278-L300"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.updateGateCompatibility",
+      "method": "PUT",
+      "path": "/api/rest/gates/{gateId}/compatibility",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 302,
+        "end_line": 322,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L302-L322"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.deleteGate",
+      "method": "DELETE",
+      "path": "/api/rest/gates/{gateId}",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 327,
+        "end_line": 346,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L327-L346"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.getStats",
+      "method": "GET",
+      "path": "/api/rest/gates/stats",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 351,
+        "end_line": 375,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L351-L375"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gates.notifyGateChange",
+      "method": "POST",
+      "path": "/api/rest/gates/notify",
+      "source": {
+        "path": "server/routers/gates.ts",
+        "line": 380,
+        "end_line": 406,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gates.ts#L380-L406"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.validate",
+      "method": "POST",
+      "path": "/api/rest/vouchers/validate",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 24,
+        "end_line": 47,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L24-L47"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.applyVoucher",
+      "method": "POST",
+      "path": "/api/rest/vouchers/apply",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 56,
+        "end_line": 83,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L56-L83"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.myCredits",
+      "method": "GET",
+      "path": "/api/rest/credits/balance",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 88,
+        "end_line": 103,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L88-L103"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.myCreditHistory",
+      "method": "GET",
+      "path": "/api/rest/credits/history",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 108,
+        "end_line": 122,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L108-L122"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.myCreditUsage",
+      "method": "GET",
+      "path": "/api/rest/credits/usage",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 127,
+        "end_line": 141,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L127-L141"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.useCredits",
+      "method": "POST",
+      "path": "/api/rest/credits/use",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 146,
+        "end_line": 171,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L146-L171"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.create",
+      "method": "POST",
+      "path": "/api/rest/admin/vouchers",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 180,
+        "end_line": 225,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L180-L225"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.getAll",
+      "method": "GET",
+      "path": "/api/rest/admin/vouchers",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 230,
+        "end_line": 252,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L230-L252"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.getById",
+      "method": "GET",
+      "path": "/api/rest/admin/vouchers/{id}",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 257,
+        "end_line": 276,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L257-L276"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.update",
+      "method": "PUT",
+      "path": "/api/rest/admin/vouchers/{id}",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 281,
+        "end_line": 310,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L281-L310"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.deactivate",
+      "method": "POST",
+      "path": "/api/rest/admin/vouchers/{id}/deactivate",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 315,
+        "end_line": 334,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L315-L334"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.getUsageHistory",
+      "method": "GET",
+      "path": "/api/rest/admin/vouchers/{id}/usage",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 339,
+        "end_line": 358,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L339-L358"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.addCredit",
+      "method": "POST",
+      "path": "/api/rest/admin/credits",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 363,
+        "end_line": 408,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L363-L408"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.getUserCredits",
+      "method": "GET",
+      "path": "/api/rest/admin/credits/user/{userId}",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 413,
+        "end_line": 432,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L413-L432"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.getAllCredits",
+      "method": "GET",
+      "path": "/api/rest/admin/credits",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 437,
+        "end_line": 457,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L437-L457"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "vouchers.processExpiredCredits",
+      "method": "POST",
+      "path": "/api/rest/admin/credits/process-expired",
+      "source": {
+        "path": "server/routers/vouchers.ts",
+        "line": 462,
+        "end_line": 477,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/vouchers.ts#L462-L477"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "mfa.setup",
+      "method": "POST",
+      "path": "/api/rest/mfa/setup",
+      "source": {
+        "path": "server/routers/mfa.ts",
+        "line": 53,
+        "end_line": 98,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/mfa.ts#L53-L98"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "mfa.verify",
+      "method": "POST",
+      "path": "/api/rest/mfa/verify",
+      "source": {
+        "path": "server/routers/mfa.ts",
+        "line": 104,
+        "end_line": 146,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/mfa.ts#L104-L146"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "mfa.disable",
+      "method": "POST",
+      "path": "/api/rest/mfa/disable",
+      "source": {
+        "path": "server/routers/mfa.ts",
+        "line": 151,
+        "end_line": 185,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/mfa.ts#L151-L185"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "mfa.regenerateBackupCodes",
+      "method": "POST",
+      "path": "/api/rest/mfa/regenerate-backup-codes",
+      "source": {
+        "path": "server/routers/mfa.ts",
+        "line": 191,
+        "end_line": 228,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/mfa.ts#L191-L228"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "mfa.getStatus",
+      "method": "GET",
+      "path": "/api/rest/mfa/status",
+      "source": {
+        "path": "server/routers/mfa.ts",
+        "line": 233,
+        "end_line": 274,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/mfa.ts#L233-L274"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiRegion.getRegions",
+      "method": "GET",
+      "path": "/api/rest/multi-region/regions",
+      "source": {
+        "path": "server/routers/multi-region.ts",
+        "line": 19,
+        "end_line": 39,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L19-L39"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiRegion.getRegionHealth",
+      "method": "GET",
+      "path": "/api/rest/multi-region/health/{regionId}",
+      "source": {
+        "path": "server/routers/multi-region.ts",
+        "line": 44,
+        "end_line": 64,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L44-L64"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiRegion.getReplicationStatus",
+      "method": "GET",
+      "path": "/api/rest/multi-region/replication",
+      "source": {
+        "path": "server/routers/multi-region.ts",
+        "line": 69,
+        "end_line": 84,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L69-L84"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiRegion.getLatencyMap",
+      "method": "GET",
+      "path": "/api/rest/multi-region/latency",
+      "source": {
+        "path": "server/routers/multi-region.ts",
+        "line": 89,
+        "end_line": 104,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L89-L104"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiRegion.getFailoverHistory",
+      "method": "GET",
+      "path": "/api/rest/multi-region/failover/history",
+      "source": {
+        "path": "server/routers/multi-region.ts",
+        "line": 109,
+        "end_line": 124,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L109-L124"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiRegion.triggerSync",
+      "method": "POST",
+      "path": "/api/rest/multi-region/sync",
+      "source": {
+        "path": "server/routers/multi-region.ts",
+        "line": 133,
+        "end_line": 161,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L133-L161"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiRegion.initiateFailover",
+      "method": "POST",
+      "path": "/api/rest/multi-region/failover",
+      "source": {
+        "path": "server/routers/multi-region.ts",
+        "line": 166,
+        "end_line": 191,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L166-L191"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "multiRegion.updateRegion",
+      "method": "PATCH",
+      "path": "/api/rest/multi-region/regions/{regionId}",
+      "source": {
+        "path": "server/routers/multi-region.ts",
+        "line": 196,
+        "end_line": 238,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/multi-region.ts#L196-L238"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "codeshare.createAgreement",
+      "method": "POST",
+      "path": "/api/rest/admin/codeshare/agreements",
+      "source": {
+        "path": "server/routers/codeshare.ts",
+        "line": 32,
+        "end_line": 134,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L32-L134"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "codeshare.updateAgreement",
+      "method": "PUT",
+      "path": "/api/rest/admin/codeshare/agreements/{id}",
+      "source": {
+        "path": "server/routers/codeshare.ts",
+        "line": 140,
+        "end_line": 233,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L140-L233"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "codeshare.getAgreement",
+      "method": "GET",
+      "path": "/api/rest/admin/codeshare/agreements/{id}",
+      "source": {
+        "path": "server/routers/codeshare.ts",
+        "line": 238,
+        "end_line": 263,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L238-L263"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "codeshare.listAgreements",
+      "method": "GET",
+      "path": "/api/rest/admin/codeshare/agreements",
+      "source": {
+        "path": "server/routers/codeshare.ts",
+        "line": 268,
+        "end_line": 335,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L268-L335"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "codeshare.activate",
+      "method": "POST",
+      "path": "/api/rest/admin/codeshare/agreements/{id}/activate",
+      "source": {
+        "path": "server/routers/codeshare.ts",
+        "line": 341,
+        "end_line": 370,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L341-L370"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "codeshare.terminate",
+      "method": "POST",
+      "path": "/api/rest/admin/codeshare/agreements/{id}/terminate",
+      "source": {
+        "path": "server/routers/codeshare.ts",
+        "line": 376,
+        "end_line": 413,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L376-L413"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "codeshare.getCodeshareFlights",
+      "method": "GET",
+      "path": "/api/rest/codeshare/flights/{airlineId}",
+      "source": {
+        "path": "server/routers/codeshare.ts",
+        "line": 423,
+        "end_line": 451,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L423-L451"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "codeshare.calculateRevenue",
+      "method": "POST",
+      "path": "/api/rest/admin/codeshare/agreements/{agreementId}/revenue",
+      "source": {
+        "path": "server/routers/codeshare.ts",
+        "line": 461,
+        "end_line": 507,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/codeshare.ts#L461-L507"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.createFareClass",
+      "method": "POST",
+      "path": "/api/rest/admin/fare-classes",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 63,
+        "end_line": 166,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L63-L166"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.updateFareClass",
+      "method": "PATCH",
+      "path": "/api/rest/admin/fare-classes/{id}",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 172,
+        "end_line": 291,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L172-L291"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.getFareClass",
+      "method": "GET",
+      "path": "/api/rest/fare-classes/{id}",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 297,
+        "end_line": 325,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L297-L325"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.listFareClasses",
+      "method": "GET",
+      "path": "/api/rest/fare-classes",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 331,
+        "end_line": 364,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L331-L364"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.getFareClassAvailability",
+      "method": "GET",
+      "path": "/api/rest/fare-classes/availability/{flightId}",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 370,
+        "end_line": 405,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L370-L405"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.createFareRule",
+      "method": "POST",
+      "path": "/api/rest/admin/fare-rules",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 415,
+        "end_line": 514,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L415-L514"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.updateFareRule",
+      "method": "PATCH",
+      "path": "/api/rest/admin/fare-rules/{id}",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 520,
+        "end_line": 625,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L520-L625"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.getFareRule",
+      "method": "GET",
+      "path": "/api/rest/admin/fare-rules/{id}",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 631,
+        "end_line": 660,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L631-L660"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.listFareRules",
+      "method": "GET",
+      "path": "/api/rest/admin/fare-rules",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 666,
+        "end_line": 718,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L666-L718"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.calculateFare",
+      "method": "POST",
+      "path": "/api/rest/fare-rules/calculate",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 728,
+        "end_line": 783,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L728-L783"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.validateRules",
+      "method": "POST",
+      "path": "/api/rest/fare-rules/validate",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 789,
+        "end_line": 830,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L789-L830"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.compareFareClasses",
+      "method": "POST",
+      "path": "/api/rest/fare-rules/compare",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 836,
+        "end_line": 875,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L836-L875"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "fareRules.calculateChangeFee",
+      "method": "POST",
+      "path": "/api/rest/fare-rules/change-fee",
+      "source": {
+        "path": "server/routers/fare-rules.ts",
+        "line": 881,
+        "end_line": 920,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/fare-rules.ts#L881-L920"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.airShopping",
+      "method": "POST",
+      "path": "/api/rest/ndc/air-shopping",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 164,
+        "end_line": 225,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L164-L225"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.offerPrice",
+      "method": "POST",
+      "path": "/api/rest/ndc/offer-price",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 233,
+        "end_line": 273,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L233-L273"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.createOrder",
+      "method": "POST",
+      "path": "/api/rest/ndc/orders",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 285,
+        "end_line": 344,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L285-L344"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.retrieveOrder",
+      "method": "GET",
+      "path": "/api/rest/ndc/orders/{orderId}",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 352,
+        "end_line": 401,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L352-L401"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.cancelOrder",
+      "method": "POST",
+      "path": "/api/rest/ndc/orders/{orderId}/cancel",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 409,
+        "end_line": 451,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L409-L451"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.changeOrder",
+      "method": "POST",
+      "path": "/api/rest/ndc/orders/{orderId}/change",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 459,
+        "end_line": 545,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L459-L545"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.addServices",
+      "method": "POST",
+      "path": "/api/rest/ndc/orders/{orderId}/services",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 557,
+        "end_line": 605,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L557-L605"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.listOrders",
+      "method": "GET",
+      "path": "/api/rest/ndc/admin/orders",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 617,
+        "end_line": 691,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L617-L691"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.getOrderHistory",
+      "method": "GET",
+      "path": "/api/rest/ndc/orders/history",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 699,
+        "end_line": 728,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L699-L728"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.expireOffers",
+      "method": "POST",
+      "path": "/api/rest/ndc/admin/expire-offers",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 740,
+        "end_line": 769,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L740-L769"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "ndc.getStatistics",
+      "method": "GET",
+      "path": "/api/rest/ndc/admin/statistics",
+      "source": {
+        "path": "server/routers/ndc.ts",
+        "line": 777,
+        "end_line": 806,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/ndc.ts#L777-L806"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.createConnection",
+      "method": "POST",
+      "path": "/api/rest/gds/connections",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 215,
+        "end_line": 250,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L215-L250"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.updateConnection",
+      "method": "PUT",
+      "path": "/api/rest/gds/connections/{id}",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 255,
+        "end_line": 291,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L255-L291"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.getConnection",
+      "method": "GET",
+      "path": "/api/rest/gds/connections/{id}",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 296,
+        "end_line": 335,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L296-L335"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.listConnections",
+      "method": "GET",
+      "path": "/api/rest/gds/connections",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 340,
+        "end_line": 372,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L340-L372"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.testConnection",
+      "method": "POST",
+      "path": "/api/rest/gds/connections/{connectionId}/test",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 377,
+        "end_line": 409,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L377-L409"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.searchAvailability",
+      "method": "POST",
+      "path": "/api/rest/gds/search",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 418,
+        "end_line": 453,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L418-L453"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.createGdsBooking",
+      "method": "POST",
+      "path": "/api/rest/gds/bookings",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 458,
+        "end_line": 493,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L458-L493"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.getMessageLog",
+      "method": "GET",
+      "path": "/api/rest/gds/connections/{connectionId}/messages",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 502,
+        "end_line": 541,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L502-L541"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "gds.getStatistics",
+      "method": "GET",
+      "path": "/api/rest/gds/connections/{connectionId}/statistics",
+      "source": {
+        "path": "server/routers/gds.ts",
+        "line": 546,
+        "end_line": 583,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/gds.ts#L546-L583"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "agentGovernance.getAiCostBreakdown",
+      "method": "GET",
+      "path": "/api/rest/agent-governance/ai-cost",
+      "source": {
+        "path": "server/routers/agent-governance.ts",
+        "line": 18,
+        "end_line": 43,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/agent-governance.ts#L18-L43"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "agentGovernance.overrideDecision",
+      "method": "POST",
+      "path": "/api/rest/agent-governance/override-decision",
+      "source": {
+        "path": "server/routers/agent-governance.ts",
+        "line": 48,
+        "end_line": 75,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/agent-governance.ts#L48-L75"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "seatEconomics.getByBooking",
+      "method": "GET",
+      "path": "/api/rest/seat-economics/booking/{bookingId}",
+      "source": {
+        "path": "server/routers/seat-economics.ts",
+        "line": 15,
+        "end_line": 44,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/seat-economics.ts#L15-L44"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "seatEconomics.getByFlight",
+      "method": "GET",
+      "path": "/api/rest/seat-economics/flight/{flightId}",
+      "source": {
+        "path": "server/routers/seat-economics.ts",
+        "line": 49,
+        "end_line": 67,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/seat-economics.ts#L49-L67"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "priceQuote.get",
+      "method": "POST",
+      "path": "/api/rest/price-quote",
+      "source": {
+        "path": "server/routers/price-quote.ts",
+        "line": 61,
+        "end_line": 86,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/price-quote.ts#L61-L86"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "boardingPass.issue",
+      "method": "POST",
+      "path": "/api/rest/boarding-pass/issue",
+      "source": {
+        "path": "server/routers/boarding-pass.ts",
+        "line": 15,
+        "end_line": 41,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/boarding-pass.ts#L15-L41"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    },
+    {
+      "procedure": "boardingPass.verify",
+      "method": "POST",
+      "path": "/api/rest/boarding-pass/verify",
+      "source": {
+        "path": "server/routers/boarding-pass.ts",
+        "line": 43,
+        "end_line": 58,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routers/boarding-pass.ts#L43-L58"
+      },
+      "adapter": "server/_core/rest.ts:76-179",
+      "mount": "server/_core/index.ts:250-262"
+    }
+  ],
+  "explicit_resources": [
+    {
+      "kind": "explicit-native",
+      "path": "/api/stripe/webhook",
+      "methods": ["POST"],
+      "audience": "provider",
+      "authority": "Stripe signature and canonical webhook handler",
+      "source": {
+        "path": "server/_core/index.ts",
+        "line": 116,
+        "end_line": 116,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/_core/index.ts#L116"
+      }
+    },
+    {
+      "kind": "explicit-native",
+      "path": "/api/metrics",
+      "methods": ["GET"],
+      "audience": "machine",
+      "authority": "Optional configured METRICS_TOKEN; source warns in production when missing",
+      "source": {
+        "path": "server/_core/index.ts",
+        "line": 130,
+        "end_line": 130,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/_core/index.ts#L130"
+      }
+    },
+    {
+      "kind": "explicit-native",
+      "path": "/api/rest/reports/preview",
+      "methods": ["QUERY", "POST", "OPTIONS"],
+      "audience": "staff-report",
+      "authority": "Original standardReports.run authorization; report44 only; OPTIONS discovery",
+      "source": {
+        "path": "server/routes/report-preview.ts",
+        "line": 147,
+        "end_line": 147,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routes/report-preview.ts#L147"
+      },
+      "backing_procedures": ["standardReports.run"],
+      "browser_source": {
+        "path": "client/src/lib/report-preview.ts",
+        "line": 32,
+        "end_line": 32,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/lib/report-preview.ts#L32"
+      }
+    },
+    {
+      "kind": "explicit-native",
+      "path": "/api/data-warehouse/download/:id",
+      "methods": ["GET"],
+      "audience": "staff-download",
+      "authority": "isAdmin admin/super_admin check",
+      "source": {
+        "path": "server/routes/operational-integrations.ts",
+        "line": 11,
+        "end_line": 11,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routes/operational-integrations.ts#L11"
+      }
+    },
+    {
+      "kind": "explicit-native",
+      "path": "/api/events/inbox",
+      "methods": ["POST"],
+      "audience": "machine-integration",
+      "authority": "OUTBOX_PUBLISH_TOKEN and matching idempotency-key",
+      "source": {
+        "path": "server/routes/operational-integrations.ts",
+        "line": 58,
+        "end_line": 58,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routes/operational-integrations.ts#L58"
+      }
+    },
+    {
+      "kind": "explicit-native",
+      "path": "/api/gdpr/download/:requestId",
+      "methods": ["GET"],
+      "audience": "owner-download",
+      "authority": "Authenticated user and openPrivacyDownload(user.id,requestId)",
+      "source": {
+        "path": "server/routes/privacy-download.ts",
+        "line": 7,
+        "end_line": 7,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routes/privacy-download.ts#L7"
+      }
+    },
+    {
+      "kind": "explicit-native",
+      "path": "/api/oauth/callback",
+      "methods": ["GET"],
+      "audience": "identity-callback",
+      "authority": "OAuth code/state exchange, MFA flow or session creation",
+      "source": {
+        "path": "server/_core/oauth.ts",
+        "line": 16,
+        "end_line": 16,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/_core/oauth.ts#L16"
+      }
+    },
+    {
+      "kind": "explicit-native",
+      "path": "/api/openapi.json",
+      "methods": ["GET"],
+      "audience": "api-documentation",
+      "authority": "Public generated OpenAPI document",
+      "source": {
+        "path": "server/_core/index.ts",
+        "line": 213,
+        "end_line": 213,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/_core/index.ts#L213"
+      }
+    },
+    {
+      "kind": "explicit-native",
+      "path": "/api/docs",
+      "methods": ["GET"],
+      "audience": "api-documentation",
+      "authority": "Swagger UI middleware mount; no business operation",
+      "source": {
+        "path": "server/_core/index.ts",
+        "line": 244,
+        "end_line": 244,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/_core/index.ts#L244"
+      }
+    }
+  ],
+  "transport_mounts": [
+    {
+      "path": "/api/trpc",
+      "source": {
+        "path": "server/_core/index.ts",
+        "line": 269,
+        "end_line": 269,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/_core/index.ts#L269"
+      },
+      "procedures": 844
+    }
+  ],
+  "unmounted_legacy_declarations": [
+    {
+      "method": "POST",
+      "local_path": "/stripe",
+      "source": {
+        "path": "server/routes/webhooks.ts",
+        "line": 16,
+        "end_line": 20,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routes/webhooks.ts#L16-L20"
+      },
+      "reachable_from_api": false
+    },
+    {
+      "method": "GET",
+      "local_path": "/health",
+      "source": {
+        "path": "server/routes/webhooks.ts",
+        "line": 22,
+        "end_line": 28,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/routes/webhooks.ts#L22-L28"
+      },
+      "reachable_from_api": false
+    },
+    {
+      "method": "GET",
+      "local_path": "/api/csrf-token",
+      "source": {
+        "path": "server/services/security.service.ts",
+        "line": 111,
+        "end_line": 114,
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/server/services/security.service.ts#L111-L114"
+      },
+      "reachable_from_api": false
+    }
+  ],
+  "interpretation": "Explicit resources include provider callbacks, machine integrations, downloads and documentation. Unmounted legacy declarations are not advertised routes. QUERY preview is a narrow report-44 adapter, not a method replacement for all tRPC/REST endpoints."
+}

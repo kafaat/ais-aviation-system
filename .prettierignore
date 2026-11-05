@@ -36,3 +36,6 @@ drizzle/legacy-migrations/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Immutable audit receipts: preserve the recorded byte hashes
+docs/audits/ui-service-connectivity-20261105/evidence/

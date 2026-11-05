@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "interpretation": "Manually classified unused components; unused files do not automatically imply a missing capability.",
+  "records": [
+    {
+      "source": {
+        "path": "client/src/components/FavoriteButton.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/FavoriteButton.tsx"
+      },
+      "classification": "coverage_gap",
+      "interpretation": "Adds/removes an individual flight, but is not imported. Reachable FavoritesPage lists saved flights and can remove them; no reachable favorites.addFlight exists. Card hearts in SearchResults add a route favorite instead.",
+      "call_site_ids": ["C0149", "C0150", "C0151", "C0152", "C0153"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/FlightReviewsSection.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/FlightReviewsSection.tsx"
+      },
+      "classification": "coverage_gap",
+      "interpretation": "Review creation is reachable through MyBookings/ReviewForm. Reading reviews, rating summaries, and helpful votes are not reachable through this unused component and ReviewsList.",
+      "call_site_ids": ["C0164", "C0165"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/PriceCalendar.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/PriceCalendar.tsx"
+      },
+      "classification": "coverage_gap",
+      "interpretation": "Calendar and FlexibleDateSearch are referenced only by unused SearchForm or lazy wrappers. Neither priceCalendar procedure is reachable; current Home does have normal and multi-city search.",
+      "call_site_ids": ["C0237"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/BiometricEnrollment.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/BiometricEnrollment.tsx"
+      },
+      "classification": "intentional_or_unsafe_to_activate_without_provider",
+      "interpretation": "Not imported. Capture generates random bytes after a delay (lines104-121), rather than using a biometric device. Do not expose it as a production enrollment flow without a verified provider.",
+      "call_site_ids": ["C0036", "C0037", "C0038", "C0039", "C0040"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/VoucherInput.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/VoucherInput.tsx"
+      },
+      "classification": "alternate_active_flow",
+      "interpretation": "Unused old validator component; CheckoutResume applies vouchers through vouchers.applyVoucher.",
+      "call_site_ids": ["C0284", "C0285"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/CreditBalance.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/CreditBalance.tsx"
+      },
+      "classification": "alternate_active_flow",
+      "interpretation": "Unused old component; reachable wallet/booking-payment components call vouchers.myCredits/useCredits.",
+      "call_site_ids": ["C0078", "C0079"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/MealPreOrder.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/MealPreOrder.tsx"
+      },
+      "classification": "alternate_active_flow",
+      "interpretation": "Unused specialist component; ManageAncillariesDialog exposes meal category through ancillary.getAvailable/addToBooking/removeFromBooking.",
+      "call_site_ids": ["C0205", "C0206", "C0207"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/PaymentMethodSelector.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/PaymentMethodSelector.tsx"
+      },
+      "classification": "requires_backend_provider_classification",
+      "interpretation": "Unused provider selector; real checkout creates/reuses checkout sessions. Absence of getProviders UI alone does not prove every provider should be offered.",
+      "call_site_ids": ["C0234"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/AIChatBooking.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/AIChatBooking.tsx"
+      },
+      "classification": "alternate_routed_page_with_discovery_gap",
+      "interpretation": "Unused floating widget; /ai-chat page calls startConversation/sendMessage. Page discovery was separately confirmed missing.",
+      "call_site_ids": ["C0004", "C0005", "C0006", "C0007", "C0008", "C0009"]
+    },
+    {
+      "source": {
+        "path": "client/src/components/FlightStatusTimeline.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/components/FlightStatusTimeline.tsx"
+      },
+      "classification": "optional_history_view",
+      "interpretation": "Unused event timeline; flight status polling and flight-tracking pages are wired. Do not label live status service absent.",
+      "call_site_ids": ["C0166"]
+    },
+    {
+      "source": {
+        "path": "client/src/pages/admin/AnalyticsDashboard.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/pages/admin/AnalyticsDashboard.tsx"
+      },
+      "classification": "unused_duplicate",
+      "interpretation": "Unrouted older analytics page. /analytics uses pages/AnalyticsDashboard.tsx and is wired.",
+      "call_site_ids": ["C0494", "C0495", "C0496", "C0497", "C0498"]
+    },
+    {
+      "source": {
+        "path": "client/src/contexts/AuthContext.tsx",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/fcc32cc05325c6ab9aae5fb895a42ecb46287f92/client/src/contexts/AuthContext.tsx"
+      },
+      "classification": "unused_legacy_transport",
+      "interpretation": "Unused context; current useAuth and tRPC cookie transport are active.",
+      "call_site_ids": ["C0296", "C0297", "C0298", "C0299", "C0300"]
+    }
+  ]
+}

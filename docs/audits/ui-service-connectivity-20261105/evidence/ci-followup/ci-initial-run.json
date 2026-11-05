@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "run_id": 42069287575,
+  "run_url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42069287575",
+  "run_head_sha": "34c3169823525f28db4d2f4cfdadbb0d6082dbc8",
+  "run_attempt": 1,
+  "unit_job": {
+    "id": 127394713400,
+    "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42069287575/job/127394713400",
+    "conclusion": "failure",
+    "files": {
+      "total": 392,
+      "passed": 391,
+      "failed": 1
+    },
+    "tests": {
+      "total": 5456,
+      "passed": 5455,
+      "failed": 1
+    },
+    "skipped_reported": false,
+    "evidence": [
+      "2026-11-05T17:06:07.3163265Z  FAIL   server  server/routers/refund-detail-authority.test.ts > refund detail authority boundary > binds non-admin refund reads to payment intent and booking owner",
+      "2026-11-05T17:06:07.3168755Z AssertionError: expected 'import { assertBookingDepartureReleas…' to contain 'actor.role !== \"admin\"'",
+      "2026-11-05T17:06:07.3449586Z  ❯ server/routers/refund-detail-authority.test.ts:20:20",
+      "2026-11-05T17:06:07.3456535Z  Test Files  1 failed | 391 passed (392)",
+      "2026-11-05T17:06:07.3457511Z       Tests  1 failed | 5455 passed (5456)",
+      "2026-11-05T17:06:07.3459053Z    Duration  350.27s (transform 17.43s, setup 22.90s, import 223.02s, tests 676.48s, environment 33.29s)"
+    ],
+    "cause": "The only failing assertion is a stale source-string expectation in refund-detail-authority.test.ts for actor.role !== admin. Runtime refund security tests passed; production uses canonical !isAdmin(actor.role)."
+  },
+  "passed_changed_suites": [
+    "2026-11-05T17:01:02.8915964Z  ✓  client  client/src/components/__tests__/ServiceNavigation.test.tsx (28 tests) 3465ms",
+    "2026-11-05T17:01:09.9146049Z  ✓  client  client/src/pages/__tests__/service-routes.test.tsx (16 tests) 7623ms",
+    "2026-11-05T17:01:23.7068673Z  ✓  client  client/src/pages/__tests__/GroupBookingNavigation.test.tsx (3 tests) 1232ms",
+    "2026-11-05T17:03:45.4880770Z  ✓  server  server/services/refunds.security.test.ts (47 tests) 45ms",
+    "2026-11-05T17:04:02.0245941Z  ✓  server  server/__tests__/baggage-entitlement.test.ts (29 tests) 36ms",
+    "2026-11-05T17:05:09.8298319Z  ✓  server  server/routers/refunds.security.test.ts (13 tests) 18ms",
+    "2026-11-05T17:05:49.0955505Z  ✓  server  server/routers/ancillary-assignment-read.test.ts (10 tests) 17ms"
+  ],
+  "downstream": {
+    "build": {
+      "status": "skipped",
+      "needs": [
+        "lint",
+        "test",
+        "security"
+      ],
+      "failed_needs": [
+        "test",
+        "security"
+      ]
+    },
+    "e2e": {
+      "status": "skipped",
+      "needs": [
+        "lint",
+        "test"
+      ],
+      "failed_needs": [
+        "test"
+      ],
+      "new_native_cases_executed": false
+    }
+  },
+  "mutation_note": "Read-only inspection; no workflow rerun or remote mutation."
+}

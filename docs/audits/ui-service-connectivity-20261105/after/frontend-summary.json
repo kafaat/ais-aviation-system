@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "base_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "source_state": "working tree; includes untracked files; not committed",
+  "observed_at": "2026-11-05T16:29:24.570Z",
+  "source_set_sha256": "9f7f8950c8004b97e32c04a65812596eb66249353d7b0ecbb8b745d04591e599",
+  "counts": {
+    "runtime_source_files": 314,
+    "import_reachable_files_from_main": 238,
+    "page_components": 71,
+    "explicit_routes": 70,
+    "all_api_call_sites": 809,
+    "import_reachable_api_call_sites": 751,
+    "all_unique_trpc_procedures": 435,
+    "import_reachable_unique_trpc_procedures": 418
+  },
+  "unknown_procedures": [],
+  "hook_type_mismatches": [],
+  "routes_without_internal_inbound_navigation": [
+    ["/embed/search"],
+    ["/404", null],
+    ["/pay/:token/:status?"]
+  ],
+  "method": "git ls-files --cached --others --exclude-standard -- client/src shared; AST runtime files only; navigation also resolves literal path/label tuples and conditional JSX href branches",
+  "interpretation": "A separate working-tree AST snapshot, including new files. The base SHA is not a claim that these changes are committed. Improved template/tuple/conditional navigation matching differs from the initial extractor; findings were manually confirmed. No native acceptance result is inferred.",
+  "validation_status": "see_separate_validation_record"
+}

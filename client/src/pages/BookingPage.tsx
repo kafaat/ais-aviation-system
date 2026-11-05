@@ -43,7 +43,6 @@ import {
   Share2,
   Users,
   Split,
-  MessageSquare,
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -166,8 +165,6 @@ function BookingForm({
   const [selectedSeats, setSelectedSeats] = useState<
     { id: string; row: number; column: string }[]
   >([]);
-  const [smsNotification, setSmsNotification] = useState(false);
-  const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
 
   const { data: flight, isLoading } = trpc.flights.getById.useQuery({
     id: flightId,
@@ -234,24 +231,6 @@ function BookingForm({
     };
   };
   const savePassengerMutation = trpc.savedPassengers.add.useMutation();
-
-  // Get user preferences for SMS phone number
-  const { data: userPrefs } = trpc.userPreferences.getMyPreferences.useQuery(
-    undefined,
-    {
-      enabled: !!user,
-    }
-  );
-
-  // Update state when user preferences are loaded
-  useEffect(() => {
-    if (userPrefs?.phoneNumber && !smsPhoneNumber) {
-      setSmsPhoneNumber(userPrefs.phoneNumber);
-    }
-    if (userPrefs?.smsNotifications != null) {
-      setSmsNotification(userPrefs.smsNotifications);
-    }
-  }, [userPrefs]);
 
   // Rebooking: fetch previous booking data to pre-fill passengers
   const { data: rebookData } = trpc.rebooking.getRebookData.useQuery(
@@ -1318,42 +1297,6 @@ function BookingForm({
                         amountMinor={Math.round(totalAmount * 100)}
                       />
                     </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* SMS Notification Option */}
-              <div className="mb-6 p-4 border rounded-lg bg-muted/30">
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="sms-notification"
-                    checked={smsNotification}
-                    onCheckedChange={(checked: boolean) =>
-                      setSmsNotification(checked)
-                    }
-                  />
-                  <div className="space-y-1 flex-1">
-                    <Label
-                      htmlFor="sms-notification"
-                      className="text-sm font-medium cursor-pointer flex items-center gap-2"
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                      {t("sms.receiveNotifications")}
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      {t("sms.notificationDescription")}
-                    </p>
-                    {smsNotification && (
-                      <div className="mt-2">
-                        <Input
-                          type="tel"
-                          placeholder={t("sms.phoneNumberPlaceholder")}
-                          value={smsPhoneNumber}
-                          onChange={e => setSmsPhoneNumber(e.target.value)}
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

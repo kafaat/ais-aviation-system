@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "algorithm": "sha256",
+  "baseline_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "input_root_label": "ais-ui-audit-work",
+  "scope": "Checksums of consumed audit input artifacts only. No runtime environment files, private provider data, test logs or output self-checksums are included. Input inventories are preserved outside this projection.",
+  "inputs": [
+    {
+      "input_artifact": "backend/baseline-classification-summary.json",
+      "sha256": "c75ce33b3f851673123ffc59732f2fa488ed5fd31d063a75df64751087bf8768",
+      "bytes": 826,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/capability-catalog.json",
+      "sha256": "331d3b648c301503d6328ebfe738a66a0d90a8a2813ce5270f20b8e4cca7f8c1",
+      "bytes": 7298,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/findings.json",
+      "sha256": "8d529f70c989de55d2c510d3cad94122201edb963ed9bf42ba1eacfac70e8dff",
+      "bytes": 6317,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/human-api-only-candidates.json",
+      "sha256": "f38b3c5f48bf0e3cf74166b4ff5ef3e14efec0e5129b7b57357f71e2a62ab43c",
+      "bytes": 36685,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/procedure-classification.json",
+      "sha256": "8acb18bf995a53a2e2c9937310ac2f5c8483f9c9b812efc3f8e6d0d7b41b5efa",
+      "bytes": 512754,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/rest-inventory.json",
+      "sha256": "6a53a1c387517321414daa271832ab37e1ee46c14d6c464e05d5083551c9603b",
+      "bytes": 273325,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/router-mounts.json",
+      "sha256": "55c3b648428c27589d4d0752732c3535c59e395b3bbc397ee97934303c5e6064",
+      "bytes": 16430,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/service-reachability.json",
+      "sha256": "64f39261b2ef3d14bd71a397100ead0057a184d943f4e036e8d3ff1e757bcdf7",
+      "bytes": 231738,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/summary.json",
+      "sha256": "7dd230d2f41e65f35898ffea55693d24f2ae157007d456898a2ee76e73369a0b",
+      "bytes": 1869,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "backend/trpc-procedures.json",
+      "sha256": "17dd967f4d73b4b9b47a6ff7634e00f61388d02e7ec3183edcc8ba2c1d480fcd",
+      "bytes": 1850943,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend-after/route-coverage.json",
+      "sha256": "318742e41955c3f7259c9a6c8c4a471b835299c2e8b4aea99a333757e8ff2ccb",
+      "bytes": 101607,
+      "snapshot": "working_tree_after"
+    },
+    {
+      "input_artifact": "frontend-after/routes.json",
+      "sha256": "a90aae51638cfae5c3df5ff25829465fab20c1df982991d5e54be16e7aae4386",
+      "bytes": 28670,
+      "snapshot": "working_tree_after"
+    },
+    {
+      "input_artifact": "frontend-after/summary.json",
+      "sha256": "f4bfe3c56f9f72d948dd85a5f6442b0e22c3dd987cbfd9ef9f026257a21d9bb9",
+      "bytes": 15880,
+      "snapshot": "working_tree_after"
+    },
+    {
+      "input_artifact": "frontend-after/verification-summary.json",
+      "sha256": "ceb17e5950daeca3ac8ae5fff7a17943fcf2531314d3b1376e7c0c396bfbe724",
+      "bytes": 36567,
+      "snapshot": "working_tree_after"
+    },
+    {
+      "input_artifact": "frontend/api-calls.json",
+      "sha256": "4c3f439631d3b614850338893fe8c1b2d0d6dd35037693c0d3f4dbd13c6acc55",
+      "bytes": 425435,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/coverage-gaps.json",
+      "sha256": "f7299c2862c175aa7984ff40394f3548947b9f61cd505d75d172cddec1ca1aa6",
+      "bytes": 21311,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/findings.json",
+      "sha256": "006bfeea15a19f6021e9c25eb001f5139f646b2f2d90105aec67006570ef7d94",
+      "bytes": 8768,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/navigation-with-template-targets.json",
+      "sha256": "0046254a21185d5dfb85018244f0a69ef2680948dfbfabffbf8a80357ae413ae",
+      "bytes": 77577,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/orphan-classification.json",
+      "sha256": "914e86a661ba3c655dc5cd481a8f036337cdedd4eec033b5f08f7451ee142b85",
+      "bytes": 25691,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/pages.json",
+      "sha256": "93f655555c08d7d647e45426c52115cb1150ee708ffbe09be55f64ec511014b9",
+      "bytes": 1012864,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/reachable-api-calls.json",
+      "sha256": "f60dab96df76e2580b3a64a1dc1a94ab2c1402b549c2c7621091c6e585ebca89",
+      "bytes": 394178,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/reachable-files.json",
+      "sha256": "4aae2c1da628584eecc4c066d4fc93c1510b8f38df55ff0252d87f759ae33869",
+      "bytes": 10158,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/reachable-procedures.json",
+      "sha256": "8df1f48635b0367cc0c5f382e69dc07aacd8c40daebee1eaea92528d6c88d7cb",
+      "bytes": 635571,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/route-coverage.json",
+      "sha256": "382a6a08a5efa6793af980c9a328508a261547ceac14a88456b031c9b0ef2adb",
+      "bytes": 94447,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/routes.json",
+      "sha256": "a90aae51638cfae5c3df5ff25829465fab20c1df982991d5e54be16e7aae4386",
+      "bytes": 28670,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "frontend/summary.json",
+      "sha256": "2b90f6de4d35e650934e72a9801826dfd7a22dd19f36ddc179f76b3d01eedacd",
+      "bytes": 16069,
+      "snapshot": "baseline"
+    },
+    {
+      "input_artifact": "journeys/cross-layer-journeys.json",
+      "sha256": "6762daab9a931bcda21ce1016c1bf73d3ec8608bc8d289482c39db7c85f4a5eb",
+      "bytes": 74820,
+      "snapshot": "baseline"
+    }
+  ]
+}

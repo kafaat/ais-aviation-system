@@ -11,6 +11,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { bookings, bookingAncillaries } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { isAdmin } from "../services/rbac.service";
 
 /**
  * Ancillary Services Router
@@ -174,7 +175,7 @@ export const ancillaryRouter = router({
         });
       }
 
-      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+      if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",

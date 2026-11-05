@@ -1,0 +1,26 @@
+{
+  "changed_file": "server/routers/refund-detail-authority.test.ts",
+  "production_files_changed": [],
+  "test_result": "refund-detail-authority-followup.results.json",
+  "files": 3,
+  "passed": 63,
+  "failed": 0,
+  "skipped": 0,
+  "prior_distinct_tests": 272,
+  "overlap_with_prior": 60,
+  "additional_distinct_tests": 3,
+  "additional_test_names": [
+    "server/routers/refund-detail-authority.test.ts :: refund detail authority boundary binds non-admin refund reads to payment intent and booking owner",
+    "server/routers/refund-detail-authority.test.ts :: refund detail authority boundary keeps unauthorized refund reads behind a not-found boundary",
+    "server/routers/refund-detail-authority.test.ts :: refund detail authority boundary passes the authenticated actor into refund detail lookup"
+  ],
+  "distinct_union": 275,
+  "lint": "passed; max-warnings 0",
+  "prettier": "passed",
+  "diff_check": "passed",
+  "runtime_authorization_evidence": [
+    "server/services/refunds.security.test.ts:235-266 covers cross-owner admin/super_admin reads and user/finance/airline_admin concealment",
+    "server/__tests__/split-refund-boundary.test.ts:742-761 covers owner refund detail success and foreign owner rejection; previously passed in focused-final-2 and the full CI run"
+  ],
+  "scope": "Only the stale structural assertion was updated to require canonical isAdmin import and call. Authenticated actor, payment intent, owner binding and NOT_FOUND assertions were retained."
+}

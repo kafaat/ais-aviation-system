@@ -1,0 +1,3346 @@
+{
+  "schema_version": 1,
+  "base_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "source_state": "working_tree_after",
+  "source_set_sha256": "9f7f8950c8004b97e32c04a65812596eb66249353d7b0ecbb8b745d04591e599",
+  "routes": [
+    {
+      "path": "/",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 257
+      },
+      "page_files": ["client/src/pages/Home.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/App.tsx",
+            "line": 211
+          },
+          "kind": "location_assignment",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/AdminRoute.tsx",
+            "line": 39
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 82
+          },
+          "kind": "navigation_data",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/ErrorBoundary.tsx",
+            "line": 107
+          },
+          "kind": "location_assignment",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/OperationalReadState.tsx",
+            "line": 21
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AccessibilityStatement.tsx",
+            "line": 21
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AdminDashboard.tsx",
+            "line": 123
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AdminDashboard.tsx",
+            "line": 147
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AgentPortal.tsx",
+            "line": 593
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 248
+          },
+          "kind": "imperative_navigation",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 330
+          },
+          "kind": "imperative_navigation",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AirlineConsole.tsx",
+            "line": 28
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AnalyticsDashboard.tsx",
+            "line": 283
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AnalyticsDashboard.tsx",
+            "line": 314
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/BookingPage.tsx",
+            "line": 566
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CodeshareFlights.tsx",
+            "line": 24
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/DcsDesk.tsx",
+            "line": 266
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/EmbedSearch.tsx",
+            "line": 102
+          },
+          "kind": "jsx_a_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/EmbedSearch.tsx",
+            "line": 108
+          },
+          "kind": "jsx_a_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 130
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 168
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/KioskBagTag.tsx",
+            "line": 142
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/LiveFlightTracking.tsx",
+            "line": 155
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/ManageBooking.tsx",
+            "line": 39
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityCheckout.tsx",
+            "line": 73
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityResults.tsx",
+            "line": 193
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityResults.tsx",
+            "line": 229
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 331
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 504
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 207
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 255
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 13
+          },
+          "kind": "imperative_navigation",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 22
+          },
+          "kind": "navigation_data",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 23
+          },
+          "kind": "navigation_data",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Notifications.tsx",
+            "line": 266
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 93
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 110
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 139
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 297
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SavedPassengers.tsx",
+            "line": 117
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 78
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 375
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 464
+          },
+          "kind": "jsx_Link_href",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/APISManagement.tsx",
+            "line": 1267
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/CompensationManagement.tsx",
+            "line": 1144
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/DataWarehouse.tsx",
+            "line": 373
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/EmergencyHotelManagement.tsx",
+            "line": 1138
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/GateManagement.tsx",
+            "line": 174
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/PassengerPriority.tsx",
+            "line": 908
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/ReportsDashboard.tsx",
+            "line": 204
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/StandardReports.tsx",
+            "line": 277
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/VoucherManagement.tsx",
+            "line": 135
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/embed/search",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 258
+      },
+      "page_files": ["client/src/pages/EmbedSearch.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": []
+    },
+    {
+      "path": "/login",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 259
+      },
+      "page_files": ["client/src/pages/Login.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 338
+          },
+          "kind": "location_assignment",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/JoinWaitlistDialog.tsx",
+            "line": 79
+          },
+          "kind": "location_assignment",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AdminDashboard.tsx",
+            "line": 105
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AnalyticsDashboard.tsx",
+            "line": 268
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 302
+          },
+          "kind": "jsx_Link_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 301
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 189
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Notifications.tsx",
+            "line": 248
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 134
+          },
+          "kind": "jsx_a_href",
+          "target": "/login",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/codeshare-flights",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 264
+      },
+      "page_files": ["client/src/pages/CodeshareFlights.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 60
+          },
+          "kind": "jsx_Link_href",
+          "target": "/codeshare-flights",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/search",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 265
+      },
+      "page_files": ["client/src/pages/SearchResults.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 18
+          },
+          "kind": "navigation_tuple",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 83
+          },
+          "kind": "navigation_data",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SearchHistory.tsx",
+            "line": 157
+          },
+          "kind": "imperative_navigation",
+          "target": "/search?${params.toString()}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 52
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CompareFlights.tsx",
+            "line": 36
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CompareFlights.tsx",
+            "line": 87
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/FavoritesPage.tsx",
+            "line": 52
+          },
+          "kind": "imperative_navigation",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 174
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 138
+          },
+          "kind": "imperative_navigation",
+          "target": "/search?${params.toString()}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PriceAlerts.tsx",
+            "line": 333
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search?from=${item.origin.id}&to=${item.destination.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateDashboard.tsx",
+            "line": 471
+          },
+          "kind": "jsx_Link_href",
+          "target": "/search",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/booking/multi-city",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 270
+      },
+      "page_files": ["client/src/pages/MultiCityCheckout.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityResults.tsx",
+            "line": 171
+          },
+          "kind": "imperative_navigation",
+          "target": "/booking/multi-city?${context}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ]
+    },
+    {
+      "path": "/booking/:id",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 275
+      },
+      "page_files": ["client/src/pages/BookingPage.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/FlightCompare.tsx",
+            "line": 514
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=economy",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightCompare.tsx",
+            "line": 527
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=business",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightFavorites.tsx",
+            "line": 189
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${item.flight.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightPreviewDialog.tsx",
+            "line": 262
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=economy",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/FlightPreviewDialog.tsx",
+            "line": 310
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=business",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SmartSuggestions.tsx",
+            "line": 181
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${suggestion.flightId}?class=economy",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 469
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${s.flightId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CodeshareFlights.tsx",
+            "line": 103
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.flightId}?class=${option.cabinClass}&codeshareAllotmentId=${option.allotmentId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 195
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flightId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityResults.tsx",
+            "line": 171
+          },
+          "kind": "imperative_navigation",
+          "target": "/booking/multi-city?${context}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyGroups.tsx",
+            "line": 39
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${g.flightId}?class=${g.cabinClass}&groupBookingId=${g.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 97
+          },
+          "kind": "location_assignment",
+          "target": "/booking/${data.flightId}?class=${data.cabinClass}&waitlistId=${data.waitlistId}&passengers=${data.passengers}&fromWaitlist=true",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 70
+          },
+          "kind": "imperative_navigation",
+          "target": "/booking/${flightId}?class=${rebookData?.cabinClass}&rebook=${bookingId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 820
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=economy&search=${encodeURIComponent(search)}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 886
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=business&search=${encodeURIComponent(search)}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 939
+          },
+          "kind": "jsx_Link_href",
+          "target": "/booking/${flight.id}?class=${fare.cabinClass}&fareClassCode=${encodeURIComponent(fare.code)}&search=${encodeURIComponent(search)}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ]
+    },
+    {
+      "path": "/manage-booking",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 280
+      },
+      "page_files": ["client/src/pages/ManageBooking.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 19
+          },
+          "kind": "navigation_tuple",
+          "target": "/manage-booking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 68
+          },
+          "kind": "jsx_Link_href",
+          "target": "/manage-booking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 243
+          },
+          "kind": "jsx_Link_href",
+          "target": "/manage-booking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 313
+          },
+          "kind": "jsx_Link_href",
+          "target": "/manage-booking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/checkout/:bookingId",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 281
+      },
+      "page_files": ["client/src/pages/CheckoutResume.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/App.tsx",
+            "line": 234
+          },
+          "kind": "jsx_Redirect_to",
+          "target": "/checkout/${encodeURIComponent(params?.id ?? \"\")}?canceled=true",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AgentPortal.tsx",
+            "line": 73
+          },
+          "kind": "imperative_navigation",
+          "target": "/checkout/${result.bookingId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AgentPortal.tsx",
+            "line": 530
+          },
+          "kind": "jsx_Link_href_conditional_true",
+          "target": "/checkout/${booking.bookingId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/BookingPage.tsx",
+            "line": 456
+          },
+          "kind": "imperative_navigation",
+          "target": "/checkout/${booking.bookingId}?${preferenceParams(searchPreferences(search))}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/BookingPage.tsx",
+            "line": 530
+          },
+          "kind": "imperative_navigation",
+          "target": "/checkout/${booking.bookingId}?${context}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityCheckout.tsx",
+            "line": 165
+          },
+          "kind": "imperative_navigation",
+          "target": "/checkout/${result.bookingId}?${preferenceParams(searchPreferences(search))}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 805
+          },
+          "kind": "jsx_Link_href",
+          "target": "/checkout/${booking.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ]
+    },
+    {
+      "path": "/agent",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 288
+      },
+      "page_files": ["client/src/pages/AgentPortal.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 84
+          },
+          "kind": "jsx_Link_href",
+          "target": "/agent",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 319
+          },
+          "kind": "jsx_Link_href",
+          "target": "/agent",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/my-bookings",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 293
+      },
+      "page_files": ["client/src/pages/MyBookings.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 27
+          },
+          "kind": "navigation_tuple",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 84
+          },
+          "kind": "navigation_data",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 76
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AgentPortal.tsx",
+            "line": 530
+          },
+          "kind": "jsx_Link_href_conditional_false",
+          "target": "/my-bookings?bookingId=${booking.bookingId}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 409
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings?exchange=${booking.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AiChat.tsx",
+            "line": 415
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/CheckoutResume.tsx",
+            "line": 350
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 248
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/ManageBooking.tsx",
+            "line": 222
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MultiCityCheckout.tsx",
+            "line": 276
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyGroups.tsx",
+            "line": 32
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyWaitlist.tsx",
+            "line": 493
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 24
+          },
+          "kind": "navigation_data",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 115
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 60
+          },
+          "kind": "imperative_navigation",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 153
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/RebookPage.tsx",
+            "line": 173
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateDashboard.tsx",
+            "line": 491
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/kiosk",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 300
+      },
+      "page_files": ["client/src/pages/KioskBagTag.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 92
+          },
+          "kind": "jsx_Link_href",
+          "target": "/kiosk",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/check-in",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 301
+      },
+      "page_files": ["client/src/pages/CheckIn.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 20
+          },
+          "kind": "navigation_tuple",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 88
+          },
+          "kind": "navigation_data",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 100
+          },
+          "kind": "jsx_Link_href",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 253
+          },
+          "kind": "jsx_Link_href",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 785
+          },
+          "kind": "jsx_Link_href",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/NotFound.tsx",
+            "line": 25
+          },
+          "kind": "navigation_data",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PrivacyPolicy.tsx",
+            "line": 120
+          },
+          "kind": "jsx_Link_href",
+          "target": "/check-in",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/airline/dcs",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 306
+      },
+      "page_files": ["client/src/pages/DcsDesk.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 109
+          },
+          "kind": "jsx_Link_href",
+          "target": "/airline/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 415
+          },
+          "kind": "navigation_data",
+          "target": "/airline/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/airline",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 313
+      },
+      "page_files": ["client/src/pages/AirlineConsole.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 98
+          },
+          "kind": "jsx_Link_href",
+          "target": "/airline",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 392
+          },
+          "kind": "navigation_data",
+          "target": "/airline",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/profile",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 320
+      },
+      "page_files": ["client/src/pages/Profile.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 33
+          },
+          "kind": "navigation_tuple",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 89
+          },
+          "kind": "navigation_data",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 623
+          },
+          "kind": "imperative_navigation",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 259
+          },
+          "kind": "jsx_Link_href",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PaymentHistory.tsx",
+            "line": 73
+          },
+          "kind": "jsx_Link_href",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/SavedPassengers.tsx",
+            "line": 137
+          },
+          "kind": "jsx_Link_href",
+          "target": "/profile",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/loyalty",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 327
+      },
+      "page_files": ["client/src/pages/LoyaltyDashboard.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 87
+          },
+          "kind": "navigation_data",
+          "target": "/loyalty",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 630
+          },
+          "kind": "imperative_navigation",
+          "target": "/loyalty",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 266
+          },
+          "kind": "jsx_Link_href",
+          "target": "/loyalty",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/favorites",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 332
+      },
+      "page_files": ["client/src/pages/FavoritesPage.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 85
+          },
+          "kind": "navigation_data",
+          "target": "/favorites",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 589
+          },
+          "kind": "jsx_Link_href",
+          "target": "/favorites",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/PriceAlerts.tsx",
+            "line": 145
+          },
+          "kind": "jsx_Link_href",
+          "target": "/favorites",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/price-alerts",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 339
+      },
+      "page_files": ["client/src/pages/PriceAlerts.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 86
+          },
+          "kind": "navigation_data",
+          "target": "/price-alerts",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/FavoritesPage.tsx",
+            "line": 213
+          },
+          "kind": "jsx_Link_href",
+          "target": "/price-alerts",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/compare",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 346
+      },
+      "page_files": ["client/src/pages/CompareFlights.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/CompareBar.tsx",
+            "line": 127
+          },
+          "kind": "jsx_Link_href",
+          "target": "/compare",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/CompareBar.tsx",
+            "line": 234
+          },
+          "kind": "jsx_Link_href",
+          "target": "/compare",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/my-groups",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 351
+      },
+      "page_files": ["client/src/pages/MyGroups.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 30
+          },
+          "kind": "navigation_tuple",
+          "target": "/my-groups",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/GroupBookingRequest.tsx",
+            "line": 171
+          },
+          "kind": "jsx_Link_href",
+          "target": "/my-groups",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/group-booking/:id",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 358
+      },
+      "page_files": ["client/src/pages/GroupBookingRequest.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/SearchResults.tsx",
+            "line": 959
+          },
+          "kind": "jsx_Link_href_conditional_true",
+          "target": "/group-booking/${flight.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ]
+    },
+    {
+      "path": "/saved-passengers",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 363
+      },
+      "page_files": ["client/src/pages/SavedPassengers.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 28
+          },
+          "kind": "navigation_tuple",
+          "target": "/saved-passengers",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/notifications",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 370
+      },
+      "page_files": ["client/src/pages/Notifications.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 29
+          },
+          "kind": "navigation_tuple",
+          "target": "/notifications",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/NotificationDropdown.tsx",
+            "line": 32
+          },
+          "kind": "jsx_Link_href",
+          "target": "/notifications",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/my-waitlist",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 377
+      },
+      "page_files": ["client/src/pages/MyWaitlist.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 31
+          },
+          "kind": "navigation_tuple",
+          "target": "/my-waitlist",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/JoinWaitlistDialog.tsx",
+            "line": 144
+          },
+          "kind": "jsx_a_href",
+          "target": "/my-waitlist",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/multi-city",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 384
+      },
+      "page_files": ["client/src/pages/MultiCityResults.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 133
+          },
+          "kind": "imperative_navigation",
+          "target": "/multi-city?${params.toString()}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 166
+          },
+          "kind": "imperative_navigation",
+          "target": "/multi-city?${params.toString()}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ]
+    },
+    {
+      "path": "/track-flight",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 389
+      },
+      "page_files": ["client/src/pages/LiveFlightTracking.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 21
+          },
+          "kind": "navigation_tuple",
+          "target": "/track-flight",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/rebook/:bookingId",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 394
+      },
+      "page_files": ["client/src/pages/RebookPage.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/MyBookings.tsx",
+            "line": 924
+          },
+          "kind": "jsx_Link_href",
+          "target": "/rebook/${booking.id}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        }
+      ]
+    },
+    {
+      "path": "/payment-history",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 401
+      },
+      "page_files": ["client/src/pages/PaymentHistory.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 32
+          },
+          "kind": "navigation_tuple",
+          "target": "/payment-history",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/WalletBookingPayment.tsx",
+            "line": 32
+          },
+          "kind": "imperative_navigation",
+          "target": "/payment-history?wallet=history",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/ai-chat",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 409
+      },
+      "page_files": ["client/src/pages/AiChat.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 23
+          },
+          "kind": "navigation_tuple",
+          "target": "/ai-chat",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/accessibility",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 416
+      },
+      "page_files": ["client/src/pages/AccessibilityStatement.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 38
+          },
+          "kind": "jsx_Link_href",
+          "target": "/accessibility",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/privacy-policy",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 417
+      },
+      "page_files": ["client/src/pages/PrivacyPolicy.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/CookieConsent.tsx",
+            "line": 380
+          },
+          "kind": "jsx_a_href",
+          "target": "/privacy-policy",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/SiteFooter.tsx",
+            "line": 30
+          },
+          "kind": "jsx_Link_href",
+          "target": "/privacy-policy",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/pay/:token/:status?",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 424
+      },
+      "page_files": ["client/src/pages/PayYourShare.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": []
+    },
+    {
+      "path": "/admin",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 431
+      },
+      "page_files": ["client/src/pages/AdminDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 118
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 94
+          },
+          "kind": "navigation_data",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 274
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/DcsDashboard.tsx",
+            "line": 44
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/DeletedBookings.tsx",
+            "line": 54
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/DisasterRecovery.tsx",
+            "line": 54
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/IROPSCommandCenter.tsx",
+            "line": 159
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/OperationsControl.tsx",
+            "line": 122
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/analytics",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 438
+      },
+      "page_files": ["client/src/pages/AnalyticsDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 98
+          },
+          "kind": "navigation_data",
+          "target": "/analytics",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/Home.tsx",
+            "line": 279
+          },
+          "kind": "jsx_Link_href",
+          "target": "/analytics",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/refunds",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 445
+      },
+      "page_files": ["client/src/pages/admin/RefundsDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 116
+          },
+          "kind": "navigation_data",
+          "target": "/admin/refunds",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/reports",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 452
+      },
+      "page_files": ["client/src/pages/admin/ReportsDashboard.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 104
+          },
+          "kind": "navigation_data",
+          "target": "/admin/reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 398
+          },
+          "kind": "navigation_data",
+          "target": "/admin/reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/StandardReports.tsx",
+            "line": 719
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/standard-reports",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 459
+      },
+      "page_files": ["client/src/pages/admin/StandardReports.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 110
+          },
+          "kind": "navigation_data",
+          "target": "/admin/standard-reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 404
+          },
+          "kind": "navigation_data",
+          "target": "/admin/standard-reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/ReportsDashboard.tsx",
+            "line": 213
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/standard-reports",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/group-bookings",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 466
+      },
+      "page_files": ["client/src/pages/admin/GroupBookingsManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 122
+          },
+          "kind": "navigation_data",
+          "target": "/admin/group-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/vouchers",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 473
+      },
+      "page_files": ["client/src/pages/admin/VoucherManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 170
+          },
+          "kind": "navigation_data",
+          "target": "/admin/vouchers",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/gates",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 480
+      },
+      "page_files": ["client/src/pages/admin/GateManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 158
+          },
+          "kind": "navigation_data",
+          "target": "/admin/gates",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/dcs",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 487
+      },
+      "page_files": ["client/src/pages/admin/DcsDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 164
+          },
+          "kind": "navigation_data",
+          "target": "/admin/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/CrewAssignment.tsx",
+            "line": 159
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/LoadPlanning.tsx",
+            "line": 49
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/WeightBalance.tsx",
+            "line": 300
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/dcs",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/deleted-bookings",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 494
+      },
+      "page_files": ["client/src/pages/admin/DeletedBookings.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 176
+          },
+          "kind": "navigation_data",
+          "target": "/admin/deleted-bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/baggage",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 501
+      },
+      "page_files": ["client/src/pages/admin/BaggageManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 128
+          },
+          "kind": "navigation_data",
+          "target": "/admin/baggage",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/corporate",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 508
+      },
+      "page_files": ["client/src/pages/admin/CorporateManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 134
+          },
+          "kind": "navigation_data",
+          "target": "/admin/corporate",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/ai-pricing",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 515
+      },
+      "page_files": ["client/src/pages/admin/AIPricingDashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 146
+          },
+          "kind": "navigation_data",
+          "target": "/admin/ai-pricing",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/travel-agents",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 522
+      },
+      "page_files": ["client/src/pages/admin/TravelAgentManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 140
+          },
+          "kind": "navigation_data",
+          "target": "/admin/travel-agents",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/overbooking",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 529
+      },
+      "page_files": ["client/src/pages/admin/OverbookingManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 152
+          },
+          "kind": "navigation_data",
+          "target": "/admin/overbooking",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/bsp-reporting",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 538
+      },
+      "page_files": ["client/src/pages/admin/BSPReporting.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 263
+          },
+          "kind": "navigation_data",
+          "target": "/admin/bsp-reporting",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/crew-assignment",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 545
+      },
+      "page_files": ["client/src/pages/admin/CrewAssignment.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 189
+          },
+          "kind": "navigation_data",
+          "target": "/admin/crew-assignment",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/OperationsControl.tsx",
+            "line": 136
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/crew-assignment",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/data-warehouse",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 552
+      },
+      "page_files": ["client/src/pages/admin/DataWarehouse.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 269
+          },
+          "kind": "navigation_data",
+          "target": "/admin/data-warehouse",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/irops",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 559
+      },
+      "page_files": ["client/src/pages/admin/IROPSCommandCenter.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 183
+          },
+          "kind": "navigation_data",
+          "target": "/admin/irops",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/OperationsControl.tsx",
+            "line": 133
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/irops",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/revenue-accounting",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 566
+      },
+      "page_files": ["client/src/pages/admin/RevenueAccounting.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 251
+          },
+          "kind": "navigation_data",
+          "target": "/admin/revenue-accounting",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/seat-economics",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 573
+      },
+      "page_files": ["client/src/pages/admin/SeatEconomics.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 257
+          },
+          "kind": "navigation_data",
+          "target": "/admin/seat-economics",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/admin/OperationsControl.tsx",
+            "line": 139
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/seat-economics",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/operations",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 580
+      },
+      "page_files": ["client/src/pages/admin/OperationsControl.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ReaccommodationAdvisory.tsx",
+            "line": 169
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/operations?bookingIds=${bookings.join(\",\")}&candidateIds=${candidates.join(\",\")}",
+          "dynamic": true,
+          "source_import_reachable": true,
+          "association_basis": "inferred_template"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/AdminDashboard.tsx",
+            "line": 135
+          },
+          "kind": "jsx_Link_href",
+          "target": "/admin/operations",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/sla",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 585
+      },
+      "page_files": ["client/src/pages/admin/SLADashboard.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 276
+          },
+          "kind": "navigation_data",
+          "target": "/admin/sla",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/compensation",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 592
+      },
+      "page_files": ["client/src/pages/admin/CompensationManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 244
+          },
+          "kind": "navigation_data",
+          "target": "/admin/compensation",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/weight-balance",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 599
+      },
+      "page_files": ["client/src/pages/admin/WeightBalance.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 195
+          },
+          "kind": "navigation_data",
+          "target": "/admin/weight-balance",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/disaster-recovery",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 606
+      },
+      "page_files": ["client/src/pages/admin/DisasterRecovery.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 282
+          },
+          "kind": "navigation_data",
+          "target": "/admin/disaster-recovery",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/load-planning",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 613
+      },
+      "page_files": ["client/src/pages/admin/LoadPlanning.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 201
+          },
+          "kind": "navigation_data",
+          "target": "/admin/load-planning",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/apis",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 620
+      },
+      "page_files": ["client/src/pages/admin/APISManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 208
+          },
+          "kind": "navigation_data",
+          "target": "/admin/apis",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/biometric",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 627
+      },
+      "page_files": ["client/src/pages/admin/BiometricBoarding.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 214
+          },
+          "kind": "navigation_data",
+          "target": "/admin/biometric",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/kiosk",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 634
+      },
+      "page_files": ["client/src/pages/admin/KioskManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 220
+          },
+          "kind": "navigation_data",
+          "target": "/admin/kiosk",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/bag-drop",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 641
+      },
+      "page_files": ["client/src/pages/admin/BagDropManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 226
+          },
+          "kind": "navigation_data",
+          "target": "/admin/bag-drop",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/emergency-hotel",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 648
+      },
+      "page_files": ["client/src/pages/admin/EmergencyHotelManagement.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 232
+          },
+          "kind": "navigation_data",
+          "target": "/admin/emergency-hotel",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/admin/passenger-priority",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 655
+      },
+      "page_files": ["client/src/pages/admin/PassengerPriority.tsx"],
+      "route_guard": "admin_or_super_admin",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/DashboardLayout.tsx",
+            "line": 238
+          },
+          "kind": "navigation_data",
+          "target": "/admin/passenger-priority",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/baggage",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 664
+      },
+      "page_files": ["client/src/pages/BaggageStatus.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 22
+          },
+          "kind": "navigation_tuple",
+          "target": "/baggage",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/corporate",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 671
+      },
+      "page_files": ["client/src/pages/corporate/CorporateDashboard.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/components/ServiceNavigation.tsx",
+            "line": 52
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateBookings.tsx",
+            "line": 206
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateBookings.tsx",
+            "line": 226
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/corporate/bookings",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 678
+      },
+      "page_files": ["client/src/pages/corporate/CorporateBookings.tsx"],
+      "route_guard": "authenticated",
+      "dynamic_path": false,
+      "inbound_navigation": [
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateDashboard.tsx",
+            "line": 324
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate/bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        },
+        {
+          "source": {
+            "path": "client/src/pages/corporate/CorporateDashboard.tsx",
+            "line": 481
+          },
+          "kind": "jsx_Link_href",
+          "target": "/corporate/bookings",
+          "dynamic": false,
+          "source_import_reachable": true,
+          "association_basis": "literal"
+        }
+      ]
+    },
+    {
+      "path": "/404",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 687
+      },
+      "page_files": ["client/src/pages/NotFound.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": []
+    }
+  ],
+  "auxiliary": [
+    {
+      "path": "/^\\/(?:login|booking\\/multi-city|checkout\\/[^/]+|payment-history)\\/?$/",
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 243
+      },
+      "page_files": [],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": true,
+      "inbound_navigation": []
+    }
+  ],
+  "catch_all": [
+    {
+      "path": null,
+      "source": {
+        "path": "client/src/App.tsx",
+        "line": 688
+      },
+      "page_files": ["client/src/pages/NotFound.tsx"],
+      "route_guard": "page_or_api_guard_only",
+      "dynamic_path": false,
+      "inbound_navigation": []
+    }
+  ]
+}

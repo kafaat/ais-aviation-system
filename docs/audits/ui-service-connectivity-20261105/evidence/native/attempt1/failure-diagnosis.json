@@ -1,0 +1,18 @@
+{
+  "at": "2026-11-05T16:44:03.753092+00:00",
+  "classification": "TEST_FIXTURE_IDENTIFIER_LENGTH",
+  "applicationDefect": false,
+  "error": "Data too long for column 'openId' at row 1",
+  "schema": "users.openId varchar(64)",
+  "oldMaximumLength": 67,
+  "newMaximumLength": 54,
+  "fix": "Shorten fixed prefix ui-connectivity- to ui-; retain complete UUID and role label",
+  "acceptanceCounts": {
+    "passed": 0,
+    "failed": 1,
+    "notStarted": 2
+  },
+  "cleanupPassed": true,
+  "nextAttempt": "Fresh directory and resources, all three cases after new root-approved SHA",
+  "attempt1ReceiptSha256": "ba6ee4eedd02af17108eb52fc875ab10e1f263688feb26665233cea0b911d82c"
+}

@@ -1,0 +1,23 @@
+{
+  "count": 3,
+  "tests": [
+    {
+      "id": "697534a0948b9ca6278d-fb8980d48610c0f8fe5b",
+      "title": "authenticated service navigation reaches notifications and exposes only eligible corporate entry",
+      "file": "ui-service-connectivity.spec.ts",
+      "line": 258
+    },
+    {
+      "id": "697534a0948b9ca6278d-84ca1462d81e9ca830d8",
+      "title": "super_admin reads native refund reporting while finance remains forbidden",
+      "file": "ui-service-connectivity.spec.ts",
+      "line": 307
+    },
+    {
+      "id": "697534a0948b9ca6278d-28bb894dfc40f6f2eb10",
+      "title": "check-in PNR and legacy reference links resolve only the native booking owner without mutations",
+      "file": "ui-service-connectivity.spec.ts",
+      "line": 356
+    }
+  ]
+}

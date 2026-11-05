@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "source_commit": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "repository": "kafaat/ais-aviation-system",
+  "backend_observed_at": "2026-11-05T16:05:27.489Z",
+  "frontend_observed_at": "2026-11-05T16:04:31.156Z",
+  "counts": {
+    "procedures": 844,
+    "queries": 441,
+    "mutations": 403,
+    "domains": 95,
+    "router_nodes_including_root": 96,
+    "generated_rest_endpoints": 234,
+    "explicit_http_resources": 9,
+    "services": 250,
+    "service_lifecycle": {
+      "reachable": 237,
+      "unwired": 1,
+      "retired": 10,
+      "type-only": 2
+    },
+    "api_reachable_services": 235,
+    "worker_reachable_services": 117,
+    "shared_api_worker_services": 115,
+    "web_routes": 70,
+    "auxiliary_routes": 1,
+    "catch_all_routes": 1,
+    "page_components": 71,
+    "frontend_runtime_files": 312,
+    "frontend_call_sites": 807,
+    "import_reachable_frontend_call_sites": 741,
+    "procedures_with_reachable_frontend_reference": 418,
+    "procedures_without_reachable_frontend_reference": 426,
+    "journeys_traced": 14,
+    "api_only_candidates": 23,
+    "catalog_capabilities": {
+      "implemented": 10,
+      "blocked": 4,
+      "demo": 8
+    }
+  },
+  "method": {
+    "backend": "Read-only TypeScript AST of tracked non-test source; resolve appRouter recursively, static runtime imports from API and worker. No application module execution, provider request or database call.",
+    "frontend": "AST inventory of tracked client/src and shared runtime TypeScript, excluding test files; import reachability is not proof a conditional component executes.",
+    "projection": "Join procedure IDs, static call locations and page import closure; keep guards as compact classifications/source locations, without input/output AST or handler source dumps.",
+    "entry_points": [
+      "server/_core/index.ts",
+      "server/worker.ts",
+      "client/src/main.tsx"
+    ]
+  },
+  "limitations": [
+    "Reachability proves an import path, not that every exported function executes.",
+    "Auth records retain builder/middleware and delegated guard evidence, not a complete symbolic authorization proof.",
+    "Frontend presence must be correlated separately; infrastructure does not imply missing UI.",
+    "Demo/provider/configuration gates can make a mounted procedure unavailable.",
+    "418/844 is not a product completion percentage; both denominator and numerator include infrastructure, conditional hooks and alternative clients.",
+    "Page association follows imports; it does not prove a conditional control renders or a user can discover a route.",
+    "Navigation matching may require manual confirmation of templates, account conditions, external email links and embedded entry points.",
+    "No new runtime acceptance, deployed configuration, database state or external-provider readiness is established by this baseline."
+  ],
+  "unresolved_backend_ast_entries": 0,
+  "service_catalog_mismatches": [],
+  "worker_only_services": [
+    "server/services/queue-v2.service.ts",
+    "server/services/stripe/stripe-reconciliation.service.ts"
+  ],
+  "unwired_services": [
+    "server/services/aviation-message-transmission.service.ts"
+  ]
+}

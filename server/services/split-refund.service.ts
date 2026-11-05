@@ -25,6 +25,7 @@ import {
 } from "./booking-settlement.service";
 import { settleVerifiedRefund } from "./payment-settlement.service";
 import { recordEvent } from "./outbox.service";
+import { isAdmin } from "./rbac.service";
 
 type Actor = { id: number; role: string };
 type Booking = typeof bookings.$inferSelect;
@@ -45,7 +46,7 @@ async function lockBooking(tx: SettlementTx, bookingId: number, actor?: Actor) {
     .for("update");
   if (
     !booking ||
-    (actor && actor.role !== "admin" && actor.id !== booking.userId)
+    (actor && !isAdmin(actor.role) && actor.id !== booking.userId)
   )
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   return booking;
@@ -795,7 +796,8 @@ export async function listSplitRefundCancellations(
   },
   actor: Actor
 ) {
-  if (actor?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+  if (!actor || !isAdmin(actor.role))
+    throw new TRPCError({ code: "FORBIDDEN" });
   const plans = await dbOrThrow()
     .select({
       bookingId: bookingRefundPlans.bookingId,

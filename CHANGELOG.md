@@ -2,12 +2,16 @@
 
 ## What's Changed in v1.38.0
 
-<!-- ais-release-source: fcc32cc05325c6ab9aae5fb895a42ecb46287f92 -->
+<!-- ais-release-source: 50a3114ec49d2bf43a4933f54b7eba43de086888 -->
 <!-- ais-release-notes:start -->
 
 ### Features
 
 - feat(reports): add scoped HTTP QUERY preview (#286) (fcc32cc)
+
+### Bug Fixes
+
+- fix(ui): connect service navigation and align platform read access (#288) (50a3114)
 
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.37.1...v1.38.0
 

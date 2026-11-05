@@ -204,7 +204,7 @@ export default function CorporateBookings() {
             {t("corporate.noAccountDescription")}
           </p>
           <Link href="/corporate">
-            <Button>{t("corporate.registerAccount")}</Button>
+            <Button>{t("corporate.backToDashboard")}</Button>
           </Link>
         </Card>
       </div>
