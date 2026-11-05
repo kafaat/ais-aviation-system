@@ -219,9 +219,8 @@ async function main() {
     commit,
     token: process.env.GITHUB_TOKEN || "",
     notes: process.env.RELEASE_NOTES || "",
-    // The operator's explicit choice wins. The tag suffix only covers the
-    // auto-increment path, which appends -rc; a custom version does not, so
-    // reading the tag alone published a checked prerelease as a full release.
+    // Proposals persist prerelease intent in the reviewed version suffix.
+    // Push publication therefore works without the earlier dispatch inputs.
     prerelease: process.env.RELEASE_PRERELEASE === "true" || tag.includes("-"),
     verify: () => verifyRemoteTag(git, tag, commit),
   });

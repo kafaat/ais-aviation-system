@@ -9,8 +9,20 @@ on:
     branches: [main, develop]
   # Release Automation starts this workflow on a `release/vX.Y.Z` branch it
   # pushed with GITHUB_TOKEN, because such pushes start no workflow on their
-  # own. Deploy jobs stay gated on a push to their branch and never run here.
+  # own. Empty-input dispatches run checks only. An optional deployment dispatch
+  # instead names a published stable tag and its exact commit, verified below.
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Published stable release tag to deploy (leave empty for checks only)"
+        required: false
+        default: ""
+        type: string
+      release_commit:
+        description: "Exact 40-character commit for release_tag"
+        required: false
+        default: ""
+        type: string
 
 env:
   NODE_VERSION: "22.x"
@@ -23,12 +35,43 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # A tag dispatch pins github.sha and every checkout to the released source.
+  # Verify before the lint/test/build graph can admit any deployment jobs.
+  release-deployment:
+    name: Verify Release Deployment Request
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      requested: ${{ steps.verify.outputs.requested }}
+    steps:
+      - name: Checkout event commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Verify deployment provenance
+        id: verify
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_EXPECTED_SHA: ${{ inputs.release_commit }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/release-deployment.mjs
+
   # =============================================================================
   # STAGE 1: Code Quality Checks
   # =============================================================================
   lint:
     name: Lint Code
     runs-on: ubuntu-latest
+    needs: release-deployment
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -699,8 +742,8 @@ jobs:
   docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push'
+    needs: [build, release-deployment]
+    if: github.event_name == 'push' || needs.release-deployment.outputs.requested == 'true'
     permissions:
       contents: read
       packages: write
@@ -997,8 +1040,11 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [build, docker]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [build, docker, e2e, release-deployment]
+    if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || needs.release-deployment.outputs.requested == 'true'
+    concurrency:
+      group: ais-production-deployment
+      cancel-in-progress: false
     environment:
       name: production
       url: ${{ vars.PRODUCTION_URL }}
@@ -1027,6 +1073,12 @@ jobs:
           AIS_KUBECONFIG_BASE64: ${{ secrets.PRODUCTION_KUBECONFIG }}
         run: python3 scripts/deploy/kubernetes_secrets.py configure
 
+      - name: Report unconfigured Kubernetes deployment
+        if: steps.kube-config.outputs.configured != 'true'
+        run: |
+          echo "::notice::Production Kubernetes credentials are not configured; no Kubernetes deployment was performed."
+          echo "Production Kubernetes deployment was skipped because its credentials are not configured." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Require accepted service ownership
         if: steps.kube-config.outputs.configured == 'true'
         run: python3 scripts/deploy/verify_service_ownership.py
@@ -1038,6 +1090,19 @@ jobs:
             echo "::error::Cannot connect to Kubernetes cluster. Check PRODUCTION_KUBECONFIG secret."
             exit 1
           fi
+
+      - name: Setup Node.js for deployment verification
+        if: steps.kube-config.outputs.configured == 'true'
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      # Check after CI/approval waits and under this job's environment lock,
+      # immediately before the first production mutation.
+      - name: Verify current production source
+        if: steps.kube-config.outputs.configured == 'true'
+        run: node scripts/ci/release-deployment.mjs current-main
 
       - name: Create deployment namespace
         if: steps.kube-config.outputs.configured == 'true'
@@ -1205,7 +1270,7 @@ jobs:
             kubernetes.io/change-cause="Deployed ${{ github.sha }} at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Notify deployment success
-        if: success() && vars.SLACK_WEBHOOK_URL != ''
+        if: success() && steps.kube-config.outputs.configured == 'true' && vars.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
           webhook: ${{ vars.SLACK_WEBHOOK_URL }}
@@ -1307,8 +1372,11 @@ jobs:
   deploy-docker-compose:
     name: Deploy via Docker Compose
     runs-on: ubuntu-latest
-    needs: [build, docker]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOYMENT_METHOD == 'docker-compose'
+    needs: [build, docker, e2e, release-deployment]
+    if: ((github.ref == 'refs/heads/main' && github.event_name == 'push') || needs.release-deployment.outputs.requested == 'true') && vars.DEPLOYMENT_METHOD == 'docker-compose'
+    concurrency:
+      group: ais-production-docker-deployment
+      cancel-in-progress: false
     environment:
       name: production-docker
       url: ${{ vars.PRODUCTION_URL }}
@@ -1325,6 +1393,17 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Setup Node.js for deployment verification
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      # This job holds the production-docker deployment lock. A stale main
+      # push or delayed release dispatch must not replace the current source.
+      - name: Verify current production source
+        run: node scripts/ci/release-deployment.mjs current-main
 
       - name: Deploy to server
         env:
