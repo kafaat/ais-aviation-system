@@ -1,0 +1,30 @@
+{
+  "base": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "head": "34c3169823525f28db4d2f4cfdadbb0d6082dbc8",
+  "version": "8.24.3",
+  "archive_sha256": "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c",
+  "policy_sha256": "48346fe3578d9a6a0995d30135cb12aa61b5eb789a39cdc8d6775c20ada2294e",
+  "ignore_sha256": "95506a2a3d9d28d6ae294c18735c69e943acb4c4b0b314fc1dc502e026c17f91",
+  "exit_code": 2,
+  "redacted": true,
+  "findings": [
+    {
+      "rule": "generic-api-key",
+      "path": "docs/audits/ui-service-connectivity-20261105/evidence/native/attempt2/source-binding.json",
+      "line": 365,
+      "end_line": 365
+    },
+    {
+      "rule": "generic-api-key",
+      "path": "docs/audits/ui-service-connectivity-20261105/evidence/native/attempt2/source-binding.json",
+      "line": 366,
+      "end_line": 366
+    },
+    {
+      "rule": "generic-api-key",
+      "path": "docs/audits/ui-service-connectivity-20261105/evidence/native/attempt2/source-binding.json",
+      "line": 367,
+      "end_line": 367
+    }
+  ]
+}

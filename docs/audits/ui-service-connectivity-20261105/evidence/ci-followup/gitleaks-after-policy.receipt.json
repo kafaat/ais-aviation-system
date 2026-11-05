@@ -1,0 +1,9 @@
+{
+  "base": "fcc32cc05325c6ab9aae5fb895a42ecb46287f92",
+  "head": "34c3169823525f28db4d2f4cfdadbb0d6082dbc8",
+  "exit_code": 0,
+  "elapsed_seconds": 1.06,
+  "policy_sha256": "b474c6d40630d61c2c99a1e7a9654129990685a79e7d47b370f9f4dcce51ceca",
+  "findings": [],
+  "redacted": true
+}

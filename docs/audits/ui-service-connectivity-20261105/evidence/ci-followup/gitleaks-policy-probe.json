@@ -1,0 +1,32 @@
+{
+  "exit_code": 0,
+  "elapsed_seconds": 2.199,
+  "result": {
+    "result": "PASS",
+    "passed": 16,
+    "checks": [
+      "idempotency_fixture",
+      "logger_fixture",
+      "credential_alone",
+      "same_line_idempotency",
+      "same_line_logger",
+      "separate_line",
+      "unrecognised_idempotency",
+      "fixture_prefix_is_not_exempt",
+      "native_public_js_digest",
+      "native_public_brotli_digest",
+      "native_public_gzip_digest",
+      "different_value_in_receipt",
+      "different_value_on_digest_line",
+      "known_digest_outside_receipt",
+      "prefixed_digest_is_not_exempt",
+      "suffixed_digest_is_not_exempt"
+    ],
+    "detectedControls": 11,
+    "historyModes": [
+      "new_root_commit",
+      "rewritten_root_commit"
+    ],
+    "providerCalls": 0
+  }
+}

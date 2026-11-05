@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "scope": "Byte-preserved CI follow-up evidence; independent from the initial native validation manifest.",
+  "files": [
+    {
+      "path": "evidence/ci-followup/asset-digest-proof.json",
+      "bytes": 1108,
+      "sha256": "af7e56f3385c6a90b779702981e5dd4d83f2bb1fe24e5854b7d1dc5b4eae1daf"
+    },
+    {
+      "path": "evidence/ci-followup/ci-initial-run.json",
+      "bytes": 2921,
+      "sha256": "d9e1673654501d36864b723a34425ea8b48ac52c6d0b38d00fc68741d07645c9"
+    },
+    {
+      "path": "evidence/ci-followup/gitleaks-after-policy.receipt.json",
+      "bytes": 281,
+      "sha256": "fab1d6377f758edfa9c2ca5c3c366349dd9d3df05779a74f6c57cc66c831e3dc"
+    },
+    {
+      "path": "evidence/ci-followup/gitleaks-initial-scan.receipt.json",
+      "bytes": 1036,
+      "sha256": "afb22beebe86d31f2f825849f92f389dea53541160336be4308b8a5dca6933db"
+    },
+    {
+      "path": "evidence/ci-followup/gitleaks-policy-probe.json",
+      "bytes": 793,
+      "sha256": "36f51314f2dce79807566a71816cf0cd1d576d91759f50639fdbe56ed180427d"
+    },
+    {
+      "path": "evidence/ci-followup/refund-detail-authority.receipt.json",
+      "bytes": 1487,
+      "sha256": "24e3193696a0607509a191a77647d0cce6ba552ae1f9a36f011c3ac37c9c4cd1"
+    },
+    {
+      "path": "evidence/ci-followup/refund-detail-authority.results.json",
+      "bytes": 20774,
+      "sha256": "4148cd3cc9ed993d2de4a65dc0a2ae42a6326326b92b71a86ab20279fd091b42"
+    }
+  ]
+}
