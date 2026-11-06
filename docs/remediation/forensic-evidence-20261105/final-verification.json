@@ -1,0 +1,1561 @@
+{
+  "codePublication": {
+    "draft": false,
+    "executionAttribution": "The main merge preserves the accepted complete code tree; the actual execution commits remain those in verifiedSource.",
+    "mainAfterMerge": "56554f82c9ed593c79a65b7e2978f7e5f10c4366",
+    "mainAfterMergeTree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b",
+    "mergeCommit": "56554f82c9ed593c79a65b7e2978f7e5f10c4366",
+    "mergePerformedByAssistant": false,
+    "mergeTreeEqualsVerifiedCodeTree": true,
+    "merged": true,
+    "mergedAt": "2026-11-06T00:31:47Z",
+    "mergedBy": "kafaat",
+    "pullRequest": 290,
+    "role": "code_pull_request",
+    "testedCiBase": "335b8bfb571144631993db6a8dd6485e739b6ea5",
+    "url": "https://github.com/kafaat/ais-aviation-system/pull/290",
+    "verifiedCodeHead": "bbd8e199d5614271b942e928483be0e973aa22cd",
+    "verifiedCodeTree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b"
+  },
+  "currency": {
+    "freshAcceptanceEnvironment": {
+      "declaredMysqlImage": "mysql:8.0",
+      "declaredRedisServiceImage": "redis:7-alpine",
+      "limit": "This fresh native currency acceptance is separate from the MySQL9.7 Production Gates result.",
+      "nativeFixtureRedis": "dedicated process using the CI-provisioned Redis binary",
+      "sourceUrl": "https://github.com/kafaat/ais-aviation-system/blob/bbd8e199d5614271b942e928483be0e973aa22cd/.github/workflows/ci-cd.yml",
+      "workflow": "CI/CD Pipeline / Run Tests"
+    },
+    "freshIntegratedAcceptance": {
+      "contracts": {
+        "actualExecutionSource": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+        "failed": 0,
+        "jobId": 127614699806,
+        "passed": 43,
+        "path": "server/__tests__/nonsecurity-currency-contracts.test.ts",
+        "pending": 0,
+        "publishedHead": "bbd8e199d5614271b942e928483be0e973aa22cd",
+        "runId": 42132795306,
+        "sourceUrl": "https://github.com/kafaat/ais-aviation-system/blob/bbd8e199d5614271b942e928483be0e973aa22cd/server/__tests__/nonsecurity-currency-contracts.test.ts",
+        "tree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b"
+      },
+      "existing": {
+        "actualExecutionSource": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+        "failed": 0,
+        "jobId": 127614699806,
+        "passed": 24,
+        "path": "server/__tests__/new-features/currency.test.ts",
+        "pending": 0,
+        "publishedHead": "bbd8e199d5614271b942e928483be0e973aa22cd",
+        "runId": 42132795306,
+        "sourceUrl": "https://github.com/kafaat/ais-aviation-system/blob/bbd8e199d5614271b942e928483be0e973aa22cd/server/__tests__/new-features/currency.test.ts",
+        "tree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b"
+      },
+      "nativeMysqlRedisHttp": {
+        "actualExecutionSource": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+        "failed": 0,
+        "jobId": 127614699806,
+        "passed": 11,
+        "path": "server/__tests__/nonsecurity-currency-native-mysql.test.ts",
+        "pending": 0,
+        "publishedHead": "bbd8e199d5614271b942e928483be0e973aa22cd",
+        "runId": 42132795306,
+        "sourceUrl": "https://github.com/kafaat/ais-aviation-system/blob/bbd8e199d5614271b942e928483be0e973aa22cd/server/__tests__/nonsecurity-currency-native-mysql.test.ts",
+        "tree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b"
+      }
+    },
+    "limits": [
+      "Current records distinguish workflow metadata readback from prior local native acceptance. No reconstructed local execution receipt was created.",
+      "Native fixture's declared scope excludes complete migration/index parity and the dynamic pricing engine.",
+      "Four other separate nonsecurity findings are outside PR289."
+    ],
+    "otherPackageFindings": {
+      "count": 4,
+      "includedInPr289": false,
+      "relationToForensic30": "Separate package; excluded from the 30-row forensic classification.",
+      "scope": "price-alert atomicity, price-alert availability, corporate ledger statistics, maintenance history"
+    },
+    "pr": {
+      "head": "065829d172516ec63b069e2284a201b5e04d1cde",
+      "mergeCommit": "335b8bfb571144631993db6a8dd6485e739b6ea5",
+      "merged": true,
+      "mergedAt": "2026-11-05T23:47:06Z",
+      "mergedBy": "kafaat",
+      "number": 289,
+      "state": "closed",
+      "url": "https://github.com/kafaat/ais-aviation-system/pull/289"
+    },
+    "priorLocalAcceptance": {
+      "contracts": 43,
+      "existing": 24,
+      "nativeMysqlRedisHttp": 11,
+      "rerun": false,
+      "source": "fb60e36fd6403e16d853cb0f961f62c3af8927b7",
+      "sourceOfRecord": "Published PR description and three review replies, recovered verbatim; original local receipts not recovered in current environment."
+    },
+    "publishedSource": {
+      "commit": "065829d172516ec63b069e2284a201b5e04d1cde",
+      "tree": "0a25d5ed470f2a0c1c8a2fd994ae0968bb30baa5",
+      "url": "https://github.com/kafaat/ais-aviation-system/commit/065829d172516ec63b069e2284a201b5e04d1cde"
+    },
+    "resolvedReviewThreads": [
+      "https://github.com/kafaat/ais-aviation-system/pull/289#discussion_r4486334375",
+      "https://github.com/kafaat/ais-aviation-system/pull/289#discussion_r4486334417",
+      "https://github.com/kafaat/ais-aviation-system/pull/289#discussion_r4486334450"
+    ]
+  },
+  "datasetReview": {
+    "amendedDatasetCreated": false,
+    "checks": {
+      "all99ReportCriteriaHaveProvenance": true,
+      "availableSourceScopePresentationsClearlyLabelled": 36,
+      "oldLocalReceiptsNotReconstructed": true,
+      "originalAssignmentsAndAcceptancePreserved": true,
+      "overlappingSuiteCountsNeverSummed": true,
+      "publishedRemainingCriteriaPreserved": 63,
+      "selectedHistoricalTestFilesReconciled": 52,
+      "sourceFilesRehashed": 94,
+      "technicalNotOperationalCounts": {
+        "contained": 5,
+        "external_dependency": 6,
+        "implemented_technical": 19
+      },
+      "ui08NamespaceSeparated": true,
+      "unassignedOwnershipDomains": 5
+    },
+    "dataset": {
+      "bytes": 847683,
+      "role": "frozen_recovery_dataset",
+      "sha256": "e9c55043369d0e4741a0d0e94c4ec90cf0ae9439bfcaf3ba688f2dbe18de8a38",
+      "verificationPath": "recovery-data.json"
+    },
+    "interpretation": "The 19/5/6 counts classify technical implementation and boundaries. They do not close operational dependencies or accept the failed historical whole workflow.",
+    "preparedSource": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+    "result": "NO_SUBSTANTIVE_DATASET_AMENDMENT_REQUIRED",
+    "schemaVersion": 1
+  },
+  "documentationFollowUp": {
+    "baseCommit": "56554f82c9ed593c79a65b7e2978f7e5f10c4366",
+    "deliveryCommit": null,
+    "identityPolicy": "The separate documentation pull request and commit are recorded externally after publication; this candidate does not self-reference a future delivery commit.",
+    "kind": "separate_docs_only_follow_up",
+    "plannedDraft": true,
+    "publicationStatus": "candidate_not_published_by_builder",
+    "pullRequest": null,
+    "url": null
+  },
+  "evidencePathSemantics": "verificationPath and historical path values identify files in the recovered verification workspace; they do not assert inclusion in the delivery archive. Bounded-delivery selections and the final archive manifest identify shipped files. The immutable input-status snapshot preserves verifier inputs, not an archive inclusion list.",
+  "historicalAcceptance": {
+    "availability": {
+      "interpretation": "The original Library audit archive and six published evidence documents are available. The lost local phase1/phase2 remediation files and finalizer are not reconstructed or represented as recovered originals.",
+      "localFullV4CompletedReceiptClaimed": false,
+      "oldLocalPhase1AndPhase2RawFilesRecovered": false,
+      "originalAuditArchive": {
+        "bytes": 15843672,
+        "kind": "recovered_original_audit_archive",
+        "member": "deliverables/audit-data.json",
+        "memberBytes": 2587990,
+        "memberSha256": "dea45e5e5f20f895d7d31ca9a18b6a175b0b1c78736dec65957ad776817d025b",
+        "path": "original-audit/AIS_Forensic_Evidence_2026-11-05.zip",
+        "sha256": "4106186240a8a23b7f4a87b7b3a35ff7aa8e3aa1955f2bb3095446e571824f65",
+        "use": "Historical baseline only; not a later remediation receipt."
+      },
+      "originalAuditPdfAvailable": true,
+      "originalAuditWorkbookAvailable": true,
+      "priorLocalRemediationReceiptsReconstructed": false,
+      "publishedEvidenceFilesAvailable": 6
+    },
+    "committedEvidence": [
+      {
+        "actualExecutionSource": {
+          "commit": "86b35690340a45aabf43ca5eddf08987f0ce46c2",
+          "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "",
+          "tree": "3bf7974979c5c2764b6370c23883cf10594ad6d3"
+        },
+        "findingIds": ["FIN-01", "FIN-02"],
+        "isCurrentSourceExecutionReceipt": false,
+        "isExecutionReceipt": true,
+        "limits": [
+          "Provider responses are synthetic; two ordinary-refund cases deliver actual signed HTTP test webhooks.",
+          "No live provider/production/device acceptance.",
+          "MySQL9.7 and final combined source CI pending."
+        ],
+        "name": "finance-native.json",
+        "reference": {
+          "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+          "gitBlob": "bb930130ace387a3447c9d8bc1165647f3036a14",
+          "kind": "committed_historical_evidence",
+          "path": "docs/remediation/forensic-evidence-20261105/finance-native.json",
+          "sha256": "45e712937a8535dfbb63202d78f08b81216c59db971df267ada24d6a32682a60",
+          "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/remediation/forensic-evidence-20261105/finance-native.json"
+        },
+        "result": {
+          "failed": 0,
+          "passed": 32,
+          "skipped": 0,
+          "suites": 5
+        },
+        "sourceFileComparisons": [
+          {
+            "historicalSha256": "1954f5f0dff4b1d2ac00b7ae081600559e5b34943935f3e7bc882f3e2087dca2",
+            "path": "server/services/refunds.service.ts",
+            "preparedSourceSha256": "baef9502a72b5c78916d603250a64d920c8fece3067e80c97084faf00ba12792",
+            "unchangedAtPreparedSource": false
+          },
+          {
+            "historicalSha256": "1f27041958840336050843efc8c1b897e903ac2ae445b5eb40706c5719706cbd",
+            "path": "server/services/ordinary-refund.service.ts",
+            "preparedSourceSha256": "d66ab55a1f6db9dd9b5afe199eb0ad69c1c2e50eecd74b3385176c81b06312ab",
+            "unchangedAtPreparedSource": false
+          },
+          {
+            "historicalSha256": "77485ab85c56b1547f14689f7eca771a37e4f69f4ac803fbacda3f787a5cc3d0",
+            "path": "server/services/payment-dispute.service.ts",
+            "preparedSourceSha256": "77485ab85c56b1547f14689f7eca771a37e4f69f4ac803fbacda3f787a5cc3d0",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "47db165c3757cc938bc4fa7ddaddf491658d8e4de58505ac67b482225f23e080",
+            "path": "server/services/payment-settlement.service.ts",
+            "preparedSourceSha256": "91a68c07f85e228514a795a6284a067ca8b70e3eb41bf0c481f5600759890d71",
+            "unchangedAtPreparedSource": false
+          },
+          {
+            "historicalSha256": "81be86b23c4bdebde42a2a3210636e870fb2935b8b5f06a2308aa72942631877",
+            "path": "server/services/wallet.service.ts",
+            "preparedSourceSha256": "81be86b23c4bdebde42a2a3210636e870fb2935b8b5f06a2308aa72942631877",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "350cbccc737d62126478d09abc8029dad63c848771384c4f27da19e146064353",
+            "path": "server/services/wallet-funding.service.ts",
+            "preparedSourceSha256": "bea8e437a61b14988d1cc17d2d2d63556e6475a45b55bb679e09d2e85c8d80fb",
+            "unchangedAtPreparedSource": false
+          },
+          {
+            "historicalSha256": "fe8f2e1f3028e51638df5267ea6c1d3df99137f27cd95b9e658b400f2565e2ad",
+            "path": "drizzle/0068_ordinary_refund_cancellation.sql",
+            "preparedSourceSha256": "fe8f2e1f3028e51638df5267ea6c1d3df99137f27cd95b9e658b400f2565e2ad",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "dce64435a53fcdcfdb0e6f95dfdb60c104f2f2e597b907d159012d515d3ddfd3",
+            "path": "drizzle/0069_wallet_receipt_owner_index.sql",
+            "preparedSourceSha256": "dce64435a53fcdcfdb0e6f95dfdb60c104f2f2e597b907d159012d515d3ddfd3",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "5c2de09572cfe826c2f64dbccd44ddfa3d44903ad87e7ca338eb91e8513ad883",
+            "path": "server/__tests__/ordinary-refund-mysql.test.ts",
+            "preparedSourceSha256": "36a5df83f59877cf6563e8a8d725801f84e2b06c0f8cd3d9d8cd5c93c6ff17de",
+            "unchangedAtPreparedSource": false
+          },
+          {
+            "historicalSha256": "b4bc91ec5ea35a629fcdb56fa076e83caa2423e9a81faefdd5f554075d836a48",
+            "path": "server/__tests__/wallet-dispute-funding-mysql.test.ts",
+            "preparedSourceSha256": "9fde1755ff3c8310d4584db5916b0ed10d39343e955918fc2e77148fc0f557d2",
+            "unchangedAtPreparedSource": false
+          }
+        ]
+      },
+      {
+        "actualExecutionSource": {
+          "commit": "b9995f9f4e50b215a8c731e96b8aef3ee307e5bd",
+          "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "",
+          "tree": "403569ffd198b9132d8e8a750db5191fd546a0bb"
+        },
+        "findingIds": ["INT-04"],
+        "isCurrentSourceExecutionReceipt": false,
+        "isExecutionReceipt": true,
+        "limits": [
+          "Controlled relational fixtures; no native fiscal provider or live tax-authority acceptance.",
+          "Internal draft only: XML, signing, onboarding and reporting/clearance remain unavailable; no production fiscal capability was enabled."
+        ],
+        "name": "fiscal-readiness-fixtures.json",
+        "reference": {
+          "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+          "gitBlob": "4555eaec7408697447d160f6ca639c8bbcecbde9",
+          "kind": "committed_historical_evidence",
+          "path": "docs/remediation/forensic-evidence-20261105/fiscal-readiness-fixtures.json",
+          "sha256": "19e1ed98aafe77a93002cc118c7b508f5ec2e6c9696a61054309ffd66444a973",
+          "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/remediation/forensic-evidence-20261105/fiscal-readiness-fixtures.json"
+        },
+        "result": {
+          "failed": 0,
+          "passed": 8,
+          "skipped": 0,
+          "suites": 1
+        },
+        "sourceFileComparisons": [
+          {
+            "historicalSha256": "908747b3cb7ce088eba509b67dd6fe5ee5c307eb224c738db43666064b525c06",
+            "path": "server/services/fare-components.service.ts",
+            "preparedSourceSha256": "908747b3cb7ce088eba509b67dd6fe5ee5c307eb224c738db43666064b525c06",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "c2f359ca17732c8f2ad8f10cfa061ce0eba5f8f9c74a491622841f89a63226ed",
+            "path": "server/__tests__/fare-components-zatca.test.ts",
+            "preparedSourceSha256": "c2f359ca17732c8f2ad8f10cfa061ce0eba5f8f9c74a491622841f89a63226ed",
+            "unchangedAtPreparedSource": true
+          }
+        ]
+      },
+      {
+        "actualExecutionSource": {
+          "commit": "ecfb9b6ab5f4ef3f5f0782e04de6130ea30bd68c",
+          "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "",
+          "tree": "d34adbef4f9716af29d91c8f0117096015646806"
+        },
+        "findingIds": [
+          "IDENTITY-01",
+          "IDENTITY-02",
+          "IDENTITY-03",
+          "IDENTITY-05",
+          "CONS-04",
+          "CONS-05"
+        ],
+        "isCurrentSourceExecutionReceipt": false,
+        "isExecutionReceipt": true,
+        "limits": [
+          "OAuth provider is a controlled local HTTP fixture; no live-provider acceptance.",
+          "OAuth/request-identity suite uses actual in-memory quota counters, not Redis quota persistence.",
+          "Consumer HTTP suite uses controlled identities; actual signed-cookie/Bearer authentication is covered separately by the native identity suite.",
+          "No physical device or browser execution is claimed by this receipt.",
+          "Final combined source and MySQL9.7 CI remain separate gates."
+        ],
+        "name": "identity-consumers-native.json",
+        "reference": {
+          "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+          "gitBlob": "5ed36c4595a813667da57852b6bf64b02bc7ede8",
+          "kind": "committed_historical_evidence",
+          "path": "docs/remediation/forensic-evidence-20261105/identity-consumers-native.json",
+          "sha256": "15a7e9b88e2bea39b5c5002d66fc5cbf2a39470b260aeedd76ceca0113414c24",
+          "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/remediation/forensic-evidence-20261105/identity-consumers-native.json"
+        },
+        "result": {
+          "failed": 0,
+          "passed": 47,
+          "skipped": 0,
+          "suites": 3
+        },
+        "sourceFileComparisons": [
+          {
+            "historicalSha256": "9268a3929f2f8f7e883bb4ee6af595b5ae20227973f046be5f4bc71af96be505",
+            "path": "drizzle/0070_oauth_login_state.sql",
+            "preparedSourceSha256": "9268a3929f2f8f7e883bb4ee6af595b5ae20227973f046be5f4bc71af96be505",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "26e37a3727925c76c8311d82c972d0f6da25bdb693d28095629c3d4f09374c3e",
+            "path": "drizzle/0071_flight_review_helpful_votes.sql",
+            "preparedSourceSha256": "26e37a3727925c76c8311d82c972d0f6da25bdb693d28095629c3d4f09374c3e",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "72acf12836992d07d63b472e245c3c4e6e5e6c567d923a25819fc57a67b0adaf",
+            "path": "server/services/account-lock.service.ts",
+            "preparedSourceSha256": "72acf12836992d07d63b472e245c3c4e6e5e6c567d923a25819fc57a67b0adaf",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "695cd34ef814483b1f7c86d136af9e64f2b480a3456b2ee31e8e8efaa34b0efc",
+            "path": "server/services/reviews.service.ts",
+            "preparedSourceSha256": "695cd34ef814483b1f7c86d136af9e64f2b480a3456b2ee31e8e8efaa34b0efc",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "35a1f8a07ba3340a68f35f241f5e2a6cc3edc3a8740f2047fcb39793fd669dca",
+            "path": "server/services/oauth-login-state.service.ts",
+            "preparedSourceSha256": "35a1f8a07ba3340a68f35f241f5e2a6cc3edc3a8740f2047fcb39793fd669dca",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "b7f5aed25fd474aa78fa5eda82ead0eed4bd19ab91deed4d592b9e7ae2d0a9fa",
+            "path": "server/_core/oauth.ts",
+            "preparedSourceSha256": "b7f5aed25fd474aa78fa5eda82ead0eed4bd19ab91deed4d592b9e7ae2d0a9fa",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "cf3ee4cb7eb198be8e22e327a104cb3bf14abeedda9c2bd46592ea1f5e6c84c9",
+            "path": "server/_core/request-identity.ts",
+            "preparedSourceSha256": "cf3ee4cb7eb198be8e22e327a104cb3bf14abeedda9c2bd46592ea1f5e6c84c9",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "294964da140f5676f92089b42318621efd899f0abf6aa217559a7be6bcf23439",
+            "path": "server/_core/middleware/blocked-ip.middleware.ts",
+            "preparedSourceSha256": "294964da140f5676f92089b42318621efd899f0abf6aa217559a7be6bcf23439",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "a7f633cee6c2b761a24a17cecb953414f21adb3477944b014ab5b1447873f1cc",
+            "path": "server/services/favorites.service.ts",
+            "preparedSourceSha256": "a7f633cee6c2b761a24a17cecb953414f21adb3477944b014ab5b1447873f1cc",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "80f72a0e9098d7c86040ff390d4d3c49fcaaa7ea9178a1100bac998762c0e387",
+            "path": "server/__tests__/auth-session-mysql.test.ts",
+            "preparedSourceSha256": "80f72a0e9098d7c86040ff390d4d3c49fcaaa7ea9178a1100bac998762c0e387",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "38de3a1e7fe425f946f4e59cfcf2ba7ed201bb7e8436a5070c5441c62a1ce4f1",
+            "path": "server/__tests__/flight-consumers-mysql.test.ts",
+            "preparedSourceSha256": "38de3a1e7fe425f946f4e59cfcf2ba7ed201bb7e8436a5070c5441c62a1ce4f1",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "d846bcddf3084c8da8197cee951c3a6388d9b3a13ee11a37073dd472601829a6",
+            "path": "server/__tests__/request-identity-oauth-mysql.test.ts",
+            "preparedSourceSha256": "d846bcddf3084c8da8197cee951c3a6388d9b3a13ee11a37073dd472601829a6",
+            "unchangedAtPreparedSource": true
+          }
+        ]
+      },
+      {
+        "actualExecutionSource": null,
+        "findingIds": [],
+        "isCurrentSourceExecutionReceipt": false,
+        "isExecutionReceipt": false,
+        "limits": [
+          "No native MySQL result is claimed. Root owns native MySQL JSON_TYPE/join acceptance and aggregate gates.",
+          "SQLite tests execute Drizzle relational SQL; they do not certify MySQL JSON typing or production source acceptance.",
+          "No accounting recognition, authoritative tax determination, internal-office assignment, accepted carrier/provider receipt, or missing historical record was fabricated."
+        ],
+        "name": "report-source-dependencies.json",
+        "reference": {
+          "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+          "gitBlob": "da6efc5d568ed93236337e5c0f26271b32e360a5",
+          "kind": "committed_historical_evidence",
+          "path": "docs/remediation/forensic-evidence-20261105/report-source-dependencies.json",
+          "sha256": "64f42562eeac9d0ff8f49f98aae974b713602694b6a8b49e7a1120a79fc1f094",
+          "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/remediation/forensic-evidence-20261105/report-source-dependencies.json"
+        },
+        "result": null,
+        "sourceFileComparisons": []
+      },
+      {
+        "actualExecutionSource": {
+          "commit": "b9995f9f4e50b215a8c731e96b8aef3ee307e5bd",
+          "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "",
+          "tree": "403569ffd198b9132d8e8a750db5191fd546a0bb"
+        },
+        "findingIds": ["CAP-01"],
+        "isCurrentSourceExecutionReceipt": false,
+        "isExecutionReceipt": true,
+        "limits": [
+          "116 native cases validate current local SQL readers and boundaries, not all99 reports or external source acceptance.",
+          "Catalog remains36 available,35partial,28blocked; exact per-report dependencies are retained."
+        ],
+        "name": "report-source-native.json",
+        "reference": {
+          "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+          "gitBlob": "4e982940ab1eed34e3f4d531e432ae1f20d70e98",
+          "kind": "committed_historical_evidence",
+          "path": "docs/remediation/forensic-evidence-20261105/report-source-native.json",
+          "sha256": "3329e2e68607f0d9ca8907e7e982a0fa145696ac91ac2e621c4c40b4fec1b923",
+          "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/remediation/forensic-evidence-20261105/report-source-native.json"
+        },
+        "result": {
+          "failed": 0,
+          "passed": 116,
+          "skipped": 0,
+          "suites": 3
+        },
+        "sourceFileComparisons": [
+          {
+            "historicalSha256": "0cbf2496b3f1dc46fcfa06d25d2c47f5ca1eaaf08e79bf60e348b9b5bdc20ac2",
+            "path": "server/services/standard-reports-ops.service.ts",
+            "preparedSourceSha256": "0cbf2496b3f1dc46fcfa06d25d2c47f5ca1eaaf08e79bf60e348b9b5bdc20ac2",
+            "unchangedAtPreparedSource": true
+          },
+          {
+            "historicalSha256": "9568027dd07eb8513484c0f30bf1948ba94361e819d7b094534482ba8e38ff62",
+            "path": "server/services/standard-reports-finance.service.ts",
+            "preparedSourceSha256": "9568027dd07eb8513484c0f30bf1948ba94361e819d7b094534482ba8e38ff62",
+            "unchangedAtPreparedSource": true
+          }
+        ]
+      },
+      {
+        "actualExecutionSource": {
+          "commit": "5f0a9e4422a0cd47237c31073e72ae589a7fe862",
+          "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "",
+          "tree": "e1cf0b54d5440277bf53f357031f66580b08e258"
+        },
+        "findingIds": [],
+        "isCurrentSourceExecutionReceipt": false,
+        "isExecutionReceipt": true,
+        "limits": [
+          "No provider or physical-device acceptance",
+          "MySQL9.7 and final combined CI not yet run",
+          "Native suite includes41existing controls and3new ownership cases"
+        ],
+        "name": "seat-native.json",
+        "reference": {
+          "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+          "gitBlob": "cb398906bc1adc51464eb8d375621348132c4928",
+          "kind": "committed_historical_evidence",
+          "path": "docs/remediation/forensic-evidence-20261105/seat-native.json",
+          "sha256": "753f9e0a4244a6b2e603f4a06bc0b192e8509a4a7b9322ef270e0f4cc161e913",
+          "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+          "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/remediation/forensic-evidence-20261105/seat-native.json"
+        },
+        "result": {
+          "failed": 0,
+          "passed": 44,
+          "skipped": 0
+        },
+        "sourceFileComparisons": []
+      }
+    ],
+    "fullSuite": {
+      "actualSource": "25f97292b799a6df53cf12bb12925bd1c49d8497",
+      "boundedDelivery": {
+        "allowlist": {
+          "bytes": 14249,
+          "role": "bounded_delivery_allowlist",
+          "sha256": "18341d0ec0d6a299caa58e59e30c87de21e7f37d4f6419ce4572280f7b1bc055",
+          "verificationPath": "packaging/coverage-409c30c/bounded-evidence-allowlist.json"
+        },
+        "derivedCaseIndex": {
+          "archivePath": "coverage-409c30c/derived/test-result-index.json",
+          "bytes": 1218317,
+          "role": "derived_case_index",
+          "sha256": "dfce891c486834a8f8f3306d9c4745dfd9c995a49de556f6eb2a0dd24d0c7025",
+          "verificationPath": "packaging/coverage-409c30c/test-result-index.json"
+        },
+        "excludedArchive": {
+          "bytes": 17102051,
+          "sha256": "4eecadb588cf3d99435e0ef916e9ff5cb533acc1f5f5ab67cd4ca982231fa4f0"
+        },
+        "interpretation": "Original raw payloads are retained for verification only. The bounded delivery contains the derived case index and allowlisted metadata/results. Actual archive paths are defined by the final delivery manifest.",
+        "omittedOriginals": [
+          {
+            "bytes": 5975,
+            "name": "vitest.config.ts",
+            "sha256": "7103e1f14ea4ac6233e45934b07ca5db50368bd4af531f1e0b56c36b2edb7901"
+          },
+          {
+            "bytes": 15045122,
+            "name": "vitest-results.json",
+            "sha256": "c4a150040a6d3ac9a4081fc199cd2b2fbb389169b3c73fcc62025eb11df48b23"
+          },
+          {
+            "bytes": 12858784,
+            "name": "coverage-final.json",
+            "sha256": "065ec6096491bd99827cb4c271c704ecbf0f9cf4cfa82f5116db1bb36fc0c055"
+          },
+          {
+            "bytes": 4768641,
+            "name": "cobertura-coverage.xml",
+            "sha256": "c2b0410dcf3432fe1b4d9da2efcabe1bad268ebad3bdb9a09f7c5f16b9ef7a01"
+          },
+          {
+            "bytes": 1825,
+            "name": "verify_partitions.mjs",
+            "sha256": "08ba326bb03fe17d8cc644265841d9b20f101da82f227b9665ef5a1b22c273e3"
+          },
+          {
+            "bytes": 24255,
+            "name": "verify_remote_full.py",
+            "sha256": "de2096b6637c13b531c44cf89cd7fc98f1d569295aad80373b879aa05c51d26d"
+          }
+        ],
+        "originalFullCoverageZipIncluded": false,
+        "originalFullVitestJsonIncluded": false,
+        "originalIstanbulMapIncluded": false
+      },
+      "coverage": {
+        "branches": {
+          "covered": 19640,
+          "pct": 51.6,
+          "skipped": 0,
+          "total": 38059
+        },
+        "branchesTrue": {
+          "covered": 0,
+          "pct": 100,
+          "skipped": 0,
+          "total": 0
+        },
+        "functions": {
+          "covered": 5181,
+          "pct": 51.56,
+          "skipped": 0,
+          "total": 10047
+        },
+        "lines": {
+          "covered": 23857,
+          "pct": 55.35,
+          "skipped": 0,
+          "total": 43101
+        },
+        "statements": {
+          "covered": 24957,
+          "pct": 54.51,
+          "skipped": 0,
+          "total": 45776
+        }
+      },
+      "failed": 0,
+      "files": 425,
+      "jobId": 127604004079,
+      "manifest": {
+        "bytes": 3951,
+        "kind": "original_ci_manifest",
+        "path": "remote-ci-coverage-409c30c/extracted/run-TsBAdV/execution-manifest.json",
+        "sha256": "d57eba06cbfed187470a8906a21c22df8df6662946dfe1281f92dc7ecfbd6520"
+      },
+      "pending": 0,
+      "proof": {
+        "bytes": 23469,
+        "kind": "independently_verified_official_full_artifact",
+        "path": "remote-ci-coverage-409c30c/verified-remote-full.json",
+        "sha256": "ccdb459997661fc7ff671c3d7af6e6447921ed67ce2da9a533bd81c7fad037d1"
+      },
+      "publishedSource": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+      "result": {
+        "bytes": 15045122,
+        "includedInDeliveryBundle": false,
+        "kind": "original_ci_vitest_result",
+        "path": "remote-ci-coverage-409c30c/extracted/run-TsBAdV/vitest-results.json",
+        "pathSemantics": "Verification workspace path, not a delivery archive path.",
+        "sha256": "c4a150040a6d3ac9a4081fc199cd2b2fbb389169b3c73fcc62025eb11df48b23",
+        "verificationOnly": true
+      },
+      "runId": 42129602571,
+      "runtime": {
+        "architecture": "x64",
+        "coverageProvider": "v8",
+        "coverageProviderVersion": "4.1.12",
+        "declaredPackageManager": "pnpm@10.34.5",
+        "node": "v22.23.4",
+        "platform": "linux",
+        "vitest": "4.1.12"
+      },
+      "scope": "Run Tests acceptance only; not E2E, production deployment, device or live-provider acceptance.",
+      "sourceScope": {
+        "eligible": 826,
+        "exactMatch": true,
+        "excluded": 446,
+        "included": 1272,
+        "measured": 826,
+        "missing": [],
+        "outsideInclude": 692,
+        "partitions": [
+          {
+            "flag": "server",
+            "records": 509,
+            "sha256": "d8a6c9e96af59ce087eced58e7a2660afe075cd5f6fc3ba328d60901453d71ca"
+          },
+          {
+            "flag": "client",
+            "records": 292,
+            "sha256": "6a9f1e17e857fad028bdfe951a8e4b68f3676ab2de9800b4bb22002fdfd62878"
+          },
+          {
+            "flag": "shared",
+            "records": 25,
+            "sha256": "6092e5a27a77d992a35a27ecb7f0ce86e290c0a76b72300aa1d3630bd087b3cf"
+          }
+        ],
+        "tracked": 1964,
+        "unexpected": []
+      },
+      "status": "PASS",
+      "tests": 6177,
+      "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+      "workflowSnapshot": {
+        "conclusion": null,
+        "otherJobs": [
+          {
+            "conclusion": "success",
+            "id": 127602557870,
+            "name": "Verify Release Deployment Request",
+            "status": "completed"
+          },
+          {
+            "conclusion": "success",
+            "id": 127602637112,
+            "name": "Lint Code",
+            "status": "completed"
+          },
+          {
+            "conclusion": "success",
+            "id": 127604004026,
+            "name": "Security Scan",
+            "status": "completed"
+          },
+          {
+            "conclusion": "success",
+            "id": 127607263878,
+            "name": "Build Application",
+            "status": "completed"
+          },
+          {
+            "conclusion": null,
+            "id": 127607263950,
+            "name": "E2E Tests",
+            "status": "in_progress"
+          },
+          {
+            "conclusion": "skipped",
+            "id": 127607265238,
+            "name": "Upload Coverage to Codecov",
+            "status": "completed"
+          },
+          {
+            "conclusion": "skipped",
+            "id": 127607570133,
+            "name": "Build Docker Image",
+            "status": "completed"
+          },
+          {
+            "conclusion": "skipped",
+            "id": 127607570642,
+            "name": "Deploy to Staging",
+            "status": "completed"
+          }
+        ],
+        "runUrl": "https://github.com/kafaat/ais-aviation-system/actions/runs/42129602571",
+        "status": "in_progress",
+        "testJobConclusion": "success",
+        "testJobStatus": "completed"
+      }
+    },
+    "mysql97": {
+      "actualSource": "25f97292b799a6df53cf12bb12925bd1c49d8497",
+      "countingNote": "479,171,7 and6177 are different overlapping contracts; no aggregate unique-test count.",
+      "nativeFiles": 29,
+      "nativeTests": 479,
+      "proof": {
+        "bytes": 11491,
+        "kind": "source_bound_mysql97_acceptance",
+        "path": "ci-status/mysql97-source-bound-409c30c-20261105T234037Z.json",
+        "sha256": "ca38a229c1279b39ba262b21fd299da7bc7722af5773e9d18a296ecc7bff1062"
+      },
+      "providerCallsForTransactionChecks": 0,
+      "restoreChecks": 7,
+      "restoredTables": 185,
+      "scope": "Successful official CI MySQL 9.7.4.0 acceptance on an executed PR merge commit whose entire tree equals published head409c30c. Does not claim live payment-provider certification, deployment, production restore objectives, or successful E2E financial acceptance.",
+      "status": "PASS",
+      "transactionChecks": 171,
+      "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+      "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42129602566/job/127602557767"
+    },
+    "previousWholeWorkflow": {
+      "e2e": {
+        "financialCollected": 0,
+        "logoutPassed": 3,
+        "mainPassed": 93,
+        "stage": "configuration_guard_rejected_helper_metadata"
+      },
+      "fullFiles": 425,
+      "fullTests": 6177,
+      "head": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+      "runId": 42129602571,
+      "status": "failure"
+    }
+  },
+  "inputs": {
+    "builder": {
+      "bytes": 62343,
+      "role": "deterministic_documentation_builder",
+      "sha256": "71fd0e0ca013b87c6ad7aff439fca6b740d95e48504206218897ce681e33f509",
+      "verificationPath": "build_docs_addendum.py"
+    },
+    "dataset": {
+      "bytes": 847683,
+      "role": "immutable_historical_recovery_dataset",
+      "sha256": "e9c55043369d0e4741a0d0e94c4ec90cf0ae9439bfcaf3ba688f2dbe18de8a38",
+      "verificationPath": "recovery-data.json"
+    },
+    "deliveryStatus": {
+      "bytes": 10873,
+      "role": "immutable_snapshot_of_consumed_delivery_readback",
+      "sha256": "009457df5f4d4d70d5a62b1db2f6ae0f13456be08564ba45b28b128edf3e00a5",
+      "verificationPath": "docs-addendum-candidate-v3/input-delivery-status.json"
+    },
+    "documentFormatter": {
+      "archiveSha256": "0af7ca9ff0d095913b49613a90bc4a866b86cbfbd7006ee671c3ad305cba25ac",
+      "configurationPath": ".prettierrc",
+      "configurationSha256": "087532218269eb851c22dcc3d5234ea46bfa513b494a3d7b167b1c1f48c410c5",
+      "name": "prettier",
+      "packageScriptsExecuted": false,
+      "repositoryLockIntegrity": "sha512-zxcTTCedNGJM4R8sj/Cq/F0W/c4iE0afWBcBwMTRtw4WHYP9TWkYjdiH3npPRUYsXQCPR0hTU9yjovOu+E6EQA==",
+      "version": "3.8.5"
+    }
+  },
+  "kind": "source_bound_documentation_addendum",
+  "latestIntegratedAcceptance": {
+    "allRequiredWorkflowsPassed": true,
+    "e2e": {
+      "actualCiCommit": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+      "artifact": {
+        "bytes": 1404322,
+        "id": 13466500206,
+        "name": "e2e-test-results",
+        "sha256": "01af847604194aa6b3a7317c5b4ba46929fa63d4082efd79dee90f21a8ef93f0",
+        "url": "https://api.github.com/repos/kafaat/ais-aviation-system/actions/artifacts/13466500206"
+      },
+      "boundedDelivery": {
+        "derivedCaseIndex": {
+          "bytes": 80374,
+          "role": "derived_bounded_e2e_case_index",
+          "sha256": "6064886a8386b12c7c13d19c4f2046792a20e902f174edbc220c1a06f3108cbf",
+          "verificationPath": "ci-status/e2e-derived-case-index-bbd8e199.json"
+        },
+        "interpretation": "Only the bounded derived case/receipt index and timing metadata are selected for delivery; original config, project/git metadata, stdout/stderr, HTML and raw reports are omitted.",
+        "originalE2eZipIncluded": false,
+        "originalPlaywrightJsonIncluded": false,
+        "originalsRetainedLocallyForVerification": true,
+        "packagingOverlay": {
+          "bytes": 1763,
+          "role": "bounded_e2e_delivery_selection",
+          "sha256": "e2efae27cad5a6f2e64bb36afcc6201fc16a45d2431f324fc1d87ead1b156ba4",
+          "verificationPath": "ci-status/e2e-packaging-overlay-bbd8e199.json"
+        }
+      },
+      "browserPreflight": {
+        "chromiumSandbox": true,
+        "configurationSource": "Published workflow and unchanged UI05 config at the complete tree above; actual log reports successful sandboxed launch.",
+        "executablePath": "/opt/google/chrome/chrome",
+        "globalSecuritySettingsChanged": false,
+        "observedSuccessLine": "2026-11-06T00:17:27.4026923Z UI05 sandboxed browser preflight passed: 156.0.8078.79",
+        "renderer": "about:blank",
+        "status": "PASS",
+        "version": "156.0.8078.79"
+      },
+      "conclusion": "success",
+      "financial5": {
+        "passed": 5,
+        "status": "PASS"
+      },
+      "financialCases": [
+        {
+          "attachmentNames": ["ui05-native-financial-receipt"],
+          "attempts": 1,
+          "durationMs": 6508,
+          "expectedStatus": "passed",
+          "file": "ui05-financial-dialogs.spec.ts",
+          "id": "e2e55067edf08a4c93f1-21b6d15d3e1cdc1c0476",
+          "line": 361,
+          "projectName": "chromium",
+          "resultStatuses": ["passed"],
+          "status": "passed",
+          "testStatus": "expected",
+          "title": "a paid modification fulfills through the real webhook and displays its single operation receipt"
+        },
+        {
+          "attachmentNames": ["ui05-native-financial-receipt"],
+          "attempts": 1,
+          "durationMs": 5362,
+          "expectedStatus": "passed",
+          "file": "ui05-financial-dialogs.spec.ts",
+          "id": "e2e55067edf08a4c93f1-b60dcc4eeb08092a21b5",
+          "line": 493,
+          "projectName": "chromium",
+          "resultStatuses": ["passed"],
+          "status": "passed",
+          "testStatus": "expected",
+          "title": "cash cancellation displays the retained fee and the native refund receipt without losing the dialog"
+        },
+        {
+          "attachmentNames": ["ui05-native-financial-receipt"],
+          "attempts": 1,
+          "durationMs": 5971,
+          "expectedStatus": "passed",
+          "file": "ui05-financial-dialogs.spec.ts",
+          "id": "e2e55067edf08a4c93f1-0a39321fc5b612c12e41",
+          "line": 587,
+          "projectName": "chromium",
+          "resultStatuses": ["passed"],
+          "status": "passed",
+          "testStatus": "expected",
+          "title": "a fare-only nonrefundable booking requires explicit consent and retains a zero-refund receipt after reload"
+        },
+        {
+          "attachmentNames": ["ui05-native-financial-receipt"],
+          "attempts": 1,
+          "durationMs": 4459,
+          "expectedStatus": "passed",
+          "file": "ui05-financial-dialogs.spec.ts",
+          "id": "e2e55067edf08a4c93f1-e4fbfce8f9cba7fa21bc",
+          "line": 720,
+          "projectName": "chromium",
+          "resultStatuses": ["passed"],
+          "status": "passed",
+          "testStatus": "expected",
+          "title": "a native nonrefundable departure refuses cancellation without a provider refund or financial effect"
+        },
+        {
+          "attachmentNames": ["ui05-native-financial-receipt"],
+          "attempts": 1,
+          "durationMs": 7830,
+          "expectedStatus": "passed",
+          "file": "ui05-financial-dialogs.spec.ts",
+          "id": "e2e55067edf08a4c93f1-8ac9fa101bd799857a31",
+          "line": 781,
+          "projectName": "chromium",
+          "resultStatuses": ["passed"],
+          "status": "passed",
+          "testStatus": "expected",
+          "title": "split cancellation fulfills both original payers and preserves fees and operation receipts after reload"
+        }
+      ],
+      "financialCasesCollected": 5,
+      "financialCasesFailed": 0,
+      "financialCasesPassed": 5,
+      "financialPassed": 5,
+      "jobId": 127617705859,
+      "proof": {
+        "bytes": 19001,
+        "role": "official_browser_acceptance_readback",
+        "sha256": "0d5117e3154b9faad52e2468b5d9578cba3c70663ab971a838e9f109c0abd33a",
+        "verificationPath": "ci-status/e2e-source-bound-bbd8e199.json"
+      },
+      "publishedHead": "bbd8e199d5614271b942e928483be0e973aa22cd",
+      "reportGroups": [
+        {
+          "failed": 0,
+          "flaky": 0,
+          "member": "test-results/results.json",
+          "passed": 93,
+          "report": {
+            "bytes": 1175280,
+            "includedInDeliveryBundle": false,
+            "role": "original_playwright_report",
+            "sha256": "e89828df060a45fd9da62e5a6503d4bf839e1387a1dcc0fd4d26e8511c408167",
+            "verificationOnly": true,
+            "verificationPath": "ci-status/e2e-artifact-13466500206/test-results/results.json"
+          },
+          "skipped": 0
+        },
+        {
+          "failed": 0,
+          "flaky": 0,
+          "member": "test-results/auth-logout/results.json",
+          "passed": 3,
+          "report": {
+            "bytes": 962466,
+            "includedInDeliveryBundle": false,
+            "role": "original_playwright_report",
+            "sha256": "86084c972b4c39d68e15331373af0125c9bd3db1e6c880a04dccf47febe4dd92",
+            "verificationOnly": true,
+            "verificationPath": "ci-status/e2e-artifact-13466500206/test-results/auth-logout/results.json"
+          },
+          "skipped": 0
+        },
+        {
+          "failed": 0,
+          "flaky": 0,
+          "member": "test-results/ui05/results.json",
+          "passed": 5,
+          "report": {
+            "bytes": 238326,
+            "includedInDeliveryBundle": false,
+            "role": "original_playwright_report",
+            "sha256": "ce3fc3a11f733fc0b74c99af23f994fc5fd71077307e00cfa2e25e54431ada09",
+            "verificationOnly": true,
+            "verificationPath": "ci-status/e2e-artifact-13466500206/test-results/ui05/results.json"
+          },
+          "skipped": 0
+        }
+      ],
+      "runId": 42132795306,
+      "scope": "Official browser fixture acceptance on this source; not live-provider or production deployment acceptance.",
+      "status": "completed",
+      "tree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b"
+    },
+    "fullSuite": {
+      "actualExecutionSource": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+      "artifact": {
+        "bytes": 17132038,
+        "id": 13464463191,
+        "name": "test-coverage",
+        "sha256": "bfc23401c3277535ad252a8b62ec195b1198ded5c7c103203bfe5608f4dcd819",
+        "url": "https://api.github.com/repos/kafaat/ais-aviation-system/actions/artifacts/13464463191"
+      },
+      "boundedDelivery": {
+        "allowlist": {
+          "bytes": 14807,
+          "role": "bounded_delivery_allowlist",
+          "sha256": "f0715ad2eb844675119394860e87dba00ef8dbed0185aebf225aa25a89655a41",
+          "verificationPath": "packaging/coverage-bbd8e199/bounded-evidence-allowlist.json"
+        },
+        "derivedCaseIndex": {
+          "archivePath": "coverage-bbd8e199/derived/test-result-index.json",
+          "bytes": 1230381,
+          "role": "derived_case_index",
+          "sha256": "6547e9a97aa55773cc25e57f899587e7323ccb09937ccf03f9ed8909d437799a",
+          "verificationPath": "packaging/coverage-bbd8e199/test-result-index.json"
+        },
+        "excludedArchive": {
+          "bytes": 17132038,
+          "sha256": "bfc23401c3277535ad252a8b62ec195b1198ded5c7c103203bfe5608f4dcd819"
+        },
+        "interpretation": "Original raw payloads are retained for verification only. The bounded delivery contains the derived case index and allowlisted metadata/results. Actual archive paths are defined by the final delivery manifest.",
+        "omittedOriginals": [
+          {
+            "bytes": 5975,
+            "name": "vitest.config.ts",
+            "sha256": "7103e1f14ea4ac6233e45934b07ca5db50368bd4af531f1e0b56c36b2edb7901"
+          },
+          {
+            "bytes": 15096175,
+            "name": "vitest-results.json",
+            "sha256": "21b312cc795becebde486df00ac068f98ae3f80c63bf7699cd849ef573793d55"
+          },
+          {
+            "bytes": 12887258,
+            "name": "coverage-final.json",
+            "sha256": "e9ab013d924ba006780c3dfa82f881f341ef403f6adc8ce21fe77d0a6037d94c"
+          },
+          {
+            "bytes": 4777698,
+            "name": "cobertura-coverage.xml",
+            "sha256": "ab138511f1f641dc6a8a479c62301ce3ff5808e66740b737551b551bde774412"
+          },
+          {
+            "bytes": 1526,
+            "name": "verify_partitions.mjs",
+            "sha256": "01b75426274542e2602a79d5ed0d572ce4f6e205b3f6b8c1ca31700dbc5ea865"
+          },
+          {
+            "bytes": 26780,
+            "name": "verify_remote_full.py",
+            "sha256": "027ccbcb0e15631a1c35415a1c33e388b4612e6fa682df2d71bba28239b35423"
+          }
+        ],
+        "originalFullCoverageZipIncluded": false,
+        "originalFullVitestJsonIncluded": false,
+        "originalIstanbulMapIncluded": false
+      },
+      "coverage": {
+        "branches": {
+          "covered": 19744,
+          "pct": 51.73,
+          "skipped": 0,
+          "total": 38164
+        },
+        "branchesTrue": {
+          "covered": 0,
+          "pct": 100,
+          "skipped": 0,
+          "total": 0
+        },
+        "functions": {
+          "covered": 5195,
+          "pct": 51.64,
+          "skipped": 0,
+          "total": 10059
+        },
+        "lines": {
+          "covered": 23971,
+          "pct": 55.48,
+          "skipped": 0,
+          "total": 43203
+        },
+        "statements": {
+          "covered": 25071,
+          "pct": 54.64,
+          "skipped": 0,
+          "total": 45879
+        }
+      },
+      "execution": {
+        "endedAt": "2026-11-06T00:04:00.864Z",
+        "exitCode": 0,
+        "startedAt": "2026-11-05T23:58:24.481Z",
+        "wrapperExitCode": 0
+      },
+      "failed": 0,
+      "files": 427,
+      "jobId": 127614699806,
+      "originalWorkflowSnapshot": {
+        "conclusion": null,
+        "otherJobs": [
+          {
+            "conclusion": "success",
+            "id": 127613636453,
+            "name": "Verify Release Deployment Request",
+            "status": "completed"
+          },
+          {
+            "conclusion": "success",
+            "id": 127613697343,
+            "name": "Lint Code",
+            "status": "completed"
+          },
+          {
+            "conclusion": "success",
+            "id": 127614699577,
+            "name": "Security Scan",
+            "status": "completed"
+          },
+          {
+            "conclusion": "success",
+            "id": 127617705604,
+            "name": "Build Application",
+            "status": "completed"
+          },
+          {
+            "conclusion": null,
+            "id": 127617705859,
+            "name": "E2E Tests",
+            "status": "in_progress"
+          },
+          {
+            "conclusion": "skipped",
+            "id": 127617707325,
+            "name": "Upload Coverage to Codecov",
+            "status": "completed"
+          },
+          {
+            "conclusion": "skipped",
+            "id": 127617967068,
+            "name": "Build Docker Image",
+            "status": "completed"
+          },
+          {
+            "conclusion": "skipped",
+            "id": 127617967925,
+            "name": "Deploy to Staging",
+            "status": "completed"
+          }
+        ],
+        "runUrl": "https://github.com/kafaat/ais-aviation-system/actions/runs/42132795306",
+        "status": "in_progress",
+        "testJobConclusion": "success",
+        "testJobStatus": "completed"
+      },
+      "pending": 0,
+      "proof": {
+        "bytes": 24234,
+        "role": "verified_official_full_coverage",
+        "sha256": "ce2c070f33c19a9fc7a7a9e350754779058daec84e0e934a108bf2eaf548408c",
+        "verificationPath": "remote-ci-coverage-bbd8e199/verified-remote-full.json"
+      },
+      "publishedHead": "bbd8e199d5614271b942e928483be0e973aa22cd",
+      "runAttempt": 1,
+      "runId": 42132795306,
+      "runtime": {
+        "architecture": "x64",
+        "coverageProvider": "v8",
+        "coverageProviderVersion": "4.1.12",
+        "declaredPackageManager": "pnpm@10.34.5",
+        "node": "v22.23.4",
+        "platform": "linux",
+        "vitest": "4.1.12"
+      },
+      "scope": "Completed Run Tests evidence; whole-workflow, native transaction and browser acceptance are separate.",
+      "sourceScope": {
+        "eligible": 826,
+        "exactMatch": true,
+        "excluded": 448,
+        "included": 1274,
+        "measured": 826,
+        "missing": [],
+        "outsideInclude": 692,
+        "partitions": [
+          {
+            "flag": "server",
+            "records": 509,
+            "sha256": "3a2b9af87f1049f3df78bd241c0c86cddfecd5e1e2eea7947080a6f6ba1ad8a5"
+          },
+          {
+            "flag": "client",
+            "records": 292,
+            "sha256": "17dad10cf000b6c72be3c60b4fe303ecddc2aa729e1281abac47fc53083f9264"
+          },
+          {
+            "flag": "shared",
+            "records": 25,
+            "sha256": "4234e760e2dfde7a76dfd85f3c2e2beaac001bddf8b328681adb45799c20c8e8"
+          }
+        ],
+        "tracked": 1966,
+        "unexpected": []
+      },
+      "status": "PASS",
+      "tests": 6238,
+      "tree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b"
+    },
+    "mysql97": {
+      "actualExecutionSource": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+      "artifact": {
+        "bytes": 87079,
+        "id": 13463928573,
+        "name": "live-transaction-acceptance-mysql-9.7",
+        "sha256": "a5eadd4af5b45517bd89fc0ece8034c4e69fac4306ea98cc533bc0c82dd0cf4a",
+        "url": "https://api.github.com/repos/kafaat/ais-aviation-system/actions/artifacts/13463928573"
+      },
+      "countingNote": "Native, transaction, restore and full-suite counters overlap and must not be summed.",
+      "integrationObservations": 42,
+      "integrationTransportScope": {
+        "outboundNetworkCalls": 0,
+        "stubbedHttpCalls": 1
+      },
+      "jobId": 127613615608,
+      "nativeFiles": 29,
+      "nativeTests": 479,
+      "proof": {
+        "bytes": 21002,
+        "role": "official_source_bound_mysql97_acceptance",
+        "sha256": "0510946542ffe3eca869517e1e840fdc8a13f1adec918cb58b214d9724dcabc3",
+        "verificationPath": "ci-status/mysql97-source-bound-bbd8e199.json"
+      },
+      "providerCallsInTransactionAcceptance": 0,
+      "publishedHead": "bbd8e199d5614271b942e928483be0e973aa22cd",
+      "restoreChecks": 7,
+      "restoredTables": 185,
+      "runId": 42132795195,
+      "scope": "Official native MySQL/Redis CI plus controlled logical backup restore. No external provider certification or production PVC/RPO/RTO claim.",
+      "serverVersion": "9.7.4.0",
+      "status": "PASS",
+      "transactionChecks": 171,
+      "tree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b",
+      "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42132795195/job/127613615608"
+    },
+    "requiredWorkflows": [
+      {
+        "conclusion": "success",
+        "created_at": "2026-11-05T23:53:27Z",
+        "head_sha": "bbd8e199d5614271b942e928483be0e973aa22cd",
+        "id": 42132795306,
+        "name": "CI/CD Pipeline",
+        "run_attempt": 1,
+        "status": "completed",
+        "updated_at": "2026-11-06T00:18:19Z",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42132795306"
+      },
+      {
+        "conclusion": "success",
+        "created_at": "2026-11-05T23:53:27Z",
+        "head_sha": "bbd8e199d5614271b942e928483be0e973aa22cd",
+        "id": 42132795195,
+        "name": "Production Gates",
+        "run_attempt": 1,
+        "status": "completed",
+        "updated_at": "2026-11-06T00:02:16Z",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42132795195"
+      },
+      {
+        "conclusion": "success",
+        "created_at": "2026-11-05T23:53:27Z",
+        "head_sha": "bbd8e199d5614271b942e928483be0e973aa22cd",
+        "id": 42132795475,
+        "name": "Production Docker Validation",
+        "run_attempt": 1,
+        "status": "completed",
+        "updated_at": "2026-11-05T23:56:10Z",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42132795475"
+      },
+      {
+        "conclusion": "success",
+        "created_at": "2026-11-05T23:53:27Z",
+        "head_sha": "bbd8e199d5614271b942e928483be0e973aa22cd",
+        "id": 42132795266,
+        "name": "Aviation Component Labs",
+        "run_attempt": 1,
+        "status": "completed",
+        "updated_at": "2026-11-05T23:55:19Z",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42132795266"
+      },
+      {
+        "conclusion": "success",
+        "created_at": "2026-11-05T23:54:55Z",
+        "head_sha": "bbd8e199d5614271b942e928483be0e973aa22cd",
+        "id": 42132948225,
+        "name": "PR Checks",
+        "run_attempt": 1,
+        "status": "completed",
+        "updated_at": "2026-11-05T23:55:07Z",
+        "url": "https://github.com/kafaat/ais-aviation-system/actions/runs/42132948225"
+      }
+    ]
+  },
+  "ledger": {
+    "bytes": 235286,
+    "path": "docs/remediation/2026-11-05-forensic-remediation.json",
+    "sha256": "25cc1f21d2850a042f180fd64e63271a716e93d2d6cc6f0035924a4287fc4075"
+  },
+  "limits": [
+    "تصنيف19/5/6 يصف تنفيذ الشيفرة وحدودها، ولا يعني إغلاق19 مطلباً تشغيلياً أو نجاح سيرCI كاملاً.",
+    "تخص6177 حالة و425 ملفاً تنفيذGitHub25f9729 وشجرة409c30c فقط؛ المصدر الأحدث يحتاج دليله ولا تُنقل الأعداد إليه.",
+    "479 حالة أصلية علىMySQL9.7 و171 فحص معاملة و7 فحوص استعادة عقود مستقلة متداخلة؛ لا تجمع مع6177.",
+    "الاستعادة المثبتة منطقية فيCI على خادم وحجمDocker منفصلين؛ ليست اعتمادRPO/RTO أو استعادة تخزين إنتاج.",
+    "سجلاتphase1/phase2 المحلية القديمة غير مستعادة؛ لا يصنع هذا الفهرس إيصالاً محلياً مكتملًا أو يعيد تصنيف الجولةv4 المنقطعة.",
+    "إيصالات المستودع التاريخية تحتفظ بالتزاماتها وبيئاتها؛ وجودها في الرأس الجديد لا يعيد نسب نتائجها إليه.",
+    "الدفع أوالاسترداد الحي وGDS/NDC/interline وAPIS/TypeB وACK والجهات الضريبية والأجهزة وعهدة المناول تحتاج قبولاً مستقلاً.",
+    "المجالات التنظيمية الخمسة بلا مالك مسؤول ومناوبة ودليل قبول؛ تكليف الوكلاء ومراجع المستودع لا يملأ هذه الحقول.",
+    "يبقى35 تقريراً جزئياً و28 محجوباً؛ نجاح قارئاتSQL لا يصنع مصادرها المفقودة أو اعترافاً محاسبياً.",
+    "ADRالانتقال إلىOrder مقترح؛ نموذج العناصر والإصدارات والكاتب الظلي وفترة المصالحة واعتماد التراجع ليست مخرجات مثبتة هنا.",
+    "UI-08 في namespace forensic-20261105 خاص بتنقلHome؛ لا يخلط معUI-08 لتصدير التقارير في سجل التغطية القديم.",
+    "The historical full-suite count remains attached to its original tree. Latest counters come only from the new official artifacts.",
+    "A successful CI workflow does not establish deployment, live provider, device, handler, fiscal, organizational ownership or Order migration acceptance.",
+    "This addendum contains no fabricated local completion receipt and does not change the interrupted historical full-v4 run.",
+    "The code commit is verified before this docs-only candidate is published; its future delivery commit is deliberately not self-referenced."
+  ],
+  "liveProviderAcceptanceClaimed": false,
+  "newLocalProductExecution": false,
+  "organizationalOwnerAssignmentsCreated": false,
+  "organizationalOwnership": [
+    {
+      "acceptanceEvidence": null,
+      "accountableOwner": null,
+      "activeServiceAssignmentsIncomplete": 34,
+      "activeServices": 34,
+      "catalogSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "4cef2151dd5f8ad6fd2707986a2f0408c9703a54",
+        "kind": "source",
+        "path": "docs/architecture/service-catalog.json",
+        "sha256": "65a1eb9d5f9b8884f28b3c8333a2bb3b299d90e216d88aad0f0946592e83bc37",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-catalog.json"
+      },
+      "gateInterpretation": "Expected refusal inferred from the actual unassigned fields and published guard; no recovery-time local gate rerun claimed.",
+      "gateSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "975f816a6b69075d6271f20839a549d8e5cabba4",
+        "kind": "source",
+        "path": "scripts/deploy/verify_service_ownership.py",
+        "sha256": "9cc3f2cd649f43fddfea95029d8a71bda688ffba85d41cade8fbe956a844e547",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/scripts/deploy/verify_service_ownership.py"
+      },
+      "id": "payments",
+      "match": "payment|refund|settlement|wallet|stripe|ledger|loyalty",
+      "missingFields": ["accountableOwner", "onCall", "acceptanceEvidence"],
+      "onCall": null,
+      "source": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "e93daeceb10bd5f9f6e09980750821b41259a1d8",
+        "kind": "source",
+        "path": "docs/architecture/service-ownership.json",
+        "sha256": "8785617ff62a15d6e3a88abf426ecd97aa4f4dde9e93716a10c2ecc98aba7fc5",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-ownership.json"
+      },
+      "status": "unassigned"
+    },
+    {
+      "acceptanceEvidence": null,
+      "accountableOwner": null,
+      "activeServiceAssignmentsIncomplete": 23,
+      "activeServices": 23,
+      "catalogSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "4cef2151dd5f8ad6fd2707986a2f0408c9703a54",
+        "kind": "source",
+        "path": "docs/architecture/service-catalog.json",
+        "sha256": "65a1eb9d5f9b8884f28b3c8333a2bb3b299d90e216d88aad0f0946592e83bc37",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-catalog.json"
+      },
+      "gateInterpretation": "Expected refusal inferred from the actual unassigned fields and published guard; no recovery-time local gate rerun claimed.",
+      "gateSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "975f816a6b69075d6271f20839a549d8e5cabba4",
+        "kind": "source",
+        "path": "scripts/deploy/verify_service_ownership.py",
+        "sha256": "9cc3f2cd649f43fddfea95029d8a71bda688ffba85d41cade8fbe956a844e547",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/scripts/deploy/verify_service_ownership.py"
+      },
+      "id": "departure",
+      "match": "departure|boarding|bcbp|seat-map|ticket|baggage|bag-drop|travel-clearance|kiosk|dcs",
+      "missingFields": ["accountableOwner", "onCall", "acceptanceEvidence"],
+      "onCall": null,
+      "source": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "e93daeceb10bd5f9f6e09980750821b41259a1d8",
+        "kind": "source",
+        "path": "docs/architecture/service-ownership.json",
+        "sha256": "8785617ff62a15d6e3a88abf426ecd97aa4f4dde9e93716a10c2ecc98aba7fc5",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-ownership.json"
+      },
+      "status": "unassigned"
+    },
+    {
+      "acceptanceEvidence": null,
+      "accountableOwner": null,
+      "activeServiceAssignmentsIncomplete": 19,
+      "activeServices": 19,
+      "catalogSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "4cef2151dd5f8ad6fd2707986a2f0408c9703a54",
+        "kind": "source",
+        "path": "docs/architecture/service-catalog.json",
+        "sha256": "65a1eb9d5f9b8884f28b3c8333a2bb3b299d90e216d88aad0f0946592e83bc37",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-catalog.json"
+      },
+      "gateInterpretation": "Expected refusal inferred from the actual unassigned fields and published guard; no recovery-time local gate rerun claimed.",
+      "gateSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "975f816a6b69075d6271f20839a549d8e5cabba4",
+        "kind": "source",
+        "path": "scripts/deploy/verify_service_ownership.py",
+        "sha256": "9cc3f2cd649f43fddfea95029d8a71bda688ffba85d41cade8fbe956a844e547",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/scripts/deploy/verify_service_ownership.py"
+      },
+      "id": "airline-operations",
+      "match": "crew|aircraft|flight-state|flight-status|disruption|irops|recovery|aviation|operational-events|passenger-priority|reaccommodation",
+      "missingFields": ["accountableOwner", "onCall", "acceptanceEvidence"],
+      "onCall": null,
+      "source": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "e93daeceb10bd5f9f6e09980750821b41259a1d8",
+        "kind": "source",
+        "path": "docs/architecture/service-ownership.json",
+        "sha256": "8785617ff62a15d6e3a88abf426ecd97aa4f4dde9e93716a10c2ecc98aba7fc5",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-ownership.json"
+      },
+      "status": "unassigned"
+    },
+    {
+      "acceptanceEvidence": null,
+      "accountableOwner": null,
+      "activeServiceAssignmentsIncomplete": 38,
+      "activeServices": 38,
+      "catalogSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "4cef2151dd5f8ad6fd2707986a2f0408c9703a54",
+        "kind": "source",
+        "path": "docs/architecture/service-catalog.json",
+        "sha256": "65a1eb9d5f9b8884f28b3c8333a2bb3b299d90e216d88aad0f0946592e83bc37",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-catalog.json"
+      },
+      "gateInterpretation": "Expected refusal inferred from the actual unassigned fields and published guard; no recovery-time local gate rerun claimed.",
+      "gateSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "975f816a6b69075d6271f20839a549d8e5cabba4",
+        "kind": "source",
+        "path": "scripts/deploy/verify_service_ownership.py",
+        "sha256": "9cc3f2cd649f43fddfea95029d8a71bda688ffba85d41cade8fbe956a844e547",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/scripts/deploy/verify_service_ownership.py"
+      },
+      "id": "commercial",
+      "match": "booking|inventory|waitlist|group|ndc|order|pricing|premium|economics|ancillar",
+      "missingFields": ["accountableOwner", "onCall", "acceptanceEvidence"],
+      "onCall": null,
+      "source": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "e93daeceb10bd5f9f6e09980750821b41259a1d8",
+        "kind": "source",
+        "path": "docs/architecture/service-ownership.json",
+        "sha256": "8785617ff62a15d6e3a88abf426ecd97aa4f4dde9e93716a10c2ecc98aba7fc5",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-ownership.json"
+      },
+      "status": "unassigned"
+    },
+    {
+      "acceptanceEvidence": null,
+      "accountableOwner": null,
+      "activeServiceAssignmentsIncomplete": 132,
+      "activeServices": 132,
+      "catalogSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "4cef2151dd5f8ad6fd2707986a2f0408c9703a54",
+        "kind": "source",
+        "path": "docs/architecture/service-catalog.json",
+        "sha256": "65a1eb9d5f9b8884f28b3c8333a2bb3b299d90e216d88aad0f0946592e83bc37",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-catalog.json"
+      },
+      "gateInterpretation": "Expected refusal inferred from the actual unassigned fields and published guard; no recovery-time local gate rerun claimed.",
+      "gateSource": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "975f816a6b69075d6271f20839a549d8e5cabba4",
+        "kind": "source",
+        "path": "scripts/deploy/verify_service_ownership.py",
+        "sha256": "9cc3f2cd649f43fddfea95029d8a71bda688ffba85d41cade8fbe956a844e547",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/scripts/deploy/verify_service_ownership.py"
+      },
+      "id": "platform",
+      "match": ".*",
+      "missingFields": ["accountableOwner", "onCall", "acceptanceEvidence"],
+      "onCall": null,
+      "source": {
+        "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+        "gitBlob": "e93daeceb10bd5f9f6e09980750821b41259a1d8",
+        "kind": "source",
+        "path": "docs/architecture/service-ownership.json",
+        "sha256": "8785617ff62a15d6e3a88abf426ecd97aa4f4dde9e93716a10c2ecc98aba7fc5",
+        "tree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+        "url": "https://github.com/kafaat/ais-aviation-system/blob/409c30ca9ef88d7d1da2085357acf107cbf4259a/docs/architecture/service-ownership.json"
+      },
+      "status": "unassigned"
+    }
+  ],
+  "preparedHistoricalSource": {
+    "actualExecutionCommit": "25f97292b799a6df53cf12bb12925bd1c49d8497",
+    "commit": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+    "tree": "78400714932aadd95f43cff0a8c2d71d160aed50"
+  },
+  "productionDeploymentAccepted": false,
+  "pullRequest": 290,
+  "reportAvailability": {
+    "available": 36,
+    "blocked": 28,
+    "partial": 35
+  },
+  "reportCriteriaSource": "docs/remediation/forensic-evidence-20261105/report-source-dependencies.json",
+  "repository": "kafaat/ais-aviation-system",
+  "repositoryMutationByBuilder": false,
+  "schemaVersion": 2,
+  "sourceDelta": {
+    "files": [
+      ".github/workflows/ci-cd.yml",
+      "e2e/fixtures/chromium-sandbox-env.ts",
+      "server/__tests__/chromium-sandbox-environment.test.ts",
+      "server/__tests__/nonsecurity-currency-contracts.test.ts",
+      "server/__tests__/nonsecurity-currency-native-mysql.test.ts",
+      "server/routers/pricing.router.ts",
+      "server/services/currency/currency.service.ts"
+    ],
+    "from": "409c30ca9ef88d7d1da2085357acf107cbf4259a",
+    "fromTree": "78400714932aadd95f43cff0a8c2d71d160aed50",
+    "interpretation": "Four currency files arrived through the upstream main merge and three browser-support files implement the installed Chrome profile. The prepared409 evidence remains historical; no prior result is reassigned to the new complete tree.",
+    "to": "32382c3d0789a23d32ebd5ba0e2ec21b44f21134",
+    "toTree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b"
+  },
+  "technicalClassification": {
+    "contained": 5,
+    "external_dependency": 6,
+    "implemented_technical": 19
+  },
+  "verificationStatus": "SCOPED_CI_NATIVE_BROWSER_ACCEPTED",
+  "verifiedAt": "2026-11-06T00:37:13.804245+00:00",
+  "verifiedSource": {
+    "actualBrowserExecutionCommit": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+    "actualFullExecutionCommit": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+    "actualNativeExecutionCommit": "fd1c65018b008cf2fab6e5eee3ea78b094ffbe24",
+    "codeVerifiedHead": "bbd8e199d5614271b942e928483be0e973aa22cd",
+    "codeVerifiedTree": "cb0b1d1e3125e0c24970f41ae34466af341fe33b",
+    "docsOnlyDeliveryCommit": "not recorded here; this document verifies the prior code source",
+    "localEquivalentCommit": "32382c3d0789a23d32ebd5ba0e2ec21b44f21134"
+  }
+}
