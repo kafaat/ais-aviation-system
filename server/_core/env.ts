@@ -44,6 +44,10 @@ const envSchema = z.object({
     .url("OAUTH_SERVER_URL must be a valid URL")
     .optional()
     .default("http://localhost:3000"),
+  // OAuth browser redirects are configured explicitly, never derived from Host.
+  OAUTH_REDIRECT_URI: z.string().url().optional(),
+  OAUTH_PORTAL_URL: z.string().url().optional(),
+  VITE_OAUTH_PORTAL_URL: z.string().url().optional(),
   AUTH_SERVICE_URL: z
     .string()
     .url("AUTH_SERVICE_URL must be a valid URL")
@@ -106,6 +110,9 @@ export const ENV = {
   mfaEncryptionKey: validatedEnv.MFA_ENCRYPTION_KEY,
   databaseUrl: validatedEnv.DATABASE_URL,
   oAuthServerUrl: validatedEnv.OAUTH_SERVER_URL,
+  oAuthRedirectUri: validatedEnv.OAUTH_REDIRECT_URI,
+  oAuthPortalUrl:
+    validatedEnv.OAUTH_PORTAL_URL ?? validatedEnv.VITE_OAUTH_PORTAL_URL,
   authServiceUrl: validatedEnv.AUTH_SERVICE_URL,
   ownerOpenId: validatedEnv.OWNER_OPEN_ID,
   isProduction: validatedEnv.NODE_ENV === "production",

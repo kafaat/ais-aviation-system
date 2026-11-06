@@ -1,8 +1,18 @@
 import { TRPCError } from "@trpc/server";
-import { and, avg, count, desc, eq, sql } from "drizzle-orm";
+import {
+  and,
+  avg,
+  count,
+  desc,
+  eq,
+  exists,
+  getTableColumns,
+  sql,
+} from "drizzle-orm";
 import { getDb } from "../db";
 import {
   flightReviews,
+  flightReviewHelpfulVotes,
   bookings,
   flights,
   type InsertFlightReview,
@@ -123,7 +133,8 @@ export async function getFlightReviews(
     limit?: number;
     offset?: number;
     minRating?: number;
-  }
+  },
+  viewerId?: number
 ) {
   const db = await getDb();
   if (!db)
@@ -137,7 +148,22 @@ export async function getFlightReviews(
     const offset = options?.offset || 0;
 
     const query = db
-      .select()
+      .select({
+        ...getTableColumns(flightReviews),
+        hasVoted: viewerId
+          ? exists(
+              db
+                .select({ id: flightReviewHelpfulVotes.id })
+                .from(flightReviewHelpfulVotes)
+                .where(
+                  and(
+                    eq(flightReviewHelpfulVotes.reviewId, flightReviews.id),
+                    eq(flightReviewHelpfulVotes.userId, viewerId)
+                  )
+                )
+            ).mapWith(Boolean)
+          : sql<boolean>`false`.mapWith(Boolean),
+      })
       .from(flightReviews)
       .where(
         and(
@@ -148,7 +174,7 @@ export async function getFlightReviews(
             : undefined
         )
       )
-      .orderBy(desc(flightReviews.createdAt))
+      .orderBy(desc(flightReviews.createdAt), desc(flightReviews.id))
       .limit(limit)
       .offset(offset);
 
@@ -330,25 +356,32 @@ export async function deleteReview(reviewId: number, userId: number) {
     });
 
   try {
-    // Verify ownership
-    const [review] = await db
-      .select()
-      .from(flightReviews)
-      .where(
-        and(eq(flightReviews.id, reviewId), eq(flightReviews.userId, userId))
-      )
-      .limit(1);
-
-    if (!review) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Review not found or you don't have permission to delete it",
-      });
-    }
-
-    await db.delete(flightReviews).where(eq(flightReviews.id, reviewId));
-
-    return { success: true };
+    return await db.transaction(async tx => {
+      // Match helpful-vote lock order. A concurrent vote either commits before
+      // this cleanup or observes the deleted review, never an orphan vote.
+      const [review] = await tx
+        .select()
+        .from(flightReviews)
+        .where(
+          and(eq(flightReviews.id, reviewId), eq(flightReviews.userId, userId))
+        )
+        .limit(1)
+        .for("update");
+      if (!review)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Review not found or you don't have permission to delete it",
+        });
+      await tx
+        .delete(flightReviewHelpfulVotes)
+        .where(eq(flightReviewHelpfulVotes.reviewId, reviewId));
+      await tx
+        .delete(flightReviews)
+        .where(
+          and(eq(flightReviews.id, reviewId), eq(flightReviews.userId, userId))
+        );
+      return { success: true };
+    });
   } catch (error) {
     if (error instanceof TRPCError) throw error;
     console.error("[Reviews Service] Error deleting review:", error);
@@ -403,7 +436,7 @@ export async function getUserReviews(
 /**
  * Mark review as helpful
  */
-export async function markReviewHelpful(reviewId: number) {
+export async function markReviewHelpful(reviewId: number, userId: number) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -412,13 +445,40 @@ export async function markReviewHelpful(reviewId: number) {
     });
 
   try {
-    await db
-      .update(flightReviews)
-      .set({ helpfulCount: sql`${flightReviews.helpfulCount} + 1` })
-      .where(eq(flightReviews.id, reviewId));
+    await db.transaction(async tx => {
+      // Serialize the approval check, unique vote, and aggregate increment on
+      // the review row. Retries and concurrent requests have one effect.
+      const [review] = await tx
+        .select({ id: flightReviews.id, status: flightReviews.status })
+        .from(flightReviews)
+        .where(eq(flightReviews.id, reviewId))
+        .for("update");
+      if (!review || review.status !== "approved") {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Review not found" });
+      }
+      const [existingVote] = await tx
+        .select({ id: flightReviewHelpfulVotes.id })
+        .from(flightReviewHelpfulVotes)
+        .where(
+          and(
+            eq(flightReviewHelpfulVotes.reviewId, reviewId),
+            eq(flightReviewHelpfulVotes.userId, userId)
+          )
+        )
+        .limit(1);
+      if (existingVote) return;
+
+      await tx.insert(flightReviewHelpfulVotes).values({ reviewId, userId });
+      // Historical counts remain intact; there is no reconstruction of voters.
+      await tx
+        .update(flightReviews)
+        .set({ helpfulCount: sql`${flightReviews.helpfulCount} + 1` })
+        .where(eq(flightReviews.id, reviewId));
+    });
 
     return { success: true };
   } catch (error) {
+    if (error instanceof TRPCError) throw error;
     console.error("[Reviews Service] Error marking review helpful:", error);
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",

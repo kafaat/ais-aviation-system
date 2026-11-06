@@ -1,3 +1,4 @@
+import { isAdmin } from "../services/rbac.service";
 import { responseContracts } from "../contracts/special-services";
 import { z } from "zod";
 import {
@@ -77,7 +78,7 @@ export const specialServicesRouter = router({
         });
       }
 
-      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+      if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "You are not authorized to modify this booking",
@@ -142,7 +143,7 @@ export const specialServicesRouter = router({
         });
       }
 
-      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+      if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
@@ -232,7 +233,7 @@ export const specialServicesRouter = router({
 
       if (
         !booking ||
-        (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
+        (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role))
       ) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -284,7 +285,7 @@ export const specialServicesRouter = router({
 
       if (
         !booking ||
-        (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
+        (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role))
       ) {
         throw new TRPCError({
           code: "FORBIDDEN",

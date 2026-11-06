@@ -249,6 +249,69 @@ describe("standard operational report readers on actual relational SQL", () => {
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
   });
 
+  it("does not use another passenger's sector record to resolve a legacy booking-wide check-in", async () => {
+    database.exec("DELETE FROM dcs_passenger_states WHERE passengerId=100");
+    database.exec(
+      "UPDATE dcs_flight_operations SET checkInState='closed' WHERE flightId=1"
+    );
+    database.exec("UPDATE bookings SET checkedIn=1 WHERE id=10");
+    // Passenger 101 has a scoped check-in. It says nothing about passenger 100's
+    // ambiguous legacy booking-wide flag, even though both share the booking.
+    expect((await getOperationsStandardReport(92, {}, scope))?.rows).toEqual(
+      []
+    );
+    const load = await getOperationsStandardReport(
+      5,
+      { startDate: "2030-01-02" },
+      scope
+    );
+    expect(load?.rows[0].noShowPassengers).toBe(0);
+    insert(dcsPassengerStates, {
+      id: 50,
+      bookingId: 10,
+      passengerId: 100,
+      flightId: 1,
+      state: "not_checked_in",
+      boardingDenied: 0,
+    });
+    expect(
+      (await getOperationsStandardReport(92, {}, scope))?.rows.map(
+        row => row.passengerId
+      )
+    ).toEqual([100]);
+  });
+
+  it("ignores conflicting-tenant DCS history but retains owned and legacy history", async () => {
+    database.exec(
+      "UPDATE dcs_flight_operations SET checkInState='closed' WHERE flightId=1"
+    );
+    insert(dcsOperationEvents, {
+      id: 50,
+      tenantId: 202,
+      flightId: 1,
+      bookingId: 10,
+      passengerId: 100,
+      fromState: "checked_in",
+      toState: "not_checked_in",
+      action: "undo_check_in",
+    });
+    for (const reportScope of [scope, { userId: 9001 }]) {
+      expect(
+        (await getOperationsStandardReport(92, {}, reportScope))?.rows.map(
+          row => row.passengerId
+        )
+      ).toEqual([100]);
+    }
+    database.exec("UPDATE dcs_operation_events SET tenantId=NULL WHERE id=50");
+    expect((await getOperationsStandardReport(92, {}, scope))?.rows).toEqual(
+      []
+    );
+    database.exec("UPDATE dcs_operation_events SET tenantId=101 WHERE id=50");
+    expect((await getOperationsStandardReport(92, {}, scope))?.rows).toEqual(
+      []
+    );
+  });
+
   it("uses exact APIS ownership, labels legacy data, and applies the origin and departure period", async () => {
     const result = await getOperationsStandardReport(2, { flightId: 1 }, scope);
     expect(result?.rows[0]).toMatchObject({

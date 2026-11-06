@@ -11,6 +11,30 @@ import { execFileSync } from "node:child_process";
 /** Canonical read-only findings. The SQL handoff is generated from this registry. */
 export const forensicFindings = [
   {
+    id: "ordinary_refund_under_review",
+    severity: "review",
+    owner: "ordinary-refund",
+    sql: "SELECT bookingId AS recordId FROM ordinary_booking_refunds WHERE status = 'review_required'",
+  },
+  {
+    id: "ordinary_refund_worker_overdue",
+    severity: "review",
+    owner: "ordinary-refund",
+    sql: "SELECT bookingId AS recordId FROM ordinary_booking_refunds WHERE status IN ('queued','requesting','pending') AND nextAttemptAt < DATE_SUB(NOW(), INTERVAL 15 MINUTE)",
+  },
+  {
+    id: "ordinary_refund_completion_mismatch",
+    severity: "error",
+    owner: "ordinary-refund",
+    sql: "SELECT c.bookingId AS recordId FROM ordinary_booking_refunds c LEFT JOIN bookings b ON b.id = c.bookingId LEFT JOIN payment_receipts r ON r.paymentIntentId = c.paymentIntentId WHERE c.completedAt IS NOT NULL AND (b.id IS NULL OR b.status <> 'cancelled' OR r.paymentIntentId IS NULL OR r.kind <> 'booking' OR r.bookingId IS NULL OR r.bookingId <> c.bookingId OR r.userId <> b.userId OR r.amount <> c.collectedAmount OR r.currency <> 'SAR' OR r.refundedAmount < c.baseRefundedAmount + c.amount)",
+  },
+  {
+    id: "wallet_dispute_projection_review",
+    severity: "review",
+    owner: "wallet-funding",
+    sql: "SELECT DISTINCT SHA2(r.paymentIntentId, 256) AS recordId FROM payment_receipts r JOIN financial_ledger l ON l.stripePaymentIntentId = r.paymentIntentId WHERE r.kind = 'wallet_topup' AND l.type = 'adjustment' AND JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(l.metadata) THEN l.metadata ELSE '{}' END, '$.eventType')) IN ('charge.dispute.funds_withdrawn','charge.dispute.funds_reinstated') AND JSON_EXTRACT(CASE WHEN JSON_VALID(l.metadata) THEN l.metadata ELSE '{}' END, '$.walletFunding.version') IS NULL",
+  },
+  {
     id: "split_refund_under_review",
     severity: "error",
     owner: "split-refund",

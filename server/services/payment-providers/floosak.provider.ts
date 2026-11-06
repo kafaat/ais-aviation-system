@@ -1,3 +1,8 @@
+import {
+  hasAcceptedPaymentIntegration,
+  paymentIntegrationInfo,
+  requireAcceptedPaymentIntegration,
+} from "./acceptance";
 import type {
   PaymentProvider,
   PaymentProviderInfo,
@@ -29,8 +34,9 @@ export class FloosAkProvider implements PaymentProvider {
   }
 
   isAvailable(): boolean {
-    return Boolean(
-      process.env.FLOOSAK_MERCHANT_ID && process.env.FLOOSAK_API_KEY
+    return (
+      hasAcceptedPaymentIntegration(this.id) &&
+      Boolean(process.env.FLOOSAK_MERCHANT_ID && process.env.FLOOSAK_API_KEY)
     );
   }
 
@@ -48,12 +54,14 @@ export class FloosAkProvider implements PaymentProvider {
       currencies: ["YER", "SAR", "USD"],
       region: "yemen",
       enabled: this.isAvailable(),
+      ...paymentIntegrationInfo(this.id),
     };
   }
 
   async createCheckoutSession(
     input: CheckoutSessionInput
   ): Promise<CheckoutSessionResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const amountInCurrency = (input.amount / 100).toFixed(2);
 
     const payload = {
@@ -100,6 +108,7 @@ export class FloosAkProvider implements PaymentProvider {
   }
 
   async verifyPayment(sessionId: string): Promise<PaymentVerificationResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(
       `${this.baseUrl}/checkout/${sessionId}/status`,
       {
@@ -127,6 +136,7 @@ export class FloosAkProvider implements PaymentProvider {
   }
 
   async refund(input: RefundInput): Promise<RefundResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(
       `${this.baseUrl}/transactions/${input.transactionId}/refund`,
       {

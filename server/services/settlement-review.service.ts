@@ -18,6 +18,24 @@ export async function listSettlementReviews(limit: number) {
     .limit(limit);
 }
 
+/** Keep a selected review observable after its verified refund removes it from
+ * the pending queue. Ordinary applied collections are outside this workflow. */
+export async function getSettlementReview(paymentIntentId: string) {
+  const db = getDb();
+  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+  const [receipt] = await db
+    .select()
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, paymentIntentId))
+    .limit(1);
+  if (!receipt || receipt.settlementStatus === "applied")
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Settlement review not found",
+    });
+  return receipt;
+}
+
 /** Platform admin route only. Provider acknowledgement never changes the local
  * receipt; the verified cumulative refund webhook is the sole refund authority. */
 export async function requestSettlementReviewRefund(
@@ -43,8 +61,8 @@ export async function requestSettlementReviewRefund(
   ) {
     return { state: "refunded" as const, refundId: null };
   }
-  if (receipt.settlementError === DepartureReleaseError.reason)
-    throw new DepartureReleaseError();
+  if (DepartureReleaseError.isReason(receipt.settlementError))
+    throw new DepartureReleaseError(receipt.settlementError);
   // Omitting amount refunds the provider's actual remaining balance. The stable
   // key makes operator/network retries identical, including partial refunds.
   log.info({ paymentIntentId, actorId }, "Settlement review refund requested");

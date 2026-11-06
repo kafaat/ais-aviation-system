@@ -2,12 +2,15 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+import { chromiumSandboxEnv } from "./e2e/fixtures/chromium-sandbox-env";
 
 // A dedicated launch owns both the actual built app and a loopback provider.
 // This config must never reuse a separately running application or live Stripe.
 // Keep this provider-specific profile outside the ordinary e2e test directory,
 // so the default browser suite cannot launch it without its owned transport.
-process.env.AIS_E2E_SESSION_ACCOUNTS = "regular";
+// Each financial journey registers and signs in its own retail customer. Five
+// real logins fit the normal IP auth quota; financial writes remain isolated by
+// authenticated user without resetting or bypassing the production limiter.
 process.env.AIS_UI05_PROVIDER_FILE ??= join(
   tmpdir(),
   `ais-ui05-provider-${randomUUID()}.json`
@@ -15,7 +18,6 @@ process.env.AIS_UI05_PROVIDER_FILE ??= join(
 export default defineConfig({
   testDir: "./browser-acceptance",
   testMatch: "ui05-financial-dialogs.spec.ts",
-  globalSetup: "./e2e/global-setup.ts",
   globalTimeout: 10 * 60 * 1000,
   timeout: 60000,
   expect: { timeout: 10000 },
@@ -55,7 +57,9 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
-          args: process.env.CI ? ["--disable-gpu", "--no-sandbox"] : [],
+          chromiumSandbox: true,
+          env: chromiumSandboxEnv(),
+          executablePath: process.env.AIS_TEST_CHROMIUM_BIN,
         },
       },
     },

@@ -211,7 +211,11 @@ describe("provider dispute evidence", () => {
       "charge.dispute.created",
       dispute({ amount: 2500 })
     );
-    expect(fixture.lockedTables).toEqual(["bookings", "payment_receipts"]);
+    expect(fixture.lockedTables).toEqual([
+      "bookings",
+      "payment_receipts",
+      "financial_ledger",
+    ]);
     expect(fixture.rows("payment_history")[0].amount).toBe(2500);
   });
 
@@ -248,7 +252,7 @@ describe("provider dispute evidence", () => {
         amount: "-100.00",
       });
       expect(fixture.rows("payment_history")).toHaveLength(0);
-      expect(fixture.rows("wallets")[0].balance).toBe(160000);
+      expect(fixture.rows("wallets")[0].balance).toBe(150000);
       expect(
         fixture.rows("outbox").filter(o => o.eventType === "payment.disputed")
       ).toMatchObject([{ tenantId, payload: { userId: 9, bookingId: null } }]);

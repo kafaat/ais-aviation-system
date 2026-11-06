@@ -1,0 +1,1 @@
+CREATE INDEX `payment_receipts_owner_kind_idx` ON `payment_receipts` (`userId`,`kind`,`paymentIntentId`);

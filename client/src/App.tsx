@@ -52,6 +52,7 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AnalyticsDashboard = lazy(() => import("./pages/AnalyticsDashboard"));
 const RefundsDashboard = lazy(() => import("./pages/admin/RefundsDashboard"));
+const SettlementReviews = lazy(() => import("./pages/admin/SettlementReviews"));
 const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
 const StandardReports = lazy(() => import("./pages/admin/StandardReports"));
 const GroupBookingsManagement = lazy(
@@ -117,6 +118,7 @@ const PassengerPriority = lazy(() => import("./pages/admin/PassengerPriority"));
 
 const AirlineConsole = lazy(() => import("./pages/AirlineConsole"));
 const DcsDesk = lazy(() => import("./pages/DcsDesk"));
+const BagReturnGrants = lazy(() => import("./pages/BagReturnGrants"));
 
 // Corporate pages
 const CorporateDashboard = lazy(
@@ -303,6 +305,13 @@ function Router() {
               <CheckIn />
             </Suspense>
           </Route>
+          <Route path="/airline/bag-return-grants">
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <BagReturnGrants />
+              </Suspense>
+            </ProtectedRoute>
+          </Route>
           <Route path="/airline/dcs">
             <ProtectedRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
@@ -446,6 +455,13 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <RefundsDashboard />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/payments/settlement-reviews">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <SettlementReviews />
               </Suspense>
             </AdminRoute>
           </Route>

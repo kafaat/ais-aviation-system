@@ -31,6 +31,7 @@ export const responseContracts = {
   }),
   getFlightReviews: z.array(
     z.object({
+      hasVoted: z.boolean(),
       id: outputNumber,
       userId: outputNumber,
       flightId: outputNumber,

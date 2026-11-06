@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { requireOperationalTransportSimulation } from "./aviation-transport-capability.service";
 
 export const operationalMessageTypes = [
   "PNL",
@@ -287,6 +288,7 @@ export function assertTransmissionTransition(
 export function requireAcceptedOperationalRoute(
   route: z.input<typeof operationalRouteSchema>
 ) {
+  requireOperationalTransportSimulation();
   const parsed = operationalRouteSchema.parse(route);
   if (
     process.env.AIS_TYPE_B_TRANSPORT_ENABLED !== "true" ||
@@ -296,7 +298,7 @@ export function requireAcceptedOperationalRoute(
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message:
-        "Operational messaging transport requires an enabled, accepted station route and AIS_TYPE_B_TRANSPORT_ENABLED=true",
+        "Operational messaging simulation requires an enabled, accepted station route and AIS_TYPE_B_TRANSPORT_ENABLED=true",
     });
   return parsed;
 }

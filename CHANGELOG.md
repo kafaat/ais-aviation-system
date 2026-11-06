@@ -2,7 +2,7 @@
 
 ## What's Changed in v1.38.0
 
-<!-- ais-release-source: 335b8bfb571144631993db6a8dd6485e739b6ea5 -->
+<!-- ais-release-source: 56554f82c9ed593c79a65b7e2978f7e5f10c4366 -->
 <!-- ais-release-notes:start -->
 
 ### Features
@@ -17,6 +17,9 @@
 - fix(currency): preserve the existing display-rate predicate and normalize formatting (4ea3a21)
 - fix(currency): revalidate observations after cache and database waits (48a10b1)
 - fix(currency): honor observation boundaries and preserve exact conversion (065829d)
+- fix(audit): reconcile financial authority, ownership and operational consumers (3aca7f4)
+- fix(e2e): retain Chromium sandboxing on hosted Ubuntu runners (409c30c)
+- fix(e2e): use installed Chrome sandbox profile on hosted CI (bbd8e19)
 
 ### Code Refactoring
 
@@ -30,7 +33,10 @@
 - style(test): normalize currency contract regression formatting (9a0fd2f)
 - style(test): normalize native currency acceptance formatting (49da6f9)
 - test(currency): reject observations that expire during cache waits (e004993)
+- test(audit): resolve native fixture loading and isolate health probes (28de80d)
 - Merge pull request #289 from kafaat/fix/backend-nonsecurity-seven-20261105 (335b8bf)
+- Merge branch 'main' into codex/ais-forensic-phase1-20261105 (e2ffb03)
+- Merge pull request #290 from kafaat/codex/ais-forensic-phase1-20261105 (56554f8)
 
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.37.1...v1.38.0
 

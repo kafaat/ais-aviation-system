@@ -9,7 +9,7 @@
  * - Filtering options
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -31,7 +31,8 @@ import {
   CheckCircle,
   MessageSquare,
   Star,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   User,
 } from "lucide-react";
 import { format, type Locale } from "date-fns";
@@ -57,28 +58,41 @@ export function ReviewsList({
   className,
 }: ReviewsListProps) {
   const { t, i18n } = useTranslation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const utils = trpc.useUtils();
   const dateLocale = i18n.language === "ar" ? ar : enUS;
 
-  const [limit, setLimit] = useState(initialLimit);
+  const limit = Math.max(1, Math.min(100, initialLimit));
+  const [offset, setOffset] = useState(0);
   const [minRating, setMinRating] = useState<number | undefined>(undefined);
 
   // Fetch reviews
-  const { data: reviews, isLoading: isLoadingReviews } =
-    trpc.reviews.getFlightReviews.useQuery({
-      flightId,
-      limit,
-      minRating,
-    });
+  const {
+    data: reviews,
+    isLoading: isLoadingReviews,
+    isError,
+    refetch,
+  } = trpc.reviews.getFlightReviews.useQuery({
+    flightId,
+    limit,
+    offset,
+    minRating,
+  });
 
   // Fetch statistics
   const { data: stats, isLoading: isLoadingStats } =
-    trpc.reviews.getFlightStats.useQuery({ flightId }, { enabled: showStats });
+    trpc.reviews.getFlightStats.useQuery({ flightId });
+
+  useEffect(() => {
+    setOffset(0);
+    void utils.reviews.getFlightReviews.invalidate({ flightId });
+  }, [flightId, user?.id, utils]);
 
   // Mark helpful mutation
   const markHelpful = trpc.reviews.markHelpful.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t("reviews.markedHelpful"));
+      await utils.reviews.getFlightReviews.invalidate({ flightId });
     },
     onError: () => {
       toast.error(t("reviews.errorMarkingHelpful"));
@@ -93,20 +107,39 @@ export function ReviewsList({
     markHelpful.mutate({ reviewId });
   };
 
-  const handleLoadMore = () => {
-    setLimit(prev => prev + 10);
-  };
-
   const handleFilterChange = (value: string) => {
     setMinRating(value === "all" ? undefined : parseInt(value));
+    setOffset(0);
   };
 
-  if (isLoadingReviews && isLoadingStats) {
+  if (isLoadingReviews || (showStats && isLoadingStats)) {
     return <ReviewsListSkeleton />;
   }
 
+  if (isError) {
+    return (
+      <div role="alert" className="space-y-3">
+        <p>{t("reviews.loadError", "Could not load reviews. Please retry.")}</p>
+        <Button variant="outline" onClick={() => void refetch()}>
+          {t("common.retry", "Retry")}
+        </Button>
+      </div>
+    );
+  }
+
+  const matchingReviews = stats
+    ? minRating
+      ? Object.entries(stats.ratingDistribution).reduce(
+          (total, [rating, count]) =>
+            total + (Number(rating) >= minRating ? count : 0),
+          0
+        )
+      : stats.totalReviews
+    : undefined;
   const hasMoreReviews =
-    reviews && stats && reviews.length < stats.totalReviews;
+    matchingReviews === undefined
+      ? reviews?.length === limit
+      : offset + (reviews?.length ?? 0) < matchingReviews;
 
   return (
     <div className={cn("space-y-6", className)}>
@@ -191,7 +224,7 @@ export function ReviewsList({
       )}
 
       {/* Filters and Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <MessageSquare className="h-5 w-5" />
           {t("reviews.customerReviews")}
@@ -233,22 +266,36 @@ export function ReviewsList({
               dateLocale={dateLocale}
               onMarkHelpful={handleMarkHelpful}
               isMarkingHelpful={markHelpful.isPending}
+              isAuthenticated={isAuthenticated}
             />
           ))}
-
-          {/* Load More Button */}
-          {hasMoreReviews && (
-            <div className="text-center pt-4">
-              <Button
-                variant="outline"
-                onClick={handleLoadMore}
-                className="min-w-[200px]"
-              >
-                <ChevronDown className="h-4 w-4 mr-2" />
-                {t("reviews.loadMore")}
-              </Button>
-            </div>
-          )}
+        </div>
+      )}
+      {/* Keep Previous available if moderation removes the current page. */}
+      {(hasMoreReviews || offset > 0) && (
+        <div className="flex items-center justify-center gap-3 pt-4">
+          <Button
+            variant="outline"
+            onClick={() => setOffset(previous => Math.max(0, previous - limit))}
+            disabled={offset === 0}
+          >
+            <ChevronLeft className="h-4 w-4 me-2" />
+            {t("common.previous", "Previous")}
+          </Button>
+          <span>
+            {t("reviews.page", {
+              defaultValue: "Page {{page}}",
+              page: Math.floor(offset / limit) + 1,
+            })}
+          </span>
+          <Button
+            variant="outline"
+            onClick={() => setOffset(previous => previous + limit)}
+            disabled={!hasMoreReviews}
+          >
+            {t("common.next", "Next")}
+            <ChevronRight className="h-4 w-4 ms-2" />
+          </Button>
         </div>
       )}
     </div>
@@ -266,11 +313,13 @@ interface ReviewCardProps {
     comment: string | null;
     isVerified: boolean;
     helpfulCount: number;
+    hasVoted: boolean;
     createdAt: Date;
   };
   dateLocale: Locale;
   onMarkHelpful: (reviewId: number) => void;
   isMarkingHelpful: boolean;
+  isAuthenticated: boolean;
 }
 
 function ReviewCard({
@@ -278,6 +327,7 @@ function ReviewCard({
   dateLocale,
   onMarkHelpful,
   isMarkingHelpful,
+  isAuthenticated,
 }: ReviewCardProps) {
   const { t } = useTranslation();
 
@@ -365,11 +415,14 @@ function ReviewCard({
             variant="ghost"
             size="sm"
             onClick={() => onMarkHelpful(review.id)}
-            disabled={isMarkingHelpful}
+            disabled={isMarkingHelpful || (isAuthenticated && review.hasVoted)}
+            aria-pressed={isAuthenticated && review.hasVoted}
             className="text-muted-foreground hover:text-blue-600"
           >
             <ThumbsUp className="h-4 w-4 mr-1" />
-            {t("reviews.helpful")}
+            {isAuthenticated && review.hasVoted
+              ? t("reviews.markedHelpful")
+              : t("reviews.helpful")}
             {review.helpfulCount > 0 && (
               <span className="ml-1">({review.helpfulCount})</span>
             )}

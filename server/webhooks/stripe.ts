@@ -1,3 +1,4 @@
+import { recordVerifiedOrdinaryRefund } from "../services/ordinary-refund.service";
 import { expireVerifiedOrderServiceCheckout } from "../services/order-service-checkout.service";
 import { recordVerifiedOrderRefund } from "../services/order-refunds.service";
 /**
@@ -330,7 +331,15 @@ export async function processStripeEvent(
         )
       )
         return;
-      await recordVerifiedSplitRefund(
+      if (
+        await recordVerifiedSplitRefund(
+          tx,
+          event.data.object as Stripe.Refund,
+          event.id
+        )
+      )
+        return;
+      await recordVerifiedOrdinaryRefund(
         tx,
         event.data.object as Stripe.Refund,
         event.id

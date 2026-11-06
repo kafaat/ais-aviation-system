@@ -154,7 +154,7 @@ describe.skipIf(!dbAvailable)("Reviews Service", () => {
     const reviews = await reviewsService.getUserReviews(testUserId);
     const reviewId = reviews[0].review.id;
 
-    const result = await reviewsService.markReviewHelpful(reviewId);
+    const result = await reviewsService.markReviewHelpful(reviewId, testUserId);
     expect(result.success).toBe(true);
   });
 

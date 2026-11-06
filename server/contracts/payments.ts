@@ -1,6 +1,19 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const settlementReview = z.object({
+  paymentIntentId: z.string(),
+  kind: z.enum(["booking", "split_payment", "modification", "wallet_topup"]),
+  bookingId: z.union([z.null(), outputNumber]),
+  userId: outputNumber,
+  targetId: outputNumber,
+  amount: outputNumber,
+  currency: z.string(),
+  refundedAmount: outputNumber,
+  settlementStatus: z.enum(["applied", "review_required", "review_refunded"]),
+  settlementError: z.union([z.null(), z.string()]),
+  createdAt: z.date(),
+});
 export const responseContracts = {
   getCheckoutState: z.object({
     bookingId: outputNumber,
@@ -25,30 +38,8 @@ export const responseContracts = {
       "unavailable",
     ]),
   }),
-  settlementReviews: z.array(
-    z.object({
-      paymentIntentId: z.string(),
-      kind: z.enum([
-        "booking",
-        "split_payment",
-        "modification",
-        "wallet_topup",
-      ]),
-      bookingId: z.union([z.null(), outputNumber]),
-      userId: outputNumber,
-      targetId: outputNumber,
-      amount: outputNumber,
-      currency: z.string(),
-      refundedAmount: outputNumber,
-      settlementStatus: z.enum([
-        "applied",
-        "review_required",
-        "review_refunded",
-      ]),
-      settlementError: z.union([z.null(), z.string()]),
-      createdAt: z.date(),
-    })
-  ),
+  settlementReviews: z.array(settlementReview),
+  settlementReview,
   getProviders: z.array(
     z.object({
       integrationState: z

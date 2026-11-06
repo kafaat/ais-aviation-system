@@ -23,6 +23,10 @@ import {
   assertNoCollectionReview,
 } from "./booking-settlement.service";
 import { eq, sql, and } from "drizzle-orm";
+import {
+  assertWalletFundingReconciled,
+  WalletFundingReviewRequiredError,
+} from "./wallet-funding.service";
 
 /**
  * Get or create a wallet for a user
@@ -237,6 +241,17 @@ export async function payFromWallet(
       wallet.balance < amount
     )
       throw new Error("Insufficient active wallet balance");
+    try {
+      await assertWalletFundingReconciled(tx, wallet);
+    } catch (error) {
+      if (!(error instanceof WalletFundingReviewRequiredError)) throw error;
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Wallet funding requires reconciliation. Contact support before making a new wallet payment.",
+        cause: error,
+      });
+    }
     const [deduction] = await tx
       .update(wallets)
       .set({ balance: sql`${wallets.balance} - ${amount}` })

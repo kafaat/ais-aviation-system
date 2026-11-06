@@ -3,13 +3,24 @@
  * Displays user's favorited individual flights
  */
 
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { FlightPreviewDialog } from "@/components/FlightPreviewDialog";
+import type { FlightData } from "@/components/FlightCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plane, Trash2, Loader2, Calendar, ArrowRight } from "lucide-react";
+import {
+  Plane,
+  Trash2,
+  Loader2,
+  Calendar,
+  ArrowRight,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
 import {
@@ -20,17 +31,27 @@ import {
 
 export function FlightFavorites() {
   const { t, i18n } = useTranslation();
+  const { user, isAuthenticated, loading: isLoadingAuth } = useAuth();
+  const utils = trpc.useUtils();
+  const [previewFlight, setPreviewFlight] = useState<FlightData | null>(null);
 
   const {
     data: favorites,
     isLoading,
+    isFetching,
+    isError,
     refetch,
-  } = trpc.favorites.getFlights.useQuery();
+  } = trpc.favorites.getFlights.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
   const removeFavorite = trpc.favorites.removeFlight.useMutation({
-    onSuccess: () => {
+    onSuccess: async (_result, { flightId }) => {
       toast.success(t("favorites.removed"));
-      refetch();
+      await Promise.all([
+        utils.favorites.getFlights.invalidate(),
+        utils.favorites.isFlightFavorited.invalidate({ flightId }),
+      ]);
     },
     onError: (error: { message: string }) => {
       toast.error(error.message);
@@ -52,7 +73,7 @@ export function FlightFavorites() {
     );
   };
 
-  if (isLoading) {
+  if (isLoadingAuth || (isAuthenticated && isLoading)) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-12">
@@ -62,18 +83,43 @@ export function FlightFavorites() {
     );
   }
 
-  const favoritesList = favorites || [];
+  if (!isAuthenticated) {
+    return <p>{t("common.loginRequired")}</p>;
+  }
+
+  // Do not display a previous identity's cached private data during a refresh.
+  const favoritesList = (favorites || []).filter(
+    item => item.favorite.userId === user?.id
+  );
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Plane className="h-5 w-5 text-primary" />
-          {t("favorites.savedFlights")}
-        </CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2">
+            <Plane className="h-5 w-5 text-primary" />
+            {t("favorites.savedFlights")}
+          </CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className="h-4 w-4 me-2" />
+            {t("common.refresh", "Refresh")}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
-        {favoritesList.length === 0 ? (
+        {isError ? (
+          <p role="alert">
+            {t(
+              "favorites.loadError",
+              "Could not load saved flights. Please retry."
+            )}
+          </p>
+        ) : favoritesList.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Plane className="h-12 w-12 mx-auto mb-4 opacity-20" />
             <p>{t("favorites.noSavedFlights")}</p>
@@ -184,6 +230,20 @@ export function FlightFavorites() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setPreviewFlight({
+                              ...item.flight,
+                              airline: item.airline,
+                              origin: item.origin,
+                              destination: item.destination,
+                            })
+                          }
+                        >
+                          {t("flightPreview.title")}
+                        </Button>
                         {!isPastFlight && (
                           <Button asChild size="sm">
                             <Link href={`/booking/${item.flight.id}`}>
@@ -199,6 +259,11 @@ export function FlightFavorites() {
                             removeFavorite.mutate({ flightId: item.flight.id })
                           }
                           disabled={removeFavorite.isPending}
+                          aria-label={t("favorites.removeFlight", {
+                            defaultValue:
+                              "Remove {{flightNumber}} from saved flights",
+                            flightNumber: item.flight.flightNumber,
+                          })}
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           {removeFavorite.isPending ? (
@@ -216,6 +281,13 @@ export function FlightFavorites() {
           </div>
         )}
       </CardContent>
+      <FlightPreviewDialog
+        flight={previewFlight}
+        open={Boolean(previewFlight)}
+        onOpenChange={open => {
+          if (!open) setPreviewFlight(null);
+        }}
+      />
     </Card>
   );
 }

@@ -1,5 +1,6 @@
 import { requireValue } from "../services/required-value";
 import { integrationConfiguration } from "../services/integration-config.service";
+import { getOperationalTransportCapability } from "../services/aviation-transport-capability.service";
 import { operationsDashboard } from "../contracts/operations";
 import {
   readOperationsDashboard,
@@ -16,6 +17,18 @@ import { and, eq, asc, gt, or } from "drizzle-orm";
 import { scheduledTasks, flights } from "../../drizzle/schema";
 import { getDb } from "../db";
 export const operationsRouter = router({
+  messageTransportCapability: adminProcedure
+    .output(
+      z.object({
+        mode: z.enum(["disabled", "simulation"]),
+        simulationAvailable: z.boolean(),
+        externalTransmissionAvailable: z.literal(false),
+        productionWorkerAvailable: z.literal(false),
+        authenticatedAcknowledgmentAvailable: z.literal(false),
+        reason: z.literal("accepted_transport_adapter_unavailable"),
+      })
+    )
+    .query(() => getOperationalTransportCapability()),
   airlineFlights: airlineOpsProcedure
     .input(
       z

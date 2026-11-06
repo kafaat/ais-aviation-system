@@ -1,3 +1,8 @@
+import {
+  hasAcceptedPaymentIntegration,
+  paymentIntegrationInfo,
+  requireAcceptedPaymentIntegration,
+} from "./acceptance";
 import type {
   PaymentProvider,
   PaymentProviderInfo,
@@ -29,8 +34,9 @@ export class JawaliProvider implements PaymentProvider {
   }
 
   isAvailable(): boolean {
-    return Boolean(
-      process.env.JAWALI_MERCHANT_ID && process.env.JAWALI_API_KEY
+    return (
+      hasAcceptedPaymentIntegration(this.id) &&
+      Boolean(process.env.JAWALI_MERCHANT_ID && process.env.JAWALI_API_KEY)
     );
   }
 
@@ -48,12 +54,14 @@ export class JawaliProvider implements PaymentProvider {
       currencies: ["YER"],
       region: "yemen",
       enabled: this.isAvailable(),
+      ...paymentIntegrationInfo(this.id),
     };
   }
 
   async createCheckoutSession(
     input: CheckoutSessionInput
   ): Promise<CheckoutSessionResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const payload = {
       merchant_id: this.merchantId,
       amount: (input.amount / 100).toFixed(2),
@@ -91,6 +99,7 @@ export class JawaliProvider implements PaymentProvider {
   }
 
   async verifyPayment(sessionId: string): Promise<PaymentVerificationResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(`${this.baseUrl}/payments/${sessionId}`, {
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -114,6 +123,7 @@ export class JawaliProvider implements PaymentProvider {
   }
 
   async refund(input: RefundInput): Promise<RefundResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(
       `${this.baseUrl}/payments/${input.transactionId}/refund`,
       {

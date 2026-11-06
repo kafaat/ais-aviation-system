@@ -276,6 +276,51 @@ describe("standard finance reports over actual relational SQL", () => {
     ).toEqual([]);
   });
 
+  it("excludes contradictory uplift relations before the source limit while retaining valid evidence", async () => {
+    database.exec("BEGIN");
+    for (let index = 0; index < 10_005; index++) {
+      const invalid =
+        index % 4 === 0
+          ? {
+              payload: JSON.stringify({
+                couponId: 100,
+                bookingId: 999,
+                passengerId: 1,
+              }),
+            }
+          : index % 4 === 1
+            ? {
+                payload: JSON.stringify({
+                  couponId: 100,
+                  bookingId: 1,
+                  passengerId: 999,
+                }),
+              }
+            : index % 4 === 2
+              ? { observedAt: "2026-10-10 09:59:59" }
+              : {
+                  ingestSnapshot: JSON.stringify({
+                    couponId: 100,
+                    bookingId: 999,
+                    passengerId: 1,
+                  }),
+                };
+      insert(aviationEvidence, uplift(index + 2, invalid));
+    }
+    database.exec("COMMIT");
+    for (const scope of [financeScope, { userId: 9001 }]) {
+      const report = await getFinanceStandardReport(95, {}, scope);
+      expect(report?.rows.map(row => row.couponId)).toEqual([100]);
+      expect(report?.rows[0].upliftEvidenceId).toBe(1);
+    }
+    // Two genuine matching receipts remain ambiguous; filtering malformed
+    // references must never pick an arbitrary proof or authorize recognition.
+    insert(aviationEvidence, uplift(20_000));
+    expect(
+      (await getFinanceStandardReport(95, {}, financeScope))?.rows
+    ).toEqual([]);
+  });
+
   it("uses immutable void-event time even when the coupon is later refunded", async () => {
     database.exec(
       "UPDATE ticket_coupons SET status='R', updatedAt='2026-10-09 10:00:00' WHERE id=100"

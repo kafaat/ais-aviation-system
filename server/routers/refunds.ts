@@ -18,15 +18,11 @@ import {
   getRefundHistory,
   getRefundTrends,
 } from "../services/refunds-stats.service";
-import {
-  calculateCancellationFee,
-  getAllCancellationTiers,
-} from "../services/cancellation-fees.service";
+import { getAllCancellationTiers } from "../services/cancellation-fees.service";
 import { getDb } from "../db";
-import { bookings, flights } from "../../drizzle/schema";
+import { bookings } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { auditRefund } from "../services/audit.service";
-import { assertBookingOwnership } from "../services/access-control.service";
 import { isAdmin } from "../services/rbac.service";
 import {
   getSplitRefundCancellation,
@@ -35,11 +31,33 @@ import {
   listSplitRefundCancellations,
 } from "../services/split-refund.service";
 
+import {
+  cancelBookingWithoutRefund,
+  getZeroCancellationReceipt,
+  zeroCancellationInput,
+  zeroCancellationReceipt,
+} from "../services/zero-refund-cancellation.service";
+
 /**
  * Refunds Router
  * Handles all refund-related operations
  */
 export const refundsRouter = router({
+  cancelWithoutRefund: protectedProcedure
+    .input(zeroCancellationInput)
+    .output(zeroCancellationReceipt)
+    .mutation(({ input, ctx }) =>
+      cancelBookingWithoutRefund(input, { ...ctx.user, tenantId: ctx.tenantId })
+    ),
+  cancellationReceipt: protectedProcedure
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(zeroCancellationReceipt.nullable())
+    .query(({ input, ctx }) =>
+      getZeroCancellationReceipt(input.bookingId, {
+        ...ctx.user,
+        tenantId: ctx.tenantId,
+      })
+    ),
   refundInternalFunding: airlineFinanceProcedure
     .input(internalRefundInput)
     .output(internalRefundResult)
@@ -90,6 +108,7 @@ export const refundsRouter = router({
             .enum(["requested_by_customer", "duplicate"])
             .default("requested_by_customer"),
           notes: z.string().max(500).optional(),
+          confirmNoRefund: z.boolean().optional(),
         })
         .strict()
     )
@@ -140,6 +159,10 @@ export const refundsRouter = router({
       z.object({
         bookingId: z.number().describe("Booking ID to refund"),
         reason: z.string().optional().describe("Reason for refund request"),
+        quoteHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
         amount: z
           .number()
           .int()
@@ -177,6 +200,7 @@ export const refundsRouter = router({
           userId: ctx.user.id,
           reason: input.reason,
           amount: input.amount,
+          quoteHash: input.quoteHash,
         },
         ctx.user
       );
@@ -301,7 +325,10 @@ export const refundsRouter = router({
     .output(responseContracts["checkRefundable"])
     .query(async ({ input, ctx }) => {
       // Ownership check: prevent leaking other users' booking status (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await refundsService.assertRefundBookingOwnership(input.bookingId, {
+        ...ctx.user,
+        tenantId: ctx.tenantId,
+      });
       return await refundsService.isBookingRefundable(input.bookingId);
     }),
 
@@ -323,51 +350,13 @@ export const refundsRouter = router({
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
     .output(responseContracts["calculateCancellationFee"])
     .query(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
       // Ownership check: prevent leaking other users' fare/flight details (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await refundsService.assertRefundBookingOwnership(input.bookingId, {
+        ...ctx.user,
+        tenantId: ctx.tenantId,
+      });
 
-      // Get booking details
-      const [booking] = await db
-        .select({
-          totalAmount: bookings.totalAmount,
-          flightId: bookings.flightId,
-        })
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      // Get flight departure time
-      const [flight] = await db
-        .select({ departureTime: flights.departureTime })
-        .from(flights)
-        .where(eq(flights.id, booking.flightId))
-        .limit(1);
-
-      if (!flight) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Flight not found",
-        });
-      }
-
-      return calculateCancellationFee(
-        booking.totalAmount,
-        flight.departureTime
-      );
+      return refundsService.getCancellationQuote(input.bookingId);
     }),
 
   /**

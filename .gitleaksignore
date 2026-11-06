@@ -16,3 +16,9 @@ f247762a582e88b31b4461e89da0640323176067:server/__tests__/baggage-registration-a
 # Current report metadata is sanitized; exempt only these two immutable findings.
 1176fa7bb2cb37db3917395b79eaebff33d0a4e6:docs/audits/security-remediation-20261104/auth-base-trivy.json:generic-api-key:62
 1176fa7bb2cb37db3917395b79eaebff33d0a4e6:docs/audits/security-remediation-20261104/auth-base-trivy.json:generic-api-key:110
+
+# Historical public source-file SHA-256 digests in the identity evidence receipt.
+# Verified against the recorded source and published tree; these are not credentials.
+# Current evidence separates file paths from digests. Ignore only these immutable findings.
+3aca7f4a374e13ae1a684321c86507469c93ae42:docs/remediation/forensic-evidence-20261105/identity-consumers-native.json:generic-api-key:50
+3aca7f4a374e13ae1a684321c86507469c93ae42:docs/remediation/forensic-evidence-20261105/identity-consumers-native.json:generic-api-key:61

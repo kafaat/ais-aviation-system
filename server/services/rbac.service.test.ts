@@ -25,10 +25,11 @@ describe("RBAC Service", () => {
       expect(isAuthorized("super_admin", ["finance"])).toBe(true);
     });
 
-    it("should authorize higher roles for lower role requirements", () => {
+    it("keeps operational and financial authority separate", () => {
       expect(isAuthorized("admin", ["user"])).toBe(true);
-      expect(isAuthorized("ops", ["support"])).toBe(true);
-      expect(isAuthorized("finance", ["ops"])).toBe(true); // finance level 4 >= ops level 3
+      expect(isAuthorized("ops", ["support"])).toBe(false);
+      expect(isAuthorized("finance", ["ops"])).toBe(false);
+      expect(isAuthorized("ops", ["finance"])).toBe(false);
     });
 
     it("should not authorize lower roles for higher role requirements", () => {
@@ -105,7 +106,7 @@ describe("RBAC Service", () => {
       expect(hasFinancialAccess("user")).toBe(false);
       expect(hasFinancialAccess("support")).toBe(false);
       expect(hasFinancialAccess("ops")).toBe(false);
-      expect(hasFinancialAccess("airline_admin")).toBe(false);
+      expect(hasFinancialAccess("airline_admin")).toBe(true);
     });
   });
 
@@ -165,9 +166,14 @@ describe("RBAC Service", () => {
     });
   });
 
-  describe("Role Hierarchy", () => {
-    it("should maintain correct hierarchy levels", () => {
-      const roles: UserRole[] = [
+  describe("Explicit role grants", () => {
+    const matrix: Record<UserRole, UserRole[]> = {
+      user: ["user"],
+      support: ["user", "support"],
+      ops: ["user", "ops"],
+      finance: ["user", "finance"],
+      airline_admin: ["user", "ops", "finance", "airline_admin"],
+      admin: [
         "user",
         "support",
         "ops",
@@ -175,14 +181,42 @@ describe("RBAC Service", () => {
         "airline_admin",
         "admin",
         "super_admin",
-      ];
-
-      // Verify each higher role can access lower role requirements
-      for (let i = 0; i < roles.length; i++) {
-        for (let j = 0; j <= i; j++) {
-          const result = isAuthorized(roles[i], [roles[j]]);
-          expect(result).toBe(true);
+      ],
+      super_admin: [
+        "user",
+        "support",
+        "ops",
+        "finance",
+        "airline_admin",
+        "admin",
+        "super_admin",
+      ],
+    };
+    it.each(Object.keys(matrix) as UserRole[])(
+      "checks every grant for %s",
+      role => {
+        for (const required of Object.keys(matrix) as UserRole[]) {
+          expect(isAuthorized(role, [required]), `${role} -> ${required}`).toBe(
+            matrix[role].includes(required)
+          );
         }
+      }
+    );
+    it("does not advertise implicit staff capabilities", () => {
+      expect(hasCapability("finance", "Update flight status")).toBe(false);
+      expect(hasCapability("ops", "Process refunds")).toBe(false);
+      expect(hasCapability("support", "Process refunds")).toBe(false);
+      expect(hasCapability("support", "View all bookings")).toBe(false);
+      expect(hasCapability("airline_admin", "Process refunds")).toBe(true);
+      expect(getRoleCapabilities("admin")).toEqual(
+        getRoleCapabilities("super_admin")
+      );
+    });
+    it("rejects unknown and prototype property roles", () => {
+      for (const role of ["invalid", "constructor", "toString", "__proto__"]) {
+        expect(isValidRole(role)).toBe(false);
+        expect(isAuthorized(role as UserRole, [])).toBe(false);
+        expect(hasCapability(role as UserRole, "Search flights")).toBe(false);
       }
     });
   });

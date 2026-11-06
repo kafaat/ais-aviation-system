@@ -182,7 +182,12 @@ describe("DCS denial and seat selection", () => {
     await transition("deny");
     const denied = structuredClone(decision());
 
-    await expect(releaseSeat(11, "1A")).resolves.toMatchObject({
+    await expect(
+      releaseSeat(11, "1A", {
+        actor: { userId: 7, tenantId: 1 },
+        expected: { bookingId: 3, passengerId: 4 },
+      })
+    ).resolves.toMatchObject({
       success: true,
     });
     expect(seat("1A")).toMatchObject({

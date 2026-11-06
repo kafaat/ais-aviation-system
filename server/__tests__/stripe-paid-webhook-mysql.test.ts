@@ -166,24 +166,39 @@ nativeDescribe.sequential(
       );
     });
 
-    it("returns retryable 500 during an API-only database partition and settles the provider redelivery once after recovery", async () => {
+    it("returns admission-unavailable 503 during an API-only database partition and settles signed redelivery once after recovery", async () => {
       const body = payload();
       const before = await fixture.financialSnapshot();
       api!.proxy.disconnect();
       try {
         const failed = await deliver(body);
+        // The real admission guard needs the same database and runs before
+        // raw-body verification or financial processing. This partition is a
+        // pre-webhook refusal, not a handler transaction failure.
         expect(failed).toEqual({
-          status: 500,
-          body: { error: "Webhook processing failed", retryable: true },
+          status: 503,
+          body: {
+            error: "ADMISSION_UNAVAILABLE",
+            message: "Service temporarily unavailable",
+          },
         });
         expect(await fixture.financialSnapshot()).toEqual(before);
+        expect(
+          await fixture.db.select().from(schema.stripeEvents)
+        ).toHaveLength(0);
       } finally {
         api!.proxy.reconnect();
       }
       expect((await deliver(body)).status).toBe(200);
       const committed = await expectOneFunding();
-      expect((await deliver(body)).status).toBe(200);
+      expect(await deliver(body)).toEqual({
+        status: 200,
+        body: { received: true, deduplicated: true },
+      });
       expect(await fixture.financialSnapshot()).toEqual(committed);
+      expect(await fixture.db.select().from(schema.stripeEvents)).toHaveLength(
+        1
+      );
     }, 40000);
   }
 );

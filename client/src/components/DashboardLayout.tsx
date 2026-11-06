@@ -117,6 +117,12 @@ const adminMenuItems: MenuItem[] = [
     adminOnly: true,
   },
   {
+    icon: FileCheck,
+    labelKey: "Payment settlement reviews / مراجعة تسويات المدفوعات",
+    path: "/admin/payments/settlement-reviews",
+    adminOnly: true,
+  },
+  {
     icon: Users,
     labelKey: "nav.groupBookings",
     path: "/admin/group-bookings",
@@ -417,9 +423,20 @@ function DashboardLayoutContent({
           },
         ]
       : [];
+  const bagGrantItems =
+    user && ["admin", "super_admin", "airline_admin"].includes(user.role)
+      ? [
+          {
+            icon: Package,
+            labelKey: "Bag return grants / صلاحيات تسليم الأمتعة",
+            path: "/airline/bag-return-grants",
+            adminOnly: false,
+          },
+        ]
+      : [];
   const allMenuItems = isAdmin
-    ? [...menuItems, ...adminMenuItems, ...dcsItems]
-    : [...menuItems, ...airlineItems, ...dcsItems];
+    ? [...menuItems, ...adminMenuItems, ...dcsItems, ...bagGrantItems]
+    : [...menuItems, ...airlineItems, ...dcsItems, ...bagGrantItems];
 
   const activeMenuItem = allMenuItems.find(item => item.path === location);
 
@@ -562,9 +579,12 @@ function DashboardLayoutContent({
             {/* Main Navigation */}
             <nav aria-label={t("accessibility.mainNavigation")}>
               <SidebarMenu className="px-2 py-1 space-y-0.5">
-                {[...menuItems, ...airlineItems, ...dcsItems].map(
-                  renderMenuItem
-                )}
+                {[
+                  ...menuItems,
+                  ...airlineItems,
+                  ...dcsItems,
+                  ...bagGrantItems,
+                ].map(renderMenuItem)}
               </SidebarMenu>
             </nav>
 

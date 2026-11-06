@@ -164,8 +164,13 @@ describe("controlled load sheet editions", () => {
     fixture.rows("flights")[0].aircraftRegistrationId = null;
     await fixture.db
       .insert((await import("../../drizzle/schema")).loadPlans)
-      .values({ id: 8, flightId: 1, status: "calculated", withinLimits: true });
-    await approveLoadPlan(8, 9);
+      .values({
+        id: 8,
+        flightId: 1,
+        status: "approved",
+        approvedBy: 9,
+        withinLimits: true,
+      });
     expect(fixture.rows("load_plans")[0].status).toBe("approved");
     await assignLoadSheetAircraft(
       { ...swap, expectedRegistrationId: null },

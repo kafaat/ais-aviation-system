@@ -1,0 +1,72 @@
+{
+  "findings": ["FIN-01", "FIN-02"],
+  "source": {
+    "commit": "86b35690340a45aabf43ca5eddf08987f0ce46c2",
+    "tree": "3bf7974979c5c2764b6370c23883cf10594ad6d3",
+    "status": "",
+    "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "result": {
+    "passed": 32,
+    "failed": 0,
+    "skipped": 0,
+    "suites": 5
+  },
+  "suiteResults": [
+    {
+      "path": "server/__tests__/financial-authority-mysql.test.ts",
+      "passed": 12,
+      "failed": 0
+    },
+    {
+      "path": "server/__tests__/ordinary-refund-mysql.test.ts",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "path": "server/__tests__/stripe-paid-webhook-mysql.test.ts",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "path": "server/__tests__/wallet-crossing-acceptance-mysql.test.ts",
+      "passed": 7,
+      "failed": 0
+    },
+    {
+      "path": "server/__tests__/wallet-dispute-funding-mysql.test.ts",
+      "passed": 8,
+      "failed": 0
+    }
+  ],
+  "environment": {
+    "node": "24.22.1",
+    "mysql": "8.0.46",
+    "redis": "7.4.5",
+    "ownership": "fresh loopback processes; disposable synthetic databases; verified cleanup"
+  },
+  "migrations": [
+    "0068_ordinary_refund_cancellation",
+    "0069_wallet_receipt_owner_index"
+  ],
+  "schemaVerification": "passed",
+  "receiptSha256": "c542bf304f12296877a6f2e8a48f5791af7de64015727ec06031d2b1df993033",
+  "resultsSha256": "2c5f305f81cd59f9ceb2c6136c04c7b329d88c090f192eca734f584b209b5263",
+  "filesAtTestedCommit": {
+    "server/services/refunds.service.ts": "1954f5f0dff4b1d2ac00b7ae081600559e5b34943935f3e7bc882f3e2087dca2",
+    "server/services/ordinary-refund.service.ts": "1f27041958840336050843efc8c1b897e903ac2ae445b5eb40706c5719706cbd",
+    "server/services/payment-dispute.service.ts": "77485ab85c56b1547f14689f7eca771a37e4f69f4ac803fbacda3f787a5cc3d0",
+    "server/services/payment-settlement.service.ts": "47db165c3757cc938bc4fa7ddaddf491658d8e4de58505ac67b482225f23e080",
+    "server/services/wallet.service.ts": "81be86b23c4bdebde42a2a3210636e870fb2935b8b5f06a2308aa72942631877",
+    "server/services/wallet-funding.service.ts": "350cbccc737d62126478d09abc8029dad63c848771384c4f27da19e146064353",
+    "drizzle/0068_ordinary_refund_cancellation.sql": "fe8f2e1f3028e51638df5267ea6c1d3df99137f27cd95b9e658b400f2565e2ad",
+    "drizzle/0069_wallet_receipt_owner_index.sql": "dce64435a53fcdcfdb0e6f95dfdb60c104f2f2e597b907d159012d515d3ddfd3",
+    "server/__tests__/ordinary-refund-mysql.test.ts": "5c2de09572cfe826c2f64dbccd44ddfa3d44903ad87e7ca338eb91e8513ad883",
+    "server/__tests__/wallet-dispute-funding-mysql.test.ts": "b4bc91ec5ea35a629fcdb56fa076e83caa2423e9a81faefdd5f554075d836a48"
+  },
+  "limits": [
+    "Provider responses are synthetic; two ordinary-refund cases deliver actual signed HTTP test webhooks.",
+    "No live provider/production/device acceptance.",
+    "MySQL9.7 and final combined source CI pending."
+  ]
+}

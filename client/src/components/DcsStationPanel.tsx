@@ -586,16 +586,24 @@ function StationTools({
                 </p>
               )}
               {mode === "remap" && (
-                <label>
-                  {l("رقم مخطط مقاعد الناقل", "Airline seat plan ID")}
-                  <Input
-                    required
-                    type="number"
-                    min="1"
-                    value={mapId}
-                    onChange={e => setMap(e.target.value)}
-                  />
-                </label>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    {l(
+                      "يحفظ المخطط المتوافق المقاعد المحظورة والمحجوزة بأرقامها وحالتها ومقصورتها وخصائصها وسعرها. يجب معالجة المقاعد المسجلة وبطاقات الصعود الصادرة أولًا.",
+                      "A compatible plan preserves blocked and reserved seats at the same seat number, with their status, cabin, features and price. Resolve checked-in seats and issued boarding passes first."
+                    )}
+                  </p>
+                  <label>
+                    {l("رقم مخطط مقاعد الناقل", "Airline seat plan ID")}
+                    <Input
+                      required
+                      type="number"
+                      min="1"
+                      value={mapId}
+                      onChange={e => setMap(e.target.value)}
+                    />
+                  </label>
+                </div>
               )}
               <label>
                 {mode === "osi"

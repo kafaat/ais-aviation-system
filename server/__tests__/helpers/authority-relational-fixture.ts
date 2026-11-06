@@ -1,7 +1,14 @@
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { createRequire } from "node:module";
+import type { SQLInputValue } from "node:sqlite";
 import { getTableColumns, getTableName, SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql-proxy";
 import { MySqlDialect, type MySqlTable } from "drizzle-orm/mysql-core";
+
+// jsdom tests still run in Node. Load its native SQLite implementation directly
+// so Vite's client bundler does not try to bundle this Node-only test dependency.
+const { DatabaseSync } = createRequire(import.meta.url)(
+  "node:sqlite"
+) as typeof import("node:sqlite");
 
 /** Executes the production Drizzle predicates and transactions on SQLite.
  * MySQL row locks are recorded, not simulated. This fixture does not establish
@@ -71,7 +78,7 @@ export function authorityRelationalFixture(tables: MySqlTable[]) {
   const db = drizzle(async (query, params, method) => {
     queries.push({ sql: query, inTransaction });
     let executable = query
-      .replace(/ for update(?=\s*(?:\)|$))/gi, "")
+      .replace(/ for update(?: skip locked)?(?=\s*(?:\)|$))/gi, "")
       .replaceAll("<=>", "IS");
     // SQLite does not accept DEFAULT inside VALUES. Preserve the corresponding
     // canonical column default explicitly; never substitute a fixture rowset.

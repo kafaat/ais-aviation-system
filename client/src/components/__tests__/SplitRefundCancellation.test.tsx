@@ -140,3 +140,80 @@ describe("split cancellation financial consent", () => {
     expect(screen.getByRole("button")).toBeDisabled();
   });
 });
+
+it("requires zero-refund consent tied to the reviewed split quote", () => {
+  const data = {
+    ...quote,
+    quote: {
+      ...quote.quote,
+      refundAmount: 0,
+      cancellationFee: 10001,
+      refundPercentage: 0,
+      items: quote.quote.items.map(i => ({ ...i, refundAmount: 0 })),
+    },
+  };
+  const { rerender } = render(
+    <SplitRefundCancellation bookingId={7} data={data} onRefresh={vi.fn()} />
+  );
+  const confirm = screen.getByRole("button", {
+    name: "cancelBooking.confirmCancel",
+  });
+  expect(confirm).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(confirm);
+  expect(state.cancel).toHaveBeenCalledWith({
+    bookingId: 7,
+    quoteHash: data.quote.quoteHash,
+    confirmNoRefund: true,
+    reason: "requested_by_customer",
+    notes: "",
+  });
+  rerender(
+    <SplitRefundCancellation
+      bookingId={7}
+      data={{ ...data, quote: { ...data.quote, quoteHash: "b".repeat(64) } }}
+      onRefresh={vi.fn()}
+    />
+  );
+  expect(screen.getByRole("checkbox")).not.toBeChecked();
+  expect(
+    screen.getByRole("button", { name: "cancelBooking.confirmCancel" })
+  ).toBeDisabled();
+});
+it("shows completed zero allocations without claiming provider refunds or offering resume", () => {
+  const data = {
+    ...quote,
+    quote: null,
+    plan: {
+      id: "zero-plan",
+      status: "completed" as const,
+      totalAmount: 10001,
+      cancellationFee: 10001,
+      refundAmount: 0,
+      items: quote.quote.items.map(i => ({
+        ...i,
+        refundAmount: 0,
+        refundedAmount: 0,
+        status: "succeeded" as const,
+        refundId: null,
+        errorCode: null,
+      })),
+    },
+  };
+  render(
+    <SplitRefundCancellation bookingId={7} data={data} onRefresh={vi.fn()} />
+  );
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "cancelBooking.noRefund.recorded"
+  );
+  expect(screen.getAllByText("cancelBooking.noRefund.noPayment")).toHaveLength(
+    2
+  );
+  expect(
+    screen.queryByText("cancelBooking.split.originalPayers")
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("cancelBooking.split.resume")
+  ).not.toBeInTheDocument();
+  expect(screen.getByText("zero-plan")).toBeVisible();
+});

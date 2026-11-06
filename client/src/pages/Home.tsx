@@ -235,51 +235,59 @@ export default function Home() {
               role="navigation"
               aria-label={t("accessibility.mainNavigation")}
             >
-              <Link href="/">
-                <a className="text-sm font-medium hover:text-primary transition-colors">
-                  {t("nav.home")}
-                </a>
+              <Link
+                href="/"
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                {t("nav.home")}
               </Link>
-              <Link href="/manage-booking">
-                <a className="text-sm font-medium hover:text-primary">
-                  {t("ibe.manageBooking")}
-                </a>
+              <Link
+                href="/manage-booking"
+                className="text-sm font-medium hover:text-primary"
+              >
+                {t("ibe.manageBooking")}
               </Link>
-              <Link href="/my-bookings">
-                <a className="text-sm font-medium hover:text-primary transition-colors">
-                  {t("nav.myBookings")}
-                </a>
+              <Link
+                href="/my-bookings"
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                {t("nav.myBookings")}
               </Link>
-              <Link href="/check-in">
-                <a className="text-sm font-medium hover:text-primary transition-colors">
-                  {t("nav.checkIn")}
-                </a>
+              <Link
+                href="/check-in"
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                {t("nav.checkIn")}
               </Link>
               {user && (
-                <Link href="/profile">
-                  <a className="text-sm font-medium hover:text-primary transition-colors">
-                    {t("nav.profile")}
-                  </a>
+                <Link
+                  href="/profile"
+                  className="text-sm font-medium hover:text-primary transition-colors"
+                >
+                  {t("nav.profile")}
                 </Link>
               )}
               {user && (
-                <Link href="/loyalty">
-                  <a className="text-sm font-medium hover:text-primary transition-colors">
-                    {t("nav.loyalty")}
-                  </a>
+                <Link
+                  href="/loyalty"
+                  className="text-sm font-medium hover:text-primary transition-colors"
+                >
+                  {t("nav.loyalty")}
                 </Link>
               )}
               {(user?.role === "admin" || user?.role === "super_admin") && (
                 <>
-                  <Link href="/admin">
-                    <a className="text-sm font-medium hover:text-primary transition-colors">
-                      {t("nav.admin")}
-                    </a>
+                  <Link
+                    href="/admin"
+                    className="text-sm font-medium hover:text-primary transition-colors"
+                  >
+                    {t("nav.admin")}
                   </Link>
-                  <Link href="/analytics">
-                    <a className="text-sm font-medium hover:text-primary transition-colors">
-                      {t("nav.analytics")}
-                    </a>
+                  <Link
+                    href="/analytics"
+                    className="text-sm font-medium hover:text-primary transition-colors"
+                  >
+                    {t("nav.analytics")}
                   </Link>
                 </>
               )}

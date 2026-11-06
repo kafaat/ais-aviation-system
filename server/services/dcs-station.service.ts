@@ -54,6 +54,7 @@ import {
 } from "./idempotency-v2.service";
 import { adjustFlightAvailability } from "./inventory-adjustment.service";
 import { assertTenantOperational } from "./tenant.service";
+import { assertFlightDepartureFinanciallyReconciled } from "./departure-financial-authority.service";
 
 function reject(message: string): never {
   throw new TRPCError({ code: "PRECONDITION_FAILED", message });
@@ -583,7 +584,9 @@ export function remapDeskSeats(
         reject(
           "Resolve issued passes and checked-in seats before equipment remapping"
         );
-      // Preserve available capacity by cabin and the number of template-blocked seats.
+      // Remapping may preserve an existing operational block, never remove it
+      // or introduce a new template restriction without reconciliation. The
+      // protected-seat checks below also retain its identity and features.
       for (const cabin of [
         "economy",
         "business",
@@ -685,6 +688,10 @@ export function finalizeDesk(
           reject("Flight is not in the expected DCS state");
         if (flight.departureTime.getTime() > now.getTime() + 48 * 3600000)
           reject("Flight is outside the departure window");
+        // The idempotent callback holds the flight under READ COMMITTED. A
+        // prior command receipt remains readable; fresh closure/OUT requires
+        // current cash authority without taking booking locks after the flight.
+        await assertFlightDepartureFinanciallyReconciled(tx, flight);
         if (input.action === "close") {
           for (const cabin of ["economy", "business"] as const)
             if (await countActiveHolds(tx, flight.id, cabin, undefined, false))

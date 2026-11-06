@@ -104,24 +104,18 @@ describe("session expiry navigation", () => {
 });
 
 describe("OAuth return destination", () => {
-  it("preserves the existing callback-as-state contract with a validated return query", () => {
-    vi.stubEnv("VITE_OAUTH_PORTAL_URL", "https://auth.example.test");
+  it("starts the server-bound OAuth flow with a validated return target", () => {
     const target = "/checkout/700?canceled=true&currency=USD";
-    const portal = new URL(getLoginUrl(target));
-    const redirectUri = portal.searchParams.get("redirectUri")!;
-    const callback = new URL(redirectUri);
-    expect(callback.origin).toBe(window.location.origin);
-    expect(callback.pathname).toBe("/api/oauth/callback");
-    expect(callback.searchParams.get("returnTo")).toBe(target);
-    expect(atob(portal.searchParams.get("state")!)).toBe(redirectUri);
-    expect(portal.searchParams.get("type")).toBe("signIn");
+    const start = new URL(getLoginUrl(target), window.location.origin);
+    expect(start.origin).toBe(window.location.origin);
+    expect(start.pathname).toBe("/api/oauth/start");
+    expect(start.searchParams.get("returnTo")).toBe(target);
+    expect(start.searchParams.has("state")).toBe(false);
+    expect(start.searchParams.has("redirectUri")).toBe(false);
   });
 
   it("does not send an external return target to the OAuth callback", () => {
-    vi.stubEnv("VITE_OAUTH_PORTAL_URL", "https://auth.example.test");
-    const portal = new URL(getLoginUrl("//evil.test"));
-    const callback = new URL(portal.searchParams.get("redirectUri")!);
-    expect(callback.searchParams.has("returnTo")).toBe(false);
+    expect(getLoginUrl("//evil.test")).toBe("/api/oauth/start");
   });
 });
 

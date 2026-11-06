@@ -1,3 +1,4 @@
+import { isAdmin } from "./rbac.service";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -51,7 +52,7 @@ async function lockSplits(tx: SettlementTx, bookingId: number) {
     .for("update");
 }
 function assertOwner(booking: Booking, actor: SplitActor) {
-  if (!actor || (actor.role !== "admin" && actor.id !== booking.userId))
+  if (!actor || (!isAdmin(actor.role) && actor.id !== booking.userId))
     throw notFound();
 }
 function claimFor(split: Split): SplitCheckoutClaim {

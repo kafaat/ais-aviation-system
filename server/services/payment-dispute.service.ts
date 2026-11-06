@@ -9,7 +9,9 @@
  *
  * It deliberately never cancels a booking, releases inventory, or changes the
  * payment status. A chargeback outcome is an operator decision that needs the
- * dispute evidence first; this module only makes that evidence durable.
+ * dispute evidence first. Wallet top-ups are different: verified withdrawn funds
+ * must immediately stop being available for new spending, even after prior spend
+ * has left the wallet in debt. Already purchased travel remains untouched.
  */
 import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
@@ -20,9 +22,12 @@ import {
   paymentReceipts,
   payments,
   users,
+  wallets,
+  walletTransactions,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
 import { recordEvent } from "./outbox.service";
+import { reconcileWalletFunding } from "./wallet-funding.service";
 
 export const DISPUTE_EVENT_TYPES = [
   "charge.dispute.created",
@@ -104,13 +109,6 @@ export async function recordVerifiedDispute(
 ): Promise<void> {
   if (!Number.isSafeInteger(dispute.amount) || dispute.amount <= 0)
     throw new Error("Invalid dispute amount");
-  const [seen] = await tx
-    .select({ id: financialLedger.id })
-    .from(financialLedger)
-    .where(eq(financialLedger.stripeEventId, dispute.eventId))
-    .limit(1);
-  if (seen) return;
-
   // Same lock order as refunds: owner first, then the receipt with a locking read.
   const [hint] = await tx
     .select()
@@ -122,6 +120,7 @@ export async function recordVerifiedDispute(
       "Dispute references an unknown payment; retry after payment receipt"
     );
   let ownerBooking;
+  let ownerWallet;
   let ownerTenantId: number | null;
   if (hint.bookingId) {
     [ownerBooking] = await tx
@@ -142,9 +141,25 @@ export async function recordVerifiedDispute(
       .from(users)
       .where(eq(users.id, hint.userId))
       .limit(1)
-      .for("share");
+      .for("update");
     if (!owner) throw new Error("Dispute wallet account missing");
     ownerTenantId = owner.tenantId;
+    const [request] = await tx
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.id, hint.targetId))
+      .limit(1)
+      .for("update");
+    if (!request || request.type !== "top_up" || request.userId !== hint.userId)
+      throw new Error("Dispute wallet top-up owner missing");
+    [ownerWallet] = await tx
+      .select()
+      .from(wallets)
+      .where(eq(wallets.id, request.walletId))
+      .limit(1)
+      .for("update");
+    if (!ownerWallet || ownerWallet.userId !== hint.userId)
+      throw new Error("Dispute wallet missing");
   } else {
     throw new Error("Dispute purchase owner missing");
   }
@@ -173,6 +188,26 @@ export async function recordVerifiedDispute(
       "Disputed amount/currency does not match the persisted purchase"
     );
 
+  // The owner locks serialize distinct events and retries. A current read after
+  // those locks prevents a repeatable-read snapshot from missing a just-committed
+  // event. Legacy wallet events may have evidence but no wallet debit; reconcile
+  // their projection while leaving their provider event/history/outbox idempotent.
+  const [seen] = await tx
+    .select({ id: financialLedger.id })
+    .from(financialLedger)
+    .where(eq(financialLedger.stripeEventId, dispute.eventId))
+    .limit(1)
+    .for("update");
+  if (seen) {
+    if (ownerWallet)
+      await reconcileWalletFunding(tx, {
+        receipt,
+        wallet: ownerWallet,
+        eventId: dispute.eventId,
+      });
+    return;
+  }
+
   const signed = signedDisputeAmount(dispute);
   const evidence = {
     disputeId: dispute.disputeId,
@@ -192,6 +227,13 @@ export async function recordVerifiedDispute(
     description: `Provider dispute ${dispute.eventType.slice("charge.dispute.".length)}`,
     metadata: JSON.stringify(evidence),
   });
+
+  if (ownerWallet)
+    await reconcileWalletFunding(tx, {
+      receipt,
+      wallet: ownerWallet,
+      eventId: dispute.eventId,
+    });
 
   if (receipt.bookingId) {
     const [payment] = await tx

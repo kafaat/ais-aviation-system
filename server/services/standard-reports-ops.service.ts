@@ -473,14 +473,15 @@ function checkedSeat(p: string, b: string, f: string): SQL {
 function noShow(p: string, b: string, f: string): SQL {
   return sql`${closedFlight(f)} AND ${currentCoupon(b, p, f, sql`('O')`)}
     AND (${col(b, "checkedIn")} = 0
-      OR EXISTS (SELECT 1 FROM dcs_passenger_states scoped_attendance WHERE scoped_attendance.bookingId = ${col(b, "id")} AND scoped_attendance.flightId = ${col(f, "id")})
-      OR EXISTS (SELECT 1 FROM seat_inventory scoped_check_in WHERE scoped_check_in.bookingId = ${col(b, "id")} AND scoped_check_in.flightId = ${col(f, "id")}))
+      OR EXISTS (SELECT 1 FROM dcs_passenger_states scoped_attendance WHERE scoped_attendance.bookingId = ${col(b, "id")} AND scoped_attendance.passengerId = ${col(p, "id")} AND scoped_attendance.flightId = ${col(f, "id")})
+      OR EXISTS (SELECT 1 FROM seat_inventory scoped_check_in WHERE scoped_check_in.bookingId = ${col(b, "id")} AND scoped_check_in.passengerId = ${col(p, "id")} AND scoped_check_in.flightId = ${col(f, "id")}))
     AND NOT ${checkedSeat(p, b, f)}
     AND NOT EXISTS (SELECT 1 FROM dcs_passenger_states no_show_state WHERE no_show_state.bookingId = ${col(b, "id")}
       AND no_show_state.passengerId = ${col(p, "id")} AND no_show_state.flightId = ${col(f, "id")}
       AND (no_show_state.state IN ('checked_in','boarded','offloaded') OR no_show_state.boardingDenied = 1))
     AND NOT EXISTS (SELECT 1 FROM dcs_operation_events no_show_event WHERE no_show_event.bookingId = ${col(b, "id")}
       AND no_show_event.passengerId = ${col(p, "id")} AND no_show_event.flightId = ${col(f, "id")}
+      AND (no_show_event.tenantId IS NULL OR no_show_event.tenantId = ${col(f, "tenantId")})
       AND (no_show_event.toState IN ('checked_in','boarded','offloaded') OR no_show_event.fromState IN ('checked_in','boarded'))) `;
 }
 function countPeople(

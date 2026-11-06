@@ -1,4 +1,4 @@
-import { eq, and, gte, desc, lt } from "drizzle-orm";
+import { eq, and, gte, desc, lt, lte, gt, isNull, or, sql } from "drizzle-orm";
 import { getDb, getUserByEmail, getUserByOpenId } from "../db";
 import {
   loginAttempts,
@@ -147,12 +147,19 @@ async function checkAndLockAccount(
       return;
     }
 
-    // Check if account is already locked
+    // Expired rows are reusable even if no access check has cleared isActive yet.
     const existingLocks = await db
       .select()
       .from(accountLocks)
       .where(
-        and(eq(accountLocks.userId, user.id), eq(accountLocks.isActive, true))
+        and(
+          eq(accountLocks.userId, user.id),
+          eq(accountLocks.isActive, true),
+          or(
+            isNull(accountLocks.autoUnlockAt),
+            gt(accountLocks.autoUnlockAt, new Date())
+          )
+        )
       );
 
     if (existingLocks.length > 0) {
@@ -219,23 +226,70 @@ export async function lockAccount(
       message: "Database not available",
     });
 
-  // Calculate auto-unlock time if specified
-  let autoUnlockAt: Date | undefined;
-  if (autoUnlockMinutes) {
-    autoUnlockAt = new Date();
-    autoUnlockAt.setMinutes(autoUnlockAt.getMinutes() + autoUnlockMinutes);
+  if (
+    autoUnlockMinutes !== undefined &&
+    (!Number.isFinite(autoUnlockMinutes) || autoUnlockMinutes <= 0)
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Auto-unlock duration must be a positive number of minutes",
+    });
   }
+
+  const now = new Date();
+  const autoUnlockAt =
+    autoUnlockMinutes === undefined
+      ? null
+      : new Date(now.getTime() + autoUnlockMinutes * 60_000);
 
   const lock: InsertAccountLock = {
     userId,
     reason,
     lockedBy,
     autoUnlockAt,
+    isActive: true,
+    unlockedAt: null,
+    unlockedBy: null,
+    createdAt: now,
+    updatedAt: now,
   };
 
-  await db.insert(accountLocks).values(lock);
+  // userId is unique. Reuse the retained row atomically, and never let a stale
+  // shorter request replace a stronger active lock. A permanent lock can only
+  // be cleared by an explicit unlock, including when the request is automatic.
+  const incomingDeadline = sql.param(autoUnlockAt, accountLocks.autoUnlockAt);
+  const replace = sql`(
+    ${accountLocks.isActive} = false
+    or (${accountLocks.autoUnlockAt} is not null and (
+      ${accountLocks.autoUnlockAt} <= ${sql.param(now, accountLocks.autoUnlockAt)}
+      or ${incomingDeadline} is null
+      or ${accountLocks.autoUnlockAt} < ${incomingDeadline}
+    ))
+  )`;
 
-  logger.error({ userId, reason, lockedBy, autoUnlockAt }, "Account locked");
+  await db
+    .insert(accountLocks)
+    .values(lock)
+    .onDuplicateKeyUpdate({
+      // MySQL evaluates assignments in order. Drizzle serializes in schema
+      // column order, so schema.ts also keeps autoUnlockAt and isActive last.
+      // This preserves the original predicate for every metadata assignment.
+      set: {
+        reason: sql`if(${replace}, ${reason}, ${accountLocks.reason})`,
+        lockedBy: sql`if(${replace}, ${lockedBy}, ${accountLocks.lockedBy})`,
+        unlockedAt: sql`if(${replace}, null, ${accountLocks.unlockedAt})`,
+        unlockedBy: sql`if(${replace}, null, ${accountLocks.unlockedBy})`,
+        createdAt: sql`if(${replace}, ${sql.param(now, accountLocks.createdAt)}, ${accountLocks.createdAt})`,
+        updatedAt: sql`if(${replace}, ${sql.param(now, accountLocks.updatedAt)}, ${accountLocks.updatedAt})`,
+        autoUnlockAt: sql`if(${replace}, ${incomingDeadline}, ${accountLocks.autoUnlockAt})`,
+        isActive: true,
+      },
+    });
+
+  logger.error(
+    { userId, reason, lockedBy, autoUnlockAt },
+    "Account lock requested; stronger active locks retained"
+  );
 }
 
 /**
@@ -262,9 +316,33 @@ export async function isAccountLocked(userId: number): Promise<boolean> {
 
   // Check if auto-unlock time has passed
   if (lock.autoUnlockAt && lock.autoUnlockAt <= now) {
-    // Auto-unlock the account
-    await unlockAccount(userId, "system");
-    return false;
+    // Do not clear a renewal that committed after this read. The deadline is
+    // part of the compare-and-set, and the follow-up read observes a renewal.
+    await db
+      .update(accountLocks)
+      .set({ isActive: false, unlockedAt: now, unlockedBy: "system" })
+      .where(
+        and(
+          eq(accountLocks.userId, userId),
+          eq(accountLocks.isActive, true),
+          eq(accountLocks.autoUnlockAt, lock.autoUnlockAt),
+          lte(accountLocks.autoUnlockAt, now)
+        )
+      );
+    const [current] = await db
+      .select()
+      .from(accountLocks)
+      .where(
+        and(eq(accountLocks.userId, userId), eq(accountLocks.isActive, true))
+      )
+      .limit(1);
+    const stillLocked = Boolean(
+      current && (!current.autoUnlockAt || current.autoUnlockAt > new Date())
+    );
+    if (!stillLocked) {
+      logger.info({ userId, unlockedBy: "system" }, "Account lock expired");
+    }
+    return stillLocked;
   }
 
   return true;

@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../db", () => {
   const mockDb = {
     insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockResolvedValue(undefined),
+    values: vi.fn().mockReturnThis(),
+    onDuplicateKeyUpdate: vi.fn().mockResolvedValue([{ affectedRows: 1 }]),
     select: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
@@ -51,6 +52,7 @@ vi.mock("../../../drizzle/schema", () => ({
     isActive: "isActive",
     autoUnlockAt: "autoUnlockAt",
     createdAt: "createdAt",
+    updatedAt: "updatedAt",
     unlockedAt: "unlockedAt",
     unlockedBy: "unlockedBy",
   },
@@ -98,7 +100,8 @@ describe("Account Lock Service", () => {
     vi.clearAllMocks();
     // Reset default mock behaviors
     mockDb.insert.mockReturnThis();
-    mockDb.values.mockResolvedValue(undefined);
+    mockDb.values.mockReturnThis();
+    mockDb.onDuplicateKeyUpdate.mockResolvedValue([{ affectedRows: 1 }]);
     mockDb.select.mockReturnThis();
     mockDb.from.mockReturnThis();
     mockDb.where.mockReturnThis();
@@ -194,6 +197,42 @@ describe("Account Lock Service", () => {
         })
       );
     });
+
+    it("reuses the unique user row and clears previous unlock metadata", async () => {
+      await lockAccount(1, "Renewed lock", "system", 30);
+
+      expect(mockDb.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isActive: true,
+          unlockedAt: null,
+          unlockedBy: null,
+        })
+      );
+      expect(mockDb.onDuplicateKeyUpdate).toHaveBeenCalledWith({
+        set: expect.objectContaining({
+          reason: expect.anything(),
+          lockedBy: expect.anything(),
+          autoUnlockAt: expect.anything(),
+          isActive: true,
+        }),
+      });
+      const keys = Object.keys(
+        mockDb.onDuplicateKeyUpdate.mock.calls[0][0].set
+      );
+      expect(keys.slice(-2)).toEqual(["autoUnlockAt", "isActive"]);
+    });
+
+    it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+      "rejects invalid duration %s instead of creating a permanent lock",
+      async minutes => {
+        await expect(
+          lockAccount(1, "Invalid", "system", minutes)
+        ).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+        });
+        expect(mockDb.insert).not.toHaveBeenCalled();
+      }
+    );
   });
 
   describe("isAccountLocked", () => {
@@ -236,6 +275,30 @@ describe("Account Lock Service", () => {
 
       const result = await isAccountLocked(1);
       expect(result).toBe(true);
+    });
+
+    it("observes a concurrent renewal instead of reporting it unlocked", async () => {
+      mockDb.limit
+        .mockResolvedValueOnce([
+          {
+            userId: 1,
+            isActive: true,
+            autoUnlockAt: new Date(Date.now() - 1000),
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            userId: 1,
+            isActive: true,
+            autoUnlockAt: new Date(Date.now() + 60_000),
+          },
+        ]);
+
+      expect(await isAccountLocked(1)).toBe(true);
+      expect(mockDb.set).toHaveBeenCalledWith(
+        expect.objectContaining({ isActive: false, unlockedBy: "system" })
+      );
+      expect(mockDb.limit).toHaveBeenCalledTimes(2);
     });
   });
 

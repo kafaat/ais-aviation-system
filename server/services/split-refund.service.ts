@@ -17,7 +17,8 @@ import {
 } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { stripe } from "../stripe";
-import { calculateCancellationFee } from "./cancellation-fees.service";
+import { quoteCancellationPolicy } from "./cancellation-policy.service";
+import { assertZeroCancellationAllowed } from "./zero-refund-cancellation.service";
 import { calculateRequestHash } from "./idempotency-v2.service";
 import {
   cancelBookingResources,
@@ -27,7 +28,7 @@ import { settleVerifiedRefund } from "./payment-settlement.service";
 import { recordEvent } from "./outbox.service";
 import { isAdmin } from "./rbac.service";
 
-type Actor = { id: number; role: string };
+type Actor = { id: number; role: string; tenantId?: number | null };
 type Booking = typeof bookings.$inferSelect;
 type Item = typeof bookingRefundItems.$inferSelect;
 const options = { timeout: 15000, maxNetworkRetries: 0 };
@@ -46,7 +47,10 @@ async function lockBooking(tx: SettlementTx, bookingId: number, actor?: Actor) {
     .for("update");
   if (
     !booking ||
-    (actor && !isAdmin(actor.role) && actor.id !== booking.userId)
+    (actor &&
+      !isAdmin(actor.role) &&
+      (actor.id !== booking.userId ||
+        (actor.tenantId !== undefined && actor.tenantId !== booking.tenantId)))
   )
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   return booking;
@@ -201,15 +205,19 @@ async function quoteFor(tx: SettlementTx, booking: Booking) {
   const departure = new Date(
     Math.min(...itinerary.map(f => f.departureTime.getTime()))
   );
-  const fee = calculateCancellationFee(booking.totalAmount, departure);
-  if (fee.refundAmount <= 0 || departure.getTime() <= Date.now())
+  const fee = await quoteCancellationPolicy(tx, booking, itinerary);
+  if (departure.getTime() <= Date.now())
     throw unavailable(
       "Self-service cancellation is unavailable after departure"
     );
-  const allocated = allocateSplitRefund(
-    active.map(s => ({ splitId: s.id, amount: s.amount })),
-    fee.refundAmount
-  );
+  if (fee.refundAmount === 0) await assertZeroCancellationAllowed(tx, booking);
+  const allocated =
+    fee.refundAmount === 0
+      ? active.map(s => ({ splitId: s.id, amount: s.amount, refundAmount: 0 }))
+      : allocateSplitRefund(
+          active.map(s => ({ splitId: s.id, amount: s.amount })),
+          fee.refundAmount
+        );
   const bySplitId = new Map(active.map(s => [s.id, s]));
   const items = allocated.map(a => {
     const s = bySplitId.get(a.splitId);
@@ -324,6 +332,7 @@ export async function reserveSplitRefundCancellation(
     quoteHash: string;
     reason: "requested_by_customer" | "duplicate";
     notes?: string;
+    confirmNoRefund?: boolean;
   },
   actor: Actor
 ) {
@@ -338,6 +347,10 @@ export async function reserveSplitRefundCancellation(
     const booking = await lockBooking(tx, input.bookingId, actor);
     const previous = await lockPlan(tx, booking.id);
     if (previous) {
+      if (previous.refundAmount === 0 && input.confirmNoRefund !== true)
+        throw unavailable(
+          "Confirm that no money will be refunded before cancelling"
+        );
       if (previous.quoteHash !== input.quoteHash)
         throw unavailable(
           "Cancellation is already reserved; refresh its status"
@@ -349,6 +362,10 @@ export async function reserveSplitRefundCancellation(
       throw unavailable(
         "Cancellation quote changed; review the new amounts before confirming"
       );
+    if (quote.refundAmount === 0 && input.confirmNoRefund !== true)
+      throw unavailable(
+        "Confirm that no money will be refunded before cancelling"
+      );
     const planId = randomUUID();
     await tx.insert(bookingRefundPlans).values({
       bookingId: booking.id,
@@ -358,10 +375,13 @@ export async function reserveSplitRefundCancellation(
       totalAmount: quote.totalAmount,
       refundAmount: quote.refundAmount,
       cancellationFee: quote.cancellationFee,
-      policyTier: quote.tier,
+      policyTier:
+        quote.policyReason === "nonrefundable_fare"
+          ? "nonrefundable"
+          : quote.tier,
       reason: input.reason,
       notes: input.notes ?? null,
-      status: "processing",
+      status: quote.refundAmount === 0 ? "completed" : "processing",
     });
     for (const allocation of quote.items) {
       const id = randomUUID();
@@ -386,10 +406,10 @@ export async function reserveSplitRefundCancellation(
         collectedAmount: allocation.paidAmount,
         refundAmount: allocation.refundAmount,
         requestPayload: JSON.stringify(request),
-        status: "queued",
+        status: allocation.refundAmount === 0 ? "succeeded" : "queued",
         requestedAt: null,
         refundId: null,
-        providerStatus: null,
+        providerStatus: allocation.refundAmount === 0 ? "not_required" : null,
         errorCode: null,
         nextAttemptAt: new Date(),
       });
@@ -397,7 +417,9 @@ export async function reserveSplitRefundCancellation(
     await cancelBookingResources(
       tx,
       booking,
-      "Split cancellation with reserved payer refunds",
+      quote.refundAmount === 0
+        ? "Customer confirmed split cancellation without refunds"
+        : "Split cancellation with reserved payer refunds",
       actor.id
     );
     await tx
@@ -420,6 +442,10 @@ export async function reserveSplitRefundCancellation(
         actorId: actor.id,
         refundAmount: quote.refundAmount,
         cancellationFee: quote.cancellationFee,
+        policyReason: quote.policyReason,
+        ...(quote.refundAmount === 0
+          ? { confirmNoRefund: true, providerRefundsRequired: false }
+          : {}),
       },
     });
     return view(tx, booking);
@@ -535,6 +561,10 @@ export async function recordVerifiedSplitRefund(
     .where(eq(bookingRefundItems.paymentIntentId, paymentIntentId))
     .limit(1);
   if (!hint) return false;
+  // Zero allocations are local cancellation decisions. They cannot identify a
+  // later provider refund, which must retain its own financial evidence.
+  if (hint.refundAmount === 0 && hint.providerStatus === "not_required")
+    return false;
   const booking = await lockBooking(tx, hint.bookingId);
   await lockPlan(tx, booking.id);
   const item = (await lockItems(tx, booking.id)).find(i => i.id === hint.id);
@@ -626,6 +656,12 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
         code: "NOT_FOUND",
         message: "Refund share not found",
       });
+    if (
+      item.refundAmount === 0 &&
+      item.providerStatus === "not_required" &&
+      item.status === "succeeded"
+    )
+      return null;
     try {
       requestForItem(item);
     } catch {

@@ -28,18 +28,25 @@ beforeEach(() => {
 it.each(["cookie", "bearer"])(
   "suspension blocks the next %s request while preserving platform administration",
   async method => {
-    const options = {
-      req: {
-        headers: method === "bearer" ? { authorization: "Bearer fixture" } : {},
-      },
-      res: {},
-    } as any;
-    expect((await createContext(options)).user?.id).toBe(3);
+    // Each HTTP request owns one cached identity. A later request must use a
+    // new request object so tenant suspension is checked again.
+    const nextRequest = () =>
+      createContext({
+        req: {
+          headers:
+            method === "bearer" ? { authorization: "Bearer fixture" } : {},
+        },
+        res: {},
+      } as any);
+    expect((await nextRequest()).user?.id).toBe(3);
     await setTenantStatus(1, "suspended", 99);
-    expect((await createContext(options)).user).toBeNull();
+    expect((await nextRequest()).user).toBeNull();
     expect(fixture.rows("outbox")[0].eventType).toBe("tenant.status_changed");
     fixture.rows("users")[0].role = "admin";
-    expect((await createContext(options)).user?.id).toBe(3);
+    expect((await nextRequest()).user?.id).toBe(3);
+    expect(
+      method === "bearer" ? state.bearer : state.cookie
+    ).toHaveBeenCalledTimes(3);
   }
 );
 it("rejects pending tenant assignment and rolls back when the audit event fails", async () => {
