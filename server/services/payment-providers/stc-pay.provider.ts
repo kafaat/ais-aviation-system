@@ -1,3 +1,8 @@
+import {
+  hasAcceptedPaymentIntegration,
+  paymentIntegrationInfo,
+  requireAcceptedPaymentIntegration,
+} from "./acceptance";
 import type {
   PaymentProvider,
   PaymentProviderInfo,
@@ -31,8 +36,9 @@ export class STCPayProvider implements PaymentProvider {
   }
 
   isAvailable(): boolean {
-    return Boolean(
-      process.env.STC_PAY_MERCHANT_ID && process.env.STC_PAY_API_KEY
+    return (
+      hasAcceptedPaymentIntegration(this.id) &&
+      Boolean(process.env.STC_PAY_MERCHANT_ID && process.env.STC_PAY_API_KEY)
     );
   }
 
@@ -50,12 +56,14 @@ export class STCPayProvider implements PaymentProvider {
       currencies: ["SAR"],
       region: "saudi",
       enabled: this.isAvailable(),
+      ...paymentIntegrationInfo(this.id),
     };
   }
 
   async createCheckoutSession(
     input: CheckoutSessionInput
   ): Promise<CheckoutSessionResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const amountInSAR = (input.amount / 100).toFixed(2);
 
     const payload = {
@@ -95,6 +103,7 @@ export class STCPayProvider implements PaymentProvider {
   }
 
   async verifyPayment(sessionId: string): Promise<PaymentVerificationResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(`${this.baseUrl}/DirectPayment/V4/Status`, {
       method: "POST",
       headers: {
@@ -121,6 +130,7 @@ export class STCPayProvider implements PaymentProvider {
   }
 
   async refund(input: RefundInput): Promise<RefundResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(`${this.baseUrl}/DirectPayment/V4/Refund`, {
       method: "POST",
       headers: {

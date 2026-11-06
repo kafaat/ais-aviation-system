@@ -240,6 +240,12 @@ describe("scoped staff departure desk", () => {
   it("requires operational reconciliation after a real late full-refund settlement without rewriting either truth", async () => {
     await checkIn();
     await transition("board");
+    const physical = structuredClone({
+      bookings: fixture.rows("bookings"),
+      seats: fixture.rows("seat_inventory"),
+      coupons: fixture.rows("ticket_coupons"),
+      attendance: fixture.rows("dcs_passenger_states"),
+    });
     await fixture.db.insert(paymentReceipts).values({
       paymentIntentId: "pi_dcs_late_refund",
       kind: "booking",
@@ -262,27 +268,50 @@ describe("scoped staff departure desk", () => {
       })
     );
     expect(fixture.rows("bookings")[0]).toMatchObject({
-      status: "cancelled",
-      paymentStatus: "refunded",
-      seatsReserved: false,
-      checkedIn: false,
+      status: "confirmed",
+      paymentStatus: "paid",
+      seatsReserved: true,
+      checkedIn: true,
     });
-    expect(fixture.rows("payment_receipts")[0].refundedAmount).toBe(10000);
+    expect({
+      bookings: fixture.rows("bookings"),
+      seats: fixture.rows("seat_inventory"),
+      coupons: fixture.rows("ticket_coupons"),
+      attendance: fixture.rows("dcs_passenger_states"),
+    }).toEqual(physical);
+    expect(fixture.rows("payment_receipts")[0]).toMatchObject({
+      refundedAmount: 10000,
+      settlementStatus: "review_required",
+      settlementError: DepartureReleaseError.boardedReason,
+    });
+    expect(fixture.rows("financial_ledger")).toHaveLength(1);
     expect(fixture.rows("financial_ledger")[0]).toMatchObject({
       type: "refund",
       amount: "100.00",
     });
     expect(passengerRow().state).toBe("boarded");
-    expect(seatRow()).toBeUndefined();
     const events = structuredClone(fixture.rows("dcs_operation_events"));
-    await expect(caller().getDesk({ flightId: 11 })).rejects.toMatchObject({
+    expect(
+      (await caller().getDesk({ flightId: 11 })).passengers.find(
+        p => p.passengerId === key.passengerId
+      )?.attendanceState
+    ).toBe("boarded");
+    await expect(
+      checkInDcsPassenger({ ...key, passengerId: 5, ...command() }, actor)
+    ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
       message: expect.stringContaining("Departure reconciliation is required"),
     });
-    expect(fixture.rows("bookings")[0].paymentStatus).toBe("refunded");
     expect(passengerRow().state).toBe("boarded");
     expect(fixture.rows("dcs_operation_events")).toEqual(events);
     expect(events.map(e => e.action)).toEqual(["check_in", "board"]);
+    expect((await transition("deplane")).state).toBe("checked_in");
+    expect((await transition("offload")).state).toBe("offloaded");
+    expect(fixture.rows("payment_receipts")[0]).toMatchObject({
+      refundedAmount: 10000,
+      settlementStatus: "review_required",
+    });
+    expect(fixture.rows("financial_ledger")).toHaveLength(1);
   });
 
   it.each(["lost_seat", "revoked_nonce", "missing_passenger"])(

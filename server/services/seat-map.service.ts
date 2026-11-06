@@ -921,14 +921,54 @@ export async function selectSeat(
 }
 
 /**
- * Release a previously assigned seat, making it available again.
+ * Server-derived identity and association observed before releasing a seat.
+ * The transaction revalidates both; this is not a user-supplied bypass.
  */
+export interface SeatReleaseAuthorization {
+  actor: { userId: number; tenantId: number | null };
+  expected: { bookingId: number; passengerId: number | null };
+}
+
+/** Release a previously assigned seat without following a changed association. */
 export async function releaseSeat(
   flightId: number,
-  seatNumber: string
+  seatNumber: string,
+  authorization: SeatReleaseAuthorization
 ): Promise<{ success: true; seatNumber: string }> {
   const database = await requireDb();
+  const { actor, expected } = authorization;
+  const changedAssignment = () =>
+    new TRPCError({
+      code: "CONFLICT",
+      message: "Seat assignment changed; refresh and retry",
+    });
   return database.transaction(async db => {
+    // Match seat selection and departure operations: booking, flight,
+    // passenger, then seat. Lock the expected booking, never a replacement's.
+    const [booking] = await db
+      .select({
+        id: bookings.id,
+        userId: bookings.userId,
+        tenantId: bookings.tenantId,
+        flightId: bookings.flightId,
+      })
+      .from(bookings)
+      .where(
+        and(eq(bookings.id, expected.bookingId), isNull(bookings.deletedAt))
+      )
+      .limit(1)
+      .for("update");
+    if (!booking)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    if (
+      booking.userId !== actor.userId ||
+      (booking.tenantId != null && booking.tenantId !== actor.tenantId)
+    )
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "You do not own this booking",
+      });
+
     const [flight] = await db
       .select({ id: flights.id, dcsClosedAt: flights.dcsClosedAt })
       .from(flights)
@@ -936,7 +976,25 @@ export async function releaseSeat(
       .limit(1)
       .for("update");
 
-    if (flight) assertDcsOpen(flight);
+    if (!flight)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    assertDcsOpen(flight);
+
+    if (expected.passengerId != null) {
+      const [passenger] = await db
+        .select({ id: passengers.id })
+        .from(passengers)
+        .where(
+          and(
+            eq(passengers.id, expected.passengerId),
+            eq(passengers.bookingId, expected.bookingId)
+          )
+        )
+        .limit(1)
+        .for("update");
+      if (!passenger) throw changedAssignment();
+    }
+
     const [seat] = await db
       .select()
       .from(seatInventory)
@@ -955,6 +1013,12 @@ export async function releaseSeat(
         message: `Seat ${seatNumber} not found on flight ${flightId}`,
       });
     }
+
+    if (
+      seat.bookingId !== expected.bookingId ||
+      seat.passengerId !== expected.passengerId
+    )
+      throw changedAssignment();
 
     if (seat.status === "available") {
       throw new TRPCError({
@@ -976,10 +1040,14 @@ export async function releaseSeat(
       });
     }
 
-    const passengerId = seat.passengerId;
+    if (seat.status === "blocked" || seat.status === "restricted")
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Operationally blocked or restricted seats cannot be released",
+      });
 
-    // Release the seat
-    await db
+    // Keep the association and guarded state in the write predicate as well.
+    const [released] = await db
       .update(seatInventory)
       .set({
         status: "available",
@@ -991,17 +1059,32 @@ export async function releaseSeat(
         boardingPassIssued: false,
         checkInNonce: null,
       })
-      .where(eq(seatInventory.id, seat.id));
+      .where(
+        and(
+          eq(seatInventory.id, seat.id),
+          eq(seatInventory.flightId, flightId),
+          eq(seatInventory.seatNumber, seatNumber),
+          eq(seatInventory.bookingId, expected.bookingId),
+          expected.passengerId == null
+            ? isNull(seatInventory.passengerId)
+            : eq(seatInventory.passengerId, expected.passengerId),
+          eq(seatInventory.status, seat.status),
+          eq(seatInventory.seatPrice, seat.seatPrice)
+        )
+      );
+    if (released.affectedRows !== 1) throw changedAssignment();
 
-    // Clear seat number from passenger record
-    if (passengerId) {
+    // The passenger mirror describes the primary flight only. Never erase a
+    // different seat or an onward flight's primary-seat mirror.
+    if (expected.passengerId != null && booking.flightId === flightId) {
       await db
         .update(passengers)
         .set({ seatNumber: null })
         .where(
           and(
-            eq(passengers.id, passengerId),
-            sql`EXISTS (SELECT 1 FROM bookings b WHERE b.id = ${passengers.bookingId} AND b.flightId = ${flightId})`
+            eq(passengers.id, expected.passengerId),
+            eq(passengers.bookingId, expected.bookingId),
+            eq(passengers.seatNumber, seatNumber)
           )
         );
     }

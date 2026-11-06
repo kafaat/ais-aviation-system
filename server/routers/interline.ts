@@ -12,9 +12,18 @@ import * as interlineService from "../services/interline.service";
 /**
  * Interline Router
  * Manages interline ticketing and baggage agreements between airlines
- * (IATA Resolution 780/788 compliance)
+ * Local agreement planning; partner execution requires separate acceptance.
  */
 export const interlineRouter = router({
+  getExecutionCapability: protectedProcedure
+    .output(
+      z.object({
+        scope: z.literal("local_agreement_planning"),
+        externalExecutionAvailable: z.literal(false),
+        reason: z.literal("accepted_interline_transport_unavailable"),
+      })
+    )
+    .query(() => interlineService.getInterlineExecutionCapability()),
   // ============================================================================
   // Agreement Management (Admin)
   // ============================================================================
@@ -301,7 +310,15 @@ export const interlineRouter = router({
           .describe("Interline agreement ID to activate"),
       })
     )
-    .output(responseContracts["activate"])
+    .output(
+      responseContracts["activate"].extend({
+        execution: z.object({
+          scope: z.literal("local_agreement_planning"),
+          externalExecutionAvailable: z.literal(false),
+          reason: z.literal("accepted_interline_transport_unavailable"),
+        }),
+      })
+    )
     .mutation(async ({ input }) => {
       try {
         const data = await interlineService.activateInterlineAgreement(
@@ -311,6 +328,7 @@ export const interlineRouter = router({
         return {
           success: true,
           data,
+          execution: interlineService.getInterlineExecutionCapability(),
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -373,7 +391,15 @@ export const interlineRouter = router({
         airline2Id: z.number().int().positive().describe("Second airline ID"),
       })
     )
-    .output(responseContracts["checkEligibility"])
+    .output(
+      responseContracts["checkEligibility"].extend({
+        execution: z.object({
+          scope: z.literal("local_agreement_planning"),
+          externalExecutionAvailable: z.literal(false),
+          reason: z.literal("accepted_interline_transport_unavailable"),
+        }),
+      })
+    )
     .query(async ({ input }) => {
       try {
         const data = await interlineService.checkInterlineEligibility(
@@ -384,6 +410,7 @@ export const interlineRouter = router({
         return {
           success: true,
           data,
+          execution: interlineService.getInterlineExecutionCapability(),
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;

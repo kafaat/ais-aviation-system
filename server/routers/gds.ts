@@ -4,6 +4,7 @@ import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import * as gdsService from "../services/gds.service";
 import { gdsMessages } from "../../drizzle/schema";
+import { getGdsExecutionCapability } from "../services/distribution-readiness.service";
 
 // ============================================================================
 // Input Schemas
@@ -205,6 +206,15 @@ const getStatisticsInput = z.object({
  * booking creation, message logging, and provider statistics.
  */
 export const gdsRouter = router({
+  getExecutionCapability: protectedProcedure
+    .output(
+      z.object({
+        externalExecutionAvailable: z.literal(false),
+        simulationAvailable: z.boolean(),
+        reason: z.literal("accepted_gds_adapter_unavailable"),
+      })
+    )
+    .query(() => getGdsExecutionCapability()),
   // ============================================================================
   // Connection Management (Admin)
   // ============================================================================
@@ -380,14 +390,19 @@ export const gdsRouter = router({
         method: "POST",
         path: "/gds/connections/{connectionId}/test",
         tags: ["GDS"],
-        summary: "Test GDS connection health",
+        summary: "Simulate GDS connection health",
         description:
-          "Send a health check request to the GDS provider to verify the connection is active and credentials are valid.",
+          "Explicit nonproduction simulation. Does not contact the provider or verify credentials or connectivity.",
         protect: true,
       },
     })
     .input(testConnectionInput)
-    .output(responseContracts["testConnection"])
+    .output(
+      responseContracts["testConnection"].extend({
+        execution: z.literal("simulation"),
+        providerContacted: z.literal(false),
+      })
+    )
     .mutation(async ({ input }) => {
       try {
         const result = await gdsService.testConnection(input.connectionId);
@@ -395,6 +410,8 @@ export const gdsRouter = router({
         return {
           success: true,
           data: result,
+          execution: "simulation" as const,
+          providerContacted: false as const,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -423,12 +440,17 @@ export const gdsRouter = router({
         tags: ["GDS"],
         summary: "Search flight availability via GDS",
         description:
-          "Search for available flights through a GDS provider connection. Returns pricing, availability, and schedule information from the GDS.",
+          "Explicit nonproduction simulation of GDS pricing, availability and schedules. No provider is contacted.",
         protect: true,
       },
     })
     .input(searchAvailabilityInput)
-    .output(responseContracts["searchAvailability"])
+    .output(
+      responseContracts["searchAvailability"].extend({
+        execution: z.literal("simulation"),
+        providerContacted: z.literal(false),
+      })
+    )
     .query(async ({ input, ctx }) => {
       try {
         const results = await gdsService.searchAvailability({
@@ -439,6 +461,8 @@ export const gdsRouter = router({
         return {
           success: true,
           data: results,
+          execution: "simulation" as const,
+          providerContacted: false as const,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -463,12 +487,17 @@ export const gdsRouter = router({
         tags: ["GDS"],
         summary: "Create a booking via GDS",
         description:
-          "Create a new booking through a GDS provider. Sends a PNR creation request to the GDS and returns the confirmation details including the GDS PNR locator.",
+          "Explicit nonproduction booking simulation. Its synthetic PNR is not a provider booking or ticket.",
         protect: true,
       },
     })
     .input(createGdsBookingInput)
-    .output(responseContracts["createGdsBooking"])
+    .output(
+      responseContracts["createGdsBooking"].extend({
+        execution: z.literal("simulation"),
+        providerContacted: z.literal(false),
+      })
+    )
     .mutation(async ({ input, ctx }) => {
       try {
         const booking = await gdsService.createGdsBooking({
@@ -479,6 +508,8 @@ export const gdsRouter = router({
         return {
           success: true,
           data: booking,
+          execution: "simulation" as const,
+          providerContacted: false as const,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;

@@ -12,7 +12,11 @@
   "checkoutResume": {
     "title": "Booking payment",
     "chooseMethod": "Payment method",
-    "methods": { "card": "Card", "wallet": "Wallet", "split": "Split payment" },
+    "methods": {
+      "card": "Card",
+      "wallet": "Wallet",
+      "split": "Split payment"
+    },
     "splitReadError": "The existing split payment plan could not be loaded. Refresh its status before taking further action.",
     "refreshSplit": "Refresh payer status",
     "splitStatuses": {
@@ -852,6 +856,10 @@
   },
   "favorites": {
     "title": "Favorite Routes",
+    "saveFlight": "Save this flight",
+    "removeSavedFlight": "Remove saved flight",
+    "removeFlight": "Remove {{flightNumber}} from saved flights",
+    "loadError": "Could not load saved flights. Please retry.",
     "empty": "No favorite routes yet",
     "emptyHint": "Add routes to your favorites to track prices",
     "alertUpdated": "Alert settings updated",
@@ -1065,6 +1073,7 @@
     "departed": "Departed",
     "delayed": "Delayed",
     "cancelled": "Cancelled",
+    "completed": "Completed",
     "landed": "Landed",
     "staticStatus": "Status (not live)",
     "disconnected": "Disconnected",
@@ -1098,6 +1107,8 @@
   },
   "reviews": {
     "title": "Reviews & Ratings",
+    "page": "Page {{page}}",
+    "loadError": "Could not load reviews. Please retry.",
     "writeReview": "Write a Review",
     "leaveReview": "Leave a Review",
     "submitReview": "Submit Review",
@@ -2004,6 +2015,20 @@
       "confirmDelete": "Are you sure you want to delete this gate?"
     },
     "voucher": {
+      "editTitle": "Edit Voucher",
+      "editDescription": "Update this voucher. The voucher code cannot be changed.",
+      "updated": "Voucher updated successfully",
+      "maxDiscount": "Maximum Discount (SAR)",
+      "deactivate": "Deactivate",
+      "editAction": "Edit voucher {{code}}",
+      "deactivateAction": "Deactivate voucher {{code}}",
+      "copyAction": "Copy voucher {{code}}",
+      "activeTermsLocked": "Deactivate this voucher before changing its discount terms. Notes, expiry and usage limit can still be edited.",
+      "usedTermsLocked": "This voucher has usage history. Its discount terms and start date cannot be changed.",
+      "checkingUsage": "Checking usage history before allowing changes to discount terms.",
+      "usageUnavailable": "Usage history could not be loaded. Discount terms remain locked; reopen the editor to retry.",
+      "moneyPrecision": "Enter SAR amounts with at most two decimal places.",
+      "invalidFields": "Check the voucher fields: use an integer percentage from 1 to 100, positive amounts and limits, and an expiry after the start date.",
       "title": "Vouchers & Credits Management",
       "description": "Manage voucher codes and user credits",
       "create": "Create Voucher",
@@ -2503,7 +2528,7 @@
       }
     },
     "split": {
-      "track": "Track cancellation refunds",
+      "track": "View cancellation",
       "more": "More cancellations",
       "fullRefundStats": "The statistics below cover full booking refunds. Use the payer list above to track partial cancellations and pending refunds.",
       "reserved": "Booking cancelled. Refunds to each payer are queued.",
@@ -2530,7 +2555,7 @@
         "review_required": "Support review required"
       }
     },
-    "title": "Cancel Booking & Refund",
+    "title": "Cancel booking",
     "bookingRef": "Booking Reference: {{ref}}",
     "successMessage": "Booking cancelled and refund processed successfully",
     "errorMessage": "An error occurred while cancelling the booking",
@@ -2551,7 +2576,19 @@
     "notesPlaceholder": "Add any additional notes...",
     "warningMessage": "Once the booking is cancelled, this action cannot be undone. The refund will be processed automatically.",
     "processing": "Cancelling...",
-    "confirmCancel": "Confirm Cancellation"
+    "confirmCancel": "Confirm Cancellation",
+    "loadingQuote": "Loading the current cancellation quote…",
+    "noRefund": {
+      "heading": "Cancellation without a refund",
+      "fareExplanation": "The booked fare is nonrefundable. The full fare shown will be retained if you cancel.",
+      "explanation": "No money will be refunded and no additional payment will be charged.",
+      "warning": "Cancellation cannot be undone. You will receive no refund.",
+      "acknowledgment": "I understand that I will receive no refund and want to cancel this booking.",
+      "recorded": "Booking cancelled. No refund was issued.",
+      "receiptTitle": "Cancellation receipt",
+      "receiptExplanation": "This receipt records your cancellation and the amount retained at that time. No provider refund was requested for this cancellation.",
+      "noPayment": "No refund due"
+    }
   },
   "modifyBooking": {
     "exchange": {

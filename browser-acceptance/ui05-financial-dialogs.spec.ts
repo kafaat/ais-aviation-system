@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import type { RowDataPacket } from "mysql2/promise";
 import { test, expect } from "../e2e/fixtures/base-test";
@@ -9,6 +10,12 @@ import {
   sqlRows,
 } from "../e2e/fixtures/hardening";
 import type { Ui05ProviderSnapshot } from "../e2e/fixtures/ui05-stripe-provider";
+import { disposableDatabaseUrl } from "../e2e/disposable-database";
+import { login } from "../e2e/fixtures/test-helpers";
+import {
+  offerDigest,
+  type OfferPayload,
+} from "../server/services/retail-offer.service";
 
 // Run with playwright.ui05.config.ts. This exercises the real built React app,
 // tRPC HTTP routes, MySQL transactions, Stripe SDK transport and signed webhook.
@@ -16,8 +23,50 @@ import type { Ui05ProviderSnapshot } from "../e2e/fixtures/ui05-stripe-provider"
 // network, Stripe sandbox, bank settlement or external ticket reissue is proven.
 // Public payer URLs contain bearer tokens, so never record browser traces/video.
 test.use({ trace: "off", video: "off", screenshot: "off" });
+const journeyOwners = new Set<number>();
 test.beforeEach(async ({ page }) => {
+  disposableDatabaseUrl();
   await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
+  const authService = process.env.AUTH_SERVICE_URL;
+  if (!authService) throw new Error("Owned UI-05 auth service is required");
+  expect(["127.0.0.1", "localhost", "[::1]"]).toContain(
+    new URL(authService).hostname
+  );
+  const customer = {
+    name: "UI05 Retail Customer",
+    email: `ui05.${randomUUID()}@example.com`,
+    password: "Ui05Password123!",
+  };
+  // Use the actual registration contract and browser password login. Sharing
+  // one customer across all five payment journeys exhausts the legitimate
+  // per-user financial-write quota and couples otherwise independent tests.
+  const registration = await page.request.post(`${authService}/auth/register`, {
+    data: customer,
+  });
+  expect(registration.ok(), "Actual customer registration must succeed").toBe(
+    true
+  );
+  expect(await registration.json()).toMatchObject({ success: true });
+  await login(page, customer.email, customer.password);
+  const client = rpc(page);
+  const owner = await client.auth.me.query();
+  if (!owner) throw new Error("Authenticated UI-05 owner missing");
+  expect(owner).toMatchObject({ role: "user", tenantId: null });
+  expect(
+    journeyOwners.has(owner.id),
+    "Every journey needs a distinct owner"
+  ).toBe(false);
+  journeyOwners.add(owner.id);
+  const consent = await client.consent.getMyConsent.query();
+  if (consent.needsReconsent)
+    await client.consent.updateConsent.mutate({
+      expectedRevision: consent.consent?.id ?? null,
+      consentVersion: consent.currentVersion,
+      essential: true,
+      analytics: false,
+      marketing: false,
+      preferences: false,
+    });
 });
 
 const minor = (amount: number) => (amount / 100).toFixed(2);
@@ -64,11 +113,11 @@ async function cancelDialog(page: Page, reference: string, track = false) {
   await page.goto("/my-bookings");
   await bookingCard(page, reference)
     .getByRole("button", {
-      name: track ? "Track cancellation refunds" : "Cancel",
+      name: track ? "View cancellation" : "Cancel",
       exact: true,
     })
     .click();
-  const dialog = page.getByRole("dialog", { name: "Cancel Booking & Refund" });
+  const dialog = page.getByRole("dialog", { name: "Cancel booking" });
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -163,7 +212,7 @@ async function completePayment(
   };
 }
 async function cashBooking(page: Page) {
-  const owned = await ownedBooking(page);
+  const owned = await ownedBooking(page, false, undefined, null);
   await page.goto(`/checkout/${owned.booking.bookingId}`);
   await page
     .getByRole("button", { name: "Continue payment", exact: true })
@@ -182,10 +231,137 @@ async function cashBooking(page: Page) {
   return { ...owned, paid, client: rpc(page) };
 }
 
+async function fareOnlyBooking(page: Page) {
+  const client = rpc(page);
+  const user = await client.auth.me.query();
+  if (!user) throw new Error("Authenticated owner missing");
+  const flightId = await fixtureFlight(user.tenantId);
+  const existingCodes = await sqlRows<RowDataPacket & { code: string }>(
+    "SELECT c.code FROM fare_classes c JOIN flights f ON f.airlineId=c.airlineId WHERE f.id=?",
+    [flightId]
+  );
+  const code = Array.from(
+    { length: 36 },
+    (_, index) => `Q${index.toString(36).toUpperCase()}`
+  ).find(candidate => !existingCodes.some(row => row.code === candidate));
+  if (!code) throw new Error("No isolated fixture fare code is available");
+  const name = `UI05 fare-only ${randomUUID()}`;
+  await sqlRows<RowDataPacket>(
+    "INSERT INTO fare_classes (airlineId,code,name,cabinClass,refundable) SELECT airlineId,?,?,'economy',0 FROM flights WHERE id=?",
+    [code, name, flightId]
+  );
+  const [fare] = await sqlRows<RowDataPacket & { id: number }>(
+    "SELECT id FROM fare_classes WHERE name=?",
+    [name]
+  );
+  if (!fare) throw new Error("Synthetic fare class missing");
+  await sqlRows<RowDataPacket>(
+    "INSERT INTO flight_fare_class_inventory (flightId,fareClassId,capacity,availableSeats) VALUES (?,?,10,10)",
+    [flightId, fare.id]
+  );
+  // A deliberately synthetic offer is the input to the actual booking API.
+  // Its fare-only price and explicit zero tax/fee lines exist before the booking
+  // or checkout. No existing offer, invoice component or collected amount is
+  // changed. This exercises cancellation, not real tax-policy certification.
+  const offerId = randomUUID();
+  const totalAmount = 10000;
+  const payload: OfferPayload = {
+    version: 1,
+    currency: "SAR",
+    amountUnit: "minor",
+    scope: "airfare",
+    fareClassId: fare.id,
+    revalidationTerms: {
+      code,
+      family: null,
+      changeable: true,
+      changeFee: 0,
+    },
+    fareLines: [
+      {
+        type: "adult",
+        baseFare: totalAmount,
+        tax: 0,
+        bookingFee: 0,
+        total: totalAmount,
+      },
+    ],
+    passengerTypes: ["adult"],
+    policy: {
+      name: "ui05:synthetic-fare-only:v1",
+      fareMultiplier: 1,
+      taxRate: 0,
+    },
+    baseAmount: totalAmount,
+    taxesAndFees: 0,
+    totalAmount,
+  };
+  const digest = offerDigest(payload);
+  await sqlRows<RowDataPacket>(
+    "INSERT INTO retail_offers (id,flightId,tenantId,userId,channel,cabinClass,payload,digest,totalAmount,expiresAt) SELECT ?,id,tenantId,?,'direct','economy',?,?,?,UTC_TIMESTAMP()+INTERVAL 5 MINUTE FROM flights WHERE id=?",
+    [offerId, user.id, JSON.stringify(payload), digest, totalAmount, flightId]
+  );
+  const booking = await client.bookings.create.mutate({
+    flightId,
+    cabinClass: "economy",
+    fareClassCode: code,
+    offerId,
+    sessionId: randomUUID(),
+    idempotencyKey: randomUUID(),
+    passengers: [
+      { firstName: "Synthetic", lastName: "FareOnly", type: "adult" },
+    ],
+  });
+  expect(booking.totalAmount).toBe(totalAmount);
+  expect(
+    await sqlRows<RowDataPacket>(
+      "SELECT status,paymentStatus,stripePaymentIntentId FROM bookings WHERE id=?",
+      [booking.bookingId]
+    )
+  ).toEqual([
+    {
+      status: "pending",
+      paymentStatus: "pending",
+      stripePaymentIntentId: null,
+    },
+  ]);
+  expect(
+    await sqlRows<RowDataPacket>(
+      "SELECT paymentIntentId FROM payment_receipts WHERE bookingId=?",
+      [booking.bookingId]
+    )
+  ).toEqual([]);
+  const components = await sqlRows<RowDataPacket>(
+    "SELECT componentType,amount,currency,policyVersion,sourceReference FROM booking_fare_components WHERE bookingId=? ORDER BY id",
+    [booking.bookingId]
+  );
+  const source = {
+    currency: "SAR",
+    policyVersion: payload.policy.name,
+    sourceReference: offerId,
+  };
+  expect(components).toEqual([
+    { ...source, componentType: "base_fare", amount: totalAmount },
+    { ...source, componentType: "tax", amount: 0 },
+    { ...source, componentType: "booking_fee", amount: 0 },
+  ]);
+  return {
+    booking,
+    flightId,
+    fareClassId: fare.id,
+    fixture: {
+      offerId,
+      digest,
+      policy: payload.policy,
+      componentsBeforePayment: components,
+    },
+  };
+}
+
 test("a paid modification fulfills through the real webhook and displays its single operation receipt", async ({
   page,
 }, info) => {
-  const { booking, flightId } = await ownedBooking(page, true);
+  const { booking, flightId } = await ownedBooking(page, true, undefined, null);
   const client = rpc(page);
   const user = await client.auth.me.query();
   if (!user) throw new Error("Authenticated owner missing");
@@ -408,6 +584,139 @@ test("cash cancellation displays the retained fee and the native refund receipt 
   });
 });
 
+test("a fare-only nonrefundable booking requires explicit consent and retains a zero-refund receipt after reload", async ({
+  page,
+}, info) => {
+  const { booking, flightId, fareClassId, fixture } =
+    await fareOnlyBooking(page);
+  const client = rpc(page);
+  await page.goto(`/checkout/${booking.bookingId}`);
+  await page
+    .getByRole("button", { name: "Continue payment", exact: true })
+    .click();
+  const paid = await completePayment(page, {
+    type: "booking",
+    bookingId: booking.bookingId,
+    amount: booking.totalAmount,
+  });
+  const quote = await client.refunds.calculateCancellationFee.query({
+    bookingId: booking.bookingId,
+  });
+  expect(quote).toMatchObject({
+    refundAmount: 0,
+    cancellationFee: booking.totalAmount,
+    policyReason: "nonrefundable_fare",
+  });
+  const dialog = await cancelDialog(page, booking.bookingReference);
+  await expect(
+    dialog.getByText("Cancellation without a refund", { exact: true })
+  ).toBeVisible();
+  const confirm = dialog.getByRole("button", {
+    name: "Confirm Cancellation",
+    exact: true,
+  });
+  await expect(confirm).toBeDisabled();
+  await dialog
+    .getByRole("checkbox", {
+      name: "I understand that I will receive no refund and want to cancel this booking.",
+      exact: true,
+    })
+    .check();
+  await confirm.click();
+  await expect(
+    dialog.getByRole("heading", { name: "Cancellation receipt", exact: true })
+  ).toBeVisible();
+  await expect(dialog.getByRole("status")).toHaveText(
+    "Booking cancelled. No refund was issued."
+  );
+  await displayedDefinition(dialog, "Refund Amount:", "0.00 SAR");
+  await displayedDefinition(
+    dialog,
+    "Retained cancellation fee:",
+    `${minor(booking.totalAmount)} SAR`
+  );
+  const receipt = await client.refunds.cancellationReceipt.query({
+    bookingId: booking.bookingId,
+  });
+  expect(receipt).toMatchObject({
+    refundAmount: 0,
+    totalAmount: booking.totalAmount,
+    cancellationFee: booking.totalAmount,
+    status: "cancelled_without_refund",
+  });
+  await expect(
+    dialog.getByText(receipt!.cancellationId, { exact: true })
+  ).toBeVisible();
+  expect(
+    (await providerState(page)).refunds.filter(
+      r => r.payment_intent === paid.payment_intent
+    )
+  ).toEqual([]);
+  expect(
+    await sqlRows<RowDataPacket>(
+      "SELECT status,paymentStatus,seatsReserved FROM bookings WHERE id=?",
+      [booking.bookingId]
+    )
+  ).toEqual([{ status: "cancelled", paymentStatus: "paid", seatsReserved: 0 }]);
+  expect(
+    await sqlRows<RowDataPacket>(
+      "SELECT refundedAmount FROM payment_receipts WHERE paymentIntentId=?",
+      [paid.payment_intent]
+    )
+  ).toEqual([{ refundedAmount: 0 }]);
+  expect(
+    await sqlRows<RowDataPacket>(
+      "SELECT amount FROM financial_ledger WHERE bookingId=? AND type IN ('refund','partial_refund')",
+      [booking.bookingId]
+    )
+  ).toEqual([]);
+  expect(
+    await sqlRows<RowDataPacket>(
+      "SELECT economyAvailable FROM flights WHERE id=?",
+      [flightId]
+    )
+  ).toEqual([{ economyAvailable: 10 }]);
+  expect(
+    await sqlRows<RowDataPacket>(
+      "SELECT availableSeats FROM flight_fare_class_inventory WHERE flightId=? AND fareClassId=?",
+      [flightId, fareClassId]
+    )
+  ).toEqual([{ availableSeats: 10 }]);
+  expect(
+    await sqlRows<RowDataPacket>(
+      "SELECT componentType,amount,currency,policyVersion,sourceReference FROM booking_fare_components WHERE bookingId=? ORDER BY id",
+      [booking.bookingId]
+    )
+  ).toEqual(fixture.componentsBeforePayment);
+  await dialog
+    .getByRole("button", { name: "Close receipt", exact: true })
+    .click();
+  const reopened = await cancelDialog(page, booking.bookingReference, true);
+  await expect(
+    reopened.getByText(receipt!.cancellationId, { exact: true })
+  ).toBeVisible();
+  await expect(reopened.getByRole("status")).toHaveText(
+    "Booking cancelled. No refund was issued."
+  );
+  await expect(
+    reopened.getByRole("button", { name: "Confirm Cancellation", exact: true })
+  ).toHaveCount(0);
+  expect(
+    (await providerState(page)).refunds.filter(
+      r => r.payment_intent === paid.payment_intent
+    )
+  ).toEqual([]);
+  await evidence(info, {
+    bookingId: booking.bookingId,
+    quote,
+    receipt,
+    paid,
+    fixture,
+    declaredFareScope:
+      "synthetic_fare_only_no_separately_recorded_tax_or_services",
+  });
+});
+
 test("a native nonrefundable departure refuses cancellation without a provider refund or financial effect", async ({
   page,
 }, info) => {
@@ -472,7 +781,12 @@ test("a native nonrefundable departure refuses cancellation without a provider r
 test("split cancellation fulfills both original payers and preserves fees and operation receipts after reload", async ({
   page,
 }, info) => {
-  const { booking, flightId } = await ownedBooking(page);
+  const { booking, flightId } = await ownedBooking(
+    page,
+    false,
+    undefined,
+    null
+  );
   const client = rpc(page);
   const firstAmount = Math.floor(booking.totalAmount * 0.4);
   const payers = [
@@ -564,9 +878,19 @@ test("split cancellation fulfills both original payers and preserves fees and op
   await expect(dialog.getByText(reserved.id, { exact: true })).toBeVisible();
   for (const payer of payers) {
     const row = dialog.getByRole("row", { name: new RegExp(payer.name) });
-    await row
-      .getByRole("button", { name: "Check / resume", exact: true })
-      .click();
+    const [resumed] = await Promise.all([
+      page.waitForResponse(
+        response =>
+          new URL(response.url()).pathname.includes(
+            "/api/trpc/refunds.resumeSplitCancellation"
+          ) && response.request().method() === "POST"
+      ),
+      row.getByRole("button", { name: "Check / resume", exact: true }).click(),
+    ]);
+    expect(
+      resumed.status(),
+      "Payer resume must succeed before its UI receipt is expected"
+    ).toBe(200);
     await expect(
       row.getByText("Refund confirmed", { exact: true })
     ).toBeVisible();

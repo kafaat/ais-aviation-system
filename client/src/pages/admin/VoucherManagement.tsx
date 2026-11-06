@@ -1,4 +1,10 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import type { Voucher } from "../../../../drizzle/schema";
+import {
+  createVoucherInputSchema,
+  updateVoucherPatchSchema,
+  voucherLockedFields,
+} from "@shared/voucher";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { SEO } from "@/components/SEO";
@@ -54,7 +60,7 @@ import { Redirect } from "wouter";
 
 type VoucherType = "fixed" | "percentage";
 
-interface CreateVoucherForm {
+interface VoucherForm {
   code: string;
   type: VoucherType;
   value: number;
@@ -67,7 +73,7 @@ interface CreateVoucherForm {
   isActive: boolean;
 }
 
-const initialFormState: CreateVoucherForm = {
+const initialFormState: VoucherForm = {
   code: "",
   type: "fixed",
   value: 0,
@@ -87,9 +93,11 @@ export default function VoucherManagement() {
   const locale = i18n.language === "ar" ? ar : enUS;
   const { user, loading: authLoading } = useAuth();
 
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [formData, setFormData] = useState<CreateVoucherForm>(initialFormState);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState<VoucherForm>(initialFormState);
   const [activeTab, setActiveTab] = useState("vouchers");
+  const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
+  const [formError, setFormError] = useState("");
 
   const {
     data: vouchers,
@@ -100,27 +108,48 @@ export default function VoucherManagement() {
   const { data: credits, isLoading: creditsLoading } =
     trpc.vouchers.getAllCredits.useQuery({ limit: 100, offset: 0 });
 
-  const createVoucherMutation = trpc.vouchers.create.useMutation({
-    onSuccess: () => {
-      toast.success(t("admin.voucher.created"));
-      setIsCreateDialogOpen(false);
-      setFormData(initialFormState);
-      refetchVouchers();
-    },
-    onError: error => {
-      toast.error(error.message);
-    },
-  });
+  const usageHistory = trpc.vouchers.getUsageHistory.useQuery(
+    { id: editingVoucher?.id ?? 0 },
+    { enabled: isDialogOpen && editingVoucher !== null }
+  );
+  const termsLocked =
+    !!editingVoucher &&
+    (editingVoucher.isActive ||
+      editingVoucher.usedCount > 0 ||
+      usageHistory.isFetching ||
+      usageHistory.isError ||
+      !usageHistory.data ||
+      usageHistory.data.length > 0);
 
-  const deactivateVoucherMutation = trpc.vouchers.deactivate.useMutation({
-    onSuccess: () => {
-      toast.success(t("admin.voucher.deactivated"));
-      refetchVouchers();
-    },
-    onError: error => {
-      toast.error(error.message);
-    },
+  const finishSave = (message: string) => {
+    toast.success(t(message));
+    setIsDialogOpen(false);
+    setEditingVoucher(null);
+    setFormData(initialFormState);
+    setFormError("");
+    void refetchVouchers();
+  };
+  const showMutationError = (error: { message: string }) => {
+    setFormError(error.message);
+    toast.error(error.message);
+  };
+
+  const createVoucherMutation = trpc.vouchers.create.useMutation({
+    onSuccess: () => finishSave("admin.voucher.created"),
+    onError: showMutationError,
   });
+  const updateVoucherMutation = trpc.vouchers.update.useMutation({
+    onSuccess: () => finishSave("admin.voucher.updated"),
+    onError: showMutationError,
+  });
+  const deactivateVoucherMutation = trpc.vouchers.deactivate.useMutation({
+    onSuccess: () => finishSave("admin.voucher.deactivated"),
+    onError: showMutationError,
+  });
+  const isSaving =
+    createVoucherMutation.isPending ||
+    updateVoucherMutation.isPending ||
+    deactivateVoucherMutation.isPending;
 
   if (authLoading) {
     return (
@@ -135,21 +164,101 @@ export default function VoucherManagement() {
     return <Redirect to="/" />;
   }
 
-  const handleCreateVoucher = () => {
-    createVoucherMutation.mutate({
+  const openCreate = () => {
+    setEditingVoucher(null);
+    setFormData(initialFormState);
+    setFormError("");
+    setIsDialogOpen(true);
+  };
+  const openEdit = (voucher: Voucher) => {
+    setEditingVoucher(voucher);
+    setFormData({
+      code: voucher.code,
+      type: voucher.type,
+      value: voucher.type === "fixed" ? voucher.value / 100 : voucher.value,
+      minPurchase: voucher.minPurchase / 100,
+      maxDiscount:
+        voucher.maxDiscount === null ? null : voucher.maxDiscount / 100,
+      maxUses: voucher.maxUses,
+      validFrom: new Date(voucher.validFrom).toISOString().slice(0, 10),
+      validUntil: new Date(voucher.validUntil).toISOString().slice(0, 10),
+      description: voucher.description ?? "",
+      isActive: voucher.isActive,
+    });
+    setFormError("");
+    setIsDialogOpen(true);
+  };
+  const handleSaveVoucher = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSaving) return;
+    setFormError("");
+    const money = [
+      formData.minPurchase,
+      ...(formData.type === "fixed" ? [formData.value] : []),
+      ...(formData.maxDiscount === null ? [] : [formData.maxDiscount]),
+    ];
+    if (
+      money.some(
+        value =>
+          !Number.isFinite(value) ||
+          Math.abs(value * 100 - Math.round(value * 100)) > 0.000001
+      )
+    ) {
+      setFormError(t("admin.voucher.moneyPrecision"));
+      return;
+    }
+    // Preserve stored timestamps when the date field was not changed.
+    const dateValue = (field: "validFrom" | "validUntil") => {
+      const original = editingVoucher && new Date(editingVoucher[field]);
+      return original && original.toISOString().slice(0, 10) === formData[field]
+        ? original
+        : new Date(formData[field]);
+    };
+    const result = createVoucherInputSchema.safeParse({
       code: formData.code,
       type: formData.type,
-      value: Math.round(formData.value * 100), // Convert to cents
+      value:
+        formData.type === "fixed"
+          ? Math.round(formData.value * 100)
+          : formData.value,
       minPurchase: Math.round(formData.minPurchase * 100),
-      maxDiscount: formData.maxDiscount
-        ? Math.round(formData.maxDiscount * 100)
-        : undefined,
-      maxUses: formData.maxUses || undefined,
-      validFrom: new Date(formData.validFrom),
-      validUntil: new Date(formData.validUntil),
-      description: formData.description || undefined,
+      maxDiscount:
+        formData.maxDiscount === null
+          ? null
+          : Math.round(formData.maxDiscount * 100),
+      maxUses: formData.maxUses,
+      validFrom: dateValue("validFrom"),
+      validUntil: dateValue("validUntil"),
+      description: formData.description || null,
       isActive: formData.isActive,
     });
+    if (!result.success) {
+      setFormError(t("admin.voucher.invalidFields"));
+      return;
+    }
+    if (!editingVoucher) {
+      createVoucherMutation.mutate(result.data);
+      return;
+    }
+    const { code: _code, ...editable } = result.data;
+    const patch = updateVoucherPatchSchema.parse(
+      Object.fromEntries(
+        Object.entries(editable).filter(([field, value]) => {
+          if (
+            termsLocked &&
+            voucherLockedFields.includes(
+              field as (typeof voucherLockedFields)[number]
+            )
+          )
+            return false;
+          const original = editingVoucher[field as keyof typeof editable];
+          return value instanceof Date && original instanceof Date
+            ? value.getTime() !== original.getTime()
+            : value !== original;
+        })
+      )
+    );
+    updateVoucherMutation.mutate({ id: editingVoucher.id, ...patch });
   };
 
   const handleCopyCode = (code: string) => {
@@ -179,182 +288,292 @@ export default function VoucherManagement() {
             {t("admin.voucher.description")}
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog
+          open={isDialogOpen}
+          onOpenChange={open => {
+            if (!isSaving) setIsDialogOpen(open);
+          }}
+        >
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
               {t("admin.voucher.create")}
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>{t("admin.voucher.createTitle")}</DialogTitle>
-              <DialogDescription>
-                {t("admin.voucher.createDescription")}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="code">{t("admin.voucher.code")}</Label>
-                <Input
-                  id="code"
-                  value={formData.code}
-                  onChange={e =>
-                    setFormData({
-                      ...formData,
-                      code: e.target.value.toUpperCase(),
-                    })
-                  }
-                  placeholder="SUMMER2024"
-                  className="uppercase"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+          <DialogContent
+            className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]"
+            dir={i18n.language === "ar" ? "rtl" : "ltr"}
+          >
+            <form onSubmit={handleSaveVoucher} aria-busy={isSaving}>
+              <DialogHeader>
+                <DialogTitle>
+                  {t(
+                    editingVoucher
+                      ? "admin.voucher.editTitle"
+                      : "admin.voucher.createTitle"
+                  )}
+                </DialogTitle>
+                <DialogDescription>
+                  {t(
+                    editingVoucher
+                      ? "admin.voucher.editDescription"
+                      : "admin.voucher.createDescription"
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              {editingVoucher && termsLocked && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {t(
+                    editingVoucher.usedCount > 0 ||
+                      (usageHistory.data?.length ?? 0) > 0
+                      ? "admin.voucher.usedTermsLocked"
+                      : editingVoucher.isActive
+                        ? "admin.voucher.activeTermsLocked"
+                        : "admin.voucher.checkingUsage"
+                  )}
+                </p>
+              )}
+              {usageHistory.error && editingVoucher && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {t("admin.voucher.usageUnavailable")}
+                </p>
+              )}
+              {formError && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {formError}
+                </p>
+              )}
+              <fieldset disabled={isSaving} className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="type">{t("admin.voucher.type")}</Label>
-                  <Select
-                    value={formData.type}
-                    onValueChange={(value: VoucherType) =>
-                      setFormData({ ...formData, type: value })
+                  <Label htmlFor="code">{t("admin.voucher.code")}</Label>
+                  <Input
+                    id="code"
+                    required
+                    minLength={3}
+                    maxLength={50}
+                    disabled={!!editingVoucher}
+                    value={formData.code}
+                    onChange={e =>
+                      setFormData({
+                        ...formData,
+                        code: e.target.value.toUpperCase(),
+                      })
+                    }
+                    placeholder="SUMMER2024"
+                    className="uppercase"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="type">{t("admin.voucher.type")}</Label>
+                    <Select
+                      value={formData.type}
+                      disabled={termsLocked || isSaving}
+                      onValueChange={(value: VoucherType) =>
+                        setFormData({
+                          ...formData,
+                          type: value,
+                          maxDiscount:
+                            value === "fixed" ? null : formData.maxDiscount,
+                        })
+                      }
+                    >
+                      <SelectTrigger id="type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">
+                          {t("admin.voucher.typeFixed")}
+                        </SelectItem>
+                        <SelectItem value="percentage">
+                          {t("admin.voucher.typePercentage")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="value">
+                      {formData.type === "fixed"
+                        ? t("admin.voucher.valueFixed")
+                        : t("admin.voucher.valuePercentage")}
+                    </Label>
+                    <Input
+                      id="value"
+                      type="number"
+                      required
+                      disabled={termsLocked}
+                      min={formData.type === "fixed" ? "0.01" : "1"}
+                      max={
+                        formData.type === "percentage" ? "100" : "21474836.47"
+                      }
+                      step={formData.type === "fixed" ? "0.01" : "1"}
+                      value={formData.value}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          value: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="minPurchase">
+                      {t("admin.voucher.minPurchase")}
+                    </Label>
+                    <Input
+                      id="minPurchase"
+                      type="number"
+                      required
+                      disabled={termsLocked}
+                      min="0"
+                      max="21474836.47"
+                      step="0.01"
+                      value={formData.minPurchase}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          minPurchase: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="maxUses">
+                      {t("admin.voucher.maxUses")}
+                    </Label>
+                    <Input
+                      id="maxUses"
+                      type="number"
+                      min={Math.max(1, editingVoucher?.usedCount ?? 0)}
+                      max="2147483647"
+                      step="1"
+                      value={formData.maxUses ?? ""}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          maxUses: e.target.value
+                            ? Number(e.target.value)
+                            : null,
+                        })
+                      }
+                      placeholder={t("admin.voucher.unlimited")}
+                    />
+                  </div>
+                </div>
+                {formData.type === "percentage" && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="maxDiscount">
+                      {t("admin.voucher.maxDiscount")}
+                    </Label>
+                    <Input
+                      id="maxDiscount"
+                      type="number"
+                      min="0.01"
+                      max="21474836.47"
+                      step="0.01"
+                      disabled={termsLocked}
+                      value={formData.maxDiscount ?? ""}
+                      onChange={event =>
+                        setFormData({
+                          ...formData,
+                          maxDiscount:
+                            event.target.value === ""
+                              ? null
+                              : Number(event.target.value),
+                        })
+                      }
+                      placeholder={t("admin.voucher.unlimited")}
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="validFrom">
+                      {t("admin.voucher.validFrom")}
+                    </Label>
+                    <Input
+                      id="validFrom"
+                      type="date"
+                      required
+                      disabled={termsLocked}
+                      value={formData.validFrom}
+                      onChange={e =>
+                        setFormData({ ...formData, validFrom: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="validUntil">
+                      {t("admin.voucher.validUntil")}
+                    </Label>
+                    <Input
+                      id="validUntil"
+                      type="date"
+                      required
+                      value={formData.validUntil}
+                      onChange={e =>
+                        setFormData({ ...formData, validUntil: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="description">
+                    {t("admin.voucher.descriptionLabel")}
+                  </Label>
+                  <Input
+                    id="description"
+                    value={formData.description}
+                    onChange={e =>
+                      setFormData({ ...formData, description: e.target.value })
+                    }
+                    placeholder={t("admin.voucher.descriptionPlaceholder")}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="isActive"
+                    checked={formData.isActive}
+                    onCheckedChange={checked =>
+                      setFormData({ ...formData, isActive: checked })
+                    }
+                  />
+                  <Label htmlFor="isActive">{t("admin.voucher.active")}</Label>
+                </div>
+              </fieldset>
+              <DialogFooter className="gap-2">
+                {editingVoucher?.isActive && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={isSaving}
+                    onClick={() =>
+                      deactivateVoucherMutation.mutate({
+                        id: editingVoucher.id,
+                      })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">
-                        {t("admin.voucher.typeFixed")}
-                      </SelectItem>
-                      <SelectItem value="percentage">
-                        {t("admin.voucher.typePercentage")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="value">
-                    {formData.type === "fixed"
-                      ? t("admin.voucher.valueFixed")
-                      : t("admin.voucher.valuePercentage")}
-                  </Label>
-                  <Input
-                    id="value"
-                    type="number"
-                    min="0"
-                    value={formData.value}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        value: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="minPurchase">
-                    {t("admin.voucher.minPurchase")}
-                  </Label>
-                  <Input
-                    id="minPurchase"
-                    type="number"
-                    min="0"
-                    value={formData.minPurchase}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        minPurchase: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="maxUses">{t("admin.voucher.maxUses")}</Label>
-                  <Input
-                    id="maxUses"
-                    type="number"
-                    min="0"
-                    value={formData.maxUses ?? ""}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        maxUses: e.target.value ? Number(e.target.value) : null,
-                      })
-                    }
-                    placeholder={t("admin.voucher.unlimited")}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="validFrom">
-                    {t("admin.voucher.validFrom")}
-                  </Label>
-                  <Input
-                    id="validFrom"
-                    type="date"
-                    value={formData.validFrom}
-                    onChange={e =>
-                      setFormData({ ...formData, validFrom: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="validUntil">
-                    {t("admin.voucher.validUntil")}
-                  </Label>
-                  <Input
-                    id="validUntil"
-                    type="date"
-                    value={formData.validUntil}
-                    onChange={e =>
-                      setFormData({ ...formData, validUntil: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">
-                  {t("admin.voucher.descriptionLabel")}
-                </Label>
-                <Input
-                  id="description"
-                  value={formData.description}
-                  onChange={e =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder={t("admin.voucher.descriptionPlaceholder")}
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="isActive"
-                  checked={formData.isActive}
-                  onCheckedChange={checked =>
-                    setFormData({ ...formData, isActive: checked })
-                  }
-                />
-                <Label htmlFor="isActive">{t("admin.voucher.active")}</Label>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button
-                onClick={handleCreateVoucher}
-                disabled={createVoucherMutation.isPending || !formData.code}
-              >
-                {createVoucherMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t("admin.voucher.deactivate")}
+                  </Button>
                 )}
-                {t("common.create")}
-              </Button>
-            </DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSaving}
+                  onClick={() => setIsDialogOpen(false)}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button type="submit" disabled={isSaving || !formData.code}>
+                  {isSaving && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {t(editingVoucher ? "common.save" : "common.create")}
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
@@ -468,6 +687,9 @@ export default function VoucherManagement() {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6"
+                              aria-label={t("admin.voucher.copyAction", {
+                                code: voucher.code,
+                              })}
                               onClick={() => handleCopyCode(voucher.code)}
                             >
                               <Copy className="h-3 w-3" />
@@ -517,7 +739,11 @@ export default function VoucherManagement() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              disabled
+                              aria-label={t("admin.voucher.editAction", {
+                                code: voucher.code,
+                              })}
+                              disabled={isSaving}
+                              onClick={() => openEdit(voucher)}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -526,6 +752,11 @@ export default function VoucherManagement() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-destructive"
+                                aria-label={t(
+                                  "admin.voucher.deactivateAction",
+                                  { code: voucher.code }
+                                )}
+                                disabled={isSaving}
                                 onClick={() =>
                                   deactivateVoucherMutation.mutate({
                                     id: voucher.id,

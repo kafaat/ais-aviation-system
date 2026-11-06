@@ -105,6 +105,13 @@ jobs:
           server/__tests__/standard-reports-available-mysql.test.ts
           server/__tests__/standard-report-schedules-mysql.test.ts
           server/__tests__/auth-session-mysql.test.ts
+          server/__tests__/request-identity-oauth-mysql.test.ts
+          server/__tests__/flight-consumers-mysql.test.ts
+          server/__tests__/ordinary-refund-mysql.test.ts
+          server/__tests__/ordinary-refund-departure-mysql.test.ts
+          server/__tests__/dcs-finalization-refund-mysql.test.ts
+          server/__tests__/wallet-dispute-funding-mysql.test.ts
+          server/__tests__/wallet-funding-maintenance-mysql.test.ts
           server/__tests__/financial-authority-mysql.test.ts
           server/__tests__/wallet-crossing-acceptance-mysql.test.ts
           server/__tests__/ticket-revalidation-acceptance-mysql.test.ts
@@ -113,6 +120,7 @@ jobs:
           server/__tests__/fare-rules-acceptance-mysql.test.ts
           server/__tests__/apis-seats-acceptance-mysql.test.ts
           server/__tests__/operations-inventory-mysql.test.ts
+          server/__tests__/dcs-load-plan-mysql.test.ts
           server/__tests__/flight-delivery-mysql.test.ts
           server/__tests__/api-process-mysql.test.ts
           server/__tests__/worker-process-mysql.test.ts

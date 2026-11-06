@@ -41,6 +41,7 @@ const tables = [
   schema.corporateBookings,
   schema.idempotencyRequests,
   schema.seatInventory,
+  schema.dcsPassengerStates,
   schema.paymentReceipts,
   schema.bookingModifications,
   schema.orderServiceRefunds,

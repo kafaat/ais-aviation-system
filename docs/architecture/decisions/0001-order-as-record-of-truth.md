@@ -9,6 +9,10 @@
 
 ## Context
 
+The [current record-authority map](../current-record-authority.md) separates
+today's implemented sources from the proposed migration and lists the evidence
+required before any reader or writer changes authority.
+
 AIS is a hybrid. The commercial core is a booking: `bookings` carries a
 six-character `pnr`, `passengers` carry 13-digit ticket numbers, and the
 money lives in `payments`, `payment_receipts` and `financial_ledger`. Above it

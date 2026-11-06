@@ -10,6 +10,7 @@ import {
   seatInventory,
   inventoryLocks,
   paymentReceipts,
+  ordinaryBookingRefunds,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
 import {
@@ -18,13 +19,38 @@ import {
 } from "./booking-settlement.service";
 import { assertTravelClearance } from "./travel-clearance.service";
 import { recordEvent } from "./outbox.service";
+import { ordinaryRefundRequiresReconciliation } from "./departure-financial-authority.service";
 import {
   assertDcsCheckInOpen,
   assertDcsPassengerMutable,
   writeDcsPassengerState,
 } from "./dcs-state.service";
 
-/** Booking -> itinerary flights (ascending) -> passenger -> seat is the lock order.
+/** Ordinary cancellation keeps the funded reservation until provider settlement.
+ * That reservation cannot authorize new carriage while a refund is outstanding.
+ * These indexed current reads follow the refund writer's lock order and also
+ * work when the caller already established a REPEATABLE READ snapshot. */
+async function ordinaryRefundRequiresDepartureHold(
+  tx: SettlementTx,
+  booking: typeof bookings.$inferSelect
+) {
+  const [intent] = await tx
+    .select()
+    .from(ordinaryBookingRefunds)
+    .where(eq(ordinaryBookingRefunds.bookingId, booking.id))
+    .for("update");
+  if (!intent) return false;
+  if (intent.status !== "failed") return true;
+  const [receipt] = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, intent.paymentIntentId))
+    .for("update");
+  return ordinaryRefundRequiresReconciliation(booking, intent, receipt);
+}
+
+/** Booking -> ordinary refund -> receipt -> itinerary flights (ascending) ->
+ * passenger -> seat is the lock order.
  * Callers lock this booking before their first consistent read, or use READ
  * COMMITTED, so receipt reads cannot predate the locked booking state. */
 export async function lockDepartureContext(
@@ -39,6 +65,10 @@ export async function lockDepartureContext(
     .for("update");
   if (!booking)
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  const ordinaryRefundHold = await ordinaryRefundRequiresDepartureHold(
+    tx,
+    booking
+  );
   // Refund writers also own the booking lock. Read their durable departure hold
   // without locking/scanning other bookings' receipts after itinerary locks.
   // A refunded duplicate collection has a different reason and must not revoke
@@ -50,7 +80,7 @@ export async function lockDepartureContext(
       and(
         eq(paymentReceipts.bookingId, bookingId),
         eq(paymentReceipts.settlementStatus, "review_required"),
-        eq(paymentReceipts.settlementError, DepartureReleaseError.reason)
+        inArray(paymentReceipts.settlementError, DepartureReleaseError.reasons)
       )
     )
     .limit(1);
@@ -95,7 +125,8 @@ export async function lockDepartureContext(
     flight,
     legs,
     reserved: member ? member.seatsReserved : booking.seatsReserved,
-    departureReconciliationRequired: Boolean(departureReview),
+    departureReconciliationRequired:
+      ordinaryRefundHold || Boolean(departureReview),
   };
 }
 
@@ -179,9 +210,8 @@ export function assertDepartureOpen(
   purpose: "check_in" | "boarding"
 ) {
   assertFundedDepartureReservation(c);
-  // Final closure retains physical attendance and its paid reservation flags
-  // after a provider refund. That evidence permits supervised recovery, never
-  // new travel on an open or subsequently reopened sector.
+  // A pending refund or final-closure quarantine retains the paid reservation
+  // for reconciliation. It permits supervised recovery, never new travel.
   assertDepartureReconciled(c);
   const remaining = c.flight.departureTime.getTime() - Date.now();
   if (

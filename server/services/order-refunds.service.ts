@@ -10,6 +10,7 @@ import {
   orderServiceRefunds,
   paymentReceipts,
   bookingRefundPlans,
+  ordinaryBookingRefunds,
   type Booking,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -57,6 +58,13 @@ export async function planOrderRefund(
     .limit(1);
   if (cancellation)
     throw new Error("Cancellation refund plan prevents an exchange refund");
+  const [ordinaryCancellation] = await tx
+    .select()
+    .from(ordinaryBookingRefunds)
+    .where(eq(ordinaryBookingRefunds.bookingId, booking.id))
+    .limit(1);
+  if (ordinaryCancellation)
+    throw new Error("Cancellation refund command prevents an exchange refund");
   const receipts = await tx
     .select()
     .from(paymentReceipts)

@@ -43,6 +43,7 @@ async function cancellation(overrides: Handlers = {}) {
       quote: null,
       reason: null,
     }),
+    "refunds.cancellationReceipt": () => null,
     "refunds.checkRefundable": () => ({ refundable: true }),
     "refunds.calculateCancellationFee": () => ({
       tier: "high",
@@ -847,3 +848,136 @@ it.each(["missing URL", "provider failure"])(
     expect(notices.success).not.toHaveBeenCalled();
   }
 );
+
+const zeroQuote = {
+  quoteHash: "a".repeat(64),
+  policyReason: "nonrefundable_fare",
+  requiresZeroRefundConfirmation: true,
+  tier: "none",
+  totalAmount: 10000,
+  cancellationFee: 10000,
+  refundAmount: 0,
+  refundPercentage: 0,
+};
+const zeroReceipt = {
+  cancellationId: "booking-7-cancel-without-refund",
+  bookingId: 7,
+  status: "cancelled_without_refund",
+  totalAmount: 10000,
+  cancellationFee: 10000,
+  refundAmount: 0,
+  currency: "SAR",
+  policyReason: "nonrefundable_fare",
+  confirmedAt: new Date("2030-01-01T12:00:00Z"),
+};
+it("requires explicit no-refund consent and keeps the truthful cancellation receipt after the confirmed response", async () => {
+  const reply = deferred<typeof zeroReceipt>();
+  const { requests, success, close } = await cancellation({
+    "refunds.checkRefundable": () => ({
+      refundable: false,
+      cancellable: true,
+      requiresZeroRefundConfirmation: true,
+    }),
+    "refunds.calculateCancellationFee": () => zeroQuote,
+    "refunds.cancelWithoutRefund": () => reply.promise,
+  });
+  const confirm = screen.getByRole("button", { name: "Confirm Cancellation" });
+  expect(confirm).toBeDisabled();
+  expect(screen.getByText("Cancellation without a refund")).toBeVisible();
+  expect(screen.getByText("-100.00 SAR")).toBeVisible();
+  expect(
+    screen.queryByText(i18n.t("cancelBooking.refundProcessing"))
+  ).not.toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("checkbox", {
+      name: i18n.t("cancelBooking.noRefund.acknowledgment"),
+    })
+  );
+  expect(confirm).toBeEnabled();
+  fireEvent.click(confirm);
+  await elapse();
+  expect(
+    requests.filter(r => /create|cancelWithoutRefund/.test(r.path))
+  ).toEqual([
+    {
+      path: "refunds.cancelWithoutRefund",
+      input: {
+        bookingId: 7,
+        quoteHash: zeroQuote.quoteHash,
+        confirmNoRefund: true,
+        reason: "requested_by_customer",
+        notes: "",
+      },
+    },
+  ]);
+  expect(success).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Cancelling..." })).toBeDisabled();
+  await act(async () => reply.resolve(zeroReceipt));
+  await elapse();
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Booking cancelled. No refund was issued."
+  );
+  expect(screen.getByText(zeroReceipt.cancellationId)).toBeVisible();
+  expect(screen.getByText("0.00 SAR")).toBeVisible();
+  expect(screen.getByText("Retained cancellation fee:")).toBeVisible();
+  expect(screen.queryByText("Refund confirmed")).not.toBeInTheDocument();
+  expect(close).not.toHaveBeenCalled();
+  expect(success).toHaveBeenCalledTimes(1);
+});
+it("reopens a persisted zero-refund receipt without another cancellation or refund request", async () => {
+  const { requests } = await cancellation({
+    "refunds.cancellationReceipt": () => zeroReceipt,
+  });
+  expect(
+    screen.getByRole("heading", { name: "Cancellation receipt" })
+  ).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("No refund was issued");
+  expect(screen.getByText(zeroReceipt.cancellationId)).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "Confirm Cancellation" })
+  ).not.toBeInTheDocument();
+  expect(
+    requests.some(r => /refunds\.(create|cancelWithoutRefund)/.test(r.path))
+  ).toBe(false);
+});
+it("clears zero-refund consent when a changed quote is rejected and requires review of the replacement quote", async () => {
+  let latest = zeroQuote;
+  const { requests, success } = await cancellation({
+    "refunds.checkRefundable": () => ({ refundable: false, cancellable: true }),
+    "refunds.calculateCancellationFee": () => latest,
+    "refunds.cancelWithoutRefund": () => {
+      latest = { ...zeroQuote, quoteHash: "b".repeat(64) };
+      throw new Error("Cancellation quote changed; review the current fare");
+    },
+  });
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm Cancellation" }));
+  await elapse();
+  expect(notices.error).toHaveBeenCalledWith(
+    "Cancellation quote changed; review the current fare"
+  );
+  expect(screen.getByRole("checkbox")).not.toBeChecked();
+  expect(
+    screen.getByRole("button", { name: "Confirm Cancellation" })
+  ).toBeDisabled();
+  expect(success).not.toHaveBeenCalled();
+  expect(
+    requests.filter(r => r.path === "refunds.cancelWithoutRefund")
+  ).toHaveLength(1);
+});
+it("never guesses a full refund or enables cancellation while the quote is unavailable", async () => {
+  const reply = deferred<typeof zeroQuote>();
+  const { requests } = await cancellation({
+    "refunds.calculateCancellationFee": () => reply.promise,
+  });
+  expect(
+    screen.getByRole("button", { name: "Confirm Cancellation" })
+  ).toBeDisabled();
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Loading the current cancellation quote"
+  );
+  expect(screen.queryByText("100.00 SAR")).not.toBeInTheDocument();
+  expect(
+    requests.some(r => /refunds\.(create|cancelWithoutRefund)/.test(r.path))
+  ).toBe(false);
+});

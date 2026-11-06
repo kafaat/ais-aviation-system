@@ -74,7 +74,7 @@ async function verifySeatOwnership(
   flightId: number,
   seatNumber: string,
   userId: number
-): Promise<void> {
+): Promise<seatMapService.SeatReleaseAuthorization["expected"]> {
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -84,7 +84,10 @@ async function verifySeatOwnership(
   }
 
   const [seat] = await db
-    .select({ bookingId: seatInventory.bookingId })
+    .select({
+      bookingId: seatInventory.bookingId,
+      passengerId: seatInventory.passengerId,
+    })
     .from(seatInventory)
     .where(
       and(
@@ -109,6 +112,7 @@ async function verifySeatOwnership(
   }
 
   await verifyBookingOwnership(seat.bookingId, userId);
+  return { bookingId: seat.bookingId, passengerId: seat.passengerId };
 }
 
 // ============================================================================
@@ -302,10 +306,20 @@ export const seatMapRouter = router({
     )
     .output(responseContracts["releaseSeat"])
     .mutation(async ({ input, ctx }) => {
-      // Verify ownership of the seat's booking
-      await verifySeatOwnership(input.flightId, input.seatNumber, ctx.user.id);
+      const expected = await verifySeatOwnership(
+        input.flightId,
+        input.seatNumber,
+        ctx.user.id
+      );
 
-      return await seatMapService.releaseSeat(input.flightId, input.seatNumber);
+      return await seatMapService.releaseSeat(
+        input.flightId,
+        input.seatNumber,
+        {
+          actor: { userId: ctx.user.id, tenantId: ctx.tenantId },
+          expected,
+        }
+      );
     }),
 
   /**

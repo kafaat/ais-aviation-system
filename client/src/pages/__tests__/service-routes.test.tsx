@@ -297,7 +297,28 @@ it.each([
 
 it("keeps passenger accounts out of the report export page", async () => {
   const route = visit("/admin/reports", "user");
+  await import("../admin/ReportsDashboard");
+  await import("../Home");
+  await vi.dynamicImportSettled();
   await waitFor(() => expect(route.history.at(-1)).toBe("/"));
+  const [navigation] = await screen.findAllByRole(
+    "navigation",
+    { name: i18n.t("accessibility.mainNavigation") },
+    { timeout: 6000 }
+  );
+  expect(navigation.querySelector("a a")).toBeNull();
+  expect(
+    within(navigation)
+      .getAllByRole("link")
+      .map(link => link.getAttribute("href"))
+  ).toEqual([
+    "/",
+    "/manage-booking",
+    "/my-bookings",
+    "/check-in",
+    "/profile",
+    "/loyalty",
+  ]);
   expect(
     screen.queryByRole("heading", { name: i18n.t("reports.title") })
   ).not.toBeInTheDocument();

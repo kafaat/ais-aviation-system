@@ -18,6 +18,8 @@ export const splitCancellationContract = z.object({
       refundAmount: z.number().int(),
       refundPercentage: z.number(),
       tier: z.enum(["full", "high", "medium", "low", "none"]),
+      policyReason: z.enum(["nonrefundable_fare", "time_based"]).optional(),
+      requiresZeroRefundConfirmation: z.boolean().optional(),
       items: z.array(splitRefundShare),
     })
     .nullable(),
@@ -92,6 +94,8 @@ export const responseContracts = {
   }),
   checkRefundable: z.object({
     refundable: z.boolean(),
+    cancellable: z.boolean().optional(),
+    requiresZeroRefundConfirmation: z.boolean().optional(),
     reason: z.union([z.undefined(), z.string()]).optional(),
   }),
   calculateCancellationFee: z.object({
@@ -100,6 +104,9 @@ export const responseContracts = {
     refundAmount: outputNumber,
     refundPercentage: outputNumber,
     tier: z.enum(["full", "high", "medium", "low", "none"]),
+    quoteHash: z.string(),
+    policyReason: z.enum(["nonrefundable_fare", "time_based"]),
+    requiresZeroRefundConfirmation: z.boolean(),
   }),
   getCancellationPolicy: z.array(
     z.object({

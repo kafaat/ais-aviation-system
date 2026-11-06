@@ -58,8 +58,11 @@ nativeDescribe.sequential(
         connectionLimit: 2,
       });
       // Preserve the migration-verified native catalog, including the API's
-      // final observation write. There are no users/bookings or financial effects.
+      // admission guard and final observation write. Non-probe requests fail
+      // closed without ip_blacklist, before auth, raw bodies or quotas run.
+      // There are no users/bookings or financial effects.
       for (const table of [
+        "ip_blacklist",
         "stripe_events",
         "operational_samples",
         "scheduled_tasks",
@@ -212,6 +215,67 @@ nativeDescribe.sequential(
         expect(denied.status).toBe(401);
         assertPublicResponse(denied.text);
       }
+    });
+
+    it("enforces a native IP block before auth and webhooks while retaining the exact live/ready probes", async () => {
+      phase = "native IP admission block";
+      const [blocked] = await pool!.execute<mysql.ResultSetHeader>(
+        "INSERT INTO ip_blacklist (ipAddress, reason, blockedBy) VALUES (?, ?, ?)",
+        ["127.0.0.1", "Native API admission control", "native-fixture"]
+      );
+      const invalidWebhook = {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Stripe-Signature": "fixture",
+        },
+        body: "{}",
+      };
+      try {
+        for (const path of [
+          "/api/rest/health",
+          "/api/trpc/health.check",
+          "/api/stripe/webhook",
+        ]) {
+          const denied = await request(
+            path,
+            path === "/api/stripe/webhook" ? invalidWebhook : undefined
+          );
+          expect(denied.status).toBe(403);
+          expect(denied.body).toEqual({
+            error: "IP_BLOCKED",
+            message: "Access denied",
+          });
+          assertPublicResponse(denied.text);
+        }
+        for (const [path, trpc, body] of [
+          ["/api/rest/health/live", false, { alive: true }],
+          ["/api/trpc/health.live", true, { alive: true }],
+          ["/api/rest/health/ready", false, { ready: true }],
+          ["/api/trpc/health.ready", true, { ready: true }],
+        ] as const) {
+          const probe = await request(path);
+          expect(probe.status).toBe(200);
+          expect(trpc ? trpcData(probe.body) : probe.body).toEqual(body);
+          assertPublicResponse(probe.text);
+        }
+      } finally {
+        await pool!.execute("DELETE FROM ip_blacklist WHERE id=?", [
+          blocked.insertId,
+        ]);
+      }
+      phase = "native IP admission restored";
+      for (const path of ["/api/rest/health", "/api/trpc/health.check"])
+        expect((await request(path)).status).toBe(401);
+      const signatureRejected = await request(
+        "/api/stripe/webhook",
+        invalidWebhook
+      );
+      expect(signatureRejected.status).toBe(400);
+      expect(signatureRejected.body).toEqual({
+        error: "Signature verification failed",
+        retryable: false,
+      });
     });
 
     it("keeps readiness with unavailable Redis under the documented memory-fallback policy", async () => {

@@ -1,0 +1,25 @@
+{
+  "findings": ["INT-04"],
+  "source": {
+    "commit": "b9995f9f4e50b215a8c731e96b8aef3ee307e5bd",
+    "tree": "403569ffd198b9132d8e8a750db5191fd546a0bb",
+    "status": "",
+    "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "result": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "suites": 1
+  },
+  "receiptSha256": "b29327be9b3797d90cc768ee03aa87ee8b272f6c11874a533f2a25bf16d42064",
+  "resultsSha256": "cd36ae9861efcced0e73e83aa4e33338dd932c5e73681506b2f0fce778a82c35",
+  "filesAtTestedCommit": {
+    "server/services/fare-components.service.ts": "908747b3cb7ce088eba509b67dd6fe5ee5c307eb224c738db43666064b525c06",
+    "server/__tests__/fare-components-zatca.test.ts": "c2f359ca17732c8f2ad8f10cfa061ce0eba5f8f9c74a491622841f89a63226ed"
+  },
+  "limits": [
+    "Controlled relational fixtures; no native fiscal provider or live tax-authority acceptance.",
+    "Internal draft only: XML, signing, onboarding and reporting/clearance remain unavailable; no production fiscal capability was enabled."
+  ]
+}

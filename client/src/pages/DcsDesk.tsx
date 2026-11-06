@@ -60,6 +60,14 @@ function ReturnBag({
         queryKey: getQueryKey(trpc.baggage.flightCloseout, { flightId }),
       });
     },
+    onError: error => {
+      if (["FORBIDDEN", "UNAUTHORIZED"].includes(error.data?.code ?? "")) {
+        toast.error(error.message);
+        void cache.invalidateQueries({
+          queryKey: getQueryKey(trpc.dcsOperations.getDesk, { flightId }),
+        });
+      }
+    },
   });
   const locked = disabled || mutation.isPending;
   const eligible =
@@ -606,7 +614,7 @@ function FlightDesk({
                 selected.attendanceState !== "boarded" &&
                 flightAllowsPassengerAction(data, "offload") && (
                   <ReturnBag
-                    key={`${flightId}:${selected.passengerId}`}
+                    key={`return:${flightId}:${selected.passengerId}`}
                     flightId={flightId}
                     passenger={selected}
                     segmentId={selected.segmentId}
@@ -632,7 +640,7 @@ function FlightDesk({
                 </div>
               ) : (
                 <DcsBaggageRegistration
-                  key={`${flightId}:${selected.passengerId}`}
+                  key={`registration:${flightId}:${selected.passengerId}`}
                   flightId={flightId}
                   bookingId={selected.bookingId}
                   passengerId={selected.passengerId}

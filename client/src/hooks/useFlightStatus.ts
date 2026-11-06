@@ -7,6 +7,7 @@ export type FlightStatusType =
   | "departed"
   | "delayed"
   | "cancelled"
+  | "completed"
   | "landed";
 
 export interface FlightStatusData {

@@ -21,6 +21,7 @@ import {
   bookingSegments,
   seatHolds,
   seatInventory,
+  dcsPassengerStates,
   passengers,
   ndcOrders,
   type Booking,
@@ -37,10 +38,23 @@ export class BookingNotPendingError extends Error {}
 export class DepartureReleaseError extends TRPCError {
   static readonly reason =
     "Final DCS closure requires departure reconciliation before booking resources can be released";
-  constructor() {
+  static readonly boardedReason =
+    "Boarded passenger requires departure reconciliation before booking resources can be released";
+  static readonly reasons = [
+    DepartureReleaseError.reason,
+    DepartureReleaseError.boardedReason,
+  ] as const;
+  static isReason(
+    reason: unknown
+  ): reason is (typeof DepartureReleaseError.reasons)[number] {
+    return DepartureReleaseError.reasons.some(value => value === reason);
+  }
+  constructor(
+    reason: (typeof DepartureReleaseError.reasons)[number] = DepartureReleaseError.reason
+  ) {
     super({
       code: "PRECONDITION_FAILED",
-      message: DepartureReleaseError.reason,
+      message: reason,
     });
   }
 }
@@ -386,17 +400,35 @@ export async function assertBookingDepartureReleasable(
       .select({ flightId: bookingSegments.flightId })
       .from(bookingSegments)
       .where(eq(bookingSegments.bookingId, booking.id)));
+  const flightIds = [
+    ...new Set([booking.flightId, ...segments.map(s => s.flightId)]),
+  ];
   const itinerary = await tx
     .select({ closedAt: flights.dcsClosedAt })
     .from(flights)
-    .where(
-      inArray(flights.id, [
-        ...new Set([booking.flightId, ...segments.map(s => s.flightId)]),
-      ])
-    )
+    .where(inArray(flights.id, flightIds))
     .orderBy(asc(flights.id))
     .for("update");
   if (itinerary.some(f => f.closedAt)) throw new DepartureReleaseError();
+  // Boarding can win the booking lock before cancellation is reserved. Keep
+  // physical attendance, coupons and assigned capacity until an operator has
+  // deplaned the passenger; payment settlement may still record real money.
+  // The booking-prefixed index and locking read avoid stale RR snapshots or a
+  // flight-wide scan while preserving booking -> sorted flights -> DCS order.
+  const [boarded] = await tx
+    .select({ id: dcsPassengerStates.id })
+    .from(dcsPassengerStates)
+    .where(
+      and(
+        eq(dcsPassengerStates.bookingId, booking.id),
+        inArray(dcsPassengerStates.flightId, flightIds),
+        eq(dcsPassengerStates.state, "boarded")
+      )
+    )
+    .limit(1)
+    .for("update");
+  if (boarded)
+    throw new DepartureReleaseError(DepartureReleaseError.boardedReason);
 }
 
 export async function releaseBookingSeats(

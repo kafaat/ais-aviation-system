@@ -758,3 +758,154 @@ describe("durable payer refund execution", () => {
     ).toHaveLength(1);
   });
 });
+
+async function nonrefundableSplit() {
+  const schema = await import("../../drizzle/schema");
+  booking().fareClassId = 31;
+  for (const flight of fixture.rows("flights")) flight.tenantId = 3;
+  await fixture.db.insert(schema.fareClasses).values({
+    id: 31,
+    airlineId: 2,
+    code: "N",
+    refundable: false,
+    active: true,
+  });
+  await fixture.db.insert(schema.flightFareClassInventory).values(
+    [4, 5].map(flightId => ({
+      id: flightId,
+      flightId,
+      fareClassId: 31,
+      availableSeats: 4,
+      capacity: 5,
+    }))
+  );
+  for (const leg of fixture.rows("booking_segments")) leg.fareClassId = 31;
+  await fixture.db.insert(schema.bookingFareComponents).values({
+    id: 1,
+    bookingId: 7,
+    tenantId: 3,
+    flightId: 4,
+    componentType: "base_fare",
+    amount: 10001,
+    currency: "SAR",
+  });
+  return (await preview()).quote!;
+}
+it("requires explicit consent for zero split refunds and records the cancellation without provider commands", async () => {
+  const quote = await nonrefundableSplit();
+  expect(quote).toMatchObject({
+    refundAmount: 0,
+    cancellationFee: 10001,
+    policyReason: "nonrefundable_fare",
+  });
+  expect(quote.items.map(i => i.refundAmount)).toEqual([0, 0]);
+  const request = {
+    bookingId: 7,
+    quoteHash: quote.quoteHash,
+    reason: "requested_by_customer" as const,
+  };
+  await expect(
+    reserveSplitRefundCancellation(request, owner)
+  ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  const result = await reserveSplitRefundCancellation(
+    { ...request, confirmNoRefund: true },
+    owner
+  );
+  expect(result.plan).toMatchObject({
+    status: "completed",
+    refundAmount: 0,
+    cancellationFee: 10001,
+  });
+  expect(booking()).toMatchObject({
+    status: "cancelled",
+    paymentStatus: "paid",
+    seatsReserved: false,
+  });
+  expect(items()).toMatchObject([
+    {
+      refundAmount: 0,
+      status: "succeeded",
+      providerStatus: "not_required",
+      refundId: null,
+    },
+    {
+      refundAmount: 0,
+      status: "succeeded",
+      providerStatus: "not_required",
+      refundId: null,
+    },
+  ]);
+  expect(await processPendingSplitRefunds()).toEqual({ scanned: 0 });
+  await resume();
+  expect(state.create).not.toHaveBeenCalled();
+  expect(state.list).not.toHaveBeenCalled();
+  expect(fixture.rows("payment_receipts").map(r => r.refundedAmount)).toEqual([
+    0, 0,
+  ]);
+  expect(fixture.rows("financial_ledger")).toHaveLength(0);
+  expect(
+    (
+      await reserveSplitRefundCancellation(
+        { ...request, confirmNoRefund: true },
+        owner
+      )
+    ).plan?.id
+  ).toBe(result.plan?.id);
+  expect(fixture.rows("flights").map(f => f.economyAvailable)).toEqual([5, 5]);
+});
+it("does not suppress later verified cash evidence after a zero split cancellation", async () => {
+  const quote = await nonrefundableSplit();
+  await reserveSplitRefundCancellation(
+    {
+      bookingId: 7,
+      quoteHash: quote.quoteHash,
+      reason: "requested_by_customer",
+      confirmNoRefund: true,
+    },
+    owner
+  );
+  expect(
+    await verified({
+      id: "re_later_compensation",
+      payment_intent: "pi_1",
+      charge: "ch_1",
+      amount: 1000,
+      currency: "sar",
+      status: "succeeded",
+      metadata: {},
+    } as Stripe.Refund)
+  ).toBe(false);
+  await fixture.db.transaction((tx: any) =>
+    settleVerifiedRefund(tx, {
+      paymentIntentId: "pi_1",
+      chargeId: "ch_1",
+      amount: 4001,
+      amountRefunded: 1000,
+      currency: "SAR",
+      eventId: "evt_later_compensation",
+    })
+  );
+  expect(receipt().refundedAmount).toBe(1000);
+  expect(fixture.rows("financial_ledger")).toMatchObject([
+    { type: "partial_refund", amount: "10.00" },
+  ]);
+  expect(fixture.rows("flights").map(f => f.economyAvailable)).toEqual([5, 5]);
+});
+it("rejects a stale zero split quote when the fare terms change", async () => {
+  const quote = await nonrefundableSplit();
+  fixture.rows("fare_classes")[0].refundable = true;
+  await expect(
+    reserveSplitRefundCancellation(
+      {
+        bookingId: 7,
+        quoteHash: quote.quoteHash,
+        reason: "requested_by_customer",
+        confirmNoRefund: true,
+      },
+      owner
+    )
+  ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  expect(booking().status).toBe("confirmed");
+  expect(plan()).toBeUndefined();
+  expect(state.create).not.toHaveBeenCalled();
+});

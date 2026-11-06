@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 /**
  * Payment Provider Registry
  * Central factory for all payment providers
@@ -21,6 +20,11 @@ import { FloosAkProvider } from "./floosak.provider";
 import { JawaliProvider } from "./jawali.provider";
 import { OneCashProvider } from "./onecash.provider";
 import { EasyCashProvider } from "./easycash.provider";
+import {
+  hasAcceptedPaymentIntegration,
+  paymentIntegrationInfo,
+  requireAcceptedPaymentIntegration,
+} from "./acceptance";
 
 export type {
   PaymentProvider,
@@ -58,12 +62,7 @@ function initProviders() {
  * Get a specific payment provider by ID
  */
 export function getProvider(id: PaymentProviderType): PaymentProvider {
-  if (id !== "stripe")
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message:
-        "This provider requires verified invoice/session binding, amount and currency checks, settlement and refund integration before activation",
-    });
+  requireAcceptedPaymentIntegration(id);
   initProviders();
   const provider = providers.get(id);
   if (!provider) {
@@ -86,7 +85,7 @@ export function getAllProviders(): PaymentProvider[] {
 export function getAvailableProviders(): PaymentProvider[] {
   initProviders();
   return Array.from(providers.values()).filter(
-    p => p.id === "stripe" && p.isAvailable()
+    p => hasAcceptedPaymentIntegration(p.id) && p.isAvailable()
   );
 }
 
@@ -97,13 +96,8 @@ export function getAllProviderInfo(): PaymentProviderInfo[] {
   initProviders();
   return Array.from(providers.values()).map(p => ({
     ...p.getInfo(),
-    enabled: p.id === "stripe" && p.isAvailable(),
-    integrationState:
-      p.id === "stripe" ? ("implemented" as const) : ("unverified" as const),
-    unavailableReason:
-      p.id === "stripe"
-        ? undefined
-        : "Verified settlement and refund integration pending",
+    enabled: hasAcceptedPaymentIntegration(p.id) && p.isAvailable(),
+    ...paymentIntegrationInfo(p.id),
   }));
 }
 
@@ -111,10 +105,7 @@ export function getAllProviderInfo(): PaymentProviderInfo[] {
  * Get provider info for available providers only
  */
 export function getAvailableProviderInfo(): PaymentProviderInfo[] {
-  initProviders();
-  return Array.from(providers.values())
-    .filter(p => p.id === "stripe" && p.isAvailable())
-    .map(p => p.getInfo());
+  return getAllProviderInfo().filter(provider => provider.enabled);
 }
 
 /**

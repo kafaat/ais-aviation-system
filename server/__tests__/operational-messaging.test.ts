@@ -127,11 +127,16 @@ describe("operational message drafts", () => {
     ).toThrow();
   });
 
-  it("keeps transport closed until both deployment and route acceptance exist", () => {
+  it("keeps transport closed without an adapter and permits explicitly enabled fixture routes", () => {
     expect(() => requireAcceptedOperationalRoute(route)).toThrow(
-      /requires an enabled, accepted/
+      /No verified operational transport/
     );
     vi.stubEnv("AIS_TYPE_B_TRANSPORT_ENABLED", "true");
+    expect(() => requireAcceptedOperationalRoute(route)).toThrow(
+      /No verified operational transport/
+    );
+    vi.stubEnv("AIS_ENABLE_DEMOS", "true");
+    vi.stubEnv("AIS_PROVIDER_BOUNDARY", "open");
     expect(() =>
       requireAcceptedOperationalRoute({
         ...route,

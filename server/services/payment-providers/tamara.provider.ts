@@ -1,3 +1,8 @@
+import {
+  hasAcceptedPaymentIntegration,
+  paymentIntegrationInfo,
+  requireAcceptedPaymentIntegration,
+} from "./acceptance";
 import type {
   PaymentProvider,
   PaymentProviderInfo,
@@ -28,7 +33,10 @@ export class TamaraProvider implements PaymentProvider {
   }
 
   isAvailable(): boolean {
-    return Boolean(process.env.TAMARA_API_TOKEN);
+    return (
+      hasAcceptedPaymentIntegration(this.id) &&
+      Boolean(process.env.TAMARA_API_TOKEN)
+    );
   }
 
   getInfo(): PaymentProviderInfo {
@@ -45,12 +53,14 @@ export class TamaraProvider implements PaymentProvider {
       currencies: ["SAR", "AED"],
       region: "mena",
       enabled: this.isAvailable(),
+      ...paymentIntegrationInfo(this.id),
     };
   }
 
   async createCheckoutSession(
     input: CheckoutSessionInput
   ): Promise<CheckoutSessionResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const amountInSAR = (input.amount / 100).toFixed(2);
 
     const payload = {
@@ -115,6 +125,7 @@ export class TamaraProvider implements PaymentProvider {
   }
 
   async verifyPayment(sessionId: string): Promise<PaymentVerificationResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(`${this.baseUrl}/orders/${sessionId}`, {
       headers: {
         Authorization: `Bearer ${this.apiToken}`,
@@ -139,6 +150,7 @@ export class TamaraProvider implements PaymentProvider {
   }
 
   async refund(input: RefundInput): Promise<RefundResult> {
+    requireAcceptedPaymentIntegration(this.id);
     const response = await fetch(
       `${this.baseUrl}/orders/${input.transactionId}/refunds`,
       {

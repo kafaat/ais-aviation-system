@@ -131,12 +131,19 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container py-3">
+      <div className="container py-3 flex flex-wrap gap-4">
         <Link href="/admin/operations">
           {t(
             "admin.operationsLink",
             "مراقبة التكامل والتشغيل / Operations control"
           )}
+        </Link>
+      </div>
+      <div className="container pb-3">
+        <Link href="/admin/payments/settlement-reviews">
+          {i18n.language.startsWith("ar")
+            ? "مراجعة تسويات المدفوعات"
+            : "Payment settlement reviews"}
         </Link>
       </div>
       {/* Header */}

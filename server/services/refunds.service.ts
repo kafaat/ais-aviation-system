@@ -13,13 +13,15 @@ import {
 } from "../../drizzle/schema";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
-import { calculateCancellationFee } from "./cancellation-fees.service";
+import { quoteCancellationPolicy } from "./cancellation-policy.service";
+import { assertZeroCancellationAllowed } from "./zero-refund-cancellation.service";
 import { trackRefundIssued } from "./metrics.service";
 import { notifyRefundProcessed } from "./notification.service";
 import {
-  settleVerifiedRefund,
-  cancelAfterPartialRefund,
-} from "./payment-settlement.service";
+  getOrdinaryRefundCancellation,
+  reserveOrdinaryRefundCancellation,
+  processOrdinaryRefundCancellation,
+} from "./ordinary-refund.service";
 import { stripe } from "../stripe";
 import { isAdmin } from "./rbac.service";
 
@@ -28,11 +30,40 @@ export interface CreateRefundInput {
   userId: number;
   reason?: string;
   amount?: number; // Admin-only override in integer cents
+  quoteHash?: string;
 }
 
 export interface RefundActor {
   id: number;
   role: string;
+  tenantId?: number | null;
+}
+
+/** Retail refund previews use the same owner and exact tenant scope as the
+ * cancellation command. A verified owner may service their null-tenant retail
+ * booking; that exception does not grant staff access to unassigned resources. */
+export async function assertRefundBookingOwnership(
+  bookingId: number,
+  actor: RefundActor & { tenantId: number | null }
+) {
+  const database = await getDb();
+  if (!database)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  const [booking] = await database
+    .select({ userId: bookings.userId, tenantId: bookings.tenantId })
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
+    .limit(1);
+  if (!booking)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  if (
+    !isAdmin(actor.role) &&
+    (booking.userId !== actor.id || booking.tenantId !== actor.tenantId)
+  )
+    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
 }
 
 function isActiveRefund(refund: Stripe.Refund): boolean {
@@ -124,7 +155,12 @@ export async function createRefund(
       });
     }
 
-    if (booking.userId !== input.userId) {
+    if (
+      booking.userId !== input.userId ||
+      (!isAdmin(actor.role) &&
+        actor.tenantId !== undefined &&
+        actor.tenantId !== booking.tenantId)
+    ) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Access denied",
@@ -166,12 +202,45 @@ export async function createRefund(
       });
     }
 
-    const feeCalculation = calculateCancellationFee(
-      booking.totalAmount,
-      flight.departureTime
+    const savedCancellation = await getOrdinaryRefundCancellation(
+      database,
+      booking.id
     );
-
-    const refundAmount = input.amount ?? feeCalculation.refundAmount;
+    if (savedCancellation?.amount === 0)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Cancellation without a refund is already recorded; open its cancellation receipt",
+      });
+    const feeCalculation =
+      savedCancellation || input.amount !== undefined
+        ? null
+        : await quoteCancellationPolicy(database, booking);
+    if (
+      input.quoteHash &&
+      feeCalculation &&
+      input.quoteHash !== feeCalculation.quoteHash
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Cancellation quote changed; review the current amounts before confirming",
+      });
+    if (
+      savedCancellation &&
+      input.amount !== undefined &&
+      input.amount !== savedCancellation.amount
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "An existing cancellation must be reconciled before changing its amount",
+      });
+    const refundAmount =
+      savedCancellation?.amount ??
+      input.amount ??
+      feeCalculation?.refundAmount ??
+      0;
 
     await assertNoOrderRefundPending(database, booking.id);
     // A refund is applied against the receipt that recorded the collection.
@@ -201,7 +270,8 @@ export async function createRefund(
     const legacyRefundId = `booking-${input.bookingId}-refund-${refundAmount}`;
     const cancellationId = `booking-${input.bookingId}-cancel-${booking.stripePaymentIntentId}`;
     const refundOperationId =
-      input.amount === undefined ? cancellationId : legacyRefundId;
+      savedCancellation?.operationId ??
+      (input.amount === undefined ? cancellationId : legacyRefundId);
     const priorCancellation = existingRefunds.find(
       refund =>
         refund.metadata?.bookingId === String(input.bookingId) &&
@@ -217,10 +287,13 @@ export async function createRefund(
           refund.amount === refundAmount
       );
 
-    let refund: Stripe.Refund;
-    if (existingOperationRefund) {
-      refund = existingOperationRefund;
-    } else {
+    if (!existingOperationRefund && !savedCancellation) {
+      if (refundAmount === 0)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "This fare has no refund. Confirm the zero-refund cancellation quote to cancel the itinerary",
+        });
       // Old releases used the amount alone for both policy cancellations and
       // manual overrides. A different historic amount has no proof of intent.
       if (
@@ -271,67 +344,55 @@ export async function createRefund(
       // a fee-bearing partial refund. Prior provider outcomes still reconcile.
       await assertBookingDepartureReleasable(database, booking);
       await assertNoFlownCouponForCancellation(database, booking.id);
-      const refundParams: Stripe.RefundCreateParams = {
-        payment_intent: booking.stripePaymentIntentId,
-        amount: refundAmount,
-        reason:
-          input.reason === "duplicate"
-            ? "duplicate"
-            : input.reason === "fraudulent"
-              ? "fraudulent"
-              : "requested_by_customer",
-        metadata: {
-          bookingId: input.bookingId.toString(),
-          refundOperationId,
-        },
-      };
-
-      refund = await stripe.refunds.create(refundParams, {
-        idempotencyKey: refundOperationId,
-      });
     }
-
-    const paymentIntentId = booking.stripePaymentIntentId;
-    const refundsAfterOperation = await listActiveRefunds(paymentIntentId);
+    const selectedAmount = existingOperationRefund?.amount ?? refundAmount;
+    const selectedOperation =
+      existingOperationRefund?.metadata?.refundOperationId ?? refundOperationId;
+    const request: Stripe.RefundCreateParams = savedCancellation
+      ? JSON.parse(savedCancellation.requestPayload)
+      : {
+          payment_intent: booking.stripePaymentIntentId,
+          amount: selectedAmount,
+          reason:
+            input.reason === "duplicate"
+              ? "duplicate"
+              : input.reason === "fraudulent"
+                ? "fraudulent"
+                : "requested_by_customer",
+          metadata: {
+            bookingId: String(input.bookingId),
+            refundOperationId: selectedOperation,
+          },
+        };
+    const otherRefunds = existingRefunds.filter(
+      r => r.id !== existingOperationRefund?.id
+    );
+    if (!savedCancellation && otherRefunds.some(r => r.status !== "succeeded"))
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "An earlier pending refund must be reconciled before this cancellation",
+      });
+    await reserveOrdinaryRefundCancellation(database, {
+      bookingId: booking.id,
+      actor,
+      userId: input.userId,
+      tenantId: booking.tenantId,
+      request,
+      baseRefundedAmount: sumRefundAmounts(otherRefunds),
+      existingRefund: existingOperationRefund,
+      policyQuoteHash: existingOperationRefund
+        ? undefined
+        : feeCalculation?.quoteHash,
+    });
+    const refund = await processOrdinaryRefundCancellation(
+      booking.id,
+      existingOperationRefund
+    );
+    const refundsAfterOperation = await listActiveRefunds(
+      booking.stripePaymentIntentId
+    );
     const cumulativeRefundedAmount = sumRefundAmounts(refundsAfterOperation);
-
-    if (refund.status === "succeeded") {
-      const chargeId =
-        typeof refund.charge === "string" ? refund.charge : refund.charge?.id;
-      if (!chargeId) throw new Error("Provider refund is missing its charge");
-      const charge = await stripe.charges.retrieve(chargeId);
-      await database.transaction(async tx => {
-        await settleVerifiedRefund(tx, {
-          paymentIntentId,
-          chargeId,
-          amount: charge.amount,
-          amountRefunded: charge.amount_refunded,
-          currency: charge.currency,
-          eventId: `refund-reconcile:${refund.id}`,
-        });
-        // This endpoint is the customer's cancellation. A full refund already
-        // cancels the booking inside settlement; a fee-bearing (partial)
-        // refund did not, which left the customer with a confirmed, seat-
-        // reserved, check-in-able booking they had been refunded for.
-        const [current] = await tx
-          .select()
-          .from(bookings)
-          .where(eq(bookings.id, booking.id))
-          .for("update")
-          .limit(1);
-        if (
-          current &&
-          current.status !== "cancelled" &&
-          charge.amount_refunded < charge.amount
-        )
-          await cancelAfterPartialRefund(
-            tx,
-            current,
-            paymentIntentId,
-            input.userId
-          );
-      });
-    }
 
     trackRefundIssued({
       userId: input.userId,
@@ -486,6 +547,8 @@ export async function getRefundDetails(refundId: string, actor: RefundActor) {
 
 export async function isBookingRefundable(bookingId: number): Promise<{
   refundable: boolean;
+  cancellable?: boolean;
+  requiresZeroRefundConfirmation?: boolean;
   reason?: string;
 }> {
   try {
@@ -521,6 +584,17 @@ export async function isBookingRefundable(bookingId: number): Promise<{
 
     await assertBookingDepartureReleasable(database, booking);
     await assertNoFlownCouponForCancellation(database, bookingId);
+    const quote = await quoteCancellationPolicy(database, booking);
+    if (quote.refundAmount === 0) {
+      await assertZeroCancellationAllowed(database, booking);
+      return {
+        refundable: false,
+        cancellable: true,
+        requiresZeroRefundConfirmation: true,
+        reason:
+          "This fare can be cancelled only after confirming that no money will be refunded",
+      };
+    }
     const activeRefunds = await listActiveRefunds(
       booking.stripePaymentIntentId
     );
@@ -535,4 +609,20 @@ export async function isBookingRefundable(bookingId: number): Promise<{
     console.error("Error checking refundability:", error);
     return { refundable: false, reason: "Error checking refundability" };
   }
+}
+
+/** Quote only; the cancellation command validates the same identity under lock. */
+export async function getCancellationQuote(bookingId: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  return await database.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .for("update");
+    if (!booking)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    return quoteCancellationPolicy(tx, booking);
+  });
 }

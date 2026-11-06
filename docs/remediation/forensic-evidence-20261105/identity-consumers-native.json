@@ -1,0 +1,110 @@
+{
+  "findings": [
+    "IDENTITY-01",
+    "IDENTITY-02",
+    "IDENTITY-03",
+    "IDENTITY-05",
+    "CONS-04",
+    "CONS-05"
+  ],
+  "source": {
+    "commit": "ecfb9b6ab5f4ef3f5f0782e04de6130ea30bd68c",
+    "tree": "d34adbef4f9716af29d91c8f0117096015646806",
+    "status": "",
+    "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "result": {
+    "passed": 47,
+    "failed": 0,
+    "skipped": 0,
+    "suites": 3
+  },
+  "suiteResults": [
+    {
+      "path": "server/__tests__/auth-session-mysql.test.ts",
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "path": "server/__tests__/flight-consumers-mysql.test.ts",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "path": "server/__tests__/request-identity-oauth-mysql.test.ts",
+      "passed": 13,
+      "failed": 0
+    }
+  ],
+  "environment": {
+    "node": "24.22.1",
+    "mysql": "8.0.46",
+    "redis": "7.4.5",
+    "ownership": "Fresh owned loopback services, isolated disposable synthetic databases; verified cleanup."
+  },
+  "migrations": ["0070_oauth_login_state", "0071_flight_review_helpful_votes"],
+  "schemaVerification": "passed",
+  "receiptSha256": "b8536b008868bb82d10814c3c1101f52674cd7990a07d19c01568f819b732647",
+  "resultsSha256": "b29b5998dec7d9a7a52f7250c648710ac181b7bacb5abbe047f022c123860216",
+  "filesAtTestedCommit": [
+    {
+      "path": "drizzle/0070_oauth_login_state.sql",
+      "sha256": "9268a3929f2f8f7e883bb4ee6af595b5ae20227973f046be5f4bc71af96be505"
+    },
+    {
+      "path": "drizzle/0071_flight_review_helpful_votes.sql",
+      "sha256": "26e37a3727925c76c8311d82c972d0f6da25bdb693d28095629c3d4f09374c3e"
+    },
+    {
+      "path": "server/services/account-lock.service.ts",
+      "sha256": "72acf12836992d07d63b472e245c3c4e6e5e6c567d923a25819fc57a67b0adaf"
+    },
+    {
+      "path": "server/services/reviews.service.ts",
+      "sha256": "695cd34ef814483b1f7c86d136af9e64f2b480a3456b2ee31e8e8efaa34b0efc"
+    },
+    {
+      "path": "server/services/oauth-login-state.service.ts",
+      "sha256": "35a1f8a07ba3340a68f35f241f5e2a6cc3edc3a8740f2047fcb39793fd669dca"
+    },
+    {
+      "path": "server/_core/oauth.ts",
+      "sha256": "b7f5aed25fd474aa78fa5eda82ead0eed4bd19ab91deed4d592b9e7ae2d0a9fa"
+    },
+    {
+      "path": "server/_core/request-identity.ts",
+      "sha256": "cf3ee4cb7eb198be8e22e327a104cb3bf14abeedda9c2bd46592ea1f5e6c84c9"
+    },
+    {
+      "path": "server/_core/middleware/blocked-ip.middleware.ts",
+      "sha256": "294964da140f5676f92089b42318621efd899f0abf6aa217559a7be6bcf23439"
+    },
+    {
+      "path": "server/services/favorites.service.ts",
+      "sha256": "a7f633cee6c2b761a24a17cecb953414f21adb3477944b014ab5b1447873f1cc"
+    },
+    {
+      "path": "server/__tests__/auth-session-mysql.test.ts",
+      "sha256": "80f72a0e9098d7c86040ff390d4d3c49fcaaa7ea9178a1100bac998762c0e387"
+    },
+    {
+      "path": "server/__tests__/flight-consumers-mysql.test.ts",
+      "sha256": "38de3a1e7fe425f946f4e59cfcf2ba7ed201bb7e8436a5070c5441c62a1ce4f1"
+    },
+    {
+      "path": "server/__tests__/request-identity-oauth-mysql.test.ts",
+      "sha256": "d846bcddf3084c8da8197cee951c3a6388d9b3a13ee11a37073dd472601829a6"
+    }
+  ],
+  "previousFailures": [
+    "First migration attempt rejected unsupported foreign keys before DDL; pending unpublished 0071 corrected without bypassing contract verification.",
+    "Second batch:44pass/3fail exposed real upsert assignment ordering and correlated-query qualification bugs; fixed before this complete47/47 run."
+  ],
+  "limits": [
+    "OAuth provider is a controlled local HTTP fixture; no live-provider acceptance.",
+    "OAuth/request-identity suite uses actual in-memory quota counters, not Redis quota persistence.",
+    "Consumer HTTP suite uses controlled identities; actual signed-cookie/Bearer authentication is covered separately by the native identity suite.",
+    "No physical device or browser execution is claimed by this receipt.",
+    "Final combined source and MySQL9.7 CI remain separate gates."
+  ]
+}

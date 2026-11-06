@@ -222,10 +222,16 @@ describe.skipIf(!dbAvailable)("Favorites Service", () => {
       expect(favorite.userId).toBe(testUserId);
     });
 
-    it("should prevent duplicate flight favorites", async () => {
-      await expect(
-        favoritesService.addFlightFavorite(testUserId, testFlightId)
-      ).rejects.toThrow("already in your favorites");
+    it("should return the same flight favorite when a save is retried", async () => {
+      const first = await favoritesService.addFlightFavorite(
+        testUserId,
+        testFlightId
+      );
+      const retried = await favoritesService.addFlightFavorite(
+        testUserId,
+        testFlightId
+      );
+      expect(retried.id).toBe(first.id);
     });
 
     it("should check if a flight is favorited", async () => {

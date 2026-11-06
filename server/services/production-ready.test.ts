@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
 import {
   checkDatabase,
   checkStripe,
@@ -6,7 +15,9 @@ import {
 } from "./health.service";
 import { cleanupExpiredLocks } from "./cron.service";
 import { getDb, getPaymentByIdempotencyKey, createPayment } from "../db";
+import * as database from "../db";
 import { inventoryLocks } from "../../drizzle/schema";
+import { redisCacheService } from "./redis-cache.service";
 
 // Check if database is actually reachable (not just env var set)
 let isDatabaseAvailable = false;
@@ -26,6 +37,52 @@ describe("Production-Ready Features", () => {
   });
 
   describe("Health Checks", () => {
+    const stripeOrigin = "http://127.0.0.1:43871";
+    const stripeKey = "sk_test_production_health_fixture";
+    const balance = {
+      object: "balance",
+      livemode: false,
+      available: [],
+      pending: [],
+    };
+    const providerFetch = vi.fn<typeof fetch>();
+
+    beforeEach(() => {
+      // Own the provider transport even when the full-suite runner supplies a
+      // rejecting listener. These are controlled fetch tests, not live probes.
+      vi.stubEnv("AIS_PROVIDER_BOUNDARY", "isolated");
+      vi.stubEnv("STRIPE_SECRET_KEY", stripeKey);
+      vi.stubEnv("STRIPE_MOCK_HOST", stripeOrigin);
+      providerFetch.mockReset().mockImplementation(
+        async () =>
+          new Response(JSON.stringify(balance), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+      );
+      vi.stubGlobal("fetch", providerFetch);
+    });
+
+    afterEach(() => {
+      try {
+        // Assert outside the fetch stub: checkStripe intentionally catches a
+        // transport error, so a destination assertion inside it could be lost.
+        for (const [input, init] of providerFetch.mock.calls) {
+          expect(input).toBe(`${stripeOrigin}/v1/balance`);
+          expect(init).toMatchObject({
+            method: "GET",
+            headers: { Authorization: `Bearer ${stripeKey}` },
+            redirect: "error",
+            signal: expect.any(AbortSignal),
+          });
+        }
+      } finally {
+        vi.unstubAllGlobals();
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+      }
+    });
+
     it.skipIf(!process.env.DATABASE_URL)(
       "should check database connectivity",
       async () => {
@@ -38,25 +95,74 @@ describe("Production-Ready Features", () => {
       }
     );
 
-    it.skipIf(!process.env.STRIPE_SECRET_KEY)(
-      "should check Stripe configuration",
-      async () => {
+    it.each([
+      {
+        label: "a healthy balance",
+        httpStatus: 200,
+        body: balance,
+        expectedStatus: "pass",
+      },
+      {
+        label: "a rejected request",
+        httpStatus: 503,
+        body: { error: "Controlled provider refusal" },
+        expectedStatus: "fail",
+      },
+      {
+        label: "an invalid live-mode balance",
+        httpStatus: 200,
+        body: { ...balance, livemode: true },
+        expectedStatus: "fail",
+      },
+    ])(
+      "checks isolated Stripe health with $label",
+      async ({ httpStatus, body, expectedStatus }) => {
+        providerFetch.mockResolvedValueOnce(
+          new Response(JSON.stringify(body), { status: httpStatus })
+        );
         const result = await checkStripe();
-        // Key format validated by regex; CI may have a placeholder key
-        const keyFormat = /^sk_(test|live)_[a-zA-Z0-9]{24,}$/;
-        const isValidKey = keyFormat.test(process.env.STRIPE_SECRET_KEY!);
-        expect(result.status).toBe(isValidKey ? "pass" : "fail");
+        expect(result).toMatchObject({ status: expectedStatus, mode: "mock" });
+        if (expectedStatus === "fail")
+          expect(result.error).toBe("STRIPE_MOCK_INVALID_RESPONSE");
+        expect(providerFetch).toHaveBeenCalledTimes(1);
       }
     );
 
-    it.skipIf(!process.env.DATABASE_URL)(
-      "should perform all health checks",
-      async () => {
-        if (!isDatabaseAvailable) return; // Skip if db not reachable
+    it.each([
+      { httpStatus: 200, expectedStatus: "healthy", stripeStatus: "pass" },
+      { httpStatus: 503, expectedStatus: "unhealthy", stripeStatus: "fail" },
+    ])(
+      "reports aggregate health as $expectedStatus for isolated Stripe HTTP $httpStatus",
+      async ({ httpStatus, expectedStatus, stripeStatus }) => {
+        // Control the other dependencies so these assertions prove the real
+        // aggregate decision, independently of native DB/Redis availability.
+        const execute = vi.fn().mockResolvedValue([]);
+        vi.spyOn(database, "getDb").mockReturnValue({
+          execute,
+        } as unknown as NonNullable<ReturnType<typeof getDb>>);
+        const cacheHealth = vi
+          .spyOn(redisCacheService, "healthCheck")
+          .mockResolvedValue({
+            status: "ok",
+            redis: { connected: true, latency: 1 },
+            memory: { entries: 0, maxSize: 10000 },
+          });
+        providerFetch.mockResolvedValueOnce(
+          new Response(JSON.stringify(balance), { status: httpStatus })
+        );
         const result = await performHealthChecks();
-        expect(["healthy", "degraded", "unhealthy"]).toContain(result.status);
-        expect(result.checks.database.status).toBe("pass");
-        expect(result.timestamp).toBeDefined();
+        expect(result).toMatchObject({
+          status: expectedStatus,
+          checks: {
+            database: { status: "pass" },
+            stripe: { status: stripeStatus, mode: "mock" },
+            cache: { status: "pass" },
+          },
+          timestamp: expect.any(String),
+        });
+        expect(execute).toHaveBeenCalledExactlyOnceWith("SELECT 1");
+        expect(cacheHealth).toHaveBeenCalledTimes(1);
+        expect(providerFetch).toHaveBeenCalledTimes(1);
       }
     );
   });

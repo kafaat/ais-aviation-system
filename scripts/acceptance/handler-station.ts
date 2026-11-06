@@ -27,12 +27,85 @@ import {
   queueTransmission,
   recordTransportResult,
 } from "../../server/services/aviation-message-transmission.service";
+import { getOperationalTransportCapability } from "../../server/services/aviation-transport-capability.service";
+
+/** A fixed DB-only simulation sequence, never a general provider callback.
+ * Keep the runner's isolated boundary around booking/refund and coupon work;
+ * only this synthetic message state-machine check needs the explicit demo gate.
+ */
+export async function simulateHandlerTransmission(input: {
+  transmissionId: number;
+  tenantId: number;
+  routeId: number;
+  messageType: "PNL" | "ADL";
+  messageDigest: string;
+  destinationAddress: string;
+}) {
+  if (process.env.NODE_ENV === "production")
+    throw new Error(
+      "The synthetic handler-station fixture cannot run in production"
+    );
+  const envBefore = {
+    AIS_PROVIDER_BOUNDARY: process.env.AIS_PROVIDER_BOUNDARY,
+  };
+  try {
+    process.env.AIS_PROVIDER_BOUNDARY = "open";
+    assert.deepEqual(getOperationalTransportCapability(), {
+      mode: "simulation",
+      simulationAvailable: true,
+      externalTransmissionAvailable: false,
+      productionWorkerAvailable: false,
+      authenticatedAcknowledgmentAvailable: false,
+      reason: "accepted_transport_adapter_unavailable",
+    });
+    const queued = await queueTransmission(input);
+    assert.equal(queued.execution, "simulation");
+    assert.equal(queued.externallyTransmitted, false);
+    const delivery = await claimDueTransmission();
+    assert(delivery && delivery.transmissionId === input.transmissionId);
+    assert.equal(delivery.tenantId, input.tenantId);
+    assert.equal(delivery.routeId, input.routeId);
+    assert.equal(delivery.transportProfile, "synthetic-handler-v1");
+    assert.equal(delivery.messageType, input.messageType);
+    assert.equal(delivery.execution, "simulation");
+    assert.equal(delivery.externallyTransmitted, false);
+    const parsed = parseOperationalDraft(delivery.messageContent);
+    assert.equal(parsed.destinationAddress, input.destinationAddress);
+    assert.equal(parsed.messageDigest, input.messageDigest);
+    const receipt = await recordTransportResult({
+      transmissionId: input.transmissionId,
+      tenantId: delivery.tenantId,
+      routeId: delivery.routeId,
+      transportProfile: delivery.transportProfile,
+      messageDigest: delivery.messageDigest,
+      leaseKey: delivery.leaseKey,
+      providerMessageId:
+        "fixture-" + input.messageType + "-" + input.transmissionId,
+    });
+    assert.equal(receipt.status, "simulated");
+    assert.equal(receipt.execution, "simulation");
+    assert.equal(receipt.externallyTransmitted, false);
+    return {
+      ...parsed,
+      execution: receipt.execution,
+      externallyTransmitted: receipt.externallyTransmitted,
+    };
+  } finally {
+    if (envBefore.AIS_PROVIDER_BOUNDARY === undefined)
+      delete process.env.AIS_PROVIDER_BOUNDARY;
+    else process.env.AIS_PROVIDER_BOUNDARY = envBefore.AIS_PROVIDER_BOUNDARY;
+  }
+}
 
 export async function verifyHandlerStation(
   db: SettlementTx,
   ctx: TrpcContext,
   tenantId: number
 ) {
+  if (process.env.NODE_ENV === "production")
+    throw new Error(
+      "The synthetic handler-station fixture cannot run in production"
+    );
   assert(ctx.user);
   const userId = ctx.user.id;
   // Route acceptance uses SQL second precision, so avoid rounding into the future.
@@ -143,21 +216,18 @@ export async function verifyHandlerStation(
       messageContent: draft.messageContent,
       idempotencyKey: "handler-pilot:" + type,
     });
-    await queueTransmission({ transmissionId, tenantId });
-    const delivery = await claimDueTransmission();
-    assert(delivery && delivery.transmissionId === transmissionId);
-    const parsed = parseOperationalDraft(delivery.messageContent);
-    assert.equal(parsed.destinationAddress, route.destinationAddress);
-    assert.equal(parsed.messageDigest, draft.messageDigest);
-    const receipt = await recordTransportResult({
+    return simulateHandlerTransmission({
       transmissionId,
-      leaseKey: delivery.leaseKey,
-      providerMessageId: "fixture-" + type + "-" + transmissionId,
+      tenantId,
+      routeId: r.insertId,
+      messageType: type,
+      messageDigest: draft.messageDigest,
+      destinationAddress: route.destinationAddress,
     });
-    assert.equal(receipt.status, "sent");
-    return parsed;
   }
   const envBefore = {
+    AIS_PROVIDER_BOUNDARY: process.env.AIS_PROVIDER_BOUNDARY,
+    AIS_ENABLE_DEMOS: process.env.AIS_ENABLE_DEMOS,
     AIS_TYPE_B_TRANSPORT_ENABLED: process.env.AIS_TYPE_B_TRANSPORT_ENABLED,
     AVIATION_SOURCE_REGISTRY: process.env.AVIATION_SOURCE_REGISTRY,
     AIS_HANDLER_PILOT_KEY: process.env.AIS_HANDLER_PILOT_KEY,
@@ -174,6 +244,7 @@ export async function verifyHandlerStation(
   const secret = "synthetic-station-only-disposable-acceptance";
   const caller = aviationIntegrationsRouter.createCaller(ctx);
   try {
+    process.env.AIS_ENABLE_DEMOS = "true";
     process.env.AIS_TYPE_B_TRANSPORT_ENABLED = "true";
     process.env.AIS_HANDLER_PILOT_KEY = secret;
     await selectSeat(flightId, "1A", kept.booking.bookingId, kept.pax.id);
@@ -335,6 +406,8 @@ export async function verifyHandlerStation(
       concurrentDeliveries: replies.length,
       delayedRetryDuplicate: delayed.duplicate,
       committedEvents: events.length,
+      transmissionExecution: "simulation" as const,
+      externallyTransmitted: false as const,
       externalHandlerCalls: 0,
     };
   } finally {

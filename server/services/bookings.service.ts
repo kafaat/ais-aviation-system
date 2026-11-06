@@ -1,3 +1,4 @@
+import { quoteCancellationPolicy } from "./cancellation-policy.service";
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import {
   priceInitialAncillaries,
@@ -664,6 +665,15 @@ export async function cancelBooking(
         throw new Error("Booking cannot be cancelled");
       if (current.status === "cancelled") return;
       await assertNoFlownCouponForCancellation(tx, current.id);
+      if (current.paymentStatus === "paid") {
+        const quote = await quoteCancellationPolicy(tx, current);
+        if (quote.refundAmount === 0)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Use the cancellation quote and explicitly confirm that no refund is due",
+          });
+      }
       await cancelBookingResources(tx, current, "Owner cancellation", userId);
     });
 

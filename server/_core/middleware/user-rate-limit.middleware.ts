@@ -20,15 +20,13 @@ import {
   STRICT_RATE_LIMITS,
   type RateLimitResult,
 } from "../../services/rate-limit.service";
-import type { User } from "../../../drizzle/schema";
-import { sdk } from "../sdk";
+import { resolveRequestIdentity } from "../request-identity";
 import { logger } from "../logger";
 
 /**
  * Extended Request with user info
  */
 interface RateLimitRequest extends Request {
-  user?: User | null;
   rateLimitResult?: RateLimitResult;
 }
 
@@ -106,18 +104,9 @@ export function createUserRateLimitMiddleware(options?: {
     }
 
     try {
-      // Get user if not already authenticated
-      let user: User | null = req.user || null;
-
-      if (!user && authenticateUser) {
-        try {
-          user = await sdk.authenticateRequest(req);
-          req.user = user;
-        } catch {
-          // User not authenticated, continue as anonymous
-          user = null;
-        }
-      }
+      const user = authenticateUser
+        ? (await resolveRequestIdentity(req)).user
+        : null;
 
       // Check rate limit
       const result = await rateLimitService.checkUserRateLimit(user, ip, scope);
@@ -191,17 +180,7 @@ export function createStrictRateLimitMiddleware(
     }
 
     try {
-      // For strict limits, use IP + user ID (if available) for the identifier
-      let user: User | null = req.user || null;
-
-      if (!user) {
-        try {
-          user = await sdk.authenticateRequest(req);
-          req.user = user;
-        } catch {
-          user = null;
-        }
-      }
+      const { user } = await resolveRequestIdentity(req);
 
       const identifier = user ? `user:${user.id}` : `ip:${ip}`;
       const result = await rateLimitService.checkStrictRateLimit(
@@ -260,16 +239,7 @@ export function rateLimitHeadersMiddleware(): RequestHandler {
     const ip = getClientIp(req);
 
     try {
-      let user: User | null = req.user || null;
-
-      if (!user) {
-        try {
-          user = await sdk.authenticateRequest(req);
-          req.user = user;
-        } catch {
-          user = null;
-        }
-      }
+      const { user } = await resolveRequestIdentity(req);
 
       const status = await rateLimitService.getRateLimitStatus(user, ip);
       setRateLimitHeaders(res, status);

@@ -1,0 +1,45 @@
+{
+  "finding": "OWN-01",
+  "source": {
+    "commit": "5f0a9e4422a0cd47237c31073e72ae589a7fe862",
+    "tree": "e1cf0b54d5440277bf53f357031f66580b08e258",
+    "status": "",
+    "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "result": {
+    "passed": 44,
+    "failed": 0,
+    "skipped": 0
+  },
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "server/__tests__/apis-seats-acceptance-mysql.test.ts",
+    "--maxWorkers=1",
+    "--reporter=default",
+    "--reporter=json",
+    "--reporter=junit"
+  ],
+  "environment": {
+    "node": "24.22.1",
+    "mysql": "8.0.46",
+    "redis": "7.4.5",
+    "ownership": "fresh loopback native services and disposable database; synthetic fixtures only"
+  },
+  "receiptSha256": "bf534d103580fbc7c9563288d7e72388ef39229563763c007a7816d99a9f65c3",
+  "resultsSha256": "c176a8ca7ec10df4c61aa358ec9eb353b26b4343ff4f42ad15b2fbc2faf25a21",
+  "files": {
+    "server/routers/seat-map.ts": "0e269c555c271d7fb25aab285851bb21d12e722a95b3a5cd58e80642a2b98260",
+    "server/services/seat-map.service.ts": "3cb19082d10ee5b892a728e993468b5ad0b59fa904ea292eee24ec137d516be3",
+    "server/__tests__/seat-release-authorization.test.ts": "47adfd1176da097859a42dbef96b3276baa3c4c31ade2b930e9483d5aa763a1b",
+    "server/__tests__/apis-seats-acceptance-mysql.test.ts": "26e9dfd7f83d087a830bc3e9bebf295bda30cd3d1729425504e1ccfbfade9d24",
+    "server/__tests__/dcs-seat-denial.test.ts": "904081bd7449464961c8e5e9304af0f9c74c282043966001626b1174239c38eb",
+    "scripts/acceptance/dcs-counter-lifecycle.ts": "125ef959d93fb87f9a011c143f5010b06e2dbec5f656e4d87ee7f7b3482a0390"
+  },
+  "limits": [
+    "No provider or physical-device acceptance",
+    "MySQL9.7 and final combined CI not yet run",
+    "Native suite includes41existing controls and3new ownership cases"
+  ]
+}

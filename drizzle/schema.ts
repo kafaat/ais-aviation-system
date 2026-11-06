@@ -60,6 +60,25 @@ export const tenants = mysqlTable(
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = typeof tenants.$inferInsert;
 
+/** Browser-bound, short-lived OAuth starts; consumed atomically before exchange. */
+export const oauthLoginStates = mysqlTable(
+  "oauth_login_states",
+  {
+    stateHash: varchar("stateHash", { length: 64 }).primaryKey(),
+    browserNonceHash: varchar("browserNonceHash", { length: 64 }).notNull(),
+    redirectUri: text("redirectUri").notNull(),
+    returnTo: text("returnTo").notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    consumedAt: timestamp("consumedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    expiresAtIdx: index("oauth_login_states_expires_at_idx").on(
+      table.expiresAt
+    ),
+  })
+);
+
 /** Encrypted TOTP settings; shared by setup and the login challenge. */
 export const mfaSettings = mysqlTable("mfa_settings", {
   id: int("id").autoincrement().primaryKey(),
@@ -1312,6 +1331,24 @@ export const flightReviews = mysqlTable(
 export type FlightReview = typeof flightReviews.$inferSelect;
 export type InsertFlightReview = typeof flightReviews.$inferInsert;
 
+/** One helpful vote per user for a flight review (separate from customer reviews). */
+export const flightReviewHelpfulVotes = mysqlTable(
+  "flight_review_helpful_votes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    reviewId: int("reviewId").notNull(),
+    userId: int("userId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    reviewUserUnique: uniqueIndex("flight_review_helpful_votes_unique_idx").on(
+      table.reviewId,
+      table.userId
+    ),
+    userIdIdx: index("flight_review_helpful_votes_user_idx").on(table.userId),
+  })
+);
+
 /**
  * Favorite Flights
  * User's saved favorite flight routes
@@ -1586,30 +1623,83 @@ export type InsertStripeEvent = typeof stripeEvents.$inferInsert;
  * Complete audit trail of all financial transactions
  */
 /** Provider collection authority; keyed by immutable payment reference. */
-export const paymentReceipts = mysqlTable("payment_receipts", {
-  paymentIntentId: varchar("paymentIntentId", { length: 255 }).primaryKey(),
-  kind: mysqlEnum("kind", [
-    "booking",
-    "split_payment",
-    "modification",
-    "wallet_topup",
-  ]).notNull(),
-  bookingId: int("bookingId"),
-  userId: int("userId").notNull(),
-  targetId: int("targetId").notNull(),
-  amount: int("amount").notNull(),
-  currency: varchar("currency", { length: 3 }).notNull(),
-  refundedAmount: int("refundedAmount").default(0).notNull(),
-  settlementStatus: mysqlEnum("settlementStatus", [
-    "applied",
-    "review_required",
-    "review_refunded",
-  ])
-    .default("applied")
-    .notNull(),
-  settlementError: varchar("settlementError", { length: 255 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+export const paymentReceipts = mysqlTable(
+  "payment_receipts",
+  {
+    paymentIntentId: varchar("paymentIntentId", { length: 255 }).primaryKey(),
+    kind: mysqlEnum("kind", [
+      "booking",
+      "split_payment",
+      "modification",
+      "wallet_topup",
+    ]).notNull(),
+    bookingId: int("bookingId"),
+    userId: int("userId").notNull(),
+    targetId: int("targetId").notNull(),
+    amount: int("amount").notNull(),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    refundedAmount: int("refundedAmount").default(0).notNull(),
+    settlementStatus: mysqlEnum("settlementStatus", [
+      "applied",
+      "review_required",
+      "review_refunded",
+    ])
+      .default("applied")
+      .notNull(),
+    settlementError: varchar("settlementError", { length: 255 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    ownerKindIdx: index("payment_receipts_owner_kind_idx").on(
+      table.userId,
+      table.kind,
+      table.paymentIntentId
+    ),
+  })
+);
+
+/** Ordinary customer/admin cancellation intent. Provider refunds alone do not
+ * prove that a partial refund should cancel carriage. The immutable command is
+ * saved before Stripe is called and survives lost responses and process exits. */
+export const ordinaryBookingRefunds = mysqlTable(
+  "ordinary_booking_refunds",
+  {
+    bookingId: int("bookingId").primaryKey(),
+    paymentIntentId: varchar("paymentIntentId", { length: 255 })
+      .notNull()
+      .unique(),
+    operationId: varchar("operationId", { length: 255 }).notNull().unique(),
+    actorId: int("actorId").notNull(),
+    amount: int("amount").notNull(),
+    collectedAmount: int("collectedAmount").notNull(),
+    baseRefundedAmount: int("baseRefundedAmount").notNull(),
+    requestPayload: text("requestPayload").notNull(),
+    refundId: varchar("refundId", { length: 255 }).unique(),
+    status: mysqlEnum("status", [
+      "queued",
+      "requesting",
+      "pending",
+      "succeeded",
+      "failed",
+      "review_required",
+    ])
+      .default("queued")
+      .notNull(),
+    providerStatus: varchar("providerStatus", { length: 32 }),
+    errorCode: varchar("errorCode", { length: 64 }),
+    requestedAt: timestamp("requestedAt"),
+    nextAttemptAt: timestamp("nextAttemptAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    dueIdx: index("ordinary_refunds_due_idx").on(
+      table.status,
+      table.nextAttemptAt
+    ),
+  })
+);
 
 /** One immutable cancellation decision per split-funded booking. Money remains
  * owned by payment_receipts; these rows own provider requests and their status. */
@@ -5094,19 +5184,19 @@ export const accountLocks = mysqlTable(
     reason: varchar("reason", { length: 255 }).notNull(),
     lockedBy: varchar("lockedBy", { length: 50 }).notNull(), // "system" or admin user ID
 
-    // Lock status
-    isActive: boolean("isActive").default(true).notNull(),
-
     // Unlock details
     unlockedAt: timestamp("unlockedAt"),
     unlockedBy: varchar("unlockedBy", { length: 50 }),
 
-    // Auto-unlock
-    autoUnlockAt: timestamp("autoUnlockAt"), // Automatic unlock time
-
     // Timestamps
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+
+    // Drizzle emits ON DUPLICATE KEY assignments in schema-column order,
+    // regardless of the set object's key order. These predicate columns must
+    // remain last for lockAccount's conditional metadata/deadline replacement.
+    autoUnlockAt: timestamp("autoUnlockAt"),
+    isActive: boolean("isActive").default(true).notNull(),
   },
   table => ({
     accountLockUserIdIdx: index("account_lock_user_id_idx").on(table.userId),

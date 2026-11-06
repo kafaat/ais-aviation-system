@@ -928,16 +928,20 @@ function visitNetworkDesk(replies: Record<string, WireReply>) {
                   },
                 };
               } catch (error) {
+                const forbidden =
+                  error instanceof Error &&
+                  "code" in error &&
+                  error.code === "FORBIDDEN";
                 return {
                   error: superjson.serialize({
                     message:
                       error instanceof Error
                         ? error.message
                         : "Synthetic source unavailable",
-                    code: -32603,
+                    code: forbidden ? -32003 : -32603,
                     data: {
-                      code: "INTERNAL_SERVER_ERROR",
-                      httpStatus: 500,
+                      code: forbidden ? "FORBIDDEN" : "INTERNAL_SERVER_ERROR",
+                      httpStatus: forbidden ? 403 : 500,
                       path: method,
                     },
                   }),
@@ -1088,6 +1092,63 @@ async function attemptNavigation(user: ReturnType<typeof userEvent.setup>) {
   });
   if (otherPassenger) await user.click(otherPassenger);
 }
+
+it("refreshes a stale open bag-return form after the server rejects a revoked grant", async () => {
+  const user = userEvent.setup();
+  const fixture = navigationReplies("bag");
+  const read = fixture.replies["dcsOperations.getDesk"];
+  let enabled = true;
+  fixture.replies["dcsOperations.getDesk"] = async input => ({
+    ...((await read(input)) as ReturnType<typeof deskData>),
+    canReturnBags: enabled,
+  });
+  fixture.replies["dcsOperations.returnBag"] = () => {
+    throw Object.assign(
+      new Error("Bag handover requires an active staff grant"),
+      { code: "FORBIDDEN" }
+    );
+  };
+  const { calls } = visitNetworkDesk(fixture.replies);
+  await selectMiddlePagePassenger(user);
+  await user.type(
+    screen.getByLabelText("Returned bag tag number"),
+    "0123000070"
+  );
+  await user.type(
+    screen.getByLabelText("Bag handover reason"),
+    "Passenger requested bag return"
+  );
+  // The grant is revoked after this desk has already rendered its controls.
+  enabled = false;
+  await user.click(
+    screen.getByRole("button", { name: "Confirm bag handover" })
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Confirm bag handover" })
+    ).not.toBeInTheDocument()
+  );
+  expect(
+    calls.filter(call => call.method === "dcsOperations.returnBag")
+  ).toEqual([
+    {
+      method: "dcsOperations.returnBag",
+      input: {
+        flightId: 51,
+        bookingId: 82,
+        passengerId: 92,
+        segmentId: 102,
+        tagNumber: "0123000070",
+        reason: "Passenger requested bag return",
+        idempotencyKey: expect.any(String),
+      },
+    },
+  ]);
+  expect(
+    calls.filter(call => call.method === "dcsOperations.getDesk").length
+  ).toBeGreaterThanOrEqual(2);
+  expect(screen.queryByText(/Bag handover receipt/)).not.toBeInTheDocument();
+});
 
 it.each<DeskCommand>(["passenger", "checkIn", "bag", "flight"])(
   "retains the selected flight, page and passenger through a pending %s command and its refresh",
