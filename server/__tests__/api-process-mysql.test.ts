@@ -291,7 +291,9 @@ nativeDescribe.sequential(
           await delay(50);
         }
         expect(connected, errors).toBe(true);
-        const live = await fetch(healthUrl, { signal: AbortSignal.timeout(3000) });
+        const live = await fetch(healthUrl, {
+          signal: AbortSignal.timeout(3000),
+        });
         expect(live.status).toBe(200);
         expect((await live.text())).toContain('"ready":true');
         expect((await fetch(healthUrl, { method: "HEAD" })).status).toBe(200);
@@ -304,14 +306,18 @@ nativeDescribe.sequential(
         // remains healthy and the proxy must reflect the child readiness.
         api!.proxy.disconnect();
         phase = "real Nginx to API during native DB outage";
-        const down = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
+        const down = await fetch(healthUrl, {
+          signal: AbortSignal.timeout(5000),
+        });
         expect(down.status).toBe(503);
         assertPublicResponse(await down.text());
         expect((await fetch(healthUrl, { method: "HEAD" })).status).toBe(503);
         api!.proxy.reconnect();
         phase = "real Nginx to API after native DB recovery";
         await ready();
-        expect((await fetch(healthUrl, { signal: AbortSignal.timeout(3000) })).status).toBe(200);
+        expect(
+          (await fetch(healthUrl, { signal: AbortSignal.timeout(3000) })).status
+        ).toBe(200);
       } finally {
         api!.proxy.reconnect();
         if (nginx && nginx.exitCode === null) {
