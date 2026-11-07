@@ -84,6 +84,7 @@ class NginxHealthContract(unittest.TestCase):
                     f"error_log {directory}/error.log warn;\n"
                     "events { worker_connections 128; }\n"
                     "http {\n"
+                    "  access_log off;\n"
                     f"  upstream ais_api {{ server 127.0.0.1:{upstream_port}; }}\n"
                     f"  server {{ listen 127.0.0.1:{proxy_port};\n"
                     f"{block}\n"
