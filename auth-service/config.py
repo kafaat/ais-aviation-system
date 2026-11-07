@@ -7,7 +7,7 @@ import hashlib
 import os
 import re
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -18,6 +18,25 @@ INSECURE_JWT_SECRETS = {
     "test-jwt-secret-key",
     "test-secret-key-for-ci",
 }
+
+# Example-file and documentation values for the service credential. Compared
+# case-insensitively after stripping, so "change_me" and "CHANGE-ME" also fail.
+INSECURE_SERVICE_TOKENS = {
+    "change_me",
+    "change-me",
+    "changeme",
+    "auth_service_token",
+    "auth-service-token",
+    "your-auth-service-token",
+    "local-development-auth-service-token-not-for-production",
+    "placeholder",
+    "secret",
+    "token",
+}
+
+# Minimum length of the shared service credential outside DEBUG mode. Length
+# does not prove entropy; operators must generate it randomly (see SECURITY.md).
+SERVICE_TOKEN_MIN_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -43,8 +62,11 @@ class Settings(BaseSettings):
     # Owner (auto-admin)
     OWNER_EMAIL: str = ""
 
-    # Shared secret the Node backend presents on every call. When set, every
-    # auth route requires it; nothing else may ask whether a password matches.
+    # Shared secret the Node backend presents on every call. Every auth route
+    # requires it; nothing else may ask whether a password matches. Outside
+    # DEBUG mode the process refuses to start without a usable value, and even
+    # in DEBUG mode an empty value makes the auth routes answer 503 rather
+    # than serving anonymous callers.
     AUTH_SERVICE_TOKEN: str = ""
 
     @field_validator("DATABASE_URL")
@@ -88,6 +110,42 @@ class Settings(BaseSettings):
         if secret in INSECURE_JWT_SECRETS:
             raise ValueError("JWT_SECRET must not use a known placeholder value")
         return secret
+
+    @field_validator("AUTH_SERVICE_TOKEN")
+    @classmethod
+    def normalize_service_token(cls, value: str) -> str:
+        token = value.strip()
+        if token and token.lower() in INSECURE_SERVICE_TOKENS:
+            raise ValueError(
+                "AUTH_SERVICE_TOKEN must not use a known placeholder value"
+            )
+        if token and any(character.isspace() for character in token):
+            raise ValueError("AUTH_SERVICE_TOKEN must not contain whitespace")
+        if token and not all(33 <= ord(character) <= 126 for character in token):
+            raise ValueError("AUTH_SERVICE_TOKEN must use printable ASCII characters")
+        if len(token) >= SERVICE_TOKEN_MIN_LENGTH and len(set(token)) == 1:
+            raise ValueError("AUTH_SERVICE_TOKEN must not use a repeated-character value")
+        return token
+
+    @model_validator(mode="after")
+    def require_service_token_outside_debug(self) -> "Settings":
+        # DEBUG is the only explicit non-production switch this service has.
+        # Every other start (Compose, Railway, Kubernetes, the built image)
+        # is production and fails closed before the engine is created.
+        if self.DEBUG:
+            return self
+        if not self.AUTH_SERVICE_TOKEN:
+            raise ValueError(
+                "AUTH_SERVICE_TOKEN is required outside DEBUG mode: set the shared "
+                "service credential (at least 32 random characters) on this "
+                "service and on every Node API replica"
+            )
+        if len(self.AUTH_SERVICE_TOKEN) < SERVICE_TOKEN_MIN_LENGTH:
+            raise ValueError(
+                "AUTH_SERVICE_TOKEN must be at least "
+                f"{SERVICE_TOKEN_MIN_LENGTH} characters outside DEBUG mode"
+            )
+        return self
 
     class Config:
         env_file = ".env"

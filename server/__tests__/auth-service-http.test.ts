@@ -198,8 +198,10 @@ describe("password verification through the real local HTTP client", () => {
     }
   );
 
-  it("does not fall back to account lookup when the service rejects a missing service token", async () => {
+  it("does not fall back to account lookup and sends no password when the service token is missing", async () => {
     vi.stubEnv("AUTH_SERVICE_TOKEN", "");
+    // Even if the service would answer, the client refuses locally first: a
+    // password must never travel to the auth service without the credential.
     respond = (request, response) => {
       response.writeHead(request.headers["x-auth-service-token"] ? 200 : 403, {
         "content-type": "application/json",
@@ -211,8 +213,9 @@ describe("password verification through the real local HTTP client", () => {
     await expect((await caller()).login(credentials)).rejects.toMatchObject({
       code: "UNAUTHORIZED",
     });
-    expect(requests[0].token).toBeUndefined();
+    expect(requests).toEqual([]);
     expect(boundary.login).not.toHaveBeenCalled();
+    expect(boundary.cookie).not.toHaveBeenCalled();
   });
 
   it("bounds a service that never replies and does not issue a session", async () => {

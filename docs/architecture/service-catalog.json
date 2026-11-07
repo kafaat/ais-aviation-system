@@ -451,6 +451,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/_core/index.ts",
         "server/routers/auth.ts",
         "server/services/mobile-auth.service.ts"
       ],
