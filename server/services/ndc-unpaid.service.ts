@@ -42,6 +42,7 @@ import {
 } from "./inventory-lock.service";
 import { allocateProportional } from "./seat-economics.service";
 import { recordEvent } from "./outbox.service";
+import { assertBookingCapability } from "./ndc-capability-matrix";
 
 type Command = { orderId: string; userId: number; idempotencyKey: string };
 async function lockOrder(tx: SettlementTx, input: Command, action: NdcAction) {
@@ -438,6 +439,30 @@ export async function changeUnpaidOrder(
         input.changes.replacementOfferId ? "exchange" : "updateDetails"
       );
       const replacementOfferId = changes.replacementOfferId;
+      // The issuing order's channel, distributor and schema version decide
+      // which OrderChange operations may be offered at all.
+      if (replacementOfferId)
+        await assertBookingCapability(
+          tx,
+          context.booking,
+          "order_change_voluntary",
+          context.order
+        );
+      if (
+        changes.passengerUpdates?.some(
+          patch =>
+            patch.firstName != null ||
+            patch.lastName != null ||
+            patch.updates?.firstName != null ||
+            patch.updates?.lastName != null
+        )
+      )
+        await assertBookingCapability(
+          tx,
+          context.booking,
+          "name_correction",
+          context.order
+        );
       if (replacementOfferId)
         await replaceItinerary(
           tx,
@@ -542,6 +567,12 @@ export async function serviceUnpaidOrder(
     request: input,
     run: async tx => {
       const context = await lockOrder(tx, input, "addAncillary");
+      await assertBookingCapability(
+        tx,
+        context.booking,
+        "ancillary_change",
+        context.order
+      );
       const segments =
         storedJson<{ segments?: NdcSegment[] }>(context.order.orderPayload, {})
           .segments ?? [];

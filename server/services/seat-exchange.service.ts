@@ -14,6 +14,7 @@ import {
   type Booking,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
+import { assertBookingCapability } from "./ndc-capability-matrix";
 
 const positive = z.number().int().positive();
 const paidSeatBinding = z.object({
@@ -266,6 +267,7 @@ export async function quoteSeatExchange(
     retainedAmount: 0,
     seats: [],
   };
+  let seatMoveAllowed = false;
   const items = await activeItems(tx, booking.id);
   const assigned = await tx
     .select()
@@ -345,6 +347,11 @@ export async function quoteSeatExchange(
     const to = newFlightIds[i];
     let target = source;
     if (to !== source.flightId) {
+      // Moving a paid seat is a distinct capability from the exchange itself.
+      if (!seatMoveAllowed) {
+        await assertBookingCapability(tx, booking, "seat_move");
+        seatMoveAllowed = true;
+      }
       const matches = await tx
         .select()
         .from(seatInventory)

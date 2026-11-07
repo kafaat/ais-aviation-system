@@ -21,6 +21,13 @@ import { eq, and, gte, lte, desc, asc, lt, sql, inArray } from "drizzle-orm";
 import { getDb, generateBookingReference } from "../db";
 import { canTransitionTo, type NdcOrderStatus } from "./ndc-order-state";
 import { recordEvent } from "./outbox.service";
+// Whether a carrier/seller/channel/version combination supports an action is
+// decided by the distribution capability matrix, never by NDC_VERSION alone.
+import {
+  ANY,
+  assertCapability,
+  distributionChannelOf,
+} from "./ndc-capability-matrix";
 import {
   ndcOffers,
   ndcOrders,
@@ -995,6 +1002,15 @@ export async function createOrder(
           message: `NDC offer is not available for ordering. Current status: ${offer.status}`,
         });
       }
+
+      // OrderCreate is itself a gated capability of the offer's channel.
+      await assertCapability(db, {
+        carrierCode: offer.ownerCode ?? ANY,
+        sellerId: ANY,
+        channel: distributionChannelOf(offer.channel),
+        schemaVersion: NDC_VERSION,
+        action: "order_create",
+      });
 
       // Create the internal booking
       const bookingReference = generateBookingReference();

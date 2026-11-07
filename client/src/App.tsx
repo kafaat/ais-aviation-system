@@ -115,6 +115,9 @@ const EmergencyHotelManagement = lazy(
   () => import("./pages/admin/EmergencyHotelManagement")
 );
 const PassengerPriority = lazy(() => import("./pages/admin/PassengerPriority"));
+const NdcCapabilityMatrix = lazy(
+  () => import("./pages/admin/NdcCapabilityMatrix")
+);
 
 const AirlineConsole = lazy(() => import("./pages/AirlineConsole"));
 const DcsDesk = lazy(() => import("./pages/DcsDesk"));
@@ -672,6 +675,13 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <PassengerPriority />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/ndc-capabilities">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <NdcCapabilityMatrix />
               </Suspense>
             </AdminRoute>
           </Route>

@@ -44,6 +44,7 @@ import {
   LogOut,
   Luggage,
   Monitor,
+  Network,
   Package,
   PanelLeft,
   Plane,
@@ -242,6 +243,12 @@ const adminMenuItems: MenuItem[] = [
     icon: ListOrdered,
     labelKey: "nav.passengerPriority",
     path: "/admin/passenger-priority",
+    adminOnly: true,
+  },
+  {
+    icon: Network,
+    labelKey: "nav.ndcCapabilities",
+    path: "/admin/ndc-capabilities",
     adminOnly: true,
   },
   {
