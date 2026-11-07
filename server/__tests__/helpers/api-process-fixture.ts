@@ -302,6 +302,9 @@ export async function startApiProcessFixture(
       STRIPE_WEBHOOK_SECRET: apiProcessWebhookSecret,
       OAUTH_SERVER_URL: mockOrigin,
       AUTH_SERVICE_URL: mockOrigin,
+      // Production start-up refuses to run without the shared auth credential.
+      AUTH_SERVICE_TOKEN:
+        "native-api-process-auth-service-credential-only-32-plus",
       BUILT_IN_FORGE_API_URL: mockOrigin,
       BUILT_IN_FORGE_API_KEY: "",
       HOTELBEDS_MODE: "disabled",
