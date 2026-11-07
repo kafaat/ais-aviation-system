@@ -71,6 +71,7 @@ describe("auth service credential policy", () => {
       "placeholder",
     ],
     ["repeated characters", "x".repeat(32), "repeated-character"],
+    ["non-ASCII", "é".repeat(40), "printable ASCII"],
     ["short", "x".repeat(31), "at least 32 characters"],
     ["whitespace inside", `${"a".repeat(20)} ${"b".repeat(20)}`, "whitespace"],
   ])(
