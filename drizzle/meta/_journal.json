@@ -519,6 +519,13 @@
       "when": 1794060053536,
       "tag": "0073_crew_legality",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "5",
+      "when": 1794062445845,
+      "tag": "0074_bsp_settlement",
+      "breakpoints": true
     }
   ]
 }
