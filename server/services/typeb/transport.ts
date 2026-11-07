@@ -64,10 +64,12 @@ export class InMemoryTransport implements TypeBTransport {
   /** When set, `send` rejects with this error (for retry tests). */
   failWith: Error | null = null;
 
-  async send(message: OutboundTypeBMessage) {
-    if (this.failWith) throw this.failWith;
+  send(message: OutboundTypeBMessage) {
+    if (this.failWith) return Promise.reject(this.failWith);
     this.sent.push(message);
-    return { transportReference: `memory:${message.id}:${this.sent.length}` };
+    return Promise.resolve({
+      transportReference: `memory:${message.id}:${this.sent.length}`,
+    });
   }
 
   /** Simulate a message arriving from the network. */
@@ -75,8 +77,8 @@ export class InMemoryTransport implements TypeBTransport {
     this.inbox.push({ transportReference, raw });
   }
 
-  async receive() {
-    return this.inbox.splice(0);
+  receive() {
+    return Promise.resolve(this.inbox.splice(0));
   }
 }
 
@@ -97,7 +99,7 @@ export class FileDropTransport implements TypeBTransport {
       mkdirSync(dir, { recursive: true });
   }
 
-  async send(message: OutboundTypeBMessage) {
+  send(message: OutboundTypeBMessage) {
     const stamp = new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15);
     const name = `${stamp}-${message.messageType}-${message.id}.txt`;
     // Teletype line ending on the wire.
@@ -109,10 +111,10 @@ export class FileDropTransport implements TypeBTransport {
         flag: "wx",
       }
     );
-    return { transportReference: `filedrop:${name}` };
+    return Promise.resolve({ transportReference: `filedrop:${name}` });
   }
 
-  async receive() {
+  receive() {
     const files = readdirSync(this.inbound, { withFileTypes: true })
       .filter(entry => entry.isFile() && /\.(txt|tbm|typeb)$/i.test(entry.name))
       .map(entry => entry.name)
@@ -124,7 +126,7 @@ export class FileDropTransport implements TypeBTransport {
       renameSync(path, join(this.processed, name));
       messages.push({ transportReference: `filedrop:${name}`, raw });
     }
-    return messages;
+    return Promise.resolve(messages);
   }
 }
 

@@ -144,6 +144,22 @@ export const capabilityCatalog = [
     requirement: "Shared database lease and observed lastSuccessAt",
   },
   {
+    id: "typeBMessaging",
+    implementation: "implemented",
+    owner: "typeb/gateway.service",
+    consumer: "typeb router and typebGateway scheduled task",
+    requirement:
+      "PNL/ADL, LDM, MVT, BSM/BPM generation and MVT/LDM/BSM parsing with a leased queue and station file; sandbox transports only (memory, file drop). Element conventions marked as assumptions in docs/architecture/typeb-gateway.md require handler confirmation.",
+  },
+  {
+    id: "typeBTransport",
+    implementation: "blocked",
+    owner: "contracted SITA/ARINC or IP Type B provider",
+    consumer: "typeb/transport TypeBTransport adapter",
+    requirement:
+      "Provider adapter, network addresses and acceptance reference, exchanged sample messages with the handler and acknowledgement handling",
+  },
+  {
     id: "slaObservations",
     implementation: "implemented",
     owner: "sla-monitoring.service",

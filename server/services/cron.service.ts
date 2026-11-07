@@ -205,6 +205,15 @@ export const PERIODIC_JOB_CATALOG = [
       await processScheduledExports();
     },
   },
+  {
+    name: "typebGateway",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { runTypeBGatewayTick } = await import("./typeb/triggers.service");
+      await runTypeBGatewayTick();
+    },
+  },
 ] as const;
 
 const scheduledTasks: Array<{ stop: () => void | Promise<void> }> = [];

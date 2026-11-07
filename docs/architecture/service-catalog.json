@@ -507,7 +507,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/baggage.ts"],
+      "consumers": [
+        "server/routers/baggage.ts",
+        "server/services/typeb/builders.service.ts"
+      ],
       "dependencies": ["drizzle/schema.ts", "server/db.ts"],
       "tableExpressions": {
         "reads": ["baggageItems", "baggageTracking", "bookings", "passengers"],
@@ -1278,6 +1281,7 @@
         "server/services/scheduled-task.service.ts",
         "server/services/split-refund.service.ts",
         "server/services/travel-scenarios.service.ts",
+        "server/services/typeb/triggers.service.ts",
         "server/services/waitlist.service.ts",
         "server/services/weather-operations.service.ts"
       ],
@@ -1645,7 +1649,8 @@
       "consumers": [
         "server/routes/operational-integrations.ts",
         "server/services/flight-event-delivery.service.ts",
-        "server/services/outbox.service.ts"
+        "server/services/outbox.service.ts",
+        "server/services/typeb/triggers.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -1872,7 +1877,8 @@
         "server/services/irops.service.ts",
         "server/services/passenger-priority.service.ts",
         "server/services/revenue-accounting.service.ts",
-        "server/services/travel-scenarios.service.ts"
+        "server/services/travel-scenarios.service.ts",
+        "server/services/typeb/builders.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -2182,7 +2188,8 @@
         "server/services/split-refund.service.ts",
         "server/services/travel-agent.service.ts",
         "server/services/travel-clearance.service.ts",
-        "server/services/travel-evidence.service.ts"
+        "server/services/travel-evidence.service.ts",
+        "server/services/typeb/gateway.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -4377,6 +4384,7 @@
         "server/routers/gates.ts",
         "server/routers/operations.ts",
         "server/routers/payments.ts",
+        "server/routers/typeb.ts",
         "server/routes/operational-integrations.ts",
         "server/services/access-control.service.ts",
         "server/services/data-warehouse.service.ts",
@@ -5431,6 +5439,318 @@
           "userPreferences"
         ],
         "writes": ["userPreferences"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/bsm.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/bsm.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/typeb/builders.service.ts",
+        "server/services/typeb/gateway.service.ts",
+        "server/services/typeb/serializer.ts"
+      ],
+      "dependencies": [
+        "server/services/typeb/model.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/builders.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/builders.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/typeb.ts",
+        "server/services/typeb/triggers.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/baggage.service.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/typeb/bsm.ts",
+        "server/services/typeb/gateway.service.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "aircraftRotations",
+          "airlines",
+          "airports",
+          "baggageCustodyEvents",
+          "bookings",
+          "flights",
+          "passengers",
+          "specialServices"
+        ],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/envelope.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/envelope.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/typeb.ts",
+        "server/services/typeb/gateway.service.ts"
+      ],
+      "dependencies": [
+        "server/services/typeb/model.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/gateway.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/gateway.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/typeb.ts",
+        "server/services/typeb/builders.service.ts",
+        "server/services/typeb/triggers.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/typeb/bsm.ts",
+        "server/services/typeb/envelope.ts",
+        "server/services/typeb/ldm.ts",
+        "server/services/typeb/model.ts",
+        "server/services/typeb/mvt.ts",
+        "server/services/typeb/serializer.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["flights", "typebAddresses", "typebMessages"],
+        "writes": ["typebAddresses", "typebMessages"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/ldm.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/ldm.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/typeb/gateway.service.ts",
+        "server/services/typeb/serializer.ts"
+      ],
+      "dependencies": [
+        "server/services/typeb/model.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/model.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/model.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/typeb.ts",
+        "server/services/typeb/bsm.ts",
+        "server/services/typeb/envelope.ts",
+        "server/services/typeb/gateway.service.ts",
+        "server/services/typeb/ldm.ts",
+        "server/services/typeb/mvt.ts",
+        "server/services/typeb/pnl-adl.ts",
+        "server/services/typeb/serializer.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/mvt.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/mvt.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/typeb/gateway.service.ts",
+        "server/services/typeb/serializer.ts"
+      ],
+      "dependencies": [
+        "server/services/typeb/model.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/pnl-adl.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/pnl-adl.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/typeb/serializer.ts"],
+      "dependencies": [
+        "server/services/typeb/model.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/serializer.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/serializer.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/typeb/gateway.service.ts"],
+      "dependencies": [
+        "server/services/typeb/bsm.ts",
+        "server/services/typeb/ldm.ts",
+        "server/services/typeb/model.ts",
+        "server/services/typeb/mvt.ts",
+        "server/services/typeb/pnl-adl.ts",
+        "server/services/typeb/text.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/text.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/text.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/typeb/bsm.ts",
+        "server/services/typeb/builders.service.ts",
+        "server/services/typeb/envelope.ts",
+        "server/services/typeb/gateway.service.ts",
+        "server/services/typeb/ldm.ts",
+        "server/services/typeb/mvt.ts",
+        "server/services/typeb/pnl-adl.ts",
+        "server/services/typeb/serializer.ts"
+      ],
+      "dependencies": ["server/services/typeb/model.ts"],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/transport.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/transport.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/typeb/triggers.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/typeb/triggers.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/typeb/triggers.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/typeb.ts",
+        "server/services/cron.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/_core/logger.ts",
+        "server/db.ts",
+        "server/services/event-inbox.service.ts",
+        "server/services/typeb/builders.service.ts",
+        "server/services/typeb/gateway.service.ts",
+        "server/services/typeb/transport.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "aviationEvidence",
+          "baggageCustodyEvents",
+          "bookingSegments",
+          "bookings",
+          "eventDeliveries",
+          "eventInbox",
+          "flights"
+        ],
+        "writes": []
       },
       "replacement": null
     },

@@ -157,6 +157,12 @@ const adminMenuItems: MenuItem[] = [
     adminOnly: true,
   },
   {
+    icon: FileText,
+    labelKey: "nav.typeb",
+    path: "/admin/typeb",
+    adminOnly: true,
+  },
+  {
     icon: Tag,
     labelKey: "nav.vouchers",
     path: "/admin/vouchers",

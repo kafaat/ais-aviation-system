@@ -79,6 +79,8 @@
 | warehouseExports | implemented | Migration applied; shared database and authorized export owner |
 | eventInbox | implemented | Migration applied; local transaction or authenticated receiver acknowledgement |
 | scheduledTasks | implemented | Shared database lease and observed lastSuccessAt |
+| typeBMessaging | implemented | PNL/ADL, LDM, MVT, BSM/BPM generation and MVT/LDM/BSM parsing with a leased queue and station file; sandbox transports only (memory, file drop). Element conventions marked as assumptions in docs/architecture/typeb-gateway.md require handler confirmation. |
+| typeBTransport | blocked | Provider adapter, network addresses and acceptance reference, exchanged sample messages with the handler and acknowledgement handling |
 | slaObservations | implemented | Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA |
 
 <!-- capability-catalog:end -->

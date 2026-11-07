@@ -93,6 +93,7 @@
     "overbooking": "Overbooking",
     "gates": "Gate Management",
     "dcs": "Departure Control",
+    "typeb": "Type B Messaging",
     "vouchers": "Vouchers",
     "deletedBookings": "Deleted Bookings",
     "irops": "IROPS Command Center",

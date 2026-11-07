@@ -100,6 +100,9 @@ import { priceQuoteRouter } from "./routers/price-quote";
 // Travel documents
 import { boardingPassRouter } from "./routers/boarding-pass";
 
+// Type B operational messaging gateway
+import { typebRouter } from "./routers/typeb";
+
 // Webhook handlers
 import { webhooksRouter } from "./routers/webhooks";
 
@@ -219,6 +222,7 @@ export const appRouter = router({
   seatEconomics: seatEconomicsRouter,
   priceQuote: priceQuoteRouter,
   boardingPass: boardingPassRouter,
+  typeb: typebRouter,
 
   // Webhook handlers
   webhooks: webhooksRouter,
