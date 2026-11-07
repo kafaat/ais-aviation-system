@@ -295,7 +295,7 @@ nativeDescribe.sequential(
           signal: AbortSignal.timeout(3000),
         });
         expect(live.status).toBe(200);
-        expect((await live.text())).toContain('"ready":true');
+        expect(await live.text()).toContain('"ready":true');
         expect((await fetch(healthUrl, { method: "HEAD" })).status).toBe(200);
         const notHealth = await fetch(
           "http://127.0.0.1:" + port + "/api/trpc/health.check",
