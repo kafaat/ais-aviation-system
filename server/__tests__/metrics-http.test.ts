@@ -112,7 +112,7 @@ vi.mock("../_core/rest", () => ({
   createRestMiddleware: () => fixture.middleware,
 }));
 
-const token = "metrics-http-fixture-token";
+const token = "ais-metrics-http-fixture-token-2026-secure";
 let origin = "";
 let metrics: ReturnType<typeof vi.spyOn>;
 
@@ -168,7 +168,7 @@ async function expectMetrics(response: Response) {
 }
 
 describe("entry point /api/metrics over HTTP", () => {
-  it.each([undefined, "", "   ", "invalid token", '"quoted"', "token\n"])(
+  it.each([undefined, "", "   ", "invalid token", '"quoted"', "token\n", "A", "a".repeat(31)])(
     "disables production scrapes with unusable configuration %j",
     async configured => {
       vi.stubEnv("METRICS_TOKEN", configured);
@@ -204,7 +204,7 @@ describe("entry point /api/metrics over HTTP", () => {
   );
 
   it("accepts the supported bearer token alphabet and padding", async () => {
-    const configured = "AZaz09-._~+/==";
+    const configured = "AZaz09-._~+/AZaz09-._~+/AZaz09-._~+/==";
     vi.stubEnv("METRICS_TOKEN", configured);
     await expectMetrics(await scrape(bearer(configured)));
   });
