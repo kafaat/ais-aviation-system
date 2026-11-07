@@ -1249,6 +1249,228 @@
       "replacement": null
     },
     {
+      "file": "server/services/bsp-settlement.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp-settlement.service.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/routers/bsp-settlement.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/bsp/bank-statement-csv.ts",
+        "server/services/bsp/dish-ret.ts",
+        "server/services/bsp/fare-components.ts",
+        "server/services/bsp/hot-parser.ts",
+        "server/services/bsp/reporting-period.ts",
+        "server/services/bsp/ret-transport.ts",
+        "server/services/bsp/settlement-reconciliation.ts",
+        "server/services/civil-day.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "agentBookings",
+          "airports",
+          "bookings",
+          "bspBankRemittances",
+          "bspHotFiles",
+          "bspHotLines",
+          "bspReconciliationItems",
+          "bspReconciliationRuns",
+          "bspRetFiles",
+          "bspRetLines",
+          "financialLedger",
+          "flights",
+          "passengers",
+          "settlementLinkSpecifications",
+          "travelAgents"
+        ],
+        "writes": [
+          "bspBankRemittances",
+          "bspHotFiles",
+          "bspHotLines",
+          "bspReconciliationItems",
+          "bspReconciliationRuns",
+          "bspRetFiles",
+          "bspRetLines",
+          "content",
+          "settlementLinkSpecifications"
+        ]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/bank-statement-csv.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/bank-statement-csv.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/bsp-settlement.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/dish-layouts.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/dish-layouts.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/bsp/dish-records.ts",
+        "server/services/bsp/dish-ret.ts",
+        "server/services/bsp/hot-parser.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/dish-records.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/dish-records.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/__tests__/fixtures/bsp-hot.ts",
+        "server/services/bsp/dish-ret.ts",
+        "server/services/bsp/hot-parser.ts"
+      ],
+      "dependencies": ["server/services/bsp/dish-layouts.ts"],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/dish-ret.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/dish-ret.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/bsp-settlement.service.ts"],
+      "dependencies": [
+        "server/services/bsp/dish-layouts.ts",
+        "server/services/bsp/dish-records.ts",
+        "server/services/civil-day.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/fare-components.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/fare-components.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/bsp-settlement.service.ts"],
+      "dependencies": ["drizzle/schema.ts"],
+      "tableExpressions": {
+        "reads": ["bookingFareComponents"],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/hot-parser.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/hot-parser.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/bsp-settlement.service.ts"],
+      "dependencies": [
+        "server/services/bsp/dish-layouts.ts",
+        "server/services/bsp/dish-records.ts"
+      ],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/reporting-period.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/reporting-period.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/bsp-settlement.service.ts"],
+      "dependencies": ["server/services/civil-day.ts"],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/ret-transport.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/ret-transport.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/bsp-settlement.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/bsp/settlement-reconciliation.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/bsp/settlement-reconciliation.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/bsp-settlement.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/cache-generation-authority.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/cache-generation-authority.ts",
@@ -1416,6 +1638,9 @@
         "server/services/apis-paxlst.ts",
         "server/services/apis-pnrgov.ts",
         "server/services/apis.service.ts",
+        "server/services/bsp-settlement.service.ts",
+        "server/services/bsp/dish-ret.ts",
+        "server/services/bsp/reporting-period.ts",
         "server/services/crew-legality-engine.ts",
         "server/services/crew-legality.service.ts",
         "server/services/flights.service.ts",
