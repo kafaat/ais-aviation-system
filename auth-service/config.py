@@ -28,6 +28,7 @@ INSECURE_SERVICE_TOKENS = {
     "auth_service_token",
     "auth-service-token",
     "your-auth-service-token",
+    "local-development-auth-service-token-not-for-production",
     "placeholder",
     "secret",
     "token",
@@ -120,6 +121,8 @@ class Settings(BaseSettings):
             )
         if token and any(character.isspace() for character in token):
             raise ValueError("AUTH_SERVICE_TOKEN must not contain whitespace")
+        if len(token) >= SERVICE_TOKEN_MIN_LENGTH and len(set(token)) == 1:
+            raise ValueError("AUTH_SERVICE_TOKEN must not use a repeated-character value")
         return token
 
     @model_validator(mode="after")
