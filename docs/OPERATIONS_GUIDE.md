@@ -179,6 +179,35 @@ pip install -r requirements.txt
 cd ..
 ```
 
+**Auth-service database configuration:** `DATABASE_URL` is required in every
+environment, including development (`DEBUG=true`). Missing, empty or malformed
+URLs stop application import before the database engine or authentication
+handlers are initialized. MySQL URLs must name a host and database, with a valid
+port if specified. Explicit `mysql://` URLs are normalized to `mysql+pymysql://`;
+qualified driver URLs are preserved.
+
+For standalone local startup, export your explicitly configured development
+`DATABASE_URL` and strong `JWT_SECRET` into the auth process, or put auth settings
+in `auth-service/.env` when starting from that directory. The root `.env` is not
+automatically loaded from `auth-service/`; do not use production credentials for
+local tests. Existing isolated tests supply `sqlite://` explicitly:
+
+```bash
+python -m unittest discover -s auth-service -p 'test_*.py' -v
+```
+
+Environment checklist (configuration references, not live deployment verification):
+
+- Development Compose already supplies its local MySQL URL.
+- `docker-compose.prod.yml` and `docker-compose.production.yml` construct the auth
+  URL from `DB_USER`, `DB_PASSWORD` and `DB_NAME`; operators must supply these.
+- CI/CD E2E startup already supplies its disposable MySQL URL; Python regression
+  tests and the Docker auth smoke boot use explicit isolated SQLite fixtures.
+- Railway staging `ais-auth` must retain its `DATABASE_URL` reference to
+  `MySQL.MYSQL_URL`, as recorded in `operations/railway-staging-completion.md`.
+- Any standalone container, custom staging/production service or other auth
+  deployment must explicitly inject `DATABASE_URL`; none may rely on a default.
+
 التبعيات الرئيسية لخدمة المصادقة:
 
 - `fastapi` 0.115+ - إطار العمل
