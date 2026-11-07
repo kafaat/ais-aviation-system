@@ -26,7 +26,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost/health",
+          "http://127.0.0.1/health",
         ]
       interval: 30s
       timeout: 10s
@@ -100,7 +100,7 @@ services:
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
       - AUTH_SERVICE_URL=http://auth-service:8000
-      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN:-}
+      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN:?Set the shared auth service credential (at least 32 random characters) for every API replica and the auth service}
       - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY:-}
       - METRICS_TOKEN=${METRICS_TOKEN:-}
       # nginx fronts these replicas; without this every client shares one
@@ -190,7 +190,7 @@ services:
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
       - AUTH_SERVICE_URL=http://auth-service:8000
-      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN:-}
+      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN:?Set the shared auth service credential (at least 32 random characters) for every API replica and the auth service}
       - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY:-}
       - METRICS_TOKEN=${METRICS_TOKEN:-}
       # nginx fronts these replicas; without this every client shares one
@@ -280,7 +280,7 @@ services:
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
       - AUTH_SERVICE_URL=http://auth-service:8000
-      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN:-}
+      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN:?Set the shared auth service credential (at least 32 random characters) for every API replica and the auth service}
       - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY:-}
       - METRICS_TOKEN=${METRICS_TOKEN:-}
       # nginx fronts these replicas; without this every client shares one
@@ -496,7 +496,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - OWNER_EMAIL=${OWNER_EMAIL}
       - CORS_ORIGINS=${FRONTEND_URL}
-      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN:-}
+      - AUTH_SERVICE_TOKEN=${AUTH_SERVICE_TOKEN:?Set the shared auth service credential (at least 32 random characters) for every API replica and the auth service}
     depends_on:
       migrator:
         condition: service_completed_successfully

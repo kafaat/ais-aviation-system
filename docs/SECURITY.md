@@ -378,6 +378,84 @@ if (!booking) {
 
 ## API Security
 
+### Prometheus Scrape Authentication
+
+`GET /api/metrics` exposes operational route labels and resource metrics. In
+`NODE_ENV=production`, an absent, empty or invalid `METRICS_TOKEN` disables the
+endpoint with HTTP 503; the application and readiness APIs remain unchanged.
+With a configured token, missing, malformed or incorrect bearer authorization
+returns HTTP 401. Metrics are returned only on a successful scrape (HTTP 200).
+Development and test modes allow unauthenticated scrapes when the token is absent;
+a configured token still requires authentication in those modes.
+
+Generate a dedicated random token, for example with `openssl rand -hex 32`, and
+set it as the web process's `METRICS_TOKEN` through your secret manager. Use the
+token alone, not the `Bearer` scheme prefix. In production tokens require at
+least 32 ASCII characters; use a cryptographically random secret (length alone
+does not prove entropy). Allowed characters are ASCII letters, digits or
+`-._~+/`, optionally followed by `=` padding; whitespace,
+quotes and other characters are invalid. Do not commit the value or log request
+authorization headers.
+
+Provision the same token in a private file readable by Prometheus and configure
+the scrape job (replace the illustrative hostname with your authorized target):
+
+```yaml
+scrape_configs:
+  - job_name: ais
+    metrics_path: /api/metrics
+    scheme: https
+    authorization:
+      type: "Bearer"
+      credentials_file: /etc/prometheus/secrets/ais-metrics-token
+    static_configs:
+      - targets: ["ais.example.com"]
+```
+
+Prometheus sends the token in the Authorization header using the `Bearer` scheme;
+it does not expand environment variables in `credentials_file`. Keep TLS
+verification enabled, restrict network access to the scrape endpoint, and ensure
+any reverse proxy forwards this header.
+Rotate both copies together and verify that anonymous and wrong-token scrapes
+fail while the authorized scrape succeeds. No Kubernetes credentials are
+provided or created by this configuration.
+
+### Service-to-Service Auth Credential
+
+The FastAPI auth service answers password questions for any e-mail address, so
+only the Node backend may call it. Both processes share one secret,
+`AUTH_SERVICE_TOKEN`, presented on every call in the `X-Auth-Service-Token`
+header and compared in constant time. The boundary fails closed on both sides:
+
+| Side                    | Condition                                                                                  | Behaviour                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Auth service (any mode) | Credential configured, header missing or wrong                                             | HTTP 401 `Service credential required.` on register, login, verify        |
+| Auth service (any mode) | Credential not configured (only possible with `DEBUG=true`)                                | HTTP 503 `Service credential not configured.`; nothing is read or written |
+| Auth service start-up   | `DEBUG` unset or false and token missing, blank, placeholder or shorter than 32 characters | Settings validation fails before the database engine is created           |
+| Node web start-up       | `NODE_ENV=production` and token missing, blank, placeholder or shorter than 32 characters  | `startServer` throws; the process does not listen                         |
+| Node client (any mode)  | Unusable credential                                                                        | No request is sent; the caller sees `Auth service unavailable`            |
+| Compose                 | `AUTH_SERVICE_TOKEN` unset in the shell or `.env`                                          | `docker compose` refuses to interpolate; no service starts                |
+
+`GET /auth/health` stays public so orchestration can observe readiness.
+Placeholders rejected everywhere include `CHANGE_ME`, `changeme`, `secret`,
+`token` and the example-file names; development may use the explicit fixture in
+`.env.example`, which is itself refused as a production value only by its length
+rule if shortened. Generate the production value with `openssl rand -hex 32` and
+provision the identical value on the auth service and on every Node API replica
+(`api1`..`api3` in `docker-compose.production.yml`, `app` in
+`docker-compose.prod.yml`, `ais-web` and `ais-auth` on Railway). Rotate both
+copies together: set the new value on the auth service and the API replicas,
+restart the auth service first, then the API replicas, and confirm in the auth
+log that logins return 200 while an anonymous probe returns 401.
+
+Evidence: `auth-service/test_config.py` (start-up refusal), `auth-service/test_http_contract.py`
+(401/503 contracts), `server/__tests__/auth-service-credential.test.ts` (Node
+start-up and client policy), `scripts/ci/test_compose_auth_service_token.py`
+(real `docker compose config` interpolation, negative and positive), and the
+CI step "Verify auth service credential boundary over real HTTP", which runs
+`scripts/ci/auth_service_credential_probe.py` and the Node client against the
+live Uvicorn process with the correct and a wrong credential.
+
 ### Rate Limiting
 
 **Implementation:**

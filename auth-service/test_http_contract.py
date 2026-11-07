@@ -87,6 +87,49 @@ class AuthHttpContractTest(unittest.TestCase):
                         response.json(), {"detail": "Service credential required."}
                     )
 
+    def test_unconfigured_credential_serves_nobody_and_writes_nothing(self):
+        # DEBUG mode may start without a credential; it must not fall open.
+        with patch.object(auth.settings, "AUTH_SERVICE_TOKEN", ""):
+            for path in ("/auth/register", "/auth/login", "/auth/verify-password"):
+                for headers in ({}, {"x-auth-service-token": "any-presented-value"}):
+                    with self.subTest(path=path, credential=bool(headers)):
+                        response = self.client.post(
+                            path,
+                            headers=headers,
+                            json={
+                                "email": TEST_EMAIL,
+                                "password": TEST_PASSWORD,
+                                "name": "Must not be stored",
+                            },
+                        )
+                        self.assertEqual(response.status_code, 503)
+                        self.assertEqual(
+                            response.json(),
+                            {"detail": "Service credential not configured."},
+                        )
+            # Readiness stays public so orchestration can still observe the pod.
+            self.assertEqual(self.client.get("/auth/health").status_code, 200)
+        with self.sessions() as session:
+            self.assertEqual(session.query(auth.User).count(), 0)
+
+    def test_wrong_credential_is_rejected_regardless_of_length(self):
+        self.assertEqual(self.register().status_code, 200)
+        for presented in (
+            "incorrect-test-token",
+            TEST_SERVICE_TOKEN[:-1],
+            TEST_SERVICE_TOKEN + "x",
+            TEST_SERVICE_TOKEN.upper(),
+        ):
+            with self.subTest(presented=presented):
+                response = self.client.post(
+                    "/auth/verify-password",
+                    headers={"x-auth-service-token": presented},
+                    json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+                )
+                self.assertEqual(response.status_code, 401)
+                self.assertNotIn("success", response.json())
+                self.assertNotIn(TEST_EMAIL, response.text)
+
     def test_registration_and_login_preserve_the_public_user_response(self):
         registered = self.register(role="admin")
         self.assertEqual(registered.status_code, 200)

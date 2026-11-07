@@ -1,4 +1,5 @@
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
+import { assertAuthServiceCredential } from "../services/auth-service.client";
 import { assertProviderBoundary } from "./provider-boundary";
 import { timingSafeEqual } from "node:crypto";
 import { initTracing, stopTracing } from "./telemetry";
@@ -78,6 +79,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   assertIntegrationConfiguration();
+  // Production refuses to start without the shared auth-service credential;
+  // the auth service itself refuses to start without the same value.
+  assertAuthServiceCredential();
   const providerBoundary = assertProviderBoundary();
   log.info(
     { event: "provider_boundary_verified", providerBoundary },
@@ -125,18 +129,39 @@ async function startServer() {
 
   // Prometheus metrics endpoint (before APM middleware to avoid self-tracking)
   // Route labels, memory, CPU and error rates are operational detail;
-  // require the scraper's token when one is configured.
-  if (!process.env.METRICS_TOKEN && process.env.NODE_ENV === "production")
+  // production requires a usable scraper token; local modes may omit it.
+  const metricsTokenPattern = /^[A-Za-z0-9._~+/-]+=*$/;
+  const usableMetricsToken = (value: string | undefined): boolean => {
+    if (!value || !metricsTokenPattern.test(value)) return false;
+    return process.env.NODE_ENV !== "production" || value.length >= 32;
+  };
+  if (
+    process.env.NODE_ENV === "production" &&
+    !usableMetricsToken(process.env.METRICS_TOKEN)
+  )
     console.warn(
-      "[security] METRICS_TOKEN is not set: /api/metrics is readable by anyone who can reach this process."
+      "[security] METRICS_TOKEN is absent or invalid: /api/metrics is disabled."
     );
   app.get("/api/metrics", (req, res) => {
     const expected = process.env.METRICS_TOKEN;
+    if (
+      (process.env.NODE_ENV === "production" || expected) &&
+      !usableMetricsToken(expected)
+    ) {
+      res
+        .status(503)
+        .set("Cache-Control", "no-store")
+        .send("Metrics unavailable");
+      return;
+    }
     if (expected) {
-      const presented = (req.headers.authorization ?? "").replace(
-        /^Bearer\s+/i,
-        ""
-      );
+      const presented = /^Bearer[ ]+([A-Za-z0-9._~+/-]+=*)$/i.exec(
+        req.headers.authorization ?? ""
+      )?.[1];
+      if (!presented) {
+        res.status(401).set("Cache-Control", "no-store").send("Unauthorized");
+        return;
+      }
       const a = Buffer.from(presented);
       const b = Buffer.from(expected);
       if (a.length !== b.length || !timingSafeEqual(a, b)) {

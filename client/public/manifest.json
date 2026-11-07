@@ -31,13 +31,13 @@
       "name": "Search Flights",
       "short_name": "Search",
       "description": "Search for available flights",
-      "url": "/flights"
+      "url": "/search"
     },
     {
       "name": "My Bookings",
       "short_name": "Bookings",
       "description": "View your flight bookings",
-      "url": "/bookings"
+      "url": "/my-bookings"
     }
   ],
   "related_applications": [],

@@ -66,6 +66,8 @@ services:
       DATABASE_URL: mysql+pymysql://ais_dev:ais_dev_password@mysql:3306/ais_aviation_dev
       # Compose must fail before startup if no explicit signing secret is supplied.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set to a strong unique value of at least 32 characters}
+      # Shared with the Node backend (.env.example carries a development-only value).
+      AUTH_SERVICE_TOKEN: ${AUTH_SERVICE_TOKEN:?AUTH_SERVICE_TOKEN must be set to the same value the Node backend uses}
       DEBUG: "true"
       CORS_ORIGINS: "http://localhost:3000"
     ports:

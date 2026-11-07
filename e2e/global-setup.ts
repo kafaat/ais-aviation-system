@@ -44,7 +44,13 @@ async function registerWithAuthService() {
   for (const user of TEST_USERS) {
     const res = await fetch(`${AUTH_SERVICE_URL}/auth/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // The auth service serves only callers holding the shared credential.
+        ...(process.env.AUTH_SERVICE_TOKEN
+          ? { "X-Auth-Service-Token": process.env.AUTH_SERVICE_TOKEN }
+          : {}),
+      },
       body: JSON.stringify({
         email: user.email,
         password: user.password,
