@@ -512,6 +512,13 @@
       "when": 1794057719325,
       "tag": "0072_ndc_capability_matrix",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "5",
+      "when": 1794060053536,
+      "tag": "0073_crew_legality",
+      "breakpoints": true
     }
   ]
 }
