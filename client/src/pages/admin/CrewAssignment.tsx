@@ -34,6 +34,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Link } from "wouter";
 import {
   ChevronLeft,
@@ -49,6 +50,7 @@ import {
   Clock,
   RefreshCw,
   XCircle,
+  Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -63,7 +65,8 @@ type ActiveTab =
   | "assign"
   | "availability"
   | "schedule"
-  | "replacement";
+  | "replacement"
+  | "legality";
 
 interface ScheduleAssignment {
   assignmentId: number;
@@ -150,6 +153,11 @@ export default function CrewAssignment() {
       label: t("crew.tabs.replacement", "Find Replacement"),
       icon: RefreshCw,
     },
+    {
+      id: "legality",
+      label: t("crew.tabs.legality", "Legality (FTL)"),
+      icon: Scale,
+    },
   ];
 
   return (
@@ -195,6 +203,7 @@ export default function CrewAssignment() {
       {activeTab === "availability" && <AvailabilityTab />}
       {activeTab === "schedule" && <ScheduleTab />}
       {activeTab === "replacement" && <ReplacementTab />}
+      {activeTab === "legality" && <LegalityTab />}
     </div>
   );
 }
@@ -1766,11 +1775,19 @@ function ReplacementTab() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {candidate.ftlCompliant ? (
-                        <FtlIndicator status="green" />
-                      ) : (
-                        <FtlIndicator status="red" />
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {candidate.ftlCompliant ? (
+                          <FtlIndicator status="green" />
+                        ) : (
+                          <FtlIndicator status="red" />
+                        )}
+                        <VerdictBadge verdict={candidate.legality.verdict} />
+                        {candidate.legality.failedRules.length > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            {candidate.legality.failedRules.join(", ")}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{candidate.dutyHoursOnDate}h</TableCell>
                     <TableCell>
@@ -1849,6 +1866,704 @@ function ReplacementTab() {
           </div>
         </Card>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Legality (FTL) Tab: rule sets as data, verdicts with margins, overrides
+// ============================================================================
+
+type VerdictKind = "legal" | "legal_with_extension" | "illegal";
+
+function VerdictBadge({ verdict }: { verdict: VerdictKind }) {
+  const { t } = useTranslation();
+  const styles: Record<VerdictKind, string> = {
+    legal:
+      "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0",
+    legal_with_extension:
+      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border-0",
+    illegal:
+      "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-0",
+  };
+  const labels: Record<VerdictKind, string> = {
+    legal: t("crew.legality.verdict.legal", "Legal"),
+    legal_with_extension: t(
+      "crew.legality.verdict.legalWithExtension",
+      "Legal with extension"
+    ),
+    illegal: t("crew.legality.verdict.illegal", "Illegal"),
+  };
+  return <Badge className={styles[verdict]}>{labels[verdict]}</Badge>;
+}
+
+function FatigueBadge({ level }: { level: "low" | "elevated" | "high" }) {
+  const { t } = useTranslation();
+  const styles = {
+    low: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0",
+    elevated:
+      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border-0",
+    high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-0",
+  } as const;
+  return (
+    <Badge className={styles[level]}>
+      {t(`crew.legality.fatigue.${level}`, level)}
+    </Badge>
+  );
+}
+
+function formatMinutes(value: number | null | undefined, unit: string) {
+  if (value === null || value === undefined) return "—";
+  if (unit !== "minutes") return String(value);
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(Math.round(value));
+  return `${sign}${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, "0")}`;
+}
+
+function LegalityTab() {
+  const { t } = useTranslation();
+  const utils = trpc.useUtils();
+  const [airlineId, setAirlineId] = useState("");
+  const [confirmNote, setConfirmNote] = useState("");
+  const [previewCrewId, setPreviewCrewId] = useState("");
+  const [previewFlightId, setPreviewFlightId] = useState("");
+  const [override, setOverride] = useState({
+    ruleCodes: "",
+    reason: "",
+    approvedBy: "",
+    expiresHours: "24",
+  });
+
+  const ruleSetsQuery = trpc.crew.listRuleSets.useQuery(
+    airlineId ? { airlineId: Number(airlineId) } : undefined
+  );
+  const verdictsQuery = trpc.crew.listVerdicts.useQuery({ limit: 50 });
+  const previewQuery = trpc.crew.previewLegality.useQuery(
+    { crewMemberId: Number(previewCrewId), flightId: Number(previewFlightId) },
+    { enabled: false, retry: false }
+  );
+
+  const refresh = () => {
+    utils.crew.listRuleSets.invalidate();
+    utils.crew.listVerdicts.invalidate();
+  };
+  const onError = (err: { message: string }) => toast.error(err.message);
+  const importMutation = trpc.crew.importRuleSet.useMutation({
+    onSuccess: r => {
+      toast.success(
+        t("crew.legality.imported", "Imported {{code}} {{version}}", {
+          code: r.code,
+          version: r.version,
+        })
+      );
+      refresh();
+    },
+    onError,
+  });
+  const confirmMutation = trpc.crew.confirmRuleSet.useMutation({
+    onSuccess: () => {
+      toast.success(
+        t("crew.legality.confirmed", "Rule set confirmed by operator")
+      );
+      setConfirmNote("");
+      refresh();
+    },
+    onError,
+  });
+  const activateMutation = trpc.crew.activateRuleSet.useMutation({
+    onSuccess: () => {
+      toast.success(t("crew.legality.activated", "Rule set activated"));
+      refresh();
+    },
+    onError,
+  });
+  const overridePolicyMutation = trpc.crew.setRuleSetOverridePolicy.useMutation(
+    {
+      onSuccess: refresh,
+      onError,
+    }
+  );
+  const overrideMutation = trpc.crew.createOverride.useMutation({
+    onSuccess: r => {
+      toast.success(
+        t(
+          "crew.legality.overrideCreated",
+          "Operational override #{{id}} recorded",
+          {
+            id: r.id,
+          }
+        )
+      );
+      utils.crew.listVerdicts.invalidate();
+    },
+    onError,
+  });
+
+  const preview = previewQuery.data;
+  const previewAirlineId = ruleSetsQuery.data?.find(r => r.active)?.airlineId;
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-4 shadow-sm rounded-xl border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/30">
+        <div className="flex items-start gap-2 text-sm">
+          <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-600" />
+          <p>
+            {t(
+              "crew.legality.notice",
+              "Rule values are data imported per operator. Only an operator-confirmed, active rule set gates assignments; GACAR Part 117 values must be loaded from the official text and are never invented. The fatigue indicator is advisory and not a certified FRMS."
+            )}
+          </p>
+        </div>
+      </Card>
+
+      {/* Rule sets */}
+      <Card className="p-4 shadow-sm rounded-xl">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Scale className="h-4 w-4" />
+            {t("crew.legality.ruleSets", "FTL rule sets")}
+          </h3>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <Label>{t("crew.legality.airlineId", "Airline ID")}</Label>
+              <Input
+                type="number"
+                className="w-32"
+                value={airlineId}
+                onChange={e => setAirlineId(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="outline"
+              disabled={!airlineId || importMutation.isPending}
+              onClick={() =>
+                importMutation.mutate({
+                  airlineId: Number(airlineId),
+                  template: "EASA-ORO-FTL",
+                })
+              }
+            >
+              {t("crew.legality.importEasa", "Import EASA ORO.FTL seed")}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!airlineId || importMutation.isPending}
+              onClick={() =>
+                importMutation.mutate({
+                  airlineId: Number(airlineId),
+                  template: "GACAR-117",
+                })
+              }
+            >
+              {t("crew.legality.importGacar", "Import GACAR 117 structure")}
+            </Button>
+          </div>
+        </div>
+        <div className="mb-4">
+          <Label>
+            {t(
+              "crew.legality.confirmNote",
+              "Confirmation note (name the verified official text)"
+            )}
+          </Label>
+          <Input
+            value={confirmNote}
+            onChange={e => setConfirmNote(e.target.value)}
+            placeholder={t(
+              "crew.legality.confirmNotePlaceholder",
+              "e.g. Verified against ORO.FTL.205 Table 1, consolidated 2024 edition"
+            )}
+          />
+        </div>
+        {ruleSetsQuery.data && ruleSetsQuery.data.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("crew.legality.table.code", "Code")}</TableHead>
+                <TableHead>
+                  {t("crew.legality.table.values", "Values")}
+                </TableHead>
+                <TableHead>
+                  {t("crew.legality.table.confirmation", "Confirmation")}
+                </TableHead>
+                <TableHead>
+                  {t("crew.legality.table.status", "Status")}
+                </TableHead>
+                <TableHead className="text-right">
+                  {t("crew.table.actions", "Actions")}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ruleSetsQuery.data.map(rs => (
+                <TableRow key={rs.id}>
+                  <TableCell>
+                    <div className="font-medium">
+                      {rs.code}{" "}
+                      <span className="text-muted-foreground">
+                        {rs.version}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {rs.name} · {t("crew.legality.airlineId", "Airline ID")}{" "}
+                      {rs.airlineId}
+                    </div>
+                    <a
+                      className="text-xs underline text-muted-foreground"
+                      href={rs.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t("crew.legality.source", "Source")}
+                    </a>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <div>
+                      {rs.fdpRows} {t("crew.legality.fdpRows", "FDP rows")},{" "}
+                      {rs.limitRows} {t("crew.legality.limitRows", "limits")}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {t(
+                        "crew.legality.valuesStatus." + rs.valuesStatus,
+                        rs.valuesStatus
+                      )}
+                      {rs.pendingValues > 0 &&
+                        ` · ${rs.pendingValues} ${t("crew.legality.pending", "pending")}`}
+                      {rs.unverifiedValues > 0 &&
+                        ` · ${rs.unverifiedValues} ${t("crew.legality.unverified", "unverified")}`}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {rs.operatorConfirmed ? (
+                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        {t(
+                          "crew.legality.operatorConfirmed",
+                          "Operator confirmed"
+                        )}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">
+                        {t("crew.legality.notConfirmed", "Not confirmed")}
+                      </Badge>
+                    )}
+                    {rs.readinessIssues.length > 0 && (
+                      <ul className="text-xs text-red-600 dark:text-red-400 mt-1 list-disc ms-4">
+                        {rs.readinessIssues.slice(0, 3).map(issue => (
+                          <li key={issue}>{issue}</li>
+                        ))}
+                        {rs.readinessIssues.length > 3 && (
+                          <li>+{rs.readinessIssues.length - 3}</li>
+                        )}
+                      </ul>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {rs.active ? (
+                      <Badge>{t("crew.legality.active", "Active")}</Badge>
+                    ) : (
+                      <Badge variant="outline">
+                        {t("crew.legality.inactive", "Inactive")}
+                      </Badge>
+                    )}
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {rs.allowsOverride
+                        ? t(
+                            "crew.legality.overridesAllowed",
+                            "Overrides allowed"
+                          )
+                        : t("crew.legality.overridesBlocked", "No overrides")}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right space-x-1 space-y-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        rs.operatorConfirmed ||
+                        rs.readinessIssues.length > 0 ||
+                        !confirmNote.trim() ||
+                        confirmMutation.isPending
+                      }
+                      onClick={() =>
+                        confirmMutation.mutate({
+                          ruleSetId: rs.id,
+                          note: confirmNote,
+                        })
+                      }
+                    >
+                      {t("crew.legality.confirm", "Confirm")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={
+                        !rs.operatorConfirmed ||
+                        rs.active ||
+                        activateMutation.isPending
+                      }
+                      onClick={() =>
+                        activateMutation.mutate({ ruleSetId: rs.id })
+                      }
+                    >
+                      {t("crew.legality.activate", "Activate")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={overridePolicyMutation.isPending}
+                      onClick={() =>
+                        overridePolicyMutation.mutate({
+                          ruleSetId: rs.id,
+                          allowsOverride: !rs.allowsOverride,
+                        })
+                      }
+                    >
+                      {rs.allowsOverride
+                        ? t(
+                            "crew.legality.disallowOverrides",
+                            "Disallow overrides"
+                          )
+                        : t("crew.legality.allowOverrides", "Allow overrides")}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "crew.legality.noRuleSets",
+              "No rule sets imported. Assignments are blocked until an operator-confirmed rule set is active."
+            )}
+          </p>
+        )}
+      </Card>
+
+      {/* Verdict preview */}
+      <Card className="p-4 shadow-sm rounded-xl">
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Shield className="h-4 w-4" />
+          {t("crew.legality.preview", "Verdict preview per assignment")}
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <Label>{t("crew.crewMember", "Crew Member")} ID</Label>
+            <Input
+              type="number"
+              value={previewCrewId}
+              onChange={e => setPreviewCrewId(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>{t("crew.flightId", "Flight ID")}</Label>
+            <Input
+              type="number"
+              value={previewFlightId}
+              onChange={e => setPreviewFlightId(e.target.value)}
+            />
+          </div>
+          <div className="flex items-end">
+            <Button
+              disabled={
+                !previewCrewId || !previewFlightId || previewQuery.isFetching
+              }
+              onClick={() => previewQuery.refetch()}
+            >
+              <Search className="h-4 w-4 mr-2" />
+              {t("crew.legality.evaluate", "Evaluate")}
+            </Button>
+          </div>
+        </div>
+        {previewQuery.error && (
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {previewQuery.error.message}
+          </p>
+        )}
+        {preview && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <VerdictBadge verdict={preview.verdict} />
+              <span>
+                {preview.crewName} · {preview.flightNumber} ·{" "}
+                {preview.ruleSet.code} {preview.ruleSet.version}
+              </span>
+              <span className="text-muted-foreground">
+                {t("crew.legality.fdp", "FDP")}{" "}
+                {formatMinutes(preview.fdpMinutes, "minutes")} ·{" "}
+                {t("crew.legality.acclimatisation", "Acclimatisation")}{" "}
+                {preview.acclimatisation.state} (
+                {preview.acclimatisation.referenceTimeZone})
+              </span>
+              <span className="flex items-center gap-1">
+                {t("crew.legality.fatigueIndicator", "Fatigue indicator")}:
+                <FatigueBadge level={preview.fatigue.level} />
+                <span className="text-xs text-muted-foreground">
+                  {preview.fatigue.score}/100
+                </span>
+              </span>
+            </div>
+            {!preview.operatorProfile.compliant && (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {t(
+                  "crew.legality.operatorProfileViolations",
+                  "Operator profile"
+                )}
+                : {preview.operatorProfile.violations.join("; ")}
+              </p>
+            )}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("crew.legality.table.rule", "Rule")}</TableHead>
+                  <TableHead>
+                    {t("crew.legality.table.status", "Status")}
+                  </TableHead>
+                  <TableHead>
+                    {t("crew.legality.table.actual", "Actual")}
+                  </TableHead>
+                  <TableHead>
+                    {t("crew.legality.table.limit", "Limit")}
+                  </TableHead>
+                  <TableHead>
+                    {t("crew.legality.table.margin", "Margin")}
+                  </TableHead>
+                  <TableHead>
+                    {t("crew.legality.table.detail", "Detail")}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {preview.checks.map(check => (
+                  <TableRow key={check.code}>
+                    <TableCell>
+                      <div className="font-mono text-xs">{check.code}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {check.reference}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          check.status === "fail" ||
+                          check.status === "not_evaluable"
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
+                        {t(
+                          `crew.legality.status.${check.status}`,
+                          check.status
+                        )}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {formatMinutes(check.actual, check.unit)}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {formatMinutes(check.limit, check.unit)}
+                    </TableCell>
+                    <TableCell
+                      className={`font-mono text-sm ${
+                        check.margin !== null && check.margin < 0
+                          ? "text-red-600 dark:text-red-400"
+                          : ""
+                      }`}
+                    >
+                      {formatMinutes(check.margin, check.unit)}
+                    </TableCell>
+                    <TableCell className="text-sm">{check.detail}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {preview.fatigue.factors.length > 0 && (
+              <div className="text-sm">
+                <div className="font-medium">
+                  {t(
+                    "crew.legality.fatigueFactors",
+                    "Fatigue factors (advisory)"
+                  )}
+                </div>
+                <ul className="list-disc ms-5 text-muted-foreground">
+                  {preview.fatigue.factors.map(f => (
+                    <li key={f.code}>
+                      {f.detail} (+{f.weight})
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {preview.fatigue.disclaimer}
+                </p>
+              </div>
+            )}
+            {preview.verdict === "illegal" && previewAirlineId && (
+              <div className="border rounded-lg p-3 space-y-2">
+                <div className="font-medium text-sm">
+                  {t(
+                    "crew.legality.override",
+                    "Documented operational override"
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "crew.legality.overrideHint",
+                    "Only honoured when the active rule set allows overrides; requires reason, approver and expiry, and is logged with the verdict."
+                  )}
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <Input
+                    placeholder={t(
+                      "crew.legality.overrideRules",
+                      "Rule codes, comma-separated"
+                    )}
+                    value={override.ruleCodes}
+                    onChange={e =>
+                      setOverride({ ...override, ruleCodes: e.target.value })
+                    }
+                  />
+                  <Input
+                    type="number"
+                    placeholder={t(
+                      "crew.legality.approverId",
+                      "Approver user ID"
+                    )}
+                    value={override.approvedBy}
+                    onChange={e =>
+                      setOverride({ ...override, approvedBy: e.target.value })
+                    }
+                  />
+                  <Input
+                    type="number"
+                    placeholder={t(
+                      "crew.legality.expiresHours",
+                      "Expires in hours"
+                    )}
+                    value={override.expiresHours}
+                    onChange={e =>
+                      setOverride({ ...override, expiresHours: e.target.value })
+                    }
+                  />
+                </div>
+                <Textarea
+                  placeholder={t(
+                    "crew.legality.overrideReason",
+                    "Operational reason (min. 10 characters)"
+                  )}
+                  value={override.reason}
+                  onChange={e =>
+                    setOverride({ ...override, reason: e.target.value })
+                  }
+                />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={overrideMutation.isPending}
+                  onClick={() =>
+                    overrideMutation.mutate({
+                      airlineId: previewAirlineId,
+                      crewMemberId: preview.crewMemberId,
+                      flightId: preview.flightId,
+                      ruleCodes: override.ruleCodes
+                        .split(",")
+                        .map(s => s.trim())
+                        .filter(Boolean),
+                      reason: override.reason,
+                      approvedBy: Number(override.approvedBy),
+                      expiresAt: new Date(
+                        Date.now() +
+                          Number(override.expiresHours || 24) * 3600000
+                      ),
+                    })
+                  }
+                >
+                  {t("crew.legality.recordOverride", "Record override")}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* Verdict log */}
+      <Card className="p-4 shadow-sm rounded-xl">
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          {t("crew.legality.verdictLog", "Verdict audit log")}
+        </h3>
+        {verdictsQuery.data && verdictsQuery.data.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("crew.legality.table.when", "When")}</TableHead>
+                <TableHead>{t("crew.table.name", "Name")}</TableHead>
+                <TableHead>{t("crew.flight", "Flight")}</TableHead>
+                <TableHead>{t("crew.legality.table.path", "Path")}</TableHead>
+                <TableHead>
+                  {t("crew.legality.table.verdict", "Verdict")}
+                </TableHead>
+                <TableHead>
+                  {t("crew.legality.table.failedRules", "Failed rules")}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {verdictsQuery.data.map(v => (
+                <TableRow key={v.id}>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {new Date(v.createdAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    {v.crewName}
+                    <div className="text-xs text-muted-foreground">
+                      {v.employeeId}
+                    </div>
+                  </TableCell>
+                  <TableCell>{v.flightNumber ?? v.flightId ?? "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {t(`crew.legality.path.${v.path}`, v.path)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <VerdictBadge verdict={v.verdict} />
+                      {v.blocked && (
+                        <span className="text-xs text-red-600 dark:text-red-400">
+                          {t("crew.legality.blocked", "Blocked")}
+                        </span>
+                      )}
+                      {v.overrideId !== null && (
+                        <span className="text-xs text-yellow-700 dark:text-yellow-300">
+                          {t(
+                            "crew.legality.overrideApplied",
+                            "Override #{{id}}",
+                            {
+                              id: v.overrideId,
+                            }
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs font-mono">
+                    {v.checks
+                      .filter(
+                        c => c.status === "fail" || c.status === "not_evaluable"
+                      )
+                      .map(c => c.code)
+                      .join(", ") || "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {t("crew.legality.noVerdicts", "No verdicts recorded yet")}
+          </p>
+        )}
+      </Card>
     </div>
   );
 }

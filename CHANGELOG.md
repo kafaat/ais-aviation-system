@@ -2,12 +2,13 @@
 
 ## What's Changed in v1.39.0
 
-<!-- ais-release-source: bd567f72368822cc52bcf88b6ececb6a638edc5b -->
+<!-- ais-release-source: 0d6f1ada389b7c0163d08d646c3aea8a6a72b79b -->
 <!-- ais-release-notes:start -->
 
 ### Features
 
-- feat(ndc): gate servicing actions with a distribution capability matrix (#292) (bd567f7)
+- feat(ndc): gate servicing actions with a distribution capability matrix (#292) (bd567f72)
+- feat(crew): enforce FTL legality as a hard constraint on every assignment path (#293) (0d6f1ada)
 
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.38.0...v1.39.0
 

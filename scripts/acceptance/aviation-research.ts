@@ -297,6 +297,27 @@ try {
       id,
       id
     );
+    // The FTL legality engine blocks every assignment path without an
+    // operator-confirmed active rule set; the fixture confirms the EASA seed.
+    const legality =
+      await import("../../server/services/crew-legality.service");
+    const ruleSet = await legality.importRuleSet({
+      airlineId: id,
+      tenantId: id,
+      actorId: id,
+      template: "EASA-ORO-FTL",
+    });
+    await legality.confirmRuleSet({
+      ruleSetId: ruleSet.id,
+      actorId: id,
+      tenantId: id,
+      note: "Synthetic acceptance fixture; values not operator-verified",
+    });
+    await legality.activateRuleSet({
+      ruleSetId: ruleSet.id,
+      actorId: id,
+      tenantId: id,
+    });
     await db.insert(s.crewMembers).values({
       id,
       employeeId: "RESEARCH-CREW",
