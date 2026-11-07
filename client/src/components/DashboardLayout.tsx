@@ -277,6 +277,12 @@ const adminMenuItems: MenuItem[] = [
     adminOnly: true,
   },
   {
+    icon: FileSpreadsheet,
+    labelKey: "nav.bspSettlement",
+    path: "/admin/bsp-settlement",
+    adminOnly: true,
+  },
+  {
     icon: Database,
     labelKey: "nav.dataWarehouse",
     path: "/admin/data-warehouse",

@@ -7499,3 +7499,249 @@ export type DistributionCapability =
   typeof distributionCapabilities.$inferSelect;
 export type InsertDistributionCapability =
   typeof distributionCapabilities.$inferInsert;
+
+// ============================================================================
+// BSP settlement. Direction follows the IATA BSP link: the airline SENDS the
+// DISH RET sales report and RECEIVES the HOT billing file. Bank remittances
+// are imported from statements. Nothing here is an external acceptance.
+// ============================================================================
+
+/** The contractual link in force for one BSP country. Transmission requires a confirmed row. */
+export const settlementLinkSpecifications = mysqlTable(
+  "settlement_link_specifications",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    bspCountry: varchar("bspCountry", { length: 2 }).notNull(), // ISO 3166-1 alpha-2
+    settlementPlan: mysqlEnum("settlementPlan", ["bsp", "arc", "other"])
+      .default("bsp")
+      .notNull(),
+    linkType: mysqlEnum("linkType", ["ndclink", "ifg", "direct"]).notNull(),
+    dishVersion: varchar("dishVersion", { length: 8 }).notNull(), // e.g. "23.1"
+    airlineNumericCode: varchar("airlineNumericCode", { length: 3 }).notNull(),
+    reportingSystemId: varchar("reportingSystemId", { length: 4 }).notNull(),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    timeZone: varchar("timeZone", { length: 50 }).notNull(), // IANA zone of the BSP country
+    retCutoffLocalTime: varchar("retCutoffLocalTime", { length: 5 }).notNull(), // HH:MM
+    hotCutoffLocalTime: varchar("hotCutoffLocalTime", { length: 5 }).notNull(), // HH:MM
+    effectiveFrom: varchar("effectiveFrom", { length: 10 }).notNull(), // civil date YYYY-MM-DD
+    effectiveTo: varchar("effectiveTo", { length: 10 }),
+    confirmationStatus: mysqlEnum("confirmationStatus", [
+      "draft",
+      "confirmed",
+      "revoked",
+    ])
+      .default("draft")
+      .notNull(),
+    confirmationReference: varchar("confirmationReference", { length: 100 }),
+    confirmedBy: int("confirmedBy"),
+    confirmedAt: timestamp("confirmedAt"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    scope: index("settlement_link_scope_idx").on(
+      t.bspCountry,
+      t.confirmationStatus,
+      t.effectiveFrom
+    ),
+  })
+);
+
+/** One generated outbound RET file. Content and hash are immutable after generation. */
+export const bspRetFiles = mysqlTable(
+  "bsp_ret_files",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    specificationId: int("specificationId").notNull(),
+    bspCountry: varchar("bspCountry", { length: 2 }).notNull(),
+    reportingDate: varchar("reportingDate", { length: 10 }).notNull(), // civil date at the BSP country
+    windowStart: timestamp("windowStart").notNull(),
+    windowEnd: timestamp("windowEnd").notNull(),
+    sequenceNumber: int("sequenceNumber").notNull(),
+    fileName: varchar("fileName", { length: 64 }).notNull(),
+    sha256: varchar("sha256", { length: 64 }).notNull().unique(),
+    content: longtext("content").notNull(),
+    recordCount: int("recordCount").notNull(),
+    transactionCount: int("transactionCount").notNull(),
+    controlTotals: json("controlTotals").notNull(),
+    fallbackLineCount: int("fallbackLineCount").notNull().default(0),
+    status: mysqlEnum("status", [
+      "generated",
+      "transmitted",
+      "accepted",
+      "rejected",
+    ])
+      .default("generated")
+      .notNull(),
+    transmittedAt: timestamp("transmittedAt"),
+    transportReference: varchar("transportReference", { length: 255 }),
+    acknowledgedAt: timestamp("acknowledgedAt"),
+    acknowledgementReason: varchar("acknowledgementReason", { length: 500 }),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    period: uniqueIndex("bsp_ret_period_idx").on(
+      t.bspCountry,
+      t.reportingDate,
+      t.sequenceNumber
+    ),
+  })
+);
+
+/** One reported document transaction inside a RET file. */
+export const bspRetLines = mysqlTable(
+  "bsp_ret_lines",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    fileId: int("fileId").notNull(),
+    transactionNumber: int("transactionNumber").notNull(),
+    transactionCode: varchar("transactionCode", { length: 4 }).notNull(), // TKTT, RFND, EMDS, EMDA
+    documentNumber: varchar("documentNumber", { length: 15 }).notNull(),
+    bookingId: int("bookingId"),
+    passengerId: int("passengerId"),
+    ledgerEntryId: int("ledgerEntryId"),
+    agentCode: varchar("agentCode", { length: 8 }).notNull(),
+    fareAmount: int("fareAmount").notNull(),
+    taxAmount: int("taxAmount").notNull(),
+    commissionAmount: int("commissionAmount").notNull(),
+    netAmount: int("netAmount").notNull(),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    formOfPayment: varchar("formOfPayment", { length: 2 }).notNull(),
+    issuedAt: timestamp("issuedAt").notNull(),
+    componentsSource: mysqlEnum("componentsSource", [
+      "fare_components",
+      "booking_total_fallback",
+    ]).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    file: index("bsp_ret_line_file_idx").on(t.fileId, t.transactionNumber),
+    document: index("bsp_ret_line_document_idx").on(
+      t.documentNumber,
+      t.transactionCode
+    ),
+  })
+);
+
+/** One received HOT billing file, stored verbatim; the hash forbids duplicates. */
+export const bspHotFiles = mysqlTable("bsp_hot_files", {
+  id: int("id").autoincrement().primaryKey(),
+  bspCountry: varchar("bspCountry", { length: 2 }).notNull(),
+  fileName: varchar("fileName", { length: 128 }).notNull(),
+  sha256: varchar("sha256", { length: 64 }).notNull().unique(),
+  content: longtext("content").notNull(),
+  recordCount: int("recordCount").notNull(),
+  transactionCount: int("transactionCount").notNull(),
+  processingDate: varchar("processingDate", { length: 10 }),
+  remittancePeriodEnd: varchar("remittancePeriodEnd", { length: 10 }),
+  totals: json("totals").notNull(),
+  warnings: json("warnings").notNull(),
+  ingestedBy: int("ingestedBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** One billed document transaction parsed from a HOT file. */
+export const bspHotLines = mysqlTable(
+  "bsp_hot_lines",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    fileId: int("fileId").notNull(),
+    transactionNumber: int("transactionNumber").notNull(),
+    transactionCode: varchar("transactionCode", { length: 4 }).notNull(),
+    documentNumber: varchar("documentNumber", { length: 15 }).notNull(),
+    agentCode: varchar("agentCode", { length: 8 }).notNull(),
+    passengerName: varchar("passengerName", { length: 49 }),
+    fareAmount: int("fareAmount").notNull(),
+    taxAmount: int("taxAmount").notNull(),
+    commissionAmount: int("commissionAmount").notNull(),
+    netAmount: int("netAmount").notNull(),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    formOfPayment: varchar("formOfPayment", { length: 2 }),
+    issueDate: varchar("issueDate", { length: 10 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    file: index("bsp_hot_line_file_idx").on(t.fileId, t.transactionNumber),
+    document: index("bsp_hot_line_document_idx").on(
+      t.documentNumber,
+      t.transactionCode
+    ),
+  })
+);
+
+/** Bank statement lines imported for BSP remittances; no account numbers are stored. */
+export const bspBankRemittances = mysqlTable(
+  "bsp_bank_remittances",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bspCountry: varchar("bspCountry", { length: 2 }).notNull(),
+    importSha256: varchar("importSha256", { length: 64 }).notNull(),
+    lineNumber: int("lineNumber").notNull(),
+    valueDate: varchar("valueDate", { length: 10 }).notNull(),
+    amount: int("amount").notNull(),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    reference: varchar("reference", { length: 140 }).notNull(),
+    counterparty: varchar("counterparty", { length: 140 }),
+    importedBy: int("importedBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    once: uniqueIndex("bsp_remittance_once_idx").on(
+      t.importSha256,
+      t.lineNumber
+    ),
+    period: index("bsp_remittance_period_idx").on(t.bspCountry, t.valueDate),
+  })
+);
+
+/** One reconciliation of ledger, RET, HOT and remittance for a period. */
+export const bspReconciliationRuns = mysqlTable("bsp_reconciliation_runs", {
+  id: int("id").autoincrement().primaryKey(),
+  bspCountry: varchar("bspCountry", { length: 2 }).notNull(),
+  settlementPlan: mysqlEnum("settlementPlan", ["bsp", "arc", "other"])
+    .default("bsp")
+    .notNull(),
+  periodStart: varchar("periodStart", { length: 10 }).notNull(),
+  periodEnd: varchar("periodEnd", { length: 10 }).notNull(),
+  sources: json("sources").notNull(),
+  summary: json("summary").notNull(),
+  status: mysqlEnum("status", ["open", "complete"]).default("open").notNull(),
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+/** One document-level reconciliation result; dispositions are recorded, never deleted. */
+export const bspReconciliationItems = mysqlTable(
+  "bsp_reconciliation_items",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    runId: int("runId").notNull(),
+    documentNumber: varchar("documentNumber", { length: 15 }).notNull(),
+    transactionCode: varchar("transactionCode", { length: 4 }).notNull(),
+    ledgerEntryId: int("ledgerEntryId"),
+    bookingId: int("bookingId"),
+    retLineId: int("retLineId"),
+    hotLineId: int("hotLineId"),
+    remittanceId: int("remittanceId"),
+    expectedAmount: int("expectedAmount"),
+    hotAmount: int("hotAmount"),
+    classification: mysqlEnum("classification", [
+      "matched",
+      "missing_in_hot",
+      "amount_mismatch",
+      "missing_remittance",
+      "unexpected_in_hot",
+    ]).notNull(),
+    dispositionReason: varchar("dispositionReason", { length: 500 }),
+    dispositionedBy: int("dispositionedBy"),
+    dispositionedAt: timestamp("dispositionedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    run: index("bsp_reconciliation_item_run_idx").on(t.runId, t.classification),
+  })
+);
