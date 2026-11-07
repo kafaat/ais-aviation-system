@@ -213,6 +213,15 @@ jobs:
         timeout-minutes: 5
         run: bash scripts/ci/provision-test-redis.sh
 
+      - name: Prepare Nginx for real API readiness acceptance
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends nginx
+          fi
+          nginx -v
       - name: Verify coverage evidence tooling
         run: |
           node --test scripts/ci/coverage-partitions.test.mjs scripts/ci/coverage-scope-inventory.test.mjs
