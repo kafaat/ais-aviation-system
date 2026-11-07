@@ -378,6 +378,46 @@ if (!booking) {
 
 ## API Security
 
+### Prometheus Scrape Authentication
+
+`GET /api/metrics` exposes operational route labels and resource metrics. In
+`NODE_ENV=production`, an absent, empty or invalid `METRICS_TOKEN` disables the
+endpoint with HTTP 503; the application and readiness APIs remain unchanged.
+With a configured token, missing, malformed or incorrect bearer authorization
+returns HTTP 401. Metrics are returned only on a successful scrape (HTTP 200).
+Development and test modes allow unauthenticated scrapes when the token is absent;
+a configured token still requires authentication in those modes.
+
+Generate a dedicated random token, for example with `openssl rand -hex 32`, and
+set it as the web process's `METRICS_TOKEN` through your secret manager. Use the
+token alone, not the `Bearer` scheme prefix. Tokens must contain one or more ASCII
+letters, digits or `-._~+/`, optionally followed by `=` padding; whitespace,
+quotes and other characters are invalid. Do not commit the value or log request
+authorization headers.
+
+Provision the same token in a private file readable by Prometheus and configure
+the scrape job (replace the illustrative hostname with your authorized target):
+
+```yaml
+scrape_configs:
+  - job_name: ais
+    metrics_path: /api/metrics
+    scheme: https
+    authorization:
+      type: "Bearer"
+      credentials_file: /etc/prometheus/secrets/ais-metrics-token
+    static_configs:
+      - targets: ["ais.example.com"]
+```
+
+Prometheus sends the token in the Authorization header using the `Bearer` scheme;
+it does not expand environment variables in `credentials_file`. Keep TLS
+verification enabled, restrict network access to the scrape endpoint, and ensure
+any reverse proxy forwards this header.
+Rotate both copies together and verify that anonymous and wrong-token scrapes
+fail while the authorized scrape succeeds. No Kubernetes credentials are
+provided or created by this configuration.
+
 ### Rate Limiting
 
 **Implementation:**
