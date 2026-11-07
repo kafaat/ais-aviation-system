@@ -127,12 +127,10 @@ async function startServer() {
   // Route labels, memory, CPU and error rates are operational detail;
   // production requires a usable scraper token; local modes may omit it.
   const metricsTokenPattern = /^[A-Za-z0-9._~+/-]+=*$/;
-  const usableMetricsToken = (value: string | undefined) =>
-    Boolean(
-      value &&
-        metricsTokenPattern.test(value) &&
-        (process.env.NODE_ENV !== "production" || value.length >= 32)
-    );
+  const usableMetricsToken = (value: string | undefined): boolean => {
+    if (!value || !metricsTokenPattern.test(value)) return false;
+    return process.env.NODE_ENV !== "production" || value.length >= 32;
+  };
   if (
     process.env.NODE_ENV === "production" &&
     !usableMetricsToken(process.env.METRICS_TOKEN)
