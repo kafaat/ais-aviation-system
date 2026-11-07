@@ -20,6 +20,21 @@ import {
   userCredits,
 } from "../../drizzle/schema";
 import { and, eq, desc, sql } from "drizzle-orm";
+import {
+  baseMilesFor,
+  getActiveProgramRule,
+  higherTier,
+  lotExpiryFor,
+  rollTierPeriod,
+} from "./loyalty-rules.service";
+import {
+  assertRedemptionCoolingOff,
+  assertRedemptionVelocity,
+  LoyaltyControlError,
+  recordBlockedRedemption,
+  recordRedemptionAudit,
+  type RedemptionContext,
+} from "./loyalty-security.service";
 
 /**
  * Loyalty Service
@@ -37,9 +52,11 @@ const TIER_THRESHOLDS = {
 };
 
 /**
- * Miles earning rate (miles per SAR spent)
+ * Miles earning rate. The historical constant (1 mile per SAR of net paid)
+ * is now the `legacy_spend` basis of the default programme rule in
+ * loyalty-rules.service; a configured rule may switch to revenue-based
+ * earning (miles per SAR of base fare) from its effective date.
  */
-const MILES_PER_SAR = 1; // 1 mile per 1 SAR
 
 /**
  * Tier multipliers for miles earning
@@ -143,8 +160,10 @@ export async function syncBookingMiles(
     .insert(loyaltyAccounts)
     .values({ userId, tier: "bronze" })
     .onDuplicateKeyUpdate({ set: { userId: sql`${loyaltyAccounts.userId}` } });
+  const now = new Date();
+  const rule = await getActiveProgramRule(tx, now);
   const state = await lockMilesState(tx, userId);
-  await expireMilesLots(tx, state);
+  await expireMilesLots(tx, state, now, rule);
   const account = state.account;
   let [accrual] = await tx
     .select()
@@ -218,31 +237,33 @@ export async function syncBookingMiles(
   const eligible =
     ["confirmed", "completed"].includes(booking.status) &&
     booking.paymentStatus === "paid";
+  // Earning basis comes from the programme rule in force; the default rule
+  // reproduces the historical floor(net SAR x 1) exactly.
   const baseMiles = eligible
-    ? Math.floor(
-        (Math.max(0, Math.min(booking.totalAmount, net)) / 100) * MILES_PER_SAR
-      )
+    ? baseMilesFor(rule, Math.max(0, Math.min(booking.totalAmount, net)))
     : 0;
   const target = Math.floor(baseMiles * Number(accrual.multiplier));
   const delta = target - accrual.awardedMiles;
   const tierDelta = baseMiles - accrual.awardedTierPoints;
   if (delta > 0) {
-    const expiry = new Date();
-    expiry.setFullYear(expiry.getFullYear() + 2);
     await creditMiles(tx, state, {
       amount: delta,
       type: "earn",
       bookingId,
       flightId: booking.flightId,
       reason: `booking-net:${bookingId}`,
-      expiresAt: expiry,
+      expiresAt: lotExpiryFor(rule, now),
     });
   } else if (delta < 0)
     await reverseBookingMilesCredit(tx, state, bookingId, -delta);
   const newBalance = state.account.currentMilesBalance;
-  const tierPoints = Math.max(0, account.tierPoints + tierDelta);
-  const newTier = calculateTier(tierPoints);
-  if (delta || tierDelta) {
+  // Tier qualification window (rule-driven; legacy rule keeps cumulative points).
+  const period = rollTierPeriod(rule, account, now);
+  const tierPoints = Math.max(0, period.tierPoints + tierDelta);
+  const newTier = rule.tierQualificationMonths
+    ? higherTier(period.retainedTier, calculateTier(tierPoints))
+    : calculateTier(tierPoints);
+  if (delta || tierDelta || period.rolled) {
     // A refund after redemption creates a negative balance, not free miles.
     // Redemption already requires a sufficient positive balance.
     await tx
@@ -252,7 +273,8 @@ export async function syncBookingMiles(
         totalMilesEarned: Math.max(0, account.totalMilesEarned + delta),
         tierPoints,
         tier: newTier,
-        lastActivityAt: new Date(),
+        tierPeriodStartedAt: period.tierPeriodStartedAt,
+        lastActivityAt: now,
       })
       .where(eq(loyaltyAccounts.id, account.id));
     await tx
@@ -288,15 +310,23 @@ export async function redeemMiles(
   userId: number,
   milesToRedeem: number,
   bookingId?: number,
-  mfaToken?: string
+  mfaToken?: string,
+  context?: RedemptionContext
 ): Promise<{ discountAmount: number; newBalance: number }> {
   requireMiles(milesToRedeem);
   try {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
+    // ATO controls (loyalty-security.service): loyalty account takeover grew
+    // >50% year on year in travel (Ravelin/Mastercard 2024). Velocity is
+    // checked before the transaction so a blocked burst still counts.
+    const rule = await getActiveProgramRule(database);
+    await assertRedemptionVelocity(userId, rule);
+
     // Use a transaction to prevent race conditions on balance updates
     return await database.transaction(async tx => {
+      await assertRedemptionCoolingOff(tx, userId, rule);
       if (!(await consumeActionTotp(tx, userId, mfaToken, "if-enrolled")))
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -316,11 +346,19 @@ export async function redeemMiles(
           });
       }
       const state = await lockMilesState(tx, userId);
-      await expireMilesLots(tx, state);
+      await expireMilesLots(tx, state, new Date(), rule);
       const newBalance = await spendMiles(tx, state, milesToRedeem, {
         type: "redeem",
         bookingId,
         reason: "Miles redeemed for discount",
+      });
+      // Redemption audit with device/IP metadata, atomic with the debit.
+      await recordRedemptionAudit(tx, {
+        userId,
+        miles: milesToRedeem,
+        bookingId,
+        outcome: "redeemed",
+        context,
       });
       // 1 mile = 1 cent. The value must exist somewhere the customer can
       // spend it: a booking credit lot in the same transaction as the miles
@@ -345,6 +383,14 @@ export async function redeemMiles(
       };
     });
   } catch (error) {
+    if (error instanceof LoyaltyControlError)
+      await recordBlockedRedemption({
+        userId,
+        miles: milesToRedeem,
+        bookingId,
+        reason: error.control,
+        context,
+      });
     if (error instanceof TRPCError) {
       throw error;
     }
@@ -429,6 +475,8 @@ export async function processExpiredMiles(): Promise<{
 }> {
   const database = getDb();
   if (!database) throw new Error("Database unavailable for miles expiration");
+  const now = new Date();
+  const rule = await getActiveProgramRule(database, now);
   const accounts = await database
     .select({ userId: loyaltyAccounts.userId })
     .from(loyaltyAccounts);
@@ -440,7 +488,7 @@ export async function processExpiredMiles(): Promise<{
     try {
       const expired = await database.transaction(async tx => {
         const state = await lockMilesState(tx, account.userId);
-        return await expireMilesLots(tx, state);
+        return await expireMilesLots(tx, state, now, rule);
       });
       if (expired) processedAccounts++;
       totalExpiredMiles += expired;
@@ -500,14 +548,16 @@ export async function awardBonusMiles(
 
     // Use a transaction to prevent race conditions on balance updates
     return await database.transaction(async tx => {
+      const now = new Date();
+      const rule = await getActiveProgramRule(tx, now);
       const state = await lockMilesState(tx, userId);
-      await expireMilesLots(tx, state);
+      await expireMilesLots(tx, state, now, rule);
       const account = state.account;
       const newBalance = await creditMiles(tx, state, {
         amount: miles,
         type: "bonus",
         reason,
-        expiresAt: new Date(Date.now() + 2 * 365 * 86400000),
+        expiresAt: lotExpiryFor(rule, now),
       });
 
       // Update account

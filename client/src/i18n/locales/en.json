@@ -111,7 +111,8 @@
     "bspReporting": "BSP Reporting",
     "dataWarehouse": "Data Warehouse",
     "sla": "SLA Monitoring",
-    "disasterRecovery": "Disaster Recovery"
+    "disasterRecovery": "Disaster Recovery",
+    "loyaltyAccounting": "Loyalty Accounting"
   },
   "home": {
     "hero": {
@@ -2091,7 +2092,58 @@
         "hold": "Hold Price"
       }
     },
-    "operationsLink": "Operations control"
+    "operationsLink": "Operations control",
+    "loyaltyAccounting": {
+      "title": "Loyalty Accounting",
+      "subtitle": "IFRS 15 contract liability, breakage estimate and miles expiring soon",
+      "runLifecycle": "Run expiry & notices",
+      "lifecycleRan": "Lifecycle completed: {{expired}} miles expired, {{notices}} notices scheduled",
+      "outstandingMiles": "Outstanding miles",
+      "unvaluedMiles": "{{miles}} issued before the policy (no liability)",
+      "liability": "Contract liability",
+      "reconciliation": "Lots vs ledger difference: {{amount}} SAR",
+      "breakageEstimate": "Expected breakage",
+      "breakageRate": "Breakage rate {{rate}}%",
+      "expiring90": "Miles expiring in 90 days",
+      "expiringAccounts": "{{count}} member accounts",
+      "policy": "Accounting policy in force",
+      "policyDesc": "Each mile issued defers revenue at the stand-alone selling price net of expected breakage; redemption recognises revenue and expiry releases breakage.",
+      "valuationStatus": "Valuation",
+      "halalaPerMile": "halala per mile",
+      "expiryRule": "Expiry rule",
+      "earningBasis": "Earning basis",
+      "ledger": "Ledger (SAR)",
+      "ledgerLine": "deferred {{deferred}} · revenue {{revenue}} · breakage {{breakage}} · reversals {{reversal}}",
+      "pendingNotices": "Expiry notices awaiting delivery",
+      "financeNote": "Approval here records who approved. Setting SSP and the breakage estimate, re-measuring miles issued before the policy, and partner earn/burn settlement remain finance controls outside this system.",
+      "valuations": "SSP and breakage valuations",
+      "valuationsDesc": "Propose a valuation as a draft; approval applies it to miles issued from its effective date (prospective change in estimate).",
+      "ssp": "SSP (halala/mile)",
+      "breakage": "Breakage %",
+      "effectiveFrom": "Effective from",
+      "propose": "Propose draft",
+      "approve": "Record approval",
+      "approvedBy": "Approved by",
+      "statusLabel": "Status",
+      "noValuations": "No valuations yet; the unapproved default (1 halala per mile, 0% breakage) applies.",
+      "valuationCreated": "Draft valuation created",
+      "valuationApproved": "Valuation approval recorded",
+      "status": {
+        "approved": "Approved",
+        "unapproved-default": "Unapproved default",
+        "draft": "Draft",
+        "superseded": "Superseded",
+        "rejected": "Rejected"
+      },
+      "expiryMode": {
+        "fixed_from_earn": "Each lot expires {{months}} months after issuance",
+        "activity": "All miles lapse after {{months}} months without earning or redeeming"
+      },
+      "earning": {
+        "legacy_spend": "{{rate}} miles per SAR of net paid total",
+        "revenue_base_fare": "{{rate}} miles per SAR of base fare"
+      }
+    }
   },
   "rebook": {
     "title": "Rebook Flight",

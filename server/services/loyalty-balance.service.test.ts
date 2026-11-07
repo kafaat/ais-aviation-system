@@ -19,6 +19,7 @@ const account = {
   milesRedeemed: 0,
   tier: "bronze",
   tierPoints: 0,
+  tierPeriodStartedAt: null,
   memberSince: now,
   lastActivityAt: now,
   createdAt: now,

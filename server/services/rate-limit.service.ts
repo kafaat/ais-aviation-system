@@ -147,6 +147,19 @@ export const STRICT_RATE_LIMITS: Record<string, RateLimitTier> = {
     requestsPerWindow: 20,
     windowMs: 60 * 1000, // 1 minute
   },
+
+  // Loyalty ATO controls (loyalty-security.service): the daily caps below
+  // are defaults; the active programme rule overrides requestsPerWindow.
+  loyaltyRedemption: {
+    name: "loyaltyRedemption",
+    requestsPerWindow: 5,
+    windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  },
+  loyaltyProfileChange: {
+    name: "loyaltyProfileChange",
+    requestsPerWindow: 3,
+    windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  },
 };
 
 /**

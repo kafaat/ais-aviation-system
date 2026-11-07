@@ -2,6 +2,33 @@ import { responseContracts } from "../contracts/loyalty";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import * as loyaltyService from "../services/loyalty.service";
+import { getDb } from "../db";
+import { TRPCError } from "@trpc/server";
+import {
+  approveValuation,
+  createValuation,
+  getLoyaltyAccountingSummary,
+  listValuations,
+} from "../services/loyalty-accounting.service";
+import {
+  getActiveProgramRule,
+  setProgramRule,
+} from "../services/loyalty-rules.service";
+import {
+  countPendingNotices,
+  runLoyaltyLifecycle,
+} from "../services/loyalty-lifecycle.service";
+import { redemptionContextFromRequest } from "../services/loyalty-security.service";
+
+function requireDb() {
+  const db = getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  return db;
+}
 
 /**
  * Loyalty Router
@@ -100,7 +127,8 @@ export const loyaltyRouter = router({
         ctx.user.id,
         input.milesToRedeem,
         input.bookingId,
-        input.mfaToken
+        input.mfaToken,
+        redemptionContextFromRequest(ctx.req)
       );
     }),
 
@@ -253,4 +281,143 @@ export const loyaltyRouter = router({
         input.limit
       );
     }),
+
+  // ============================================================================
+  // Programme accounting (IFRS 15) and lifecycle — admin
+  // ============================================================================
+
+  accountingSummary: adminProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/admin/loyalty/accounting",
+        tags: ["Loyalty", "Admin"],
+        summary: "Loyalty contract liability summary",
+        description:
+          "Outstanding miles, deferred-revenue (contract liability) balance, breakage estimate and miles expiring within 90 days. SSP and breakage approval remain a finance control outside this system.",
+        protect: true,
+      },
+    })
+    .output(responseContracts["accountingSummary"])
+    .query(async () => {
+      const db = requireDb();
+      const [summary, pendingNotices] = await Promise.all([
+        getLoyaltyAccountingSummary(db),
+        countPendingNotices(db),
+      ]);
+      return { ...summary, pendingNotices };
+    }),
+
+  listValuations: adminProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/admin/loyalty/valuations",
+        tags: ["Loyalty", "Admin"],
+        summary: "List SSP/breakage valuations",
+        protect: true,
+      },
+    })
+    .output(responseContracts["listValuations"])
+    .query(async () => await listValuations(requireDb())),
+
+  createValuation: adminProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/admin/loyalty/valuations",
+        tags: ["Loyalty", "Admin"],
+        summary: "Propose a valuation (draft)",
+        protect: true,
+      },
+    })
+    .input(
+      z.object({
+        sspMinorPerMile: z.number().positive().max(100000),
+        breakageRatePercent: z.number().min(0).max(99.99),
+        effectiveFrom: z.date(),
+        notes: z.string().max(1000).optional(),
+      })
+    )
+    .output(responseContracts["createValuation"])
+    .mutation(
+      async ({ ctx, input }) =>
+        await createValuation(requireDb(), input, ctx.user.id)
+    ),
+
+  approveValuation: adminProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/admin/loyalty/valuations/{id}/approve",
+        tags: ["Loyalty", "Admin"],
+        summary: "Record valuation approval (placeholder for finance sign-off)",
+        protect: true,
+      },
+    })
+    .input(z.object({ id: z.number().int().positive() }))
+    .output(responseContracts["approveValuation"])
+    .mutation(
+      async ({ ctx, input }) =>
+        await approveValuation(requireDb(), input.id, ctx.user.id)
+    ),
+
+  getProgramRule: adminProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/admin/loyalty/rules/active",
+        tags: ["Loyalty", "Admin"],
+        summary: "Active programme rule set",
+        protect: true,
+      },
+    })
+    .output(responseContracts["getProgramRule"])
+    .query(async () => await getActiveProgramRule(requireDb())),
+
+  setProgramRule: adminProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/admin/loyalty/rules",
+        tags: ["Loyalty", "Admin"],
+        summary: "Activate a programme rule set from an effective date",
+        protect: true,
+      },
+    })
+    .input(
+      z.object({
+        name: z.string().min(1).max(100),
+        effectiveFrom: z.date(),
+        earningBasis: z.enum(["legacy_spend", "revenue_base_fare"]),
+        milesPerSar: z.number().min(0).max(100),
+        baseFareShareBps: z.number().int().min(0).max(10000),
+        expiryMode: z.enum(["fixed_from_earn", "activity"]),
+        expiryMonths: z.number().int().min(1).max(120),
+        expiryNoticeDays: z.array(z.number().int().min(1).max(365)).max(6),
+        tierQualificationMonths: z.number().int().min(1).max(36).nullable(),
+        redemptionCoolingOffHours: z.number().int().min(0).max(720),
+        redemptionVelocityPerDay: z.number().int().min(1).max(1000),
+        profileChangeVelocityPerDay: z.number().int().min(1).max(100),
+        notes: z.string().max(1000).optional(),
+      })
+    )
+    .output(responseContracts["setProgramRule"])
+    .mutation(
+      async ({ ctx, input }) =>
+        await setProgramRule(requireDb(), input, ctx.user.id)
+    ),
+
+  runLifecycle: adminProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/admin/loyalty/lifecycle/run",
+        tags: ["Loyalty", "Admin"],
+        summary: "Run the expiry and notice lifecycle now",
+        protect: true,
+      },
+    })
+    .output(responseContracts["runLifecycle"])
+    .mutation(async () => await runLoyaltyLifecycle()),
 });

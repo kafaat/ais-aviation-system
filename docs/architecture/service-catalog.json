@@ -1270,6 +1270,7 @@
         "server/services/group-booking.service.ts",
         "server/services/hotel-fulfillment.service.ts",
         "server/services/inventory-lock.service.ts",
+        "server/services/loyalty-lifecycle.service.ts",
         "server/services/on-call.service.ts",
         "server/services/operational-observations.service.ts",
         "server/services/order-refunds.service.ts",
@@ -1545,6 +1546,7 @@
         "server/jobs/check-in-reminder.job.ts",
         "server/queue/workers/email.worker.ts",
         "server/services/flight-event-delivery.service.ts",
+        "server/services/loyalty-lifecycle.service.ts",
         "server/services/notification.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/queue.service.ts",
@@ -2788,6 +2790,34 @@
       "replacement": null
     },
     {
+      "file": "server/services/loyalty-accounting.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/loyalty-accounting.service.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/loyalty.ts",
+        "server/services/loyalty-balance.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/loyalty-rules.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "financialLedger",
+          "loyaltyAccounts",
+          "loyaltyCreditLots",
+          "loyaltyValuations"
+        ],
+        "writes": ["financialLedger", "loyaltyValuations"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/loyalty-balance.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/loyalty-balance.service.ts",
@@ -2798,12 +2828,92 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/services/family-pool.service.ts",
+        "server/services/loyalty-lifecycle.service.ts",
+        "server/services/loyalty.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/loyalty-accounting.service.ts",
+        "server/services/loyalty-rules.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["loyaltyAccounts", "loyaltyCreditLots", "milesTransactions"],
+        "writes": ["loyaltyAccounts", "loyaltyCreditLots", "milesTransactions"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/loyalty-lifecycle.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/loyalty-lifecycle.service.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/loyalty.ts",
+        "server/services/cron.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/email.service.ts",
+        "server/services/loyalty-balance.service.ts",
+        "server/services/loyalty-rules.service.ts",
+        "server/services/notification.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["loyaltyAccounts", "loyaltyExpiryNotices", "users"],
+        "writes": ["loyaltyExpiryNotices"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/loyalty-rules.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/loyalty-rules.service.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/loyalty.ts",
+        "server/services/loyalty-accounting.service.ts",
+        "server/services/loyalty-balance.service.ts",
+        "server/services/loyalty-lifecycle.service.ts",
         "server/services/loyalty.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
       "tableExpressions": {
-        "reads": ["loyaltyAccounts", "loyaltyCreditLots", "milesTransactions"],
-        "writes": ["loyaltyAccounts", "loyaltyCreditLots", "milesTransactions"]
+        "reads": ["loyaltyProgramRules"],
+        "writes": ["loyaltyProgramRules"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/loyalty-security.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/loyalty-security.service.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/loyalty.ts",
+        "server/routers/mfa.ts",
+        "server/services/loyalty.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/rate-limit.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["securityEvents"],
+        "writes": ["securityEvents"]
       },
       "replacement": null
     },
@@ -2825,6 +2935,8 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/loyalty-balance.service.ts",
+        "server/services/loyalty-rules.service.ts",
+        "server/services/loyalty-security.service.ts",
         "server/services/mfa.service.ts"
       ],
       "tableExpressions": {
@@ -3156,6 +3268,7 @@
         "server/routers/bookings.ts",
         "server/routers/notifications.ts",
         "server/services/gate.service.ts",
+        "server/services/loyalty-lifecycle.service.ts",
         "server/services/price-alerts.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/queue.service.ts",
@@ -4344,7 +4457,8 @@
         "server/_core/middleware/procedure-rate-limit.ts",
         "server/_core/middleware/user-rate-limit.middleware.ts",
         "server/_core/rateLimiter.ts",
-        "server/routers/rate-limit.ts"
+        "server/routers/rate-limit.ts",
+        "server/services/loyalty-security.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",

@@ -30,6 +30,10 @@ import {
   disableMfa,
   updateBackupCodes,
 } from "../services/mfa.service";
+import {
+  recordCredentialChange,
+  redemptionContextFromRequest,
+} from "../services/loyalty-security.service";
 
 // ============================================================================
 // Input Schemas
@@ -146,6 +150,12 @@ export const mfaRouter = router({
         });
       }
 
+      // Loyalty ATO control: profile-change velocity and redemption cooling-off.
+      await recordCredentialChange(
+        userId,
+        "mfa_enabled",
+        redemptionContextFromRequest(ctx.req)
+      );
       // Enable MFA
       await enableMfa(userId, settings.secret);
 
@@ -197,6 +207,12 @@ export const mfaRouter = router({
         });
       }
 
+      // Loyalty ATO control: profile-change velocity and redemption cooling-off.
+      await recordCredentialChange(
+        userId,
+        "mfa_disabled",
+        redemptionContextFromRequest(ctx.req)
+      );
       await disableMfa(userId, settings.secret);
 
       logger.info({ userId }, "MFA disabled by user");

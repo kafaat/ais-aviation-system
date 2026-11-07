@@ -690,6 +690,9 @@ export const loyaltyAccounts = mysqlTable(
       .notNull()
       .default("bronze"),
     tierPoints: int("tierPoints").notNull().default(0), // Points for tier qualification
+    // Start of the current tier qualification window; null while the active
+    // programme rule has no window (legacy: tier points accumulate forever).
+    tierPeriodStartedAt: timestamp("tierPeriodStartedAt"),
 
     // Metadata
     memberSince: timestamp("memberSince").defaultNow().notNull(),
@@ -766,8 +769,148 @@ export const loyaltyCreditLots = mysqlTable(
     expiredMiles: int("expiredMiles").notNull().default(0),
     reversedMiles: int("reversedMiles").notNull().default(0),
     expiresAt: timestamp("expiresAt"),
+    // IFRS 15 contract liability locked at issuance. Null valuation marks a
+    // lot issued before the accounting policy; it carries no liability until
+    // finance posts a catch-up entry outside this system.
+    valuationId: int("valuationId"),
+    sspMinorPerMile: decimal("sspMinorPerMile", { precision: 10, scale: 4 }),
+    breakageRatePercent: decimal("breakageRatePercent", {
+      precision: 5,
+      scale: 2,
+    }),
+    // Carrying liability for the lot in SAR minor units, kept equal to
+    // round(remainingMiles * ssp * (1 - breakage)) after every posting.
+    deferredMinor: int("deferredMinor").notNull().default(0),
   },
   t => ({ account: index("loyalty_lots_account_idx").on(t.loyaltyAccountId) })
+);
+
+/**
+ * Loyalty valuation: stand-alone selling price per mile and breakage estimate
+ * used to defer ticket revenue into a contract liability (IFRS 15 / ASC 606).
+ * Approval here is a placeholder for the finance sign-off that remains an
+ * external control; the approving user is recorded, not the authority.
+ */
+export const loyaltyValuations = mysqlTable(
+  "loyalty_valuations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    sspMinorPerMile: decimal("sspMinorPerMile", { precision: 10, scale: 4 })
+      .notNull()
+      .default("1.0000"),
+    breakageRatePercent: decimal("breakageRatePercent", {
+      precision: 5,
+      scale: 2,
+    })
+      .notNull()
+      .default("0.00"),
+    effectiveFrom: timestamp("effectiveFrom").notNull(),
+    status: mysqlEnum("status", ["draft", "approved", "superseded", "rejected"])
+      .default("draft")
+      .notNull(),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    createdBy: int("createdBy"),
+    notes: text("notes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    statusEffective: index("loyalty_valuations_status_idx").on(
+      t.status,
+      t.effectiveFrom
+    ),
+  })
+);
+
+export type LoyaltyValuation = typeof loyaltyValuations.$inferSelect;
+
+/**
+ * Loyalty programme rule set with effective dates. Absence of an active row
+ * means the built-in legacy defaults apply, so existing behaviour does not
+ * change silently when the table is introduced.
+ */
+export const loyaltyProgramRules = mysqlTable(
+  "loyalty_program_rules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    effectiveFrom: timestamp("effectiveFrom").notNull(),
+    effectiveTo: timestamp("effectiveTo"),
+    status: mysqlEnum("status", ["draft", "active", "superseded"])
+      .default("draft")
+      .notNull(),
+    // legacy_spend: miles per SAR of net paid total (current behaviour).
+    // revenue_base_fare: miles per SAR of the base-fare share of net paid.
+    earningBasis: mysqlEnum("earningBasis", [
+      "legacy_spend",
+      "revenue_base_fare",
+    ])
+      .default("legacy_spend")
+      .notNull(),
+    milesPerSar: decimal("milesPerSar", { precision: 6, scale: 2 })
+      .default("1.00")
+      .notNull(),
+    // Share of the net paid amount treated as base fare, in basis points.
+    baseFareShareBps: int("baseFareShareBps").default(10000).notNull(),
+    // fixed_from_earn: each lot expires expiryMonths after issuance.
+    // activity: all miles expire after expiryMonths without earn or burn
+    // (AlFursan and American practice; 24 months).
+    expiryMode: mysqlEnum("expiryMode", ["fixed_from_earn", "activity"])
+      .default("fixed_from_earn")
+      .notNull(),
+    expiryMonths: int("expiryMonths").default(24).notNull(),
+    expiryNoticeDays: varchar("expiryNoticeDays", { length: 64 })
+      .default("60,30")
+      .notNull(),
+    tierQualificationMonths: int("tierQualificationMonths"),
+    redemptionCoolingOffHours: int("redemptionCoolingOffHours")
+      .default(24)
+      .notNull(),
+    redemptionVelocityPerDay: int("redemptionVelocityPerDay")
+      .default(5)
+      .notNull(),
+    profileChangeVelocityPerDay: int("profileChangeVelocityPerDay")
+      .default(3)
+      .notNull(),
+    approvedBy: int("approvedBy"),
+    createdBy: int("createdBy"),
+    notes: text("notes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    statusEffective: index("loyalty_rules_status_idx").on(
+      t.status,
+      t.effectiveFrom
+    ),
+  })
+);
+
+export type LoyaltyProgramRule = typeof loyaltyProgramRules.$inferSelect;
+
+/** One row per member, projected expiry date and notice offset; the unique key makes the reminder idempotent. */
+export const loyaltyExpiryNotices = mysqlTable(
+  "loyalty_expiry_notices",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    loyaltyAccountId: int("loyaltyAccountId").notNull(),
+    userId: int("userId").notNull(),
+    projectedExpiryAt: timestamp("projectedExpiryAt").notNull(),
+    daysBefore: int("daysBefore").notNull(),
+    milesAtRisk: int("milesAtRisk").notNull(),
+    notificationId: int("notificationId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    unique: uniqueIndex("loyalty_expiry_notice_unique").on(
+      t.loyaltyAccountId,
+      t.projectedExpiryAt,
+      t.daysBefore
+    ),
+    pending: index("loyalty_expiry_notice_pending_idx").on(t.notificationId),
+  })
 );
 
 /**
@@ -1405,6 +1548,12 @@ export const financialLedger = mysqlTable(
       "partial_refund",
       "fee",
       "adjustment",
+      // Loyalty contract liability (IFRS 15): deferral credits the liability,
+      // the three releases debit it. Cash reports ignore these types.
+      "loyalty_deferral",
+      "loyalty_revenue",
+      "loyalty_breakage",
+      "loyalty_reversal",
     ]).notNull(),
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 3 }).default("SAR").notNull(),

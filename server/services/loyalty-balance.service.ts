@@ -6,11 +6,28 @@ import {
   milesTransactions,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
+import {
+  getCurrentValuation,
+  postLoyaltyLedger,
+  snapshotLots,
+  type LotSnapshot,
+  type Valuation,
+} from "./loyalty-accounting.service";
+import {
+  activityExpiryAt,
+  getActiveProgramRule,
+  type ProgramRule,
+} from "./loyalty-rules.service";
 
 type Account = typeof loyaltyAccounts.$inferSelect;
 type Lot = typeof loyaltyCreditLots.$inferSelect;
 type Ledger = typeof milesTransactions.$inferSelect;
-export type MilesState = { account: Account; lots: Lot[] };
+/** `posted` holds each lot's counters as last reflected in the financial ledger. */
+export type MilesState = {
+  account: Account;
+  lots: Lot[];
+  posted: Map<number, LotSnapshot>;
+};
 const MAX_MILES = 2147483647;
 export function requireMiles(value: number) {
   if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_MILES)
@@ -65,7 +82,8 @@ function spendAvailable(state: MilesState, amount: number) {
 }
 function addCredit(
   state: MilesState,
-  row: Pick<Ledger, "id" | "bookingId" | "amount" | "expiresAt">
+  row: Pick<Ledger, "id" | "bookingId" | "amount" | "expiresAt">,
+  valuation: Valuation | null
 ) {
   requireMiles(row.amount);
   // Credits first repay a negative balance created by refunding already spent miles.
@@ -83,6 +101,14 @@ function addCredit(
     expiredMiles: 0,
     reversedMiles: 0,
     expiresAt: row.expiresAt,
+    // Valuation locked at issuance; null for lots reconstructed from the
+    // pre-policy ledger, which carry no contract liability.
+    valuationId: valuation?.id ?? null,
+    sspMinorPerMile: valuation ? valuation.sspMinorPerMile.toFixed(4) : null,
+    breakageRatePercent: valuation
+      ? valuation.breakageRatePercent.toFixed(2)
+      : null,
+    deferredMinor: 0,
   };
   state.lots.push(lot);
   state.account.currentMilesBalance += row.amount;
@@ -125,12 +151,13 @@ export function reconstructMilesLots(
   const state: MilesState = {
     account: { ...account, currentMilesBalance: 0 },
     lots: [],
+    posted: new Map(),
   };
   for (const row of rows) {
     if (row.loyaltyAccountId !== account.id || row.userId !== account.userId)
       throw new Error("Legacy loyalty ledger ownership mismatch");
     if (row.amount > 0 && ["earn", "bonus", "adjustment"].includes(row.type))
-      addCredit(state, row);
+      addCredit(state, row, null);
     else if (row.type === "expire" && row.amount < 0) {
       let remaining = -row.amount;
       for (const lot of ordered(state.lots).filter(
@@ -214,21 +241,23 @@ export async function lockMilesState(
       .set({ creditLotsInitializedAt: initialized })
       .where(eq(loyaltyAccounts.id, account.id));
     state.account.creditLotsInitializedAt = initialized;
+    state.posted = snapshotLots(state.lots);
     return state;
   }
-  const state = {
-    account,
-    lots: await tx
-      .select()
-      .from(loyaltyCreditLots)
-      .where(eq(loyaltyCreditLots.loyaltyAccountId, account.id))
-      .for("update"),
-  };
+  const lots = await tx
+    .select()
+    .from(loyaltyCreditLots)
+    .where(eq(loyaltyCreditLots.loyaltyAccountId, account.id))
+    .for("update");
+  const state = { account, lots, posted: snapshotLots(lots) };
   validate(state);
   return state;
 }
 async function saveState(tx: SettlementTx, state: MilesState) {
   validate(state);
+  // Accounting hook: every miles movement posts its contract-liability entry
+  // in the same transaction (loyalty-accounting.service).
+  await postLoyaltyLedger(tx, state);
   for (const lot of state.lots)
     await tx
       .update(loyaltyCreditLots)
@@ -237,6 +266,7 @@ async function saveState(tx: SettlementTx, state: MilesState) {
         spentMiles: lot.spentMiles,
         expiredMiles: lot.expiredMiles,
         reversedMiles: lot.reversedMiles,
+        deferredMinor: lot.deferredMinor,
       })
       .where(eq(loyaltyCreditLots.transactionId, lot.transactionId));
   await tx
@@ -247,14 +277,31 @@ async function saveState(tx: SettlementTx, state: MilesState) {
     })
     .where(eq(loyaltyAccounts.id, state.account.id));
 }
+/**
+ * Expire miles under the active programme rule.
+ * - fixed_from_earn (default): each lot lapses at its own expiresAt.
+ * - activity: every remaining mile lapses once the account has had no earn or
+ *   burn for `expiryMonths` (AlFursan: 24 months of inactivity). Any later
+ *   credit or redemption moves lastActivityAt and resets the clock.
+ * Expiry posts the breakage release through the saveState accounting hook.
+ */
 export async function expireMilesLots(
   tx: SettlementTx,
   state: MilesState,
-  now = new Date()
+  now = new Date(),
+  rule?: ProgramRule
 ) {
+  const active = rule ?? (await getActiveProgramRule(tx, now));
   let expired = 0;
+  const deadline = activityExpiryAt(active, state.account);
+  const lapsesAll = deadline !== null && deadline <= now;
   for (const lot of ordered(state.lots)) {
-    if (!lot.expiresAt || lot.expiresAt > now || !lot.remainingMiles) continue;
+    if (!lot.remainingMiles) continue;
+    const byLot =
+      active.expiryMode === "fixed_from_earn" &&
+      lot.expiresAt !== null &&
+      lot.expiresAt <= now;
+    if (!byLot && !lapsesAll) continue;
     const amount = lot.remainingMiles;
     lot.remainingMiles = 0;
     lot.expiredMiles += amount;
@@ -267,8 +314,12 @@ export async function expireMilesLots(
       type: "expire",
       amount: -amount,
       balanceAfter: state.account.currentMilesBalance,
-      description: "Unused miles expired",
-      reason: `credit-expiry:${lot.transactionId}`,
+      description: byLot
+        ? "Unused miles expired"
+        : `Miles expired after ${active.expiryMonths} months without activity`,
+      reason: byLot
+        ? `credit-expiry:${lot.transactionId}`
+        : `activity-expiry:${lot.transactionId}`,
     });
   }
   if (expired) await saveState(tx, state);
@@ -283,10 +334,11 @@ export async function creditMiles(
     bookingId?: number;
     flightId?: number;
     reason: string;
-    expiresAt: Date;
+    expiresAt: Date | null;
   }
 ) {
   requireMiles(input.amount);
+  const valuation = await getCurrentValuation(tx);
   const [created] = await tx.insert(milesTransactions).values({
     userId: state.account.userId,
     loyaltyAccountId: state.account.id,
@@ -294,12 +346,16 @@ export async function creditMiles(
     description: input.reason,
     balanceAfter: state.account.currentMilesBalance + input.amount,
   });
-  const lot = addCredit(state, {
-    id: created.insertId,
-    amount: input.amount,
-    bookingId: input.bookingId ?? null,
-    expiresAt: input.expiresAt,
-  });
+  const lot = addCredit(
+    state,
+    {
+      id: created.insertId,
+      amount: input.amount,
+      bookingId: input.bookingId ?? null,
+      expiresAt: input.expiresAt,
+    },
+    valuation
+  );
   await tx.insert(loyaltyCreditLots).values(lot);
   await saveState(tx, state);
   return state.account.currentMilesBalance;

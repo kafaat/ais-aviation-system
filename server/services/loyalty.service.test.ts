@@ -82,6 +82,10 @@ vi.mock("../db", () => ({
   getDb: vi.fn(() => mockDb),
 }));
 
+vi.mock("./cache.service", () => ({
+  cacheService: { isConnected: () => false },
+}));
+
 vi.mock("@trpc/server", () => ({
   TRPCError: class TRPCError extends Error {
     code: string;
@@ -119,6 +123,10 @@ describe("Loyalty Service", () => {
   ) {
     const fixture = transactionMemory({
       mfa_settings: [],
+      loyalty_program_rules: [],
+      loyalty_valuations: [],
+      financial_ledger: [],
+      security_events: [],
       loyalty_accounts: [{ ...account, creditLotsInitializedAt: new Date() }],
       loyalty_credit_lots:
         account.currentMilesBalance > 0
@@ -162,11 +170,17 @@ describe("Loyalty Service", () => {
     vi.mocked(getDb).mockReturnValue(fixture.db);
     return fixture;
   }
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     mockDb._reset();
     vi.mocked(getDb).mockReturnValue(
       mockDb as unknown as ReturnType<typeof getDb>
+    );
+    // The redemption velocity counter is process-wide; start each case clean.
+    const { rateLimitService } = await import("./rate-limit.service");
+    await rateLimitService.resetRateLimit(
+      `user:${testUserId}`,
+      "loyalty-redeem"
     );
   });
 
@@ -406,5 +420,228 @@ describe("Loyalty Service", () => {
     expect(details.nextTier).toBe("gold");
     expect(details.pointsToNextTier).toBeGreaterThan(0);
     expect(details.tierMultiplier).toBe(1.25);
+  });
+
+  describe("programme rules: earning basis", () => {
+    const revenueRule = {
+      id: 1,
+      name: "revenue-based",
+      effectiveFrom: new Date("2020-01-01T00:00:00Z"),
+      effectiveTo: null,
+      status: "active",
+      earningBasis: "revenue_base_fare",
+      milesPerSar: "1.00",
+      baseFareShareBps: 10000,
+      expiryMode: "fixed_from_earn",
+      expiryMonths: 24,
+      expiryNoticeDays: "60,30",
+      tierQualificationMonths: null,
+      redemptionCoolingOffHours: 24,
+      redemptionVelocityPerDay: 5,
+      profileChangeVelocityPerDay: 3,
+      approvedBy: null,
+      createdBy: null,
+      notes: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it("revenue-based earning at 1 mile/SAR over the whole fare matches the legacy basis", async () => {
+      const amountPaid = 123_456; // 1,234.56 SAR
+      const legacy = funded(
+        { ...baseBronzeAccount },
+        testBookingId,
+        amountPaid
+      );
+      const { awardMilesForBooking } = await import("./loyalty.service");
+      const legacyResult = await awardMilesForBooking(
+        testUserId,
+        testBookingId,
+        testFlightId,
+        amountPaid
+      );
+      const revenue = funded(
+        { ...baseBronzeAccount },
+        testBookingId,
+        amountPaid
+      );
+      revenue.rows("loyalty_program_rules").push({ ...revenueRule });
+      const revenueResult = await awardMilesForBooking(
+        testUserId,
+        testBookingId,
+        testFlightId,
+        amountPaid
+      );
+      expect(legacyResult.baseMiles).toBe(1234);
+      expect(revenueResult.baseMiles).toBe(legacyResult.baseMiles);
+      expect(revenueResult.milesEarned).toBe(legacyResult.milesEarned);
+      expect(legacy.rows("loyalty_credit_lots")[0].expiresAt).toBeInstanceOf(
+        Date
+      );
+    });
+
+    it("revenue-based earning uses the base-fare share and configured rate", async () => {
+      const fixture = funded({ ...baseBronzeAccount }, testBookingId, 100_000);
+      // 85% base fare (15% VAT) at 1.5 miles per SAR: floor(850 x 1.5) = 1275.
+      fixture.rows("loyalty_program_rules").push({
+        ...revenueRule,
+        baseFareShareBps: 8500,
+        milesPerSar: "1.50",
+        expiryMode: "activity",
+      });
+      const { awardMilesForBooking } = await import("./loyalty.service");
+      const result = await awardMilesForBooking(
+        testUserId,
+        testBookingId,
+        testFlightId,
+        100_000
+      );
+      expect(result.baseMiles).toBe(1275);
+      expect(result.milesEarned).toBe(1275);
+      // Activity-based programmes do not stamp a per-lot expiry.
+      expect(fixture.rows("loyalty_credit_lots")[0].expiresAt).toBeNull();
+      // Issuance posted a contract-liability deferral (default 1 halala/mile).
+      expect(fixture.rows("financial_ledger")).toMatchObject([
+        { type: "loyalty_deferral", amount: "12.75", userId: testUserId },
+      ]);
+    });
+
+    it("rolls the tier qualification window and holds the earned tier through the next window", async () => {
+      const fixture = funded(
+        {
+          ...baseBronzeAccount,
+          tier: "silver" as const,
+          tierPoints: 12_000,
+          currentMilesBalance: 100,
+          totalMilesEarned: 100,
+        },
+        testBookingId,
+        50_000
+      );
+      fixture.rows("loyalty_accounts")[0].tierPeriodStartedAt = new Date(
+        Date.now() - 400 * 86_400_000
+      );
+      fixture.rows("loyalty_program_rules").push({
+        ...revenueRule,
+        earningBasis: "legacy_spend",
+        tierQualificationMonths: 12,
+      });
+      const { awardMilesForBooking } = await import("./loyalty.service");
+      const result = await awardMilesForBooking(
+        testUserId,
+        testBookingId,
+        testFlightId,
+        50_000
+      );
+      const account = fixture.rows("loyalty_accounts")[0];
+      // Points reset to the new window's 500; silver is retained.
+      expect(account.tierPoints).toBe(500);
+      expect(result.newTier).toBe("silver");
+      expect(account.tierPeriodStartedAt.getTime()).toBeGreaterThan(
+        Date.now() - 40 * 86_400_000
+      );
+    });
+  });
+
+  describe("account-takeover controls on redemption", () => {
+    it("pauses redemption during the cooling-off period after a credential change and audits the block", async () => {
+      const fixture = funded(
+        { ...baseBronzeAccount, currentMilesBalance: 5000 },
+        testBookingId,
+        1000
+      );
+      fixture.rows("security_events").push({
+        id: 1,
+        eventType: "mfa_disabled",
+        severity: "medium",
+        userId: testUserId,
+        createdAt: new Date(Date.now() - 2 * 3_600_000),
+      });
+      const { redeemMiles } = await import("./loyalty.service");
+      await expect(
+        redeemMiles(testUserId, 100, undefined, undefined, {
+          ipAddress: "203.0.113.9",
+          userAgent: "vitest",
+          deviceId: "dev-1",
+        })
+      ).rejects.toThrow("paused for 24 hours");
+      expect(fixture.rows("loyalty_accounts")[0].currentMilesBalance).toBe(
+        5000
+      );
+      expect(fixture.rows("user_credits")).toHaveLength(0);
+      const blocked = fixture
+        .rows("security_events")
+        .find(e => e.eventType === "loyalty_redemption_blocked");
+      expect(blocked).toMatchObject({
+        userId: testUserId,
+        ipAddress: "203.0.113.9",
+        actionTaken: "denied",
+      });
+      expect(JSON.parse(blocked.metadata)).toMatchObject({
+        miles: 100,
+        deviceId: "dev-1",
+        reason: "cooling_off",
+      });
+
+      // A change older than the window no longer blocks; the redemption is audited.
+      fixture.rows("security_events")[0].createdAt = new Date(
+        Date.now() - 25 * 3_600_000
+      );
+      await expect(
+        redeemMiles(testUserId, 100, undefined, undefined, {
+          ipAddress: "203.0.113.9",
+          userAgent: "vitest",
+        })
+      ).resolves.toMatchObject({ newBalance: 4900 });
+      expect(
+        fixture
+          .rows("security_events")
+          .filter(e => e.eventType === "loyalty_redemption")
+      ).toMatchObject([{ userId: testUserId, ipAddress: "203.0.113.9" }]);
+    });
+
+    it("enforces the per-day redemption velocity from the programme rule", async () => {
+      const fixture = funded(
+        { ...baseBronzeAccount, currentMilesBalance: 5000 },
+        testBookingId,
+        1000
+      );
+      fixture.rows("loyalty_program_rules").push({
+        id: 1,
+        name: "tight",
+        effectiveFrom: new Date("2020-01-01T00:00:00Z"),
+        effectiveTo: null,
+        status: "active",
+        earningBasis: "legacy_spend",
+        milesPerSar: "1.00",
+        baseFareShareBps: 10000,
+        expiryMode: "fixed_from_earn",
+        expiryMonths: 24,
+        expiryNoticeDays: "60,30",
+        tierQualificationMonths: null,
+        redemptionCoolingOffHours: 0,
+        redemptionVelocityPerDay: 2,
+        profileChangeVelocityPerDay: 3,
+        approvedBy: null,
+        createdBy: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      const { redeemMiles } = await import("./loyalty.service");
+      await expect(redeemMiles(testUserId, 100)).resolves.toBeDefined();
+      await expect(redeemMiles(testUserId, 100)).resolves.toBeDefined();
+      await expect(redeemMiles(testUserId, 100)).rejects.toThrow(
+        "Redemption limit of 2 per day"
+      );
+      expect(fixture.rows("loyalty_accounts")[0].currentMilesBalance).toBe(
+        4800
+      );
+      expect(
+        fixture
+          .rows("security_events")
+          .filter(e => e.eventType === "loyalty_redemption_blocked")
+      ).toHaveLength(1);
+    });
   });
 });

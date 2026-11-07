@@ -244,6 +244,12 @@ const adminMenuItems: MenuItem[] = [
     adminOnly: true,
   },
   {
+    icon: Star,
+    labelKey: "nav.loyaltyAccounting",
+    path: "/admin/loyalty-accounting",
+    adminOnly: true,
+  },
+  {
     icon: BarChart3,
     labelKey: "nav.seatEconomics",
     path: "/admin/seat-economics",

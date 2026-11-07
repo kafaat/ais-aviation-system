@@ -78,6 +78,7 @@ describe("cron.service scheduler", () => {
         "flightCancellationRefunds",
         "channelAllocationExpiry",
         "operationalAlerts",
+        "loyaltyLifecycle",
       ])
     );
   });

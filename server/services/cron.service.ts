@@ -187,6 +187,19 @@ export const PERIODIC_JOB_CATALOG = [
     },
   },
   {
+    // IFRS 15 lifecycle: activity/lot expiry with breakage postings and the
+    // 60/30-day expiry warnings. Runs after loyaltyExpiry so a lapsed lot is
+    // never warned about on the day it expires.
+    name: "loyaltyLifecycle",
+    cron: "30 0 * * *",
+    periodMs: 86400000,
+    run: async () => {
+      const { runLoyaltyLifecycleJob } =
+        await import("./loyalty-lifecycle.service");
+      await runLoyaltyLifecycleJob();
+    },
+  },
+  {
     name: "priceAlerts",
     cron: "*/15 * * * *",
     periodMs: 15 * 60_000,

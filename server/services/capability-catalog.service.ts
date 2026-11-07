@@ -151,6 +151,15 @@ export const capabilityCatalog = [
     requirement:
       "Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA",
   },
+  {
+    id: "loyaltyDeferredRevenue",
+    implementation: "implemented",
+    owner:
+      "loyalty-accounting.service, loyalty-rules.service and loyalty-lifecycle.service",
+    consumer: "loyalty.accountingSummary and loyaltyLifecycle scheduled task",
+    requirement:
+      "Contract-liability ledger entries at a locked SSP net of breakage for miles issued after the policy; activity-based expiry and 60/30-day notices. Finance approval of SSP/breakage, re-measurement of pre-policy miles and partner earn/burn settlement remain external",
+  },
 ] as const;
 
 export function listCapabilities() {
