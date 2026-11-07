@@ -24,7 +24,9 @@ import { responseContracts } from "../contracts/bsp-reporting";
  *
  * Admin endpoints for IATA BSP (Billing and Settlement Plan) reporting,
  * AHC (Airlines Handling Charges) reports, settlement cycle management,
- * reconciliation, RET drafts and inbound HOT evidence.
+ * reconciliation, local RET drafts and inbound HOT evidence (profile
+ * AIS-BSP-LOCAL-1). The DISH RET/HOT wire layer, the link-specification
+ * gate and the document-level settlement gate live in bspSettlement.
  */
 
 import { z } from "zod";

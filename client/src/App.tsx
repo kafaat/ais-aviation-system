@@ -90,6 +90,7 @@ const OverbookingManagement = lazy(
 
 // Phase 4: Competitive gap closure admin pages
 const BSPReporting = lazy(() => import("./pages/admin/BSPReporting"));
+const BSPSettlement = lazy(() => import("./pages/admin/BSPSettlement"));
 const CrewAssignment = lazy(() => import("./pages/admin/CrewAssignment"));
 const DataWarehouse = lazy(() => import("./pages/admin/DataWarehouse"));
 const IROPSCommandCenter = lazy(
@@ -558,6 +559,13 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <BSPReporting />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/bsp-settlement">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <BSPSettlement />
               </Suspense>
             </AdminRoute>
           </Route>
