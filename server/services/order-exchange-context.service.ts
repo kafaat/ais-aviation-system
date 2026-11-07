@@ -17,6 +17,9 @@ import {
   capabilitySummaryOutput,
   resolveCapabilitySummary,
 } from "./ndc-capability-matrix";
+import { logServicingAccessDenied } from "./audit.service";
+import type { SettlementTx } from "./booking-settlement.service";
+import { servicingQuoteVersion } from "./order-servicing.service";
 
 const flight = z.object({
   flightId: z.number().int(),
@@ -36,6 +39,10 @@ const retainedSeats = z.object({
 });
 const quoteMetadata = z.object({
   expiresAt: z.iso.datetime(),
+  termsHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   seatExchange: retainedSeats.optional(),
   revalidation: revalidationReceipt.optional(),
 });
@@ -60,6 +67,8 @@ export const exchangeContextOutput = z.object({
       priceDifference: z.number().int(),
       totalCost: z.number().int(),
       currency: z.literal("SAR"),
+      /** Digest of the quoted amounts; consent must name it to execute. */
+      quoteVersion: z.string().nullable(),
       expiresAt: z.date().nullable(),
       seatExchange: retainedSeats.nullable(),
     })
@@ -74,7 +83,19 @@ export async function getExchangeContext(
 ) {
   const db = await getDb();
   if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
-  return db.transaction(async tx => {
+  try {
+    return await db.transaction(tx => read(tx));
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === "NOT_FOUND")
+      logServicingAccessDenied({
+        userId,
+        tenantId,
+        bookingId,
+        action: "order.servicing.context",
+      });
+    throw error;
+  }
+  async function read(tx: SettlementTx) {
     const [booking] = await tx
       .select({ flightId: bookings.flightId, status: bookings.status })
       .from(bookings)
@@ -206,11 +227,17 @@ export async function getExchangeContext(
         modificationFee: change.modificationFee,
         totalCost: change.totalCost,
         currency: "SAR" as const,
+        quoteVersion:
+          payload.success && payload.data.termsHash
+            ? servicingQuoteVersion(change) === payload.data.termsHash
+              ? payload.data.termsHash
+              : null
+            : null,
         expiresAt: payload.success ? new Date(payload.data.expiresAt) : null,
         seatExchange: payload.success
           ? (payload.data.seatExchange ?? null)
           : null,
       },
     };
-  });
+  }
 }

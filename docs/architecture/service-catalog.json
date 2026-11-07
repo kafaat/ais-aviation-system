@@ -423,8 +423,12 @@
       "consumers": [
         "server/routers/admin.ts",
         "server/routers/bookings.ts",
+        "server/routers/payments.ts",
         "server/routers/refunds.ts",
-        "server/services/gdpr.service.ts"
+        "server/services/booking-modification.service.ts",
+        "server/services/gdpr.service.ts",
+        "server/services/order-exchange-context.service.ts",
+        "server/services/order-servicing.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -1024,6 +1028,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/audit.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/inventory-capacity.service.ts",
         "server/services/order-servicing.service.ts",
@@ -2339,6 +2344,7 @@
       ],
       "tableExpressions": {
         "reads": [
+          "bookingModifications",
           "bookingSegments",
           "bookings",
           "dcsOperationEvents",
@@ -4791,7 +4797,9 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/audit.service.ts",
         "server/services/ndc-capability-matrix.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/ticket-revalidation.service.ts"
       ],
       "tableExpressions": {
@@ -4896,14 +4904,17 @@
       "consumers": [
         "server/__tests__/helpers/ticket-revalidation-fixture.ts",
         "server/routers/ndc.ts",
+        "server/routers/payments.ts",
         "server/services/booking-modification.service.ts",
         "server/services/dcs-station.service.ts",
+        "server/services/order-exchange-context.service.ts",
         "server/services/order-service-checkout.service.ts",
         "server/services/payment-settlement.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/audit.service.ts",
         "server/services/baggage-custody.service.ts",
         "server/services/booking-invoice.service.ts",
         "server/services/booking-settlement.service.ts",
