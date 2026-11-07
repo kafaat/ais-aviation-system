@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.39.0
+
+<!-- ais-release-source: bd567f72368822cc52bcf88b6ececb6a638edc5b -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(ndc): gate servicing actions with a distribution capability matrix (#292) (bd567f7)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.38.0...v1.39.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.38.0
 
 <!-- ais-release-source: 56554f82c9ed593c79a65b7e2978f7e5f10c4366 -->
