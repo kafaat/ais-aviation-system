@@ -49,7 +49,10 @@ export function authServiceCredentialProblem(
   if (/\s/.test(token)) return "AUTH_SERVICE_TOKEN must not contain whitespace";
   if (INSECURE_SERVICE_TOKENS.has(token.toLowerCase()))
     return "AUTH_SERVICE_TOKEN must not be a placeholder value";
-  if (token.length >= AUTH_SERVICE_TOKEN_MIN_LENGTH && new Set(token).size === 1)
+  if (
+    token.length >= AUTH_SERVICE_TOKEN_MIN_LENGTH &&
+    new Set(token).size === 1
+  )
     return "AUTH_SERVICE_TOKEN must not use a repeated-character value";
   if (production && token.length < AUTH_SERVICE_TOKEN_MIN_LENGTH)
     return `AUTH_SERVICE_TOKEN must be at least ${AUTH_SERVICE_TOKEN_MIN_LENGTH} characters in production`;
