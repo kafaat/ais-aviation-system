@@ -127,12 +127,15 @@ export const loadPlanningRouter = router({
     .input(
       z.object({
         aircraftTypeId: z.number().positive(),
+        /** Aircraft registry record; replaces the illustrative layout with AHM 560 holds. */
+        registrationId: z.number().int().positive().optional(),
       })
     )
     .output(responseContracts["getCompartments"])
     .query(async ({ input }) => {
       return await loadPlanningService.getCompartmentLayout(
-        input.aircraftTypeId
+        input.aircraftTypeId,
+        input.registrationId
       );
     }),
 

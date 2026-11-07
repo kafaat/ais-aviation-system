@@ -97,12 +97,20 @@ export const capabilityCatalog = [
       "Certified scale, printer, conveyor and device heartbeat adapter",
   },
   {
+    id: "aircraftRegistry",
+    implementation: "implemented",
+    owner: "aircraft-registry.service",
+    consumer: "weightBalance registry endpoints and loadPlanning compartments",
+    requirement:
+      "Validated JSON import of per-type AHM 560/565 datasets and per-registration DOW/DOI; no certified figures shipped, fictional training type is development-only and never approvable. Operator approval with a document reference is recorded per dataset and registration.",
+  },
+  {
     id: "weightBalance",
     implementation: "demo",
-    owner: "weight-balance.service",
-    consumer: "weightBalance",
+    owner: "weight-balance.service and weight-balance-engine",
+    consumer: "weightBalance and load-sheet-figures reader (Type B LDM)",
     requirement:
-      "Approved aircraft data, calculation validation and operational sign-off",
+      "Engine computes DOW/DOI to ZFW/TOW/LAW, index to %MAC, envelopes, structural/compartment/zone limits, underload, LMC limit, trim and aircraft-change review on registry data with signed immutable editions; still gated. Release requires operator-approved datasets and registrations, confirmed standard masses, validation against the operator's reference load sheets and recorded dispatch acceptance; until then every edition is marked not dispatch-approved.",
   },
   {
     id: "loadPlanning",
@@ -110,7 +118,7 @@ export const capabilityCatalog = [
     owner: "load-planning.service",
     consumer: "loadPlanning",
     requirement:
-      "Aircraft configuration, measured cargo and approved dispatch workflow",
+      "Compartment layout comes from the aircraft registry when a registration is selected; item planning, ULD and optimisation remain illustrative until measured cargo and an approved dispatch workflow exist",
   },
   {
     id: "disasterRecovery",

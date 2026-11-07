@@ -375,6 +375,9 @@ export const responseContracts = {
       totalSeats: outputNumber,
       isWidebody: z.boolean(),
     }),
+    source: z.enum(["ahm560", "illustrative"]),
+    registration: z.string().nullable(),
+    balanceDataset: z.string().nullable(),
     compartments: z.array(
       z.object({
         id: outputNumber,

@@ -60,9 +60,9 @@ it("permits explicitly enabled development fixtures", () => {
   vi.stubEnv("NODE_ENV", "development");
   vi.stubEnv("AIS_ENABLE_DEMOS", "true");
   expect(multiRegion.getRegions().length).toBeGreaterThan(0);
-  expect(weightBalance.calculateFuelWeight(1, 10000).totalFuelWeight).toBe(
-    10000
-  );
+  expect(
+    weightBalance.listStandardMassRuleSets().map(ruleSet => ruleSet.id)
+  ).toContain("easa-cat-pol-mab-100-20plus");
 });
 
 it("retains ordinary DCS aircraft reads in production", async () => {

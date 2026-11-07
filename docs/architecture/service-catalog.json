@@ -144,6 +144,37 @@
       "replacement": null
     },
     {
+      "file": "server/services/aircraft-registry.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/aircraft-registry.service.ts",
+      "domain": "airline-operations",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/weight-balance.ts",
+        "server/services/load-planning.service.ts",
+        "server/services/weight-balance.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/demo-capability.ts",
+        "server/services/weight-balance-engine.ts",
+        "server/services/weight-balance-training-fixture.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "aircraftRegistrations",
+          "aircraftTypeBalanceData",
+          "airlines"
+        ],
+        "writes": ["aircraftRegistrations", "aircraftTypeBalanceData"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/aircraft-rotation.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/aircraft-rotation.service.ts",
@@ -935,6 +966,7 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/services/emd.service.ts",
+        "server/services/load-sheet-figures.service.ts",
         "server/services/operations-dashboard.service.ts"
       ],
       "dependencies": [],
@@ -1415,6 +1447,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/services/aircraft-registry.service.ts",
         "server/services/bag-drop.service.ts",
         "server/services/biometric.service.ts",
         "server/services/dcs.service.ts",
@@ -2751,6 +2784,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/aircraft-registry.service.ts",
         "server/services/demo-capability.ts"
       ],
       "tableExpressions": {
@@ -2764,6 +2798,27 @@
           "passengers"
         ],
         "writes": ["loadPlanDetails", "loadPlans"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/load-sheet-figures.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/load-sheet-figures.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/weight-balance.service.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/capability-catalog.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["loadSheets"],
+        "writes": []
       },
       "replacement": null
     },
@@ -5590,6 +5645,44 @@
       "replacement": "server/routers/flights.ts statusBatch and client/src/hooks/useFlightStatus.ts"
     },
     {
+      "file": "server/services/weight-balance-engine.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/weight-balance-engine.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/contracts/weight-balance.ts",
+        "server/services/aircraft-registry.service.ts",
+        "server/services/weight-balance.service.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": ["c.code", "zone.code"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/weight-balance-training-fixture.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/weight-balance-training-fixture.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/aircraft-registry.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/weight-balance.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/weight-balance.service.ts",
@@ -5602,20 +5695,24 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/demo-capability.ts"
+        "server/services/aircraft-registry.service.ts",
+        "server/services/demo-capability.ts",
+        "server/services/load-sheet-figures.service.ts",
+        "server/services/weight-balance-engine.ts"
       ],
       "tableExpressions": {
         "reads": [
-          "aircraftTypes",
-          "airlines",
           "airports",
           "baggageItems",
           "bookings",
+          "crewAssignments",
           "flights",
-          "loadPlans",
-          "passengers"
+          "loadSheetAircraftChanges",
+          "loadSheets",
+          "passengers",
+          "users"
         ],
-        "writes": ["aircraftTypes", "loadPlans"]
+        "writes": ["loadSheetAircraftChanges", "loadSheets"]
       },
       "replacement": null
     }

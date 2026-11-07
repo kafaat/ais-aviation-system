@@ -2,174 +2,173 @@ import { responseContracts } from "../contracts/weight-balance";
 /**
  * Weight & Balance Router
  *
- * Admin-only tRPC endpoints for flight weight & balance calculations,
- * aircraft limit management, load sheet generation, and weight history.
+ * Admin-only endpoints for the aircraft registry (AHM 560/565 datasets and
+ * registrations), load sheet computation on real flight data, signing, LMC,
+ * aircraft change review and the printable load sheet document.
  */
 
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
-import * as wbService from "../services/weight-balance.service";
+import * as registry from "../services/aircraft-registry.service";
+import * as wb from "../services/weight-balance.service";
+
+const actor = (user: { id: number; name: string | null }) => ({
+  id: user.id,
+  name: user.name,
+});
 
 export const weightBalanceRouter = router({
   // ========================================================================
-  // Calculate Weight & Balance
+  // Aircraft registry
   // ========================================================================
 
-  /**
-   * Trigger a full W&B calculation for a flight.
-   * Creates a load plan record with all weight components and CG data.
-   */
-  calculate: adminProcedure
+  listTypeBalanceData: adminProcedure
+    .input(
+      z
+        .object({
+          typeCode: z.string().min(1).max(10).optional(),
+          includeWithdrawn: z.boolean().optional(),
+        })
+        .optional()
+    )
+    .output(responseContracts["listTypeBalanceData"])
+    .query(({ input }) => registry.listTypeBalanceData(input)),
+
+  getTypeBalanceData: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .output(responseContracts["getTypeBalanceData"])
+    .query(({ input }) => registry.getTypeBalanceDataDetail(input.id)),
+
+  /** Validated JSON import of one type/variant dataset; stored as a new draft version. */
+  importTypeBalanceData: adminProcedure
+    .input(z.object({ dataset: z.unknown() }))
+    .output(responseContracts["importTypeBalanceData"])
+    .mutation(({ input, ctx }) =>
+      registry.importTypeBalanceData(input.dataset, actor(ctx.user))
+    ),
+
+  setTypeBalanceApproval: adminProcedure
     .input(
       z.object({
-        flightId: z.number().int().positive(),
-        aircraftTypeId: z.number().int().positive(),
-        fuelWeight: z.number().nonnegative(),
-        cargoDistribution: z
-          .array(
-            z.object({
-              zone: z.string().min(1),
-              weight: z.number().nonnegative(),
-            })
-          )
-          .optional(),
-        status: z
-          .enum(["preliminary", "final", "amended"])
-          .optional()
-          .default("preliminary"),
+        id: z.number().int().positive(),
+        approvalStatus: z.enum(["operator_approved", "withdrawn"]),
+        approvalReference: z.string().trim().min(3).max(80),
       })
     )
-    .output(responseContracts["calculate"])
-    .mutation(async ({ input, ctx }) => {
-      return await wbService.calculateFlightWeightBalance(input.flightId, {
-        aircraftTypeId: input.aircraftTypeId,
-        fuelWeight: input.fuelWeight,
-        cargoDistribution: input.cargoDistribution,
-        calculatedBy: ctx.user.id,
-        status: input.status,
-      });
-    }),
+    .output(responseContracts["setTypeBalanceApproval"])
+    .mutation(({ input, ctx }) =>
+      registry.setTypeBalanceApproval(
+        input.id,
+        {
+          approvalStatus: input.approvalStatus,
+          approvalReference: input.approvalReference,
+        },
+        actor(ctx.user)
+      )
+    ),
 
-  // ========================================================================
-  // Get Flight W&B
-  // ========================================================================
+  listRegistrations: adminProcedure
+    .input(
+      z
+        .object({
+          airlineId: z.number().int().positive().optional(),
+          registration: z.string().min(2).max(10).optional(),
+          includeWithdrawn: z.boolean().optional(),
+        })
+        .optional()
+    )
+    .output(responseContracts["listRegistrations"])
+    .query(({ input }) => registry.listRegistrations(input)),
 
-  /**
-   * Get the current weight & balance data for a flight.
-   * Returns the latest load plan calculation result.
-   */
-  getFlightWB: adminProcedure
+  importRegistration: adminProcedure
+    .input(z.object({ record: z.unknown() }))
+    .output(responseContracts["importRegistration"])
+    .mutation(({ input, ctx }) =>
+      registry.importRegistration(input.record, actor(ctx.user))
+    ),
+
+  setRegistrationApproval: adminProcedure
     .input(
       z.object({
-        flightId: z.number().int().positive(),
+        id: z.number().int().positive(),
+        approvalStatus: z.enum(["operator_approved", "withdrawn"]),
+        approvalReference: z.string().trim().min(3).max(80),
       })
     )
-    .output(responseContracts["getFlightWB"])
-    .query(async ({ input }) => {
-      return await wbService.getFlightWeightBalance(input.flightId);
-    }),
+    .output(responseContracts["setRegistrationApproval"])
+    .mutation(({ input, ctx }) =>
+      registry.setRegistrationApproval(
+        input.id,
+        {
+          approvalStatus: input.approvalStatus,
+          approvalReference: input.approvalReference,
+        },
+        actor(ctx.user)
+      )
+    ),
+
+  /** Development only: fictional AIS-T1 datasets and registrations. */
+  seedTrainingFixture: adminProcedure
+    .input(z.object({ airlineId: z.number().int().positive() }))
+    .output(responseContracts["seedTrainingFixture"])
+    .mutation(({ input, ctx }) =>
+      registry.seedTrainingFixture(input.airlineId, actor(ctx.user))
+    ),
 
   // ========================================================================
-  // Aircraft Limits
+  // Load sheets
   // ========================================================================
 
-  /**
-   * Get weight limits for a specific aircraft type.
-   * Includes MTOW, MLW, MZFW, OEW, and standard passenger weights.
-   */
-  getAircraftLimits: adminProcedure
-    .input(
-      z.object({
-        aircraftTypeId: z.number().int().positive(),
-      })
-    )
-    .output(responseContracts["getAircraftLimits"])
-    .query(async ({ input }) => {
-      return await wbService.getAircraftLimits(input.aircraftTypeId);
-    }),
+  listStandardMassRuleSets: adminProcedure
+    .output(responseContracts["listStandardMassRuleSets"])
+    .query(() => wb.listStandardMassRuleSets()),
 
-  /**
-   * Update weight limits for an aircraft type.
-   * All weight fields are in kg * 100 for precision.
-   */
-  updateAircraftLimits: adminProcedure
-    .input(
-      z.object({
-        aircraftTypeId: z.number().int().positive(),
-        maxTakeoffWeight: z.number().positive().optional(),
-        maxLandingWeight: z.number().positive().optional(),
-        maxZeroFuelWeight: z.number().positive().optional(),
-        operatingEmptyWeight: z.number().positive().optional(),
-        maxPayload: z.number().positive().optional(),
-        maxFuelCapacity: z.number().positive().optional(),
-        maxPassengers: z.number().int().positive().optional(),
-        standardMaleWeight: z.number().positive().optional(),
-        standardFemaleWeight: z.number().positive().optional(),
-        standardChildWeight: z.number().positive().optional(),
-        standardInfantWeight: z.number().positive().optional(),
-        standardBagWeight: z.number().positive().optional(),
-      })
-    )
-    .output(responseContracts["updateAircraftLimits"])
-    .mutation(async ({ input }) => {
-      const { aircraftTypeId, ...updates } = input;
-      return await wbService.updateAircraftLimits(aircraftTypeId, updates);
-    }),
+  compute: adminProcedure
+    .input(wb.computeRequestSchema)
+    .output(responseContracts["compute"])
+    .mutation(({ input, ctx }) => wb.computeLoadSheet(input, actor(ctx.user))),
 
-  // ========================================================================
-  // Load Sheet
-  // ========================================================================
+  getLatest: adminProcedure
+    .input(z.object({ flightId: z.number().int().positive() }))
+    .output(responseContracts["getLatest"])
+    .query(({ input }) => wb.getLatestLoadSheet(input.flightId)),
 
-  /**
-   * Generate an IATA-standard load sheet for a flight.
-   * Requires an existing load plan calculation.
-   */
-  generateLoadSheet: adminProcedure
-    .input(
-      z.object({
-        flightId: z.number().int().positive(),
-      })
-    )
-    .output(responseContracts["generateLoadSheet"])
-    .mutation(async ({ input }) => {
-      return await wbService.generateLoadSheet(input.flightId);
-    }),
+  listEditions: adminProcedure
+    .input(z.object({ flightId: z.number().int().positive() }))
+    .output(responseContracts["listEditions"])
+    .query(({ input }) => wb.listLoadSheetEditions(input.flightId)),
 
-  // ========================================================================
-  // Check Limits
-  // ========================================================================
+  getEdition: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .output(responseContracts["getEdition"])
+    .query(({ input }) => wb.getLoadSheetEdition(input.id)),
 
-  /**
-   * Verify all weight limits for a flight.
-   * Returns detailed pass/fail results for each limit check.
-   */
-  checkLimits: adminProcedure
-    .input(
-      z.object({
-        flightId: z.number().int().positive(),
-      })
-    )
-    .output(responseContracts["checkLimits"])
-    .query(async ({ input }) => {
-      return await wbService.checkWeightLimits(input.flightId);
-    }),
+  /** Freezes a preliminary edition as final under the signing admin's identity. */
+  sign: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .output(responseContracts["sign"])
+    .mutation(({ input, ctx }) => wb.signLoadSheet(input.id, actor(ctx.user))),
 
-  // ========================================================================
-  // Weight History
-  // ========================================================================
+  applyLmc: adminProcedure
+    .input(wb.lmcRequestSchema)
+    .output(responseContracts["applyLmc"])
+    .mutation(({ input, ctx }) =>
+      wb.applyLastMinuteChange(input, actor(ctx.user))
+    ),
 
-  /**
-   * Get weight calculation history for a flight.
-   * Returns all load plan records ordered by creation time (newest first).
-   */
-  getHistory: adminProcedure
-    .input(
-      z.object({
-        flightId: z.number().int().positive(),
-      })
-    )
-    .output(responseContracts["getHistory"])
-    .query(async ({ input }) => {
-      return await wbService.getWeightHistory(input.flightId);
-    }),
+  renderDocument: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .output(responseContracts["renderDocument"])
+    .query(({ input }) => wb.renderLoadSheetDocument(input.id)),
+
+  /** Registration swap: invalidates active editions, re-evaluates, records audit. */
+  changeAircraft: adminProcedure
+    .input(wb.aircraftChangeRequestSchema)
+    .output(responseContracts["changeAircraft"])
+    .mutation(({ input, ctx }) => wb.changeAircraft(input, actor(ctx.user))),
+
+  listAircraftChanges: adminProcedure
+    .input(z.object({ flightId: z.number().int().positive() }))
+    .output(responseContracts["listAircraftChanges"])
+    .query(({ input }) => wb.listAircraftChanges(input.flightId)),
 });

@@ -21,6 +21,11 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import {
+  getRegistrationRow,
+  getTypeBalanceDataRow,
+  toTypeBalanceData,
+} from "./aircraft-registry.service";
 
 // ============================================================================
 // Inline Schema Types
@@ -1003,7 +1008,10 @@ export async function updateBulkLoad(
 /**
  * Get cargo compartment layout for an aircraft type.
  */
-export async function getCompartmentLayout(aircraftTypeId: number) {
+export async function getCompartmentLayout(
+  aircraftTypeId: number,
+  registrationId?: number
+) {
   requireDemoCapability("Load planning simulation");
   const db = await requireDb();
 
@@ -1023,6 +1031,49 @@ export async function getCompartmentLayout(aircraftTypeId: number) {
   const isWidebody = aircraft.totalSeats > 200;
   const layoutKey = isWidebody ? "widebody" : "narrowbody";
   const layout = DEFAULT_COMPARTMENT_LAYOUTS[layoutKey];
+
+  // A registration replaces the illustrative layout with the holds of its
+  // AHM 560/565 balance dataset (arms and maximum loads from the registry).
+  if (registrationId) {
+    const registrationRow = await getRegistrationRow(registrationId);
+    const type = toTypeBalanceData(
+      await getTypeBalanceDataRow(registrationRow.balanceDataId)
+    );
+    const refSta = type.payload.index.referenceStationM;
+    const compartments: CargoCompartment[] = type.payload.compartments.map(
+      (c, idx) => ({
+        id: aircraftTypeId * 100 + idx + 1,
+        aircraftTypeId,
+        compartmentCode: c.code,
+        name: c.name ?? `Compartment ${c.code}`,
+        position: /bulk/i.test(c.name ?? "")
+          ? "bulk"
+          : c.armM < refSta
+            ? "forward"
+            : "aft",
+        maxWeight: Math.round(c.maxKg * 100),
+        maxVolume: 0,
+        uldCompatible: false,
+        createdAt: new Date().toISOString(),
+      })
+    );
+    return {
+      aircraftType: {
+        id: aircraft.id,
+        code: aircraft.code,
+        name: aircraft.name,
+        manufacturer: aircraft.manufacturer,
+        totalSeats: aircraft.totalSeats,
+        isWidebody,
+      },
+      source: "ahm560" as const,
+      registration: registrationRow.registration,
+      balanceDataset: `${type.typeCode}${type.variant ? `-${type.variant}` : ""} v${type.version}${type.fictional ? " (fictional training data)" : ""}`,
+      compartments,
+      totalMaxWeight: compartments.reduce((sum, c) => sum + c.maxWeight, 0),
+      totalMaxVolume: 0,
+    };
+  }
 
   // Parse custom cargo zones from aircraft type if available
   let customZones: Array<{ zone: string; maxWeight: number }> = [];
@@ -1055,6 +1106,9 @@ export async function getCompartmentLayout(aircraftTypeId: number) {
       totalSeats: aircraft.totalSeats,
       isWidebody,
     },
+    source: "illustrative" as const,
+    registration: null,
+    balanceDataset: null,
     compartments,
     totalMaxWeight: compartments.reduce((sum, c) => sum + c.maxWeight, 0),
     totalMaxVolume: compartments.reduce((sum, c) => sum + c.maxVolume, 0),

@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../../server/routers";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,283 +17,36 @@ import {
 import { Link } from "wouter";
 import {
   ChevronLeft,
-  Weight,
+  Plane,
+  Calculator,
+  FileText,
   AlertTriangle,
   CheckCircle,
-  FileText,
-  History,
-  Calculator,
-  Gauge,
   XCircle,
-  Info,
-  ChevronDown,
-  ChevronUp,
+  PenLine,
+  Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
-// ============================================================================
-// Type Definitions
-// These types mirror the service return shapes. Once the weightBalance router
-// is registered in server/routers.ts, these can be removed in favor of
-// tRPC-inferred types.
-// ============================================================================
+type Outputs = inferRouterOutputs<AppRouter>["weightBalance"];
+type LoadSheetRecord = NonNullable<Outputs["getLatest"]>;
+type Figures = LoadSheetRecord["figures"];
+type RegistrationSummary = Outputs["listRegistrations"][number];
+type TypeSummary = Outputs["listTypeBalanceData"][number];
 
-interface WBPassengerBreakdown {
-  males: { count: number; weight: number };
-  females: { count: number; weight: number };
-  children: { count: number; weight: number };
-  infants: { count: number; weight: number };
-}
+type Tab = "registry" | "compute" | "loadsheet";
 
-interface WBFuelBreakdown {
-  taxiFuel: number;
-  tripFuel: number;
-  contingency: number;
-  alternateFuel: number;
-  finalReserve: number;
-  extraFuel: number;
-}
-
-interface WBDetails {
-  aircraft: {
-    code: string;
-    name: string;
-    limits: {
-      mtow: number;
-      mlw: number;
-      mzfw: number;
-      oew: number;
-      maxPayload: number;
-      maxFuel: number;
-    };
-  };
-  weights: {
-    operatingEmpty: number;
-    passengers: {
-      count: number;
-      weight: number;
-      breakdown: WBPassengerBreakdown;
-    };
-    baggage: {
-      checkedCount: number;
-      checkedWeight: number;
-      carryOnCount: number;
-      totalWeight: number;
-    };
-    cargo: {
-      zones: Array<{ zone: string; weight: number }>;
-      totalWeight: number;
-    };
-    fuel: {
-      totalFuelWeight: number;
-      breakdown: WBFuelBreakdown;
-      fuelDensity: number;
-    };
-    zeroFuel: number;
-    takeoff: number;
-    landing: number;
-  };
-  balance: {
-    cgPosition: number;
-    forwardLimit: number;
-    aftLimit: number;
-    trimSetting: number;
-  };
-  isWithinLimits: boolean;
-}
-
-interface WBCalculationResult {
-  id: number;
-  flightId: number;
-  aircraftTypeId: number;
-  operatingEmptyWeight: number;
-  passengerWeight: number;
-  baggageWeight: number;
-  cargoWeight: number;
-  fuelWeight: number;
-  totalWeight: number;
-  maxTakeoffWeight: number;
-  cgPosition: number;
-  cgForwardLimit: number;
-  cgAftLimit: number;
-  isWithinLimits: boolean;
-  trimSetting: number;
-  status: string;
-  calculatedBy: number;
-  calculatedAt: string;
-  details: WBDetails;
-}
-
-interface WBFlightData {
-  id: number;
-  flightId: number;
-  aircraftTypeId: number;
-  operatingEmptyWeight: number;
-  passengerWeight: number;
-  baggageWeight: number;
-  cargoWeight: number;
-  fuelWeight: number;
-  totalWeight: number;
-  maxTakeoffWeight: number;
-  cgPosition: number;
-  cgForwardLimit: number;
-  cgAftLimit: number;
-  isWithinLimits: boolean;
-  trimSetting: number;
-  status: string;
-}
-
-interface WBLimitCheck {
-  name: string;
-  actual: number;
-  limit: number;
-  unit: string;
-  passed: boolean;
-  margin: number;
-}
-
-interface WBLimitsResult {
-  isWithinAllLimits: boolean;
-  checks: WBLimitCheck[];
-  warnings: string[];
-  errors: string[];
-}
-
-interface WBLoadSheet {
-  loadSheetNumber: string;
-  edition: string;
-  generatedAt: string;
-  flight: {
-    id: number;
-    flightNumber: string;
-    date: string;
-    origin: string;
-    destination: string;
-    aircraftType: string;
-    registration: string;
-  };
-  crew: { cockpit: number; cabin: number; total: number };
-  passengers: {
-    males: number;
-    females: number;
-    children: number;
-    infants: number;
-    totalExcludingInfants: number;
-    total: number;
-  };
-  weights: {
-    operatingEmptyWeight: number;
-    passengerWeight: number;
-    baggageWeight: number;
-    cargoMailWeight: number;
-    totalTrafficLoad: number;
-    dryOperatingWeight: number;
-    zeroFuelWeightActual: number;
-    zeroFuelWeightMax: number;
-    takeoffFuel: number;
-    takeoffWeightActual: number;
-    takeoffWeightMax: number;
-    tripFuel: number;
-    landingWeightActual: number;
-    landingWeightMax: number;
-  };
-  balance: {
-    cgPercent: number;
-    cgForwardLimit: number;
-    cgAftLimit: number;
-    trimSetting: number;
-    stabilizerSetting: number;
-  };
-  cargoByZone: Array<{ zone: string; weight: number; maxWeight: number }>;
-  limitations: { isWithinAllLimits: boolean; items: string[] };
-  remarks: string[];
-}
-
-interface WBHistoryRecord {
-  id: number;
-  status: string;
-  passengerCount: number;
-  passengerWeight: number;
-  baggageWeight: number;
-  cargoWeight: number;
-  fuelWeight: number;
-  zeroFuelWeight: number;
-  takeoffWeight: number;
-  landingWeight: number;
-  cgPosition: string | null;
-  withinLimits: boolean;
-  warnings: string[];
-  createdAt: string;
-}
-
-// Access the weightBalance router via type assertion.
-// The router is defined but must be registered in server/routers.ts
-// for full type inference. Until then, we use this typed accessor.
-const wbTrpc = trpc.weightBalance as {
-  calculate: {
-    useMutation: (opts: {
-      onSuccess: () => void;
-      onError: (err: { message: string }) => void;
-    }) => {
-      mutate: (input: {
-        flightId: number;
-        aircraftTypeId: number;
-        fuelWeight: number;
-        cargoDistribution?: Array<{ zone: string; weight: number }>;
-      }) => void;
-      data: WBCalculationResult | undefined;
-      isPending: boolean;
-    };
-  };
-  getFlightWB: {
-    useQuery: (
-      input: { flightId: number },
-      opts: { enabled: boolean }
-    ) => { data: WBFlightData | null | undefined; isLoading: boolean };
-  };
-  checkLimits: {
-    useQuery: (
-      input: { flightId: number },
-      opts: { enabled: boolean }
-    ) => {
-      data: WBLimitsResult | undefined;
-      isLoading: boolean;
-      refetch: () => void;
-    };
-  };
-  generateLoadSheet: {
-    useMutation: (opts: {
-      onSuccess: () => void;
-      onError: (err: { message: string }) => void;
-    }) => {
-      mutate: (input: { flightId: number }) => void;
-      data: WBLoadSheet | undefined;
-      isPending: boolean;
-    };
-  };
-  getHistory: {
-    useQuery: (
-      input: { flightId: number },
-      opts: { enabled: boolean }
-    ) => { data: WBHistoryRecord[] | undefined; isLoading: boolean };
-  };
-};
-
-// ============================================================================
-// Main WeightBalance Page
-// ============================================================================
-
-type Tab = "calculate" | "current" | "limits" | "loadsheet" | "history";
+const kg = (value: number) => `${Math.round(value).toLocaleString()} kg`;
 
 export default function WeightBalance() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<Tab>("calculate");
+  const [activeTab, setActiveTab] = useState<Tab>("loadsheet");
+  const [flightId, setFlightId] = useState("");
 
   return (
     <div className="container mx-auto p-6 max-w-7xl page-enter">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
+      <div className="flex items-center gap-4 mb-6">
         <Link href="/admin/dcs">
           <Button
             variant="ghost"
@@ -306,41 +62,48 @@ export default function WeightBalance() {
           </h1>
           <p className="text-muted-foreground text-sm">
             {t(
-              "dcs.loadTrainingNotice",
-              "Training simulation. This page cannot issue a load sheet for dispatch."
+              "wb.subtitle",
+              "AHM 560/565 load control: registry data, index to %MAC, envelopes, underload, LMC and signed load sheet editions"
             )}
           </p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-8 flex-wrap">
+      <div
+        role="status"
+        className="mb-6 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100"
+      >
+        <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold">
+            {t("wb.notDispatchApproved", "Not dispatch-approved")}
+          </p>
+          <p>
+            {t(
+              "wb.gateNotice",
+              "Figures are computed by the engine from registry data. Load sheets stay marked not dispatch-approved until the operator approves the aircraft data, confirms the standard masses and records acceptance in the capability catalog."
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-6 flex-wrap">
         {(
           [
             {
-              id: "calculate",
-              label: t("wb.tabs.calculate", "Calculate W&B"),
+              id: "registry",
+              label: t("wb.tabs.registry", "Aircraft registry"),
+              icon: Plane,
+            },
+            {
+              id: "compute",
+              label: t("wb.tabs.compute", "Compute load sheet"),
               icon: Calculator,
             },
             {
-              id: "current",
-              label: t("wb.tabs.current", "Current W&B"),
-              icon: Weight,
-            },
-            {
-              id: "limits",
-              label: t("wb.tabs.limits", "Check Limits"),
-              icon: Gauge,
-            },
-            {
               id: "loadsheet",
-              label: t("wb.tabs.loadsheet", "Load Sheet"),
+              label: t("wb.tabs.loadsheet", "Load sheet"),
               icon: FileText,
-            },
-            {
-              id: "history",
-              label: t("wb.tabs.history", "History"),
-              icon: History,
             },
           ] as const
         ).map(tab => (
@@ -356,1524 +119,1694 @@ export default function WeightBalance() {
         ))}
       </div>
 
-      {/* Content */}
-      {activeTab === "calculate" && <CalculateTab />}
-      {activeTab === "current" && <CurrentWBTab />}
-      {activeTab === "limits" && <CheckLimitsTab />}
-      {activeTab === "loadsheet" && <LoadSheetTab />}
-      {activeTab === "history" && <HistoryTab />}
+      {activeTab === "registry" && <RegistryTab />}
+      {activeTab === "compute" && (
+        <ComputeTab
+          flightId={flightId}
+          setFlightId={setFlightId}
+          onComputed={() => setActiveTab("loadsheet")}
+        />
+      )}
+      {activeTab === "loadsheet" && (
+        <LoadSheetTab flightId={flightId} setFlightId={setFlightId} />
+      )}
     </div>
   );
 }
 
 // ============================================================================
-// Calculate Tab - Full W&B Calculation
+// Registry
 // ============================================================================
 
-function CalculateTab() {
+function RegistryTab() {
   const { t } = useTranslation();
-  const [flightId, setFlightId] = useState("");
-  const [aircraftTypeId, setAircraftTypeId] = useState("");
-  const [fuelWeight, setFuelWeight] = useState("");
-  const [cargoZones, setCargoZones] = useState<
-    Array<{ zone: string; weight: string }>
-  >([]);
-
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
-  const { data: aircraftList } = trpc.dcs.getAircraftTypes.useQuery();
-
-  const calculateMutation = wbTrpc.calculate.useMutation({
+  const utils = trpc.useUtils();
+  const types = trpc.weightBalance.listTypeBalanceData.useQuery({});
+  const registrations = trpc.weightBalance.listRegistrations.useQuery({});
+  const [datasetJson, setDatasetJson] = useState("");
+  const [registrationJson, setRegistrationJson] = useState("");
+  const [airlineId, setAirlineId] = useState("1");
+  const refresh = () => {
+    utils.weightBalance.listTypeBalanceData.invalidate();
+    utils.weightBalance.listRegistrations.invalidate();
+  };
+  const onError = (error: { message: string }) => toast.error(error.message);
+  const importType = trpc.weightBalance.importTypeBalanceData.useMutation({
     onSuccess: () => {
       toast.success(
-        t("wb.calculated", "Weight & Balance calculated successfully")
+        t("wb.registry.datasetImported", "Dataset imported as draft")
       );
+      setDatasetJson("");
+      refresh();
     },
-    onError: (err: { message: string }) => toast.error(err.message),
+    onError,
+  });
+  const importRegistration = trpc.weightBalance.importRegistration.useMutation({
+    onSuccess: () => {
+      toast.success(
+        t("wb.registry.registrationImported", "Registration imported as draft")
+      );
+      setRegistrationJson("");
+      refresh();
+    },
+    onError,
+  });
+  const approveType = trpc.weightBalance.setTypeBalanceApproval.useMutation({
+    onSuccess: refresh,
+    onError,
+  });
+  const approveRegistration =
+    trpc.weightBalance.setRegistrationApproval.useMutation({
+      onSuccess: refresh,
+      onError,
+    });
+  const seed = trpc.weightBalance.seedTrainingFixture.useMutation({
+    onSuccess: () => {
+      toast.success(
+        t("wb.registry.seeded", "Fictional AIS-T1 training fixture loaded")
+      );
+      refresh();
+    },
+    onError,
   });
 
-  const wb = calculateMutation.data;
-
-  const addCargoZone = () => {
-    setCargoZones([...cargoZones, { zone: "", weight: "" }]);
+  const parseJson = (text: string) => {
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      toast.error(t("wb.registry.invalidJson", "Invalid JSON"));
+      return undefined;
+    }
   };
-
-  const removeCargoZone = (idx: number) => {
-    setCargoZones(cargoZones.filter((_, i) => i !== idx));
-  };
-
-  const updateCargoZone = (
-    idx: number,
-    field: "zone" | "weight",
-    value: string
-  ) => {
-    const updated = [...cargoZones];
-    updated[idx] = { ...updated[idx], [field]: value };
-    setCargoZones(updated);
-  };
-
-  const handleCalculate = () => {
-    const cargo = cargoZones
-      .filter(c => c.zone && c.weight)
-      .map(c => ({ zone: c.zone, weight: parseInt(c.weight) || 0 }));
-
-    calculateMutation.mutate({
-      flightId: parsedFlightId,
-      aircraftTypeId: parseInt(aircraftTypeId),
-      fuelWeight: parseInt(fuelWeight) || 0,
-      cargoDistribution: cargo.length > 0 ? cargo : undefined,
-    });
+  const approvalPrompt = (status: "operator_approved" | "withdrawn") => {
+    const reference = window.prompt(
+      t(
+        "wb.registry.approvalReferencePrompt",
+        "Approval reference (document, revision, approver)"
+      )
+    );
+    return reference && reference.trim().length >= 3
+      ? { status, reference }
+      : null;
   };
 
   return (
     <div className="space-y-6">
-      {/* Input Form */}
-      <Card className="p-6">
-        <h3 className="font-semibold text-lg mb-4">
-          {t("wb.calc.title", "Calculate Weight & Balance")}
+      <Card className="p-6 shadow-sm rounded-xl space-y-3">
+        <h3 className="font-semibold text-lg">
+          {t("wb.registry.datasets", "Type balance datasets (AHM 560/565)")}
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <Label>{t("wb.calc.flightId", "Flight ID")}</Label>
+        <p className="text-sm text-muted-foreground">
+          {t(
+            "wb.registry.noShippedData",
+            "No certified figures for a real type are shipped. Import the operator's dataset as JSON; it is validated and stored as a draft version until approved with a reference."
+          )}
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-muted-foreground">
+              <tr>
+                <th className="py-1 pr-3">{t("wb.registry.type", "Type")}</th>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.version", "Version")}
+                </th>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.limits", "MTOW / MLW / MZFW")}
+                </th>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.lmcLimit", "LMC limit")}
+                </th>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.status", "Status")}
+                </th>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.source", "Source")}
+                </th>
+                <th className="py-1" />
+              </tr>
+            </thead>
+            <tbody>
+              {types.data?.map(type => (
+                <TypeRow
+                  key={type.id}
+                  type={type}
+                  onDecision={status => {
+                    const decision = approvalPrompt(status);
+                    if (decision)
+                      approveType.mutate({
+                        id: type.id,
+                        approvalStatus: decision.status,
+                        approvalReference: decision.reference,
+                      });
+                  }}
+                />
+              ))}
+              {types.data?.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-3 text-muted-foreground">
+                    {t("wb.registry.noDatasets", "No datasets imported yet")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Label>{t("wb.registry.importDataset", "Import dataset JSON")}</Label>
+        <Textarea
+          rows={6}
+          value={datasetJson}
+          onChange={e => setDatasetJson(e.target.value)}
+          placeholder='{"typeCode":"...","variant":"","description":"...","dataSource":"AHM 560 rev ...","fictional":false,"limits":{...},"lmcLimitKg":...,"effectiveFrom":"2026-01-01","payload":{...}}'
+          className="font-mono text-xs"
+        />
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            disabled={!datasetJson.trim() || importType.isPending}
+            onClick={() => {
+              const dataset = parseJson(datasetJson);
+              if (dataset !== undefined) importType.mutate({ dataset });
+            }}
+          >
+            {t("wb.registry.importBtn", "Validate and import")}
+          </Button>
+          <div className="flex items-center gap-2">
             <Input
               type="number"
-              value={flightId}
-              onChange={e => setFlightId(e.target.value)}
-              placeholder={t("wb.calc.enterFlightId", "Enter flight ID")}
+              min={1}
+              className="w-24"
+              value={airlineId}
+              onChange={e => setAirlineId(e.target.value)}
+              aria-label={t("wb.registry.airlineId", "Operator ID")}
             />
+            <Button
+              variant="outline"
+              disabled={seed.isPending || !Number(airlineId)}
+              onClick={() => seed.mutate({ airlineId: Number(airlineId) })}
+            >
+              {t(
+                "wb.registry.seedBtn",
+                "Load fictional AIS-T1 training fixture (dev only)"
+              )}
+            </Button>
           </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 shadow-sm rounded-xl space-y-3">
+        <h3 className="font-semibold text-lg">
+          {t("wb.registry.registrations", "Aircraft registrations (DOW/DOI)")}
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-muted-foreground">
+              <tr>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.registration", "Registration")}
+                </th>
+                <th className="py-1 pr-3">{t("wb.registry.type", "Type")}</th>
+                <th className="py-1 pr-3">DOW</th>
+                <th className="py-1 pr-3">DOI</th>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.cabinConfig", "Cabin config")}
+                </th>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.envelope", "Envelope")}
+                </th>
+                <th className="py-1 pr-3">
+                  {t("wb.registry.status", "Status")}
+                </th>
+                <th className="py-1" />
+              </tr>
+            </thead>
+            <tbody>
+              {registrations.data?.map(reg => (
+                <RegistrationRow
+                  key={reg.id}
+                  registration={reg}
+                  onDecision={status => {
+                    const decision = approvalPrompt(status);
+                    if (decision)
+                      approveRegistration.mutate({
+                        id: reg.id,
+                        approvalStatus: decision.status,
+                        approvalReference: decision.reference,
+                      });
+                  }}
+                />
+              ))}
+              {registrations.data?.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-3 text-muted-foreground">
+                    {t("wb.registry.noRegistrations", "No registrations yet")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Label>
+          {t("wb.registry.importRegistration", "Import registration JSON")}
+        </Label>
+        <Textarea
+          rows={4}
+          value={registrationJson}
+          onChange={e => setRegistrationJson(e.target.value)}
+          placeholder='{"registration":"HZ-...","airlineId":1,"balanceDataId":1,"typeCode":"...","variant":"","dowKg":...,"doi":...,"fuelCapacityKg":...,"cabinConfigVersion":"...","envelopeRef":"...","effectiveFrom":"2026-01-01"}'
+          className="font-mono text-xs"
+        />
+        <Button
+          disabled={!registrationJson.trim() || importRegistration.isPending}
+          onClick={() => {
+            const record = parseJson(registrationJson);
+            if (record !== undefined) importRegistration.mutate({ record });
+          }}
+        >
+          {t("wb.registry.importBtn", "Validate and import")}
+        </Button>
+      </Card>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
+  const labels: Record<string, string> = {
+    draft: t("wb.status.draft", "Draft"),
+    operator_approved: t("wb.status.operatorApproved", "Operator approved"),
+    withdrawn: t("wb.status.withdrawn", "Withdrawn"),
+    preliminary: t("wb.status.preliminary", "Preliminary"),
+    final: t("wb.status.final", "Final (signed)"),
+    superseded: t("wb.status.superseded", "Superseded"),
+    superseded_by_aircraft_change: t(
+      "wb.status.supersededByAircraftChange",
+      "Superseded by aircraft change"
+    ),
+  };
+  const color =
+    status === "operator_approved" || status === "final"
+      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+      : status === "superseded_by_aircraft_change" || status === "withdrawn"
+        ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+        : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200";
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded ${color}`}>
+      {labels[status] ?? status}
+    </span>
+  );
+}
+
+function TypeRow({
+  type,
+  onDecision,
+}: {
+  type: TypeSummary;
+  onDecision: (status: "operator_approved" | "withdrawn") => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <tr className="border-t">
+      <td className="py-2 pr-3 font-medium">
+        {type.typeCode}
+        {type.variant ? `-${type.variant}` : ""}
+        {type.fictional && (
+          <span className="ml-2 text-xs text-red-700 dark:text-red-300">
+            {t("wb.registry.fictional", "FICTIONAL")}
+          </span>
+        )}
+        <div className="text-xs text-muted-foreground">{type.description}</div>
+      </td>
+      <td className="py-2 pr-3">v{type.version}</td>
+      <td className="py-2 pr-3">
+        {type.limits.mtowKg.toLocaleString()} /{" "}
+        {type.limits.mlwKg.toLocaleString()} /{" "}
+        {type.limits.mzfwKg.toLocaleString()}
+      </td>
+      <td className="py-2 pr-3">{type.lmcLimitKg} kg</td>
+      <td className="py-2 pr-3">
+        <StatusBadge status={type.approvalStatus} />
+        {type.approvalReference && (
+          <div className="text-xs text-muted-foreground">
+            {type.approvalReference}
+          </div>
+        )}
+      </td>
+      <td className="py-2 pr-3 text-xs">{type.dataSource}</td>
+      <td className="py-2 flex gap-1">
+        {type.approvalStatus === "draft" && !type.fictional && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onDecision("operator_approved")}
+          >
+            {t("wb.registry.approve", "Approve")}
+          </Button>
+        )}
+        {type.approvalStatus !== "withdrawn" && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onDecision("withdrawn")}
+          >
+            {t("wb.registry.withdraw", "Withdraw")}
+          </Button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function RegistrationRow({
+  registration,
+  onDecision,
+}: {
+  registration: RegistrationSummary;
+  onDecision: (status: "operator_approved" | "withdrawn") => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <tr className="border-t">
+      <td className="py-2 pr-3 font-medium">{registration.registration}</td>
+      <td className="py-2 pr-3">
+        {registration.typeCode}
+        {registration.variant ? `-${registration.variant}` : ""}
+      </td>
+      <td className="py-2 pr-3">{registration.dowKg.toLocaleString()} kg</td>
+      <td className="py-2 pr-3">{registration.doi}</td>
+      <td className="py-2 pr-3">{registration.cabinConfigVersion}</td>
+      <td className="py-2 pr-3">{registration.envelopeRef}</td>
+      <td className="py-2 pr-3">
+        <StatusBadge status={registration.approvalStatus} />
+      </td>
+      <td className="py-2 flex gap-1">
+        {registration.approvalStatus === "draft" && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onDecision("operator_approved")}
+          >
+            {t("wb.registry.approve", "Approve")}
+          </Button>
+        )}
+        {registration.approvalStatus !== "withdrawn" && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onDecision("withdrawn")}
+          >
+            {t("wb.registry.withdraw", "Withdraw")}
+          </Button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// ============================================================================
+// Compute
+// ============================================================================
+
+type DeadloadRow = {
+  compartment: string;
+  baggagePieces: string;
+  baggageKg: string;
+  cargoKg: string;
+  mailKg: string;
+};
+type ZoneRow = {
+  zone: string;
+  male: string;
+  female: string;
+  child: string;
+  infant: string;
+};
+
+function ComputeTab({
+  flightId,
+  setFlightId,
+  onComputed,
+}: {
+  flightId: string;
+  setFlightId: (value: string) => void;
+  onComputed: () => void;
+}) {
+  const { t } = useTranslation();
+  const utils = trpc.useUtils();
+  const registrations = trpc.weightBalance.listRegistrations.useQuery({});
+  const ruleSets = trpc.weightBalance.listStandardMassRuleSets.useQuery();
+  const [registrationId, setRegistrationId] = useState("");
+  const [ruleSetId, setRuleSetId] = useState("easa-cat-pol-mab-100-20plus");
+  const [ruleSetConfirmation, setRuleSetConfirmation] = useState("");
+  const [passengerSource, setPassengerSource] = useState<"system" | "manual">(
+    "system"
+  );
+  const [zones, setZones] = useState<ZoneRow[]>([]);
+  const [systemBaggageCompartment, setSystemBaggageCompartment] = useState("");
+  const [deadload, setDeadload] = useState<DeadloadRow[]>([]);
+  const [fuel, setFuel] = useState({ blockKg: "", taxiKg: "", tripKg: "" });
+  const [rtowKg, setRtowKg] = useState("");
+  const [mlawKg, setMlawKg] = useState("");
+
+  const selected = registrations.data?.find(
+    r => r.id === Number(registrationId)
+  );
+  const typeDetail = trpc.weightBalance.getTypeBalanceData.useQuery(
+    { id: selected?.balanceDataId ?? 0 },
+    { enabled: Boolean(selected) }
+  );
+  const compartments = typeDetail.data?.compartments ?? [];
+  const cabinZones = typeDetail.data?.cabinZones ?? [];
+
+  const compute = trpc.weightBalance.compute.useMutation({
+    onSuccess: record => {
+      toast.success(
+        t("wb.compute.success", "Edition {{edition}} computed", {
+          edition: record.edition,
+        })
+      );
+      utils.weightBalance.getLatest.invalidate();
+      utils.weightBalance.listEditions.invalidate();
+      onComputed();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const num = (value: string) => (value.trim() === "" ? 0 : Number(value));
+  const submit = () => {
+    compute.mutate({
+      flightId: Number(flightId),
+      registrationId: Number(registrationId),
+      ruleSetId,
+      ruleSetConfirmationReference: ruleSetConfirmation.trim() || undefined,
+      passengerSource,
+      passengersByZone:
+        passengerSource === "manual"
+          ? zones
+              .filter(z => z.zone)
+              .map(z => ({
+                zone: z.zone,
+                male: num(z.male),
+                female: num(z.female),
+                child: num(z.child),
+                infant: num(z.infant),
+              }))
+          : undefined,
+      systemBaggageCompartment: systemBaggageCompartment || undefined,
+      deadload: deadload
+        .filter(d => d.compartment)
+        .map(d => ({
+          compartment: d.compartment,
+          baggagePieces: num(d.baggagePieces),
+          baggageKg: d.baggageKg.trim() === "" ? null : Number(d.baggageKg),
+          cargoKg: num(d.cargoKg),
+          mailKg: num(d.mailKg),
+        })),
+      fuel: {
+        blockKg: num(fuel.blockKg),
+        taxiKg: num(fuel.taxiKg),
+        tripKg: num(fuel.tripKg),
+      },
+      performanceLimits: {
+        rtowKg: rtowKg ? Number(rtowKg) : null,
+        mlawKg: mlawKg ? Number(mlawKg) : null,
+      },
+    });
+  };
+
+  return (
+    <Card className="p-6 shadow-sm rounded-xl space-y-5">
+      <h3 className="font-semibold text-lg">
+        {t("wb.compute.title", "Compute a new preliminary edition")}
+      </h3>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div>
+          <Label>{t("wb.compute.flightId", "Flight ID")}</Label>
+          <Input
+            type="number"
+            min={1}
+            value={flightId}
+            onChange={e => setFlightId(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>{t("wb.compute.registration", "Registration")}</Label>
+          <Select value={registrationId} onValueChange={setRegistrationId}>
+            <SelectTrigger>
+              <SelectValue
+                placeholder={t(
+                  "wb.compute.selectRegistration",
+                  "Select registration"
+                )}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {registrations.data?.map(r => (
+                <SelectItem key={r.id} value={String(r.id)}>
+                  {r.registration} ({r.typeCode}
+                  {r.variant ? `-${r.variant}` : ""}, DOW{" "}
+                  {r.dowKg.toLocaleString()})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>{t("wb.compute.ruleSet", "Standard mass rule set")}</Label>
+          <Select value={ruleSetId} onValueChange={setRuleSetId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ruleSets.data?.map(r => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.authority}: {r.masses.maleKg}/{r.masses.femaleKg}/
+                  {r.masses.childKg} kg, bag {r.masses.checkedBagKg} kg
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {ruleSets.data && (
+            <p className="text-xs text-muted-foreground mt-1">
+              <a
+                href={ruleSets.data.find(r => r.id === ruleSetId)?.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                {t("wb.compute.ruleSetSource", "Source")}
+              </a>{" "}
+              · {ruleSets.data.find(r => r.id === ruleSetId)?.effectiveFrom}
+            </p>
+          )}
+        </div>
+        <div className="md:col-span-3">
+          <Label>
+            {t(
+              "wb.compute.ruleSetConfirmation",
+              "Operator confirmation reference for these masses (leave empty to record them as unconfirmed)"
+            )}
+          </Label>
+          <Input
+            value={ruleSetConfirmation}
+            onChange={e => setRuleSetConfirmation(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>{t("wb.compute.passengers", "Passengers")}</Label>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant={passengerSource === "system" ? "default" : "outline"}
+            onClick={() => setPassengerSource("system")}
+          >
+            {t("wb.compute.paxSystem", "From confirmed bookings and seats")}
+          </Button>
+          <Button
+            size="sm"
+            variant={passengerSource === "manual" ? "default" : "outline"}
+            onClick={() => setPassengerSource("manual")}
+          >
+            {t("wb.compute.paxManual", "Enter counts by zone")}
+          </Button>
+        </div>
+        {passengerSource === "manual" && (
+          <div className="space-y-2">
+            {zones.map((zone, i) => (
+              <div key={i} className="grid grid-cols-5 gap-2">
+                <Select
+                  value={zone.zone}
+                  onValueChange={value =>
+                    setZones(
+                      zones.map((z, j) => (j === i ? { ...z, zone: value } : z))
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("wb.compute.zone", "Zone")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cabinZones.map(c => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.code} ({c.seats})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(["male", "female", "child", "infant"] as const).map(key => (
+                  <Input
+                    key={key}
+                    type="number"
+                    min={0}
+                    placeholder={t(`wb.compute.${key}`, key)}
+                    value={zone[key]}
+                    onChange={e =>
+                      setZones(
+                        zones.map((z, j) =>
+                          j === i ? { ...z, [key]: e.target.value } : z
+                        )
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            ))}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setZones([
+                  ...zones,
+                  { zone: "", male: "", female: "", child: "", infant: "" },
+                ])
+              }
+            >
+              {t("wb.compute.addZone", "+ Zone")}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label>
+          {t("wb.compute.deadload", "Deadload by compartment (kg)")}
+        </Label>
+        <div className="grid gap-2 md:grid-cols-2">
           <div>
-            <Label>{t("wb.calc.aircraftType", "Aircraft Type")}</Label>
-            <Select value={aircraftTypeId} onValueChange={setAircraftTypeId}>
+            <Label className="text-xs text-muted-foreground">
+              {t(
+                "wb.compute.systemBaggage",
+                "Place the system's checked bags in compartment"
+              )}
+            </Label>
+            <Select
+              value={systemBaggageCompartment}
+              onValueChange={setSystemBaggageCompartment}
+            >
               <SelectTrigger>
                 <SelectValue
-                  placeholder={t("wb.calc.selectAircraft", "Select aircraft")}
+                  placeholder={t("wb.compute.none", "None (manual only)")}
                 />
               </SelectTrigger>
               <SelectContent>
-                {aircraftList?.map(ac => (
-                  <SelectItem key={ac.id} value={ac.id.toString()}>
-                    {ac.code} - {ac.name}
+                {compartments.map(c => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.code} {c.name ?? ""} (max {c.maxKg.toLocaleString()} kg)
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>{t("wb.calc.fuelWeight", "Fuel Weight (kg)")}</Label>
-            <Input
-              type="number"
-              value={fuelWeight}
-              onChange={e => setFuelWeight(e.target.value)}
-              placeholder="e.g. 15000"
-            />
-          </div>
         </div>
-
-        {/* Cargo Zones */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between mb-2">
-            <Label>{t("wb.calc.cargoZones", "Cargo Zones")}</Label>
-            <Button variant="outline" size="sm" onClick={addCargoZone}>
-              {t("wb.calc.addZone", "+ Add Zone")}
-            </Button>
-          </div>
-          {cargoZones.map((zone, idx) => (
-            <div key={idx} className="flex gap-2 mb-2 items-end">
-              <div className="flex-1">
-                <Input
-                  value={zone.zone}
-                  onChange={e => updateCargoZone(idx, "zone", e.target.value)}
-                  placeholder={t("wb.calc.zoneName", "Zone (e.g. FWD, AFT)")}
-                />
-              </div>
-              <div className="flex-1">
-                <Input
-                  type="number"
-                  value={zone.weight}
-                  onChange={e => updateCargoZone(idx, "weight", e.target.value)}
-                  placeholder={t("wb.calc.zoneWeight", "Weight (kg)")}
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => removeCargoZone(idx)}
-              >
-                <XCircle className="h-4 w-4 text-red-500" />
-              </Button>
-            </div>
-          ))}
-        </div>
-
-        <Button
-          className="mt-4 gap-2"
-          disabled={
-            !parsedFlightId ||
-            !aircraftTypeId ||
-            !fuelWeight ||
-            calculateMutation.isPending
-          }
-          onClick={handleCalculate}
-        >
-          <Calculator className="h-4 w-4" />
-          {calculateMutation.isPending
-            ? t("wb.calc.calculating", "Calculating...")
-            : t("wb.calc.calculateBtn", "Calculate W&B")}
-        </Button>
-      </Card>
-
-      {/* Results */}
-      {wb && (
-        <div className="space-y-4">
-          {/* Safety Status */}
-          <Card
-            className={`p-4 border-2 ${
-              wb.isWithinLimits ? "border-green-500" : "border-red-500"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {wb.isWithinLimits ? (
-                <CheckCircle className="h-6 w-6 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-6 w-6 text-red-500" />
-              )}
-              <div>
-                <p className="font-semibold text-lg">
-                  {wb.isWithinLimits
-                    ? t("wb.result.withinLimits", "All weights within limits")
-                    : t("wb.result.exceedsLimits", "Weight limits exceeded!")}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t("wb.result.status", "Status")}: {wb.status} |{" "}
-                  {t("wb.result.trim", "Trim")}: {wb.trimSetting}{" "}
-                  {t("wb.result.units", "units")}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Weight Breakdown */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.result.weightBreakdown", "Weight Breakdown")}
-            </h3>
-            <div className="space-y-3">
-              <WeightRow
-                label={t("wb.result.oew", "Operating Empty Weight (OEW)")}
-                value={wb.details.weights.operatingEmpty}
-              />
-              <div className="pl-4 border-l-2 border-muted space-y-2">
-                <WeightRow
-                  label={`${t("wb.result.males", "Males")} (${wb.details.weights.passengers.breakdown.males.count})`}
-                  value={wb.details.weights.passengers.breakdown.males.weight}
-                  small
-                />
-                <WeightRow
-                  label={`${t("wb.result.females", "Females")} (${wb.details.weights.passengers.breakdown.females.count})`}
-                  value={wb.details.weights.passengers.breakdown.females.weight}
-                  small
-                />
-                <WeightRow
-                  label={`${t("wb.result.children", "Children")} (${wb.details.weights.passengers.breakdown.children.count})`}
-                  value={
-                    wb.details.weights.passengers.breakdown.children.weight
-                  }
-                  small
-                />
-                <WeightRow
-                  label={`${t("wb.result.infants", "Infants")} (${wb.details.weights.passengers.breakdown.infants.count})`}
-                  value={wb.details.weights.passengers.breakdown.infants.weight}
-                  small
-                />
-              </div>
-              <WeightRow
-                label={`${t("wb.result.passengers", "Passengers")} (${wb.details.weights.passengers.count})`}
-                value={wb.details.weights.passengers.weight}
-              />
-              <WeightRow
-                label={`${t("wb.result.baggage", "Checked Baggage")} (${wb.details.weights.baggage.checkedCount} pcs)`}
-                value={wb.details.weights.baggage.totalWeight}
-              />
-              <WeightRow
-                label={t("wb.result.cargo", "Cargo")}
-                value={wb.details.weights.cargo.totalWeight}
-              />
-              <hr />
-              <WeightRow
-                label={t("wb.result.zfw", "Zero Fuel Weight (ZFW)")}
-                value={wb.details.weights.zeroFuel}
-                limit={wb.details.aircraft.limits.mzfw}
-                bold
-              />
-              <WeightRow
-                label={t("wb.result.fuel", "Fuel")}
-                value={wb.details.weights.fuel.totalFuelWeight}
-                limit={wb.details.aircraft.limits.maxFuel}
-              />
-              <hr />
-              <WeightRow
-                label={t("wb.result.tow", "Takeoff Weight (TOW)")}
-                value={wb.details.weights.takeoff}
-                limit={wb.details.aircraft.limits.mtow}
-                bold
-              />
-              <WeightRow
-                label={t("wb.result.lw", "Landing Weight (LW)")}
-                value={wb.details.weights.landing}
-                limit={wb.details.aircraft.limits.mlw}
-                bold
-              />
-            </div>
-          </Card>
-
-          {/* Weight Limit Progress Bars */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.result.limitIndicators", "Weight Limit Indicators")}
-            </h3>
-            <div className="space-y-4">
-              <WeightProgressBar
-                label="MTOW"
-                value={wb.details.weights.takeoff}
-                max={wb.details.aircraft.limits.mtow}
-              />
-              <WeightProgressBar
-                label="MLW"
-                value={wb.details.weights.landing}
-                max={wb.details.aircraft.limits.mlw}
-              />
-              <WeightProgressBar
-                label="MZFW"
-                value={wb.details.weights.zeroFuel}
-                max={wb.details.aircraft.limits.mzfw}
-              />
-              <WeightProgressBar
-                label={t("wb.result.payload", "Payload")}
-                value={
-                  wb.details.weights.passengers.weight +
-                  wb.details.weights.baggage.totalWeight +
-                  wb.details.weights.cargo.totalWeight
-                }
-                max={wb.details.aircraft.limits.maxPayload}
-              />
-              <WeightProgressBar
-                label={t("wb.result.fuelCap", "Fuel")}
-                value={wb.details.weights.fuel.totalFuelWeight}
-                max={wb.details.aircraft.limits.maxFuel}
-              />
-            </div>
-          </Card>
-
-          {/* CG Envelope Visualization */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.result.cgEnvelope", "CG Envelope")}
-            </h3>
-            <CgEnvelopeGraph
-              cgPosition={wb.details.balance.cgPosition}
-              forwardLimit={wb.details.balance.forwardLimit}
-              aftLimit={wb.details.balance.aftLimit}
-            />
-          </Card>
-
-          {/* Trim Settings */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.result.trimSettings", "Trim Settings")}
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-muted rounded">
-                <p className="text-2xl font-bold">
-                  {wb.details.balance.trimSetting}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.result.trimUnits", "Trim (units)")}
-                </p>
-              </div>
-              <div className="text-center p-4 bg-muted rounded">
-                <p className="text-2xl font-bold">
-                  {wb.details.balance.cgPosition}%
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.result.cgMAC", "CG (% MAC)")}
-                </p>
-              </div>
-              <div className="text-center p-4 bg-muted rounded">
-                <p className="text-2xl font-bold">
-                  {wb.details.balance.forwardLimit}%
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.result.fwdLimit", "Fwd Limit")}
-                </p>
-              </div>
-              <div className="text-center p-4 bg-muted rounded">
-                <p className="text-2xl font-bold">
-                  {wb.details.balance.aftLimit}%
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.result.aftLimit", "Aft Limit")}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Fuel Breakdown */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.result.fuelBreakdown", "Fuel Breakdown")}
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {Object.entries(wb.details.weights.fuel.breakdown).map(
-                ([key, value]) => (
-                  <div key={key} className="p-3 bg-muted rounded">
-                    <p className="text-sm text-muted-foreground capitalize">
-                      {key.replace(/([A-Z])/g, " $1").trim()}
-                    </p>
-                    <p className="font-semibold">
-                      {(value as number).toLocaleString()} kg
-                    </p>
-                  </div>
+        {deadload.map((row, i) => (
+          <div key={i} className="grid grid-cols-5 gap-2">
+            <Select
+              value={row.compartment}
+              onValueChange={value =>
+                setDeadload(
+                  deadload.map((d, j) =>
+                    j === i ? { ...d, compartment: value } : d
+                  )
                 )
-              )}
-            </div>
-          </Card>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// Current W&B Tab
-// ============================================================================
-
-function CurrentWBTab() {
-  const { t } = useTranslation();
-  const [flightId, setFlightId] = useState("");
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
-
-  const { data: wb, isLoading } = wbTrpc.getFlightWB.useQuery(
-    { flightId: parsedFlightId },
-    { enabled: parsedFlightId > 0 }
-  );
-
-  return (
-    <div className="space-y-6">
-      <Card className="p-4">
-        <div className="flex gap-4 items-end">
-          <div className="flex-1">
-            <Label>{t("wb.current.flightId", "Flight ID")}</Label>
-            <Input
-              type="number"
-              value={flightId}
-              onChange={e => setFlightId(e.target.value)}
-              placeholder={t("wb.current.enterFlightId", "Enter flight ID")}
-            />
-          </div>
-        </div>
-      </Card>
-
-      {isLoading && parsedFlightId > 0 && (
-        <Card className="p-6 animate-pulse">
-          <div className="h-40 bg-muted rounded" />
-        </Card>
-      )}
-
-      {!isLoading && parsedFlightId > 0 && !wb && (
-        <Card className="p-6">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <Info className="h-5 w-5" />
-            <p>
-              {t(
-                "wb.current.noData",
-                "No W&B data found for this flight. Use the Calculate tab first."
-              )}
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {wb && (
-        <div className="space-y-4">
-          {/* Status Banner */}
-          <Card
-            className={`p-4 border-2 ${
-              wb.isWithinLimits ? "border-green-500" : "border-red-500"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {wb.isWithinLimits ? (
-                <CheckCircle className="h-6 w-6 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-6 w-6 text-red-500" />
-              )}
-              <div>
-                <p className="font-semibold">
-                  {wb.isWithinLimits
-                    ? t("wb.current.withinLimits", "All weights within limits")
-                    : t("wb.current.exceedsLimits", "Weight limits exceeded!")}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t("wb.current.status", "Status")}: {wb.status}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Weight Summary */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.current.summary", "Weight Summary")}
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4 bg-muted rounded text-center">
-                <p className="text-2xl font-bold">
-                  {wb.operatingEmptyWeight.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">OEW (kg)</p>
-              </div>
-              <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded text-center">
-                <p className="text-2xl font-bold">
-                  {wb.passengerWeight.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.current.paxWeight", "Passengers (kg)")}
-                </p>
-              </div>
-              <div className="p-4 bg-amber-50 dark:bg-amber-950 rounded text-center">
-                <p className="text-2xl font-bold">
-                  {wb.baggageWeight.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.current.bagWeight", "Baggage (kg)")}
-                </p>
-              </div>
-              <div className="p-4 bg-green-50 dark:bg-green-950 rounded text-center">
-                <p className="text-2xl font-bold">
-                  {wb.cargoWeight.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.current.cargoWeight", "Cargo (kg)")}
-                </p>
-              </div>
-              <div className="p-4 bg-purple-50 dark:bg-purple-950 rounded text-center">
-                <p className="text-2xl font-bold">
-                  {wb.fuelWeight.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.current.fuelWeight", "Fuel (kg)")}
-                </p>
-              </div>
-              <div className="p-4 bg-muted rounded text-center">
-                <p className="text-2xl font-bold">
-                  {wb.totalWeight.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">TOW (kg)</p>
-              </div>
-              <div className="p-4 bg-muted rounded text-center">
-                <p className="text-2xl font-bold">{wb.cgPosition}%</p>
-                <p className="text-xs text-muted-foreground">CG (% MAC)</p>
-              </div>
-              <div className="p-4 bg-muted rounded text-center">
-                <p className="text-2xl font-bold">{wb.trimSetting}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t("wb.current.trim", "Trim (units)")}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Weight Progress Bars */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.current.limits", "Limit Utilization")}
-            </h3>
-            <div className="space-y-4">
-              <WeightProgressBar
-                label="TOW vs MTOW"
-                value={wb.totalWeight}
-                max={wb.maxTakeoffWeight}
+              }
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={t("wb.compute.compartment", "Compartment")}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {compartments.map(c => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.code} (max {c.maxKg.toLocaleString()})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(
+              [
+                ["baggagePieces", t("wb.compute.bagPieces", "Bag pcs")],
+                [
+                  "baggageKg",
+                  t("wb.compute.bagKg", "Bag kg (blank = standard)"),
+                ],
+                ["cargoKg", t("wb.compute.cargoKg", "Cargo kg")],
+                ["mailKg", t("wb.compute.mailKg", "Mail kg")],
+              ] as const
+            ).map(([key, label]) => (
+              <Input
+                key={key}
+                type="number"
+                min={0}
+                placeholder={label}
+                value={row[key]}
+                onChange={e =>
+                  setDeadload(
+                    deadload.map((d, j) =>
+                      j === i ? { ...d, [key]: e.target.value } : d
+                    )
+                  )
+                }
               />
-            </div>
-          </Card>
+            ))}
+          </div>
+        ))}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            setDeadload([
+              ...deadload,
+              {
+                compartment: "",
+                baggagePieces: "",
+                baggageKg: "",
+                cargoKg: "",
+                mailKg: "",
+              },
+            ])
+          }
+        >
+          {t("wb.compute.addCompartment", "+ Compartment")}
+        </Button>
+      </div>
 
-          {/* CG Envelope */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.current.cgEnvelope", "CG Position")}
-            </h3>
-            <CgEnvelopeGraph
-              cgPosition={wb.cgPosition}
-              forwardLimit={wb.cgForwardLimit}
-              aftLimit={wb.cgAftLimit}
-            />
-          </Card>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// Check Limits Tab
-// ============================================================================
-
-function CheckLimitsTab() {
-  const { t } = useTranslation();
-  const [flightId, setFlightId] = useState("");
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
-
-  const {
-    data: limitsData,
-    isLoading,
-    refetch,
-  } = wbTrpc.checkLimits.useQuery(
-    { flightId: parsedFlightId },
-    { enabled: false }
-  );
-
-  const handleCheck = () => {
-    if (parsedFlightId > 0) {
-      refetch();
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card className="p-4">
-        <div className="flex gap-4 items-end">
-          <div className="flex-1">
-            <Label>{t("wb.limits.flightId", "Flight ID")}</Label>
+      <div className="grid gap-4 md:grid-cols-5">
+        {(
+          [
+            ["blockKg", t("wb.compute.blockFuel", "Block fuel (kg)")],
+            ["taxiKg", t("wb.compute.taxiFuel", "Taxi fuel (kg)")],
+            ["tripKg", t("wb.compute.tripFuel", "Trip fuel (kg)")],
+          ] as const
+        ).map(([key, label]) => (
+          <div key={key}>
+            <Label>{label}</Label>
             <Input
               type="number"
-              value={flightId}
-              onChange={e => setFlightId(e.target.value)}
-              placeholder={t("wb.limits.enterFlightId", "Enter flight ID")}
+              min={0}
+              value={fuel[key]}
+              onChange={e => setFuel({ ...fuel, [key]: e.target.value })}
             />
           </div>
-          <Button
-            onClick={handleCheck}
-            disabled={!parsedFlightId}
-            className="gap-2"
-          >
-            <Gauge className="h-4 w-4" />
-            {t("wb.limits.checkBtn", "Check Limits")}
-          </Button>
+        ))}
+        <div>
+          <Label>{t("wb.compute.rtow", "RTOW (performance, optional)")}</Label>
+          <Input
+            type="number"
+            min={0}
+            value={rtowKg}
+            onChange={e => setRtowKg(e.target.value)}
+          />
         </div>
-      </Card>
-
-      {isLoading && (
-        <Card className="p-6 animate-pulse">
-          <div className="h-40 bg-muted rounded" />
-        </Card>
-      )}
-
-      {limitsData && (
-        <div className="space-y-4">
-          {/* Overall Status */}
-          <Card
-            className={`p-4 border-2 ${
-              limitsData.isWithinAllLimits
-                ? "border-green-500"
-                : "border-red-500"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {limitsData.isWithinAllLimits ? (
-                <CheckCircle className="h-6 w-6 text-green-500" />
-              ) : (
-                <AlertTriangle className="h-6 w-6 text-red-500" />
-              )}
-              <p className="font-semibold text-lg">
-                {limitsData.isWithinAllLimits
-                  ? t("wb.limits.allPassed", "All limit checks passed")
-                  : t("wb.limits.failed", "One or more limits exceeded")}
-              </p>
-            </div>
-          </Card>
-
-          {/* Individual Checks */}
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">
-              {t("wb.limits.detailedChecks", "Detailed Limit Checks")}
-            </h3>
-            <div className="space-y-3">
-              {limitsData.checks.map((check, idx) => (
-                <div
-                  key={idx}
-                  className={`flex items-center justify-between p-3 rounded border ${
-                    check.passed
-                      ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950"
-                      : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    {check.passed ? (
-                      <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-                    )}
-                    <div>
-                      <p className="font-medium">{check.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {t("wb.limits.actual", "Actual")}:{" "}
-                        {check.unit === "% MAC"
-                          ? `${check.actual.toFixed(2)}${check.unit}`
-                          : `${check.actual.toLocaleString()} ${check.unit}`}{" "}
-                        / {t("wb.limits.limit", "Limit")}:{" "}
-                        {check.unit === "% MAC"
-                          ? `${check.limit.toFixed(2)}${check.unit}`
-                          : `${check.limit.toLocaleString()} ${check.unit}`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={`font-mono text-sm ${
-                        check.passed ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      {check.margin >= 0 ? "+" : ""}
-                      {check.unit === "% MAC"
-                        ? check.margin.toFixed(2)
-                        : check.margin.toLocaleString()}{" "}
-                      {check.unit}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t("wb.limits.margin", "Margin")}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Warnings */}
-          {limitsData.warnings.length > 0 && (
-            <Card className="p-6 border-amber-200 dark:border-amber-800">
-              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
-                {t("wb.limits.warnings", "Warnings")}
-              </h3>
-              <ul className="space-y-1">
-                {limitsData.warnings.map((w, i) => (
-                  <li
-                    key={i}
-                    className="text-sm text-amber-700 dark:text-amber-300"
-                  >
-                    {w}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          {/* Errors */}
-          {limitsData.errors.length > 0 && (
-            <Card className="p-6 border-red-200 dark:border-red-800">
-              <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                <XCircle className="h-5 w-5 text-red-500" />
-                {t("wb.limits.errors", "Errors")}
-              </h3>
-              <ul className="space-y-1">
-                {limitsData.errors.map((e, i) => (
-                  <li
-                    key={i}
-                    className="text-sm text-red-700 dark:text-red-300"
-                  >
-                    {e}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
+        <div>
+          <Label>
+            {t("wb.compute.mlaw", "Perf. landing limit (optional)")}
+          </Label>
+          <Input
+            type="number"
+            min={0}
+            value={mlawKg}
+            onChange={e => setMlawKg(e.target.value)}
+          />
         </div>
-      )}
-    </div>
+      </div>
+
+      <Button
+        onClick={submit}
+        disabled={
+          !Number(flightId) || !Number(registrationId) || compute.isPending
+        }
+        className="w-full"
+      >
+        {compute.isPending
+          ? t("wb.compute.computing", "Computing...")
+          : t("wb.compute.computeBtn", "Compute preliminary load sheet")}
+      </Button>
+    </Card>
   );
 }
 
 // ============================================================================
-// Load Sheet Tab
+// Load sheet
 // ============================================================================
 
-function LoadSheetTab() {
+function LoadSheetTab({
+  flightId,
+  setFlightId,
+}: {
+  flightId: string;
+  setFlightId: (value: string) => void;
+}) {
   const { t } = useTranslation();
-  const [flightId, setFlightId] = useState("");
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
-
-  const generateMutation = wbTrpc.generateLoadSheet.useMutation({
-    onSuccess: () =>
-      toast.success(t("wb.loadsheet.generated", "Load sheet generated")),
-    onError: (err: { message: string }) => toast.error(err.message),
+  const utils = trpc.useUtils();
+  const id = Number(flightId);
+  const latest = trpc.weightBalance.getLatest.useQuery(
+    { flightId: id },
+    { enabled: id > 0 }
+  );
+  const editions = trpc.weightBalance.listEditions.useQuery(
+    { flightId: id },
+    { enabled: id > 0 }
+  );
+  const changes = trpc.weightBalance.listAircraftChanges.useQuery(
+    { flightId: id },
+    { enabled: id > 0 }
+  );
+  const [selectedEdition, setSelectedEdition] = useState<number | null>(null);
+  const record = useMemo(() => {
+    if (selectedEdition)
+      return editions.data?.find(e => e.id === selectedEdition) ?? null;
+    return latest.data ?? null;
+  }, [selectedEdition, editions.data, latest.data]);
+  const document = trpc.weightBalance.renderDocument.useQuery(
+    { id: record?.id ?? 0 },
+    { enabled: Boolean(record) }
+  );
+  const refresh = () => {
+    utils.weightBalance.getLatest.invalidate();
+    utils.weightBalance.listEditions.invalidate();
+    utils.weightBalance.listAircraftChanges.invalidate();
+    utils.weightBalance.renderDocument.invalidate();
+    setSelectedEdition(null);
+  };
+  const sign = trpc.weightBalance.sign.useMutation({
+    onSuccess: () => {
+      toast.success(
+        t("wb.sheet.signed", "Load sheet signed and frozen as final")
+      );
+      refresh();
+    },
+    onError: error => toast.error(error.message),
   });
 
-  const loadSheet = generateMutation.data;
-
   return (
     <div className="space-y-6">
-      <Card className="p-4">
-        <div className="flex gap-4 items-end">
-          <div className="flex-1">
-            <Label>{t("wb.loadsheet.flightId", "Flight ID")}</Label>
+      <Card className="p-4 shadow-sm rounded-xl">
+        <div className="flex gap-4 items-end flex-wrap">
+          <div className="max-w-xs">
+            <Label>{t("wb.sheet.flightId", "Flight ID")}</Label>
             <Input
               type="number"
+              min={1}
               value={flightId}
-              onChange={e => setFlightId(e.target.value)}
-              placeholder={t("wb.loadsheet.enterFlightId", "Enter flight ID")}
+              onChange={e => {
+                setFlightId(e.target.value);
+                setSelectedEdition(null);
+              }}
             />
           </div>
-          <Button
-            onClick={() =>
-              generateMutation.mutate({ flightId: parsedFlightId })
-            }
-            disabled={!parsedFlightId || generateMutation.isPending}
-            className="gap-2"
-          >
-            <FileText className="h-4 w-4" />
-            {generateMutation.isPending
-              ? t("wb.loadsheet.generating", "Generating...")
-              : t("wb.loadsheet.generateBtn", "Generate Load Sheet")}
-          </Button>
+          {editions.data && editions.data.length > 0 && (
+            <div className="max-w-xs">
+              <Label>{t("wb.sheet.edition", "Edition")}</Label>
+              <Select
+                value={record ? String(record.id) : ""}
+                onValueChange={value => setSelectedEdition(Number(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {editions.data.map(e => (
+                    <SelectItem key={e.id} value={String(e.id)}>
+                      EDN {e.edition} {e.basis === "lmc" ? "(LMC)" : ""} ·{" "}
+                      {e.status} · {e.figures.aircraft.registration}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       </Card>
 
-      {loadSheet && (
-        <Card className="p-6 font-mono text-sm">
-          {/* Load Sheet Header */}
-          <div className="border-b-2 border-black dark:border-white pb-4 mb-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h2 className="text-xl font-bold">
-                  {t("wb.loadsheet.title", "LOAD & TRIM SHEET")}
-                </h2>
-                <p className="text-muted-foreground">
-                  {t("wb.loadsheet.iataStandard", "IATA AHM 515 Standard")}
-                </p>
-              </div>
-              <div className="text-right">
-                <p>
-                  {t("wb.loadsheet.lsNumber", "LS#")}:{" "}
-                  {loadSheet.loadSheetNumber}
-                </p>
-                <p>
-                  {t("wb.loadsheet.edition", "Edition")}:{" "}
-                  <span
-                    className={`font-bold ${
-                      loadSheet.edition === "FINAL"
-                        ? "text-green-600"
-                        : "text-amber-600"
-                    }`}
-                  >
-                    {loadSheet.edition}
-                  </span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Flight Info */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div>
-              <p className="text-xs text-muted-foreground">
-                {t("wb.loadsheet.flight", "FLIGHT")}
-              </p>
-              <p className="font-bold">{loadSheet.flight.flightNumber}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">
-                {t("wb.loadsheet.date", "DATE")}
-              </p>
-              <p className="font-bold">{loadSheet.flight.date}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">
-                {t("wb.loadsheet.route", "ROUTE")}
-              </p>
-              <p className="font-bold">
-                {loadSheet.flight.origin} - {loadSheet.flight.destination}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">
-                {t("wb.loadsheet.acType", "A/C TYPE")}
-              </p>
-              <p className="font-bold">{loadSheet.flight.aircraftType}</p>
-            </div>
-          </div>
-
-          {/* Passenger Section */}
-          <div className="border rounded p-4 mb-4">
-            <h4 className="font-bold mb-2 border-b pb-1">
-              {t("wb.loadsheet.paxSection", "PASSENGERS")}
-            </h4>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground">M</p>
-                <p className="font-bold">{loadSheet.passengers.males}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">F</p>
-                <p className="font-bold">{loadSheet.passengers.females}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">CHD</p>
-                <p className="font-bold">{loadSheet.passengers.children}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">INF</p>
-                <p className="font-bold">{loadSheet.passengers.infants}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">TTL (excl INF)</p>
-                <p className="font-bold">
-                  {loadSheet.passengers.totalExcludingInfants}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">TTL</p>
-                <p className="font-bold">{loadSheet.passengers.total}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Weight Section */}
-          <div className="border rounded p-4 mb-4">
-            <h4 className="font-bold mb-2 border-b pb-1">
-              {t("wb.loadsheet.weightSection", "WEIGHTS (kg)")}
-            </h4>
-            <table className="w-full">
-              <tbody>
-                <LoadSheetRow
-                  label={t("wb.loadsheet.dow", "Dry Operating Weight (DOW)")}
-                  value={loadSheet.weights.dryOperatingWeight}
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.paxWeight", "Passenger Weight")}
-                  value={loadSheet.weights.passengerWeight}
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.bagWeight", "Baggage Weight")}
-                  value={loadSheet.weights.baggageWeight}
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.cargoMail", "Cargo / Mail")}
-                  value={loadSheet.weights.cargoMailWeight}
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.totalTraffic", "Total Traffic Load")}
-                  value={loadSheet.weights.totalTrafficLoad}
-                  bold
-                />
-                <tr>
-                  <td colSpan={2}>
-                    <hr className="my-1" />
-                  </td>
-                </tr>
-                <LoadSheetRow
-                  label={t(
-                    "wb.loadsheet.zfwActual",
-                    "Zero Fuel Weight (Actual)"
-                  )}
-                  value={loadSheet.weights.zeroFuelWeightActual}
-                  bold
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.zfwMax", "Zero Fuel Weight (Max)")}
-                  value={loadSheet.weights.zeroFuelWeightMax}
-                  muted
-                />
-                <tr>
-                  <td colSpan={2}>
-                    <hr className="my-1" />
-                  </td>
-                </tr>
-                <LoadSheetRow
-                  label={t("wb.loadsheet.takeoffFuel", "Takeoff Fuel")}
-                  value={loadSheet.weights.takeoffFuel}
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.towActual", "Takeoff Weight (Actual)")}
-                  value={loadSheet.weights.takeoffWeightActual}
-                  bold
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.towMax", "Takeoff Weight (Max)")}
-                  value={loadSheet.weights.takeoffWeightMax}
-                  muted
-                />
-                <tr>
-                  <td colSpan={2}>
-                    <hr className="my-1" />
-                  </td>
-                </tr>
-                <LoadSheetRow
-                  label={t("wb.loadsheet.tripFuel", "Trip Fuel")}
-                  value={loadSheet.weights.tripFuel}
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.lwActual", "Landing Weight (Actual)")}
-                  value={loadSheet.weights.landingWeightActual}
-                  bold
-                />
-                <LoadSheetRow
-                  label={t("wb.loadsheet.lwMax", "Landing Weight (Max)")}
-                  value={loadSheet.weights.landingWeightMax}
-                  muted
-                />
-              </tbody>
-            </table>
-          </div>
-
-          {/* Balance Section */}
-          <div className="border rounded p-4 mb-4">
-            <h4 className="font-bold mb-2 border-b pb-1">
-              {t("wb.loadsheet.balanceSection", "BALANCE / TRIM")}
-            </h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground">CG %MAC</p>
-                <p className="font-bold">
-                  {loadSheet.balance.cgPercent.toFixed(2)}%
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">FWD LIMIT</p>
-                <p className="font-bold">{loadSheet.balance.cgForwardLimit}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">AFT LIMIT</p>
-                <p className="font-bold">{loadSheet.balance.cgAftLimit}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">STAB TRIM</p>
-                <p className="font-bold">
-                  {loadSheet.balance.stabilizerSetting} units
-                </p>
-              </div>
-            </div>
-
-            {/* Inline CG visualization */}
-            <div className="mt-3">
-              <CgEnvelopeGraph
-                cgPosition={loadSheet.balance.cgPercent}
-                forwardLimit={loadSheet.balance.cgForwardLimit}
-                aftLimit={loadSheet.balance.cgAftLimit}
-              />
-            </div>
-          </div>
-
-          {/* Cargo Zones */}
-          {loadSheet.cargoByZone.length > 0 && (
-            <div className="border rounded p-4 mb-4">
-              <h4 className="font-bold mb-2 border-b pb-1">
-                {t("wb.loadsheet.cargoSection", "CARGO DISTRIBUTION")}
-              </h4>
-              <table className="w-full">
-                <thead>
-                  <tr className="text-xs text-muted-foreground">
-                    <th className="text-start pb-1">ZONE</th>
-                    <th className="text-end pb-1">WEIGHT (kg)</th>
-                    <th className="text-end pb-1">MAX (kg)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadSheet.cargoByZone.map((zone, idx) => (
-                    <tr key={idx}>
-                      <td className="font-bold">{zone.zone}</td>
-                      <td
-                        className={`text-end ${
-                          zone.maxWeight > 0 && zone.weight > zone.maxWeight
-                            ? "text-red-600 font-bold"
-                            : ""
-                        }`}
-                      >
-                        {zone.weight.toLocaleString()}
-                      </td>
-                      <td className="text-end text-muted-foreground">
-                        {zone.maxWeight > 0
-                          ? zone.maxWeight.toLocaleString()
-                          : "-"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {id > 0 && latest.data === null && (
+        <Card className="p-6 shadow-sm rounded-xl text-muted-foreground">
+          {t(
+            "wb.sheet.none",
+            "No load sheet for this flight yet. Compute one first."
           )}
+        </Card>
+      )}
 
-          {/* Limitations */}
-          <div className="border rounded p-4 mb-4">
-            <h4 className="font-bold mb-2 border-b pb-1 flex items-center gap-2">
-              {loadSheet.limitations.isWithinAllLimits ? (
-                <CheckCircle className="h-4 w-4 text-green-500" />
+      {record && (
+        <>
+          <LoadSheetView record={record} />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="p-6 shadow-sm rounded-xl space-y-3">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <PenLine className="h-5 w-5" />
+                {t("wb.sheet.signing", "Signature")}
+              </h3>
+              {record.status === "preliminary" ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      "wb.sheet.signNotice",
+                      "Signing freezes this edition under your identity and timestamp (EASA AMC1 CAT.POL.MAB.105(c) electronic equivalent). Editions with limit breaches cannot be signed."
+                    )}
+                  </p>
+                  <Button
+                    disabled={!record.figures.ok || sign.isPending}
+                    onClick={() => sign.mutate({ id: record.id })}
+                  >
+                    {t("wb.sheet.signBtn", "Sign as final")}
+                  </Button>
+                </>
               ) : (
-                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <p className="text-sm">
+                  {record.signedByName ?? record.signedBy ?? "-"} ·{" "}
+                  {record.signedAt
+                    ? new Date(record.signedAt).toLocaleString()
+                    : "-"}
+                </p>
               )}
-              {t("wb.loadsheet.limitations", "LIMITATIONS")}
-            </h4>
-            {loadSheet.limitations.items.length === 0 ? (
-              <p className="text-green-600">
-                {t(
-                  "wb.loadsheet.noLimitations",
-                  "No limitations - all within acceptable limits"
-                )}
+              <p className="text-xs text-muted-foreground break-all">
+                {t("wb.sheet.digest", "Digest")}: {record.digest}
               </p>
+            </Card>
+            <LmcForm record={record} onApplied={refresh} />
+          </div>
+          <AircraftChangeForm record={record} onChanged={refresh} />
+          {changes.data && changes.data.length > 0 && (
+            <Card className="p-6 shadow-sm rounded-xl space-y-2">
+              <h3 className="font-semibold text-lg">
+                {t("wb.sheet.aircraftChanges", "Aircraft change audit")}
+              </h3>
+              {changes.data.map(change => (
+                <div key={change.id} className="border-t pt-2 text-sm">
+                  <p>
+                    {change.review.from.registration} →{" "}
+                    {change.review.to.registration} ·{" "}
+                    {change.changedByName ?? change.changedBy} ·{" "}
+                    {new Date(change.changedAt).toLocaleString()}
+                  </p>
+                  <p className="text-muted-foreground">{change.reason}</p>
+                  <p className="text-xs">
+                    {t("wb.sheet.invalidated", "Invalidated editions")}:{" "}
+                    {change.invalidatedEditionIds.join(", ") || "-"} ·{" "}
+                    {t("wb.sheet.requiresReview", "Requires review")}:{" "}
+                    {change.review.checksRequiringReview.join("; ") ||
+                      t("wb.sheet.nothing", "none")}
+                  </p>
+                </div>
+              ))}
+            </Card>
+          )}
+          {document.data && (
+            <Card className="p-6 shadow-sm rounded-xl">
+              <h3 className="font-semibold text-lg mb-2">
+                {t("wb.sheet.document", "Printable load sheet")}
+              </h3>
+              <pre className="text-xs font-mono whitespace-pre overflow-x-auto bg-muted p-4 rounded">
+                {document.data.text}
+              </pre>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function LoadSheetView({ record }: { record: LoadSheetRecord }) {
+  const { t } = useTranslation();
+  const f = record.figures;
+  const failing = f.structuralChecks.filter(c => !c.ok);
+  return (
+    <div className="space-y-6">
+      <Card
+        className={`p-6 shadow-sm rounded-xl border-2 ${
+          f.ok
+            ? "border-green-300 dark:border-green-800"
+            : "border-red-400 dark:border-red-700"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="font-semibold text-lg">
+              {record.flight.flightNumber} {record.flight.origin}-
+              {record.flight.destination} · {record.flight.date} ·{" "}
+              {f.aircraft.registration} {f.aircraft.typeCode}
+              {f.aircraft.variant ? `-${f.aircraft.variant}` : ""}
+            </h3>
+            <div className="flex gap-2 mt-1 flex-wrap items-center text-sm">
+              <StatusBadge status={record.status} />
+              <span>EDN {record.edition}</span>
+              {record.basis === "lmc" && <span>(LMC)</span>}
+              <span
+                className={`text-xs px-2 py-0.5 rounded ${
+                  record.dispatchApproved
+                    ? "bg-green-100 text-green-800"
+                    : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                }`}
+              >
+                {record.dispatchApproved
+                  ? t("wb.sheet.dispatchApproved", "Dispatch-approved")
+                  : t("wb.notDispatchApproved", "Not dispatch-approved")}
+              </span>
+              {f.aircraft.fictional && (
+                <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                  {t("wb.registry.fictional", "FICTIONAL")}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-lg font-semibold">
+            {f.ok ? (
+              <>
+                <CheckCircle className="h-6 w-6 text-green-600" />
+                {t("wb.sheet.withinLimits", "Within all limits")}
+              </>
             ) : (
-              <ul className="space-y-1">
-                {loadSheet.limitations.items.map((item, i) => (
-                  <li key={i} className="text-red-600">
-                    {item}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <XCircle className="h-6 w-6 text-red-600" />
+                {t("wb.sheet.breaches", "{{count}} limit breach(es)", {
+                  count: f.breaches.length,
+                })}
+              </>
             )}
           </div>
+        </div>
+        {f.breaches.length > 0 && (
+          <ul className="mt-4 space-y-1 rounded-lg bg-red-50 dark:bg-red-950 p-3 text-sm text-red-800 dark:text-red-200">
+            {f.breaches.map(b => (
+              <li key={b} className="flex gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                {b}
+              </li>
+            ))}
+          </ul>
+        )}
+        {record.remarks.length > 0 && (
+          <ul className="mt-3 text-xs text-muted-foreground list-disc pl-5">
+            {record.remarks.map(r => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
-          {/* Remarks */}
-          {loadSheet.remarks.length > 0 && (
-            <div className="border rounded p-4">
-              <h4 className="font-bold mb-2 border-b pb-1">
-                {t("wb.loadsheet.remarks", "REMARKS")}
-              </h4>
-              <ul className="space-y-1">
-                {loadSheet.remarks.map((r, i) => (
-                  <li key={i} className="text-sm">
-                    {r}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="mt-4 pt-4 border-t-2 border-black dark:border-white text-xs text-muted-foreground">
-            <p>
-              {t("wb.loadsheet.generatedAt", "Generated")}:{" "}
-              {new Date(loadSheet.generatedAt).toLocaleString()}
-            </p>
-          </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="p-6 shadow-sm rounded-xl">
+          <h3 className="font-semibold text-lg mb-3">
+            {t("wb.sheet.weightChain", "Weight chain")}
+          </h3>
+          <table className="w-full text-sm">
+            <tbody>
+              <Row
+                label={t("wb.sheet.dow", "Dry operating weight / DOI")}
+                value={`${kg(f.dow.weightKg)} / ${f.dow.index}`}
+              />
+              <Row
+                label={`${t("wb.sheet.passengers", "Passengers")} ${f.passengers.byCategory.male}/${f.passengers.byCategory.female}/${f.passengers.byCategory.child}/${f.passengers.byCategory.infant}`}
+                value={kg(f.passengers.weightKg)}
+              />
+              <Row
+                label={t("wb.sheet.baggage", "Baggage")}
+                value={kg(f.deadload.baggageKg)}
+              />
+              <Row
+                label={t("wb.sheet.cargo", "Cargo")}
+                value={kg(f.deadload.cargoKg)}
+              />
+              <Row
+                label={t("wb.sheet.mail", "Mail")}
+                value={kg(f.deadload.mailKg)}
+              />
+              <Row
+                label={t("wb.sheet.trafficLoad", "Total traffic load")}
+                value={kg(f.trafficLoadKg)}
+                bold
+              />
+              <Row
+                label={`${t("wb.sheet.zfw", "Zero fuel weight")} (max ${f.effectiveLimits.mzfwKg.toLocaleString()})`}
+                value={`${kg(f.zfw.weightKg)} · ZFI ${f.zfw.index} · ${f.zfw.macPct.toFixed(2)} %MAC`}
+                bold
+                bad={
+                  !f.zfw.withinEnvelope ||
+                  f.zfw.weightKg > f.effectiveLimits.mzfwKg
+                }
+              />
+              <Row
+                label={t("wb.sheet.takeoffFuel", "Take-off fuel")}
+                value={kg(f.fuel.takeoffKg)}
+              />
+              <Row
+                label={`${t("wb.sheet.tow", "Take-off weight")} (max ${Math.min(f.effectiveLimits.mtowKg, f.effectiveLimits.rtowKg ?? Infinity).toLocaleString()})`}
+                value={`${kg(f.tow.weightKg)} · TOI ${f.tow.index} · ${f.tow.macPct.toFixed(2)} %MAC`}
+                bold
+                bad={
+                  !f.tow.withinEnvelope ||
+                  f.tow.weightKg > f.effectiveLimits.mtowKg
+                }
+              />
+              <Row
+                label={t("wb.sheet.tripFuel", "Trip fuel")}
+                value={kg(f.fuel.tripKg)}
+              />
+              <Row
+                label={`${t("wb.sheet.law", "Landing weight")} (max ${Math.min(f.effectiveLimits.mlwKg, f.effectiveLimits.performanceMlawKg ?? Infinity).toLocaleString()})`}
+                value={`${kg(f.law.weightKg)} · LI ${f.law.index} · ${f.law.macPct.toFixed(2)} %MAC`}
+                bold
+                bad={
+                  !f.law.withinEnvelope ||
+                  f.law.weightKg > f.effectiveLimits.mlwKg
+                }
+              />
+              <Row
+                label={`${t("wb.sheet.underload", "Underload before LMC")} (${f.underload.limitingFactor})`}
+                value={kg(f.underload.underloadKg)}
+                bad={f.underload.underloadKg < 0}
+              />
+              <Row
+                label={t("wb.sheet.trim", "Stabiliser trim")}
+                value={
+                  f.trim.stabTrimUnits === null
+                    ? `- (${f.trim.source})`
+                    : `${f.trim.stabTrimUnits}`
+                }
+              />
+              <Row
+                label={t("wb.sheet.lmc", "LMC used / limit")}
+                value={`${f.lmc.appliedKg} / ${f.lmc.limitKg} kg`}
+                bad={f.lmc.requiresNewLoadSheet}
+              />
+            </tbody>
+          </table>
         </Card>
-      )}
-    </div>
-  );
-}
 
-// ============================================================================
-// History Tab
-// ============================================================================
+        <Card className="p-6 shadow-sm rounded-xl">
+          <h3 className="font-semibold text-lg mb-3">
+            {t("wb.sheet.envelope", "CG envelope")}
+          </h3>
+          <EnvelopeGraph figures={f} />
+        </Card>
+      </div>
 
-function HistoryTab() {
-  const { t } = useTranslation();
-  const [flightId, setFlightId] = useState("");
-  const parsedFlightId = flightId ? parseInt(flightId) : 0;
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-
-  const { data: history, isLoading } = wbTrpc.getHistory.useQuery(
-    { flightId: parsedFlightId },
-    { enabled: parsedFlightId > 0 }
-  );
-
-  return (
-    <div className="space-y-6">
-      <Card className="p-4">
-        <div className="flex gap-4 items-end">
-          <div className="flex-1">
-            <Label>{t("wb.history.flightId", "Flight ID")}</Label>
-            <Input
-              type="number"
-              value={flightId}
-              onChange={e => setFlightId(e.target.value)}
-              placeholder={t("wb.history.enterFlightId", "Enter flight ID")}
-            />
+      <Card className="p-6 shadow-sm rounded-xl">
+        <h3 className="font-semibold text-lg mb-3">
+          {t("wb.sheet.limitChecks", "Structural and configuration limits")}
+          {failing.length > 0 && (
+            <span className="ml-2 text-sm text-red-700 dark:text-red-300">
+              {t("wb.sheet.failingCount", "{{count}} failing", {
+                count: failing.length,
+              })}
+            </span>
+          )}
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-muted-foreground">
+              <tr>
+                <th className="py-1 pr-3">{t("wb.sheet.check", "Check")}</th>
+                <th className="py-1 pr-3">{t("wb.sheet.actual", "Actual")}</th>
+                <th className="py-1 pr-3">{t("wb.sheet.limit", "Limit")}</th>
+                <th className="py-1 pr-3">{t("wb.sheet.margin", "Margin")}</th>
+                <th className="py-1" />
+              </tr>
+            </thead>
+            <tbody>
+              {f.structuralChecks.map(c => (
+                <tr
+                  key={c.code}
+                  className={`border-t ${c.ok ? "" : "bg-red-50 dark:bg-red-950 font-semibold"}`}
+                >
+                  <td className="py-1 pr-3">
+                    {c.code}
+                    <div className="text-xs text-muted-foreground font-normal">
+                      {c.description}
+                    </div>
+                  </td>
+                  <td className="py-1 pr-3">{c.actualKg.toLocaleString()}</td>
+                  <td className="py-1 pr-3">{c.limitKg.toLocaleString()}</td>
+                  <td className="py-1 pr-3">{c.marginKg.toLocaleString()}</td>
+                  <td className="py-1">
+                    {c.ok ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-600" />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 mt-4 text-sm">
+          <div>
+            <h4 className="font-medium mb-1">
+              {t("wb.sheet.paxByZone", "Passengers by zone")}
+            </h4>
+            {f.passengers.byZone.map(z => (
+              <p key={z.zone}>
+                {z.zone}: {z.count}/{z.seats} · {kg(z.weightKg)} · idx {z.index}
+              </p>
+            ))}
+          </div>
+          <div>
+            <h4 className="font-medium mb-1">
+              {t("wb.sheet.deadloadByCompartment", "Deadload by compartment")}
+            </h4>
+            {f.deadload.byCompartment.map(c => (
+              <p
+                key={c.compartment}
+                className={
+                  c.totalKg > c.maxKg ? "text-red-700 font-semibold" : ""
+                }
+              >
+                {c.compartment}: {kg(c.totalKg)} / {c.maxKg.toLocaleString()} ·
+                B {c.baggageKg}
+                {c.baggageWeighed ? "" : "*"} C {c.cargoKg} M {c.mailKg} · idx{" "}
+                {c.index}
+              </p>
+            ))}
+            <p className="text-xs text-muted-foreground mt-1">
+              {t(
+                "wb.sheet.standardBagNote",
+                "* baggage from pieces × standard mass"
+              )}
+            </p>
           </div>
         </div>
       </Card>
-
-      {isLoading && parsedFlightId > 0 && (
-        <Card className="p-6 animate-pulse">
-          <div className="h-40 bg-muted rounded" />
-        </Card>
-      )}
-
-      {!isLoading &&
-        parsedFlightId > 0 &&
-        (!history || history.length === 0) && (
-          <Card className="p-6">
-            <div className="flex items-center gap-3 text-muted-foreground">
-              <Info className="h-5 w-5" />
-              <p>
-                {t(
-                  "wb.history.noData",
-                  "No weight history found for this flight."
-                )}
-              </p>
-            </div>
-          </Card>
-        )}
-
-      {history && history.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="font-semibold text-lg">
-            {t("wb.history.title", "Weight Calculation History")} (
-            {history.length} {t("wb.history.records", "records")})
-          </h3>
-
-          {history.map((record, _idx) => (
-            <Card key={record.id} className="p-0 overflow-hidden">
-              <button
-                className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                onClick={() =>
-                  setExpandedId(expandedId === record.id ? null : record.id)
-                }
-              >
-                <div className="flex items-center gap-3">
-                  {record.withinLimits ? (
-                    <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                  ) : (
-                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
-                  )}
-                  <div className="text-start">
-                    <p className="font-medium">
-                      TOW: {record.takeoffWeight.toLocaleString()} kg
-                      <span className="text-muted-foreground ml-2">|</span>
-                      <span className="ml-2">
-                        CG: {record.cgPosition ?? "N/A"}% MAC
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(record.createdAt).toLocaleString()} -{" "}
-                      <span className="capitalize">{record.status}</span>
-                    </p>
-                  </div>
-                </div>
-                {expandedId === record.id ? (
-                  <ChevronUp className="h-4 w-4 flex-shrink-0" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 flex-shrink-0" />
-                )}
-              </button>
-
-              {expandedId === record.id && (
-                <div className="p-4 pt-0 border-t">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">
-                        {t("wb.history.pax", "Passengers")}
-                      </p>
-                      <p className="font-medium">
-                        {record.passengerCount} (
-                        {record.passengerWeight.toLocaleString()} kg)
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">
-                        {t("wb.history.baggage", "Baggage")}
-                      </p>
-                      <p className="font-medium">
-                        {record.baggageWeight.toLocaleString()} kg
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">
-                        {t("wb.history.cargo", "Cargo")}
-                      </p>
-                      <p className="font-medium">
-                        {record.cargoWeight.toLocaleString()} kg
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">
-                        {t("wb.history.fuel", "Fuel")}
-                      </p>
-                      <p className="font-medium">
-                        {record.fuelWeight.toLocaleString()} kg
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">ZFW</p>
-                      <p className="font-medium">
-                        {record.zeroFuelWeight.toLocaleString()} kg
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">TOW</p>
-                      <p className="font-medium">
-                        {record.takeoffWeight.toLocaleString()} kg
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">LW</p>
-                      <p className="font-medium">
-                        {record.landingWeight.toLocaleString()} kg
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">
-                        {t("wb.history.status", "Status")}
-                      </p>
-                      <p className="font-medium capitalize">{record.status}</p>
-                    </div>
-                  </div>
-
-                  {record.warnings.length > 0 && (
-                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-950 rounded">
-                      <p className="text-sm font-medium text-red-700 dark:text-red-300 mb-1">
-                        {t("wb.history.warnings", "Warnings")}:
-                      </p>
-                      {record.warnings.map((w: string, wi: number) => (
-                        <p
-                          key={wi}
-                          className="text-sm text-red-600 dark:text-red-400"
-                        >
-                          {w}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
-// ============================================================================
-// Shared Components
-// ============================================================================
-
-/**
- * Weight row for breakdown display.
- */
-function WeightRow({
+function Row({
   label,
   value,
-  limit,
   bold,
-  small,
+  bad,
 }: {
   label: string;
-  value: number;
-  limit?: number;
+  value: string;
   bold?: boolean;
-  small?: boolean;
+  bad?: boolean;
 }) {
-  const exceeds = limit !== undefined ? value > limit : false;
   return (
-    <div
-      className={`flex justify-between items-center ${
-        bold ? "font-semibold" : ""
-      } ${small ? "text-sm text-muted-foreground" : ""}`}
+    <tr
+      className={`border-t ${bad ? "bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200" : ""}`}
     >
-      <span>{label}</span>
-      <span className={exceeds ? "text-red-600 font-bold" : ""}>
-        {value.toLocaleString()} kg
-        {limit !== undefined ? (
-          <span className="text-xs text-muted-foreground ml-2">
-            / {limit.toLocaleString()} kg
-          </span>
-        ) : null}
-      </span>
-    </div>
-  );
-}
-
-/**
- * Weight progress bar showing utilization percentage.
- */
-function WeightProgressBar({
-  label,
-  value,
-  max,
-}: {
-  label: string;
-  value: number;
-  max: number;
-}) {
-  const { t } = useTranslation();
-  const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  const exceeds = value > max;
-  const isWarning = percentage > 90 && !exceeds;
-
-  let barColor = "bg-green-500";
-  if (exceeds) barColor = "bg-red-500";
-  else if (isWarning) barColor = "bg-amber-500";
-
-  return (
-    <div>
-      <div className="flex justify-between text-sm mb-1">
-        <span className="font-medium">{label}</span>
-        <span className={`${exceeds ? "text-red-600 font-bold" : ""}`}>
-          {value.toLocaleString()} / {max.toLocaleString()} kg (
-          {percentage.toFixed(1)}%)
-        </span>
-      </div>
-      <div className="h-3 bg-muted rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${barColor}`}
-          style={{ width: `${Math.min(percentage, 100)}%` }}
-        />
-      </div>
-      {exceeds && (
-        <p className="text-xs text-red-600 mt-1">
-          {t("wb.result.exceedsBy", "Exceeds limit by {{amount}} kg", {
-            amount: (value - max).toLocaleString(),
-          })}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/**
- * CG Envelope visualization - simple div-based graph showing
- * the forward/aft limits and current CG position.
- */
-function CgEnvelopeGraph({
-  cgPosition,
-  forwardLimit,
-  aftLimit,
-}: {
-  cgPosition: number;
-  forwardLimit: number;
-  aftLimit: number;
-}) {
-  const { t } = useTranslation();
-  // Scale: we show from 0% to 50% MAC
-  const scaleMax = 50;
-
-  const fwdPct = (forwardLimit / scaleMax) * 100;
-  const aftPct = (aftLimit / scaleMax) * 100;
-  const cgPct = (cgPosition / scaleMax) * 100;
-  const isWithin = cgPosition >= forwardLimit && cgPosition <= aftLimit;
-
-  return (
-    <div>
-      {/* Scale labels */}
-      <div className="flex justify-between text-xs text-muted-foreground mb-1">
-        <span>0% MAC</span>
-        <span>25% MAC</span>
-        <span>50% MAC</span>
-      </div>
-
-      {/* CG Bar */}
-      <div className="relative h-10 bg-muted rounded overflow-hidden">
-        {/* Acceptable range (green zone) */}
-        <div
-          className="absolute top-0 bottom-0 bg-green-200 dark:bg-green-900"
-          style={{
-            left: `${fwdPct}%`,
-            width: `${aftPct - fwdPct}%`,
-          }}
-        />
-
-        {/* Forward limit line */}
-        <div
-          className="absolute top-0 bottom-0 w-0.5 bg-green-600"
-          style={{ left: `${fwdPct}%` }}
-        />
-
-        {/* Aft limit line */}
-        <div
-          className="absolute top-0 bottom-0 w-0.5 bg-green-600"
-          style={{ left: `${aftPct}%` }}
-        />
-
-        {/* CG position marker */}
-        <div
-          className={`absolute top-0 bottom-0 w-1.5 rounded ${
-            isWithin ? "bg-blue-600" : "bg-red-600"
-          }`}
-          style={{
-            left: `${Math.max(0, Math.min(cgPct, 100))}%`,
-            transform: "translateX(-50%)",
-          }}
-        />
-
-        {/* CG label */}
-        <div
-          className="absolute top-0 flex items-center justify-center h-full"
-          style={{
-            left: `${Math.max(2, Math.min(cgPct, 98))}%`,
-            transform: "translateX(-50%)",
-          }}
-        >
-          <span
-            className={`text-xs font-bold px-1 rounded ${
-              isWithin
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200"
-            }`}
-          >
-            {cgPosition.toFixed(1)}%
-          </span>
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="flex justify-between mt-2 text-xs">
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-green-200 dark:bg-green-900 border border-green-600 rounded" />
-          <span className="text-muted-foreground">
-            {t("wb.result.envelope", "Envelope")} ({forwardLimit}% - {aftLimit}
-            %)
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div
-            className={`w-3 h-3 rounded ${
-              isWithin ? "bg-blue-600" : "bg-red-600"
-            }`}
-          />
-          <span
-            className={
-              isWithin ? "text-blue-600" : "text-red-600 font-semibold"
-            }
-          >
-            CG: {cgPosition.toFixed(2)}% MAC{" "}
-            {isWithin
-              ? t("wb.result.ok", "(OK)")
-              : t("wb.result.outOfLimits", "(OUT OF LIMITS)")}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Load sheet table row.
- */
-function LoadSheetRow({
-  label,
-  value,
-  bold,
-  muted,
-}: {
-  label: string;
-  value: number;
-  bold?: boolean;
-  muted?: boolean;
-}) {
-  return (
-    <tr>
-      <td
-        className={`py-1 ${bold ? "font-bold" : ""} ${
-          muted ? "text-muted-foreground text-xs" : ""
-        }`}
-      >
-        {label}
-      </td>
-      <td
-        className={`py-1 text-end ${bold ? "font-bold" : ""} ${
-          muted ? "text-muted-foreground text-xs" : ""
-        }`}
-      >
-        {value.toLocaleString()}
+      <td className={`py-1 pr-3 ${bold ? "font-semibold" : ""}`}>{label}</td>
+      <td className={`py-1 text-right ${bold ? "font-semibold" : ""}`}>
+        {value}
       </td>
     </tr>
+  );
+}
+
+/** Weight vs %MAC chart: envelope limits at each phase weight and the CG. */
+function EnvelopeGraph({ figures }: { figures: Figures }) {
+  const { t } = useTranslation();
+  const phases = [
+    { name: "ZFW", p: figures.zfw },
+    { name: "TOW", p: figures.tow },
+    { name: "LAW", p: figures.law },
+  ];
+  const macs = phases.flatMap(({ p }) => [
+    p.macPct,
+    p.fwdLimitMacPct ?? p.macPct,
+    p.aftLimitMacPct ?? p.macPct,
+  ]);
+  const minMac = Math.floor(Math.min(...macs) - 3);
+  const maxMac = Math.ceil(Math.max(...macs) + 3);
+  const weights = phases.map(({ p }) => p.weightKg);
+  const minW = Math.min(...weights) * 0.95;
+  const maxW = Math.max(...weights) * 1.05;
+  const width = 420;
+  const height = 240;
+  const pad = 36;
+  const x = (mac: number) =>
+    pad + ((mac - minMac) / (maxMac - minMac)) * (width - 2 * pad);
+  const y = (w: number) =>
+    height - pad - ((w - minW) / (maxW - minW)) * (height - 2 * pad);
+  return (
+    <div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-auto"
+        role="img"
+      >
+        <title>
+          {t("wb.sheet.envelopeGraph", "CG position against envelope limits")}
+        </title>
+        <line
+          x1={pad}
+          y1={height - pad}
+          x2={width - pad}
+          y2={height - pad}
+          className="stroke-current opacity-40"
+        />
+        <line
+          x1={pad}
+          y1={pad}
+          x2={pad}
+          y2={height - pad}
+          className="stroke-current opacity-40"
+        />
+        {[minMac, (minMac + maxMac) / 2, maxMac].map(mac => (
+          <text
+            key={mac}
+            x={x(mac)}
+            y={height - pad + 14}
+            fontSize={9}
+            textAnchor="middle"
+            className="fill-current"
+          >
+            {mac.toFixed(0)}%
+          </text>
+        ))}
+        {phases.map(({ name, p }) => (
+          <g key={name}>
+            {p.fwdLimitMacPct !== null && p.aftLimitMacPct !== null && (
+              <line
+                x1={x(p.fwdLimitMacPct)}
+                x2={x(p.aftLimitMacPct)}
+                y1={y(p.weightKg)}
+                y2={y(p.weightKg)}
+                strokeWidth={6}
+                className="stroke-green-300 dark:stroke-green-800"
+              />
+            )}
+            <circle
+              cx={x(p.macPct)}
+              cy={y(p.weightKg)}
+              r={5}
+              className={p.withinEnvelope ? "fill-blue-600" : "fill-red-600"}
+            />
+            <text
+              x={pad - 4}
+              y={y(p.weightKg) + 3}
+              fontSize={9}
+              textAnchor="end"
+              className="fill-current"
+            >
+              {name}
+            </text>
+            <text
+              x={x(p.macPct) + 8}
+              y={y(p.weightKg) - 6}
+              fontSize={9}
+              className="fill-current"
+            >
+              {p.macPct.toFixed(2)}%
+            </text>
+          </g>
+        ))}
+      </svg>
+      <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+        {phases.map(({ name, p }) => (
+          <div
+            key={name}
+            className={
+              p.withinEnvelope
+                ? ""
+                : "text-red-700 dark:text-red-300 font-semibold"
+            }
+          >
+            {name}: {p.macPct.toFixed(2)}% (
+            {p.fwdLimitMacPct?.toFixed(2) ?? "-"} –{" "}
+            {p.aftLimitMacPct?.toFixed(2) ?? "-"})
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LmcForm({
+  record,
+  onApplied,
+}: {
+  record: LoadSheetRecord;
+  onApplied: () => void;
+}) {
+  const { t } = useTranslation();
+  const [kind, setKind] = useState<"passenger" | "baggage" | "cargo" | "mail">(
+    "cargo"
+  );
+  const [location, setLocation] = useState("");
+  const [category, setCategory] = useState<
+    "male" | "female" | "child" | "infant"
+  >("male");
+  const [delta, setDelta] = useState("");
+  const [description, setDescription] = useState("");
+  const apply = trpc.weightBalance.applyLmc.useMutation({
+    onSuccess: () => {
+      toast.success(t("wb.lmc.applied", "LMC applied as a new signed edition"));
+      setDelta("");
+      setDescription("");
+      onApplied();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const locations =
+    kind === "passenger"
+      ? record.figures.passengers.byZone.map(z => z.zone)
+      : record.figures.deadload.byCompartment.map(c => c.compartment);
+  return (
+    <Card className="p-6 shadow-sm rounded-xl space-y-3">
+      <h3 className="font-semibold text-lg">
+        {t("wb.lmc.title", "Last-minute change")}
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "wb.lmc.notice",
+          "Allowed on a signed final edition only, within {{limit}} kg cumulative; beyond that a new load sheet is required.",
+          {
+            limit: record.figures.lmc.limitKg,
+          }
+        )}
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <Select
+          value={kind}
+          onValueChange={value => setKind(value as typeof kind)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(["passenger", "baggage", "cargo", "mail"] as const).map(k => (
+              <SelectItem key={k} value={k}>
+                {t(`wb.lmc.kind.${k}`, k)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          list="wb-lmc-locations"
+          placeholder={
+            kind === "passenger"
+              ? t("wb.compute.zone", "Zone")
+              : t("wb.compute.compartment", "Compartment")
+          }
+          value={location}
+          onChange={e => setLocation(e.target.value)}
+        />
+        <datalist id="wb-lmc-locations">
+          {locations.map(l => (
+            <option key={l} value={l} />
+          ))}
+        </datalist>
+        {kind === "passenger" && (
+          <Select
+            value={category}
+            onValueChange={value => setCategory(value as typeof category)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(["male", "female", "child", "infant"] as const).map(c => (
+                <SelectItem key={c} value={c}>
+                  {t(`wb.compute.${c}`, c)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <Input
+          type="number"
+          placeholder={
+            kind === "passenger"
+              ? t("wb.lmc.deltaCount", "± passengers")
+              : t("wb.lmc.deltaKg", "± kg")
+          }
+          value={delta}
+          onChange={e => setDelta(e.target.value)}
+        />
+        <Input
+          className="col-span-2"
+          placeholder={t(
+            "wb.lmc.description",
+            "Reason (e.g. 2 pax offloaded, late cargo)"
+          )}
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+        />
+      </div>
+      <Button
+        disabled={
+          record.status !== "final" ||
+          !location ||
+          !delta ||
+          !description ||
+          apply.isPending
+        }
+        onClick={() =>
+          apply.mutate({
+            flightId: record.flightId,
+            changes: [
+              kind === "passenger"
+                ? {
+                    kind,
+                    location,
+                    category,
+                    deltaCount: Number(delta),
+                    description,
+                  }
+                : { kind, location, deltaKg: Number(delta), description },
+            ],
+          })
+        }
+      >
+        {t("wb.lmc.applyBtn", "Apply LMC")}
+      </Button>
+      {record.lmcList.length > 0 && (
+        <ul className="text-xs space-y-1">
+          {record.lmcList.map(l => (
+            <li key={l.sequence}>
+              {l.sequence}. {l.kind} {l.location} {l.appliedKg >= 0 ? "+" : ""}
+              {l.appliedKg} kg · {l.description} · {l.actorName ?? l.actorId}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function AircraftChangeForm({
+  record,
+  onChanged,
+}: {
+  record: LoadSheetRecord;
+  onChanged: () => void;
+}) {
+  const { t } = useTranslation();
+  const registrations = trpc.weightBalance.listRegistrations.useQuery({});
+  const [newRegistrationId, setNewRegistrationId] = useState("");
+  const [reason, setReason] = useState("");
+  const [result, setResult] = useState<Outputs["changeAircraft"] | null>(null);
+  const change = trpc.weightBalance.changeAircraft.useMutation({
+    onSuccess: data => {
+      setResult(data);
+      toast.warning(
+        t(
+          "wb.swap.done",
+          "Aircraft changed; {{count}} edition(s) invalidated. A new preliminary load sheet is required.",
+          {
+            count: data.invalidatedEditionIds.length,
+          }
+        )
+      );
+      onChanged();
+    },
+    onError: error => toast.error(error.message),
+  });
+  return (
+    <Card className="p-6 shadow-sm rounded-xl space-y-3">
+      <h3 className="font-semibold text-lg flex items-center gap-2">
+        <Repeat className="h-5 w-5" />
+        {t("wb.swap.title", "Aircraft registration change")}
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "wb.swap.notice",
+          "Swapping the registration invalidates every preliminary or final edition of this flight, re-evaluates the load under the new registration's data and records who changed it, when and why."
+        )}
+      </p>
+      <div className="grid gap-2 md:grid-cols-3">
+        <Select value={newRegistrationId} onValueChange={setNewRegistrationId}>
+          <SelectTrigger>
+            <SelectValue
+              placeholder={t("wb.swap.newRegistration", "New registration")}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {registrations.data
+              ?.filter(r => r.id !== record.registrationId)
+              .map(r => (
+                <SelectItem key={r.id} value={String(r.id)}>
+                  {r.registration} ({r.typeCode}
+                  {r.variant ? `-${r.variant}` : ""})
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+        <Input
+          className="md:col-span-2"
+          placeholder={t("wb.swap.reason", "Reason (minimum 3 characters)")}
+          value={reason}
+          onChange={e => setReason(e.target.value)}
+        />
+      </div>
+      <Button
+        variant="destructive"
+        disabled={
+          !Number(newRegistrationId) ||
+          reason.trim().length < 3 ||
+          change.isPending
+        }
+        onClick={() =>
+          change.mutate({
+            flightId: record.flightId,
+            newRegistrationId: Number(newRegistrationId),
+            reason: reason.trim(),
+          })
+        }
+      >
+        {t("wb.swap.applyBtn", "Change aircraft and invalidate editions")}
+      </Button>
+      {result && (
+        <div className="text-sm space-y-2 rounded-lg bg-muted p-3">
+          <p className="font-medium">
+            {result.review.from.registration} → {result.review.to.registration}{" "}
+            {result.review.sameTypeAndVariant
+              ? t("wb.swap.sameType", "(same type and variant)")
+              : t("wb.swap.differentType", "(different type or variant)")}
+          </p>
+          <div>
+            <p className="font-medium">
+              {t("wb.swap.differences", "Data differences")}
+            </p>
+            <ul className="list-disc pl-5">
+              {result.review.dataDifferences.map(d => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="font-medium text-red-700 dark:text-red-300">
+              {t("wb.sheet.requiresReview", "Requires review")}
+            </p>
+            <ul className="list-disc pl-5">
+              {result.review.checksRequiringReview.length === 0 && (
+                <li>{t("wb.sheet.nothing", "none")}</li>
+              )}
+              {result.review.checksRequiringReview.map(d => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t("wb.swap.stillValid", "Still valid")}:{" "}
+            {result.review.checksStillValid.join("; ")}
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }

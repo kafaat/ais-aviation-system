@@ -3989,6 +3989,214 @@ export type LoadPlan = typeof loadPlans.$inferSelect;
 export type InsertLoadPlan = typeof loadPlans.$inferInsert;
 
 // ============================================================================
+// Weight & balance on AHM 560/565 data
+// ============================================================================
+
+/**
+ * Per type/variant balance dataset (IATA AHM 560/565 scope): index constants,
+ * MAC geometry, compartments, cabin zones, fuel index table, CG envelopes and
+ * optional stabiliser trim table. Scalar limits are kg integers; the structured
+ * dataset lives in `payload` and is validated by the engine schema on read and
+ * write. Rows are never edited after approval; a new version supersedes.
+ */
+export const aircraftTypeBalanceData = mysqlTable(
+  "aircraft_type_balance_data",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    typeCode: varchar("typeCode", { length: 10 }).notNull(),
+    variant: varchar("variant", { length: 30 }).notNull().default(""),
+    version: int("version").notNull().default(1),
+    description: varchar("description", { length: 255 }).notNull(),
+    /** Operator document the figures were transcribed from (AHM 560 revision, weighing report...). */
+    dataSource: varchar("dataSource", { length: 255 }).notNull(),
+    /** Fictional training datasets are never approvable for dispatch. */
+    fictional: boolean("fictional").default(false).notNull(),
+    approvalStatus: mysqlEnum("approvalStatus", [
+      "draft",
+      "operator_approved",
+      "withdrawn",
+    ])
+      .default("draft")
+      .notNull(),
+    approvalReference: varchar("approvalReference", { length: 100 }),
+    effectiveFrom: datetime("effectiveFrom").notNull(),
+    effectiveTo: datetime("effectiveTo"),
+    mtowKg: int("mtowKg").notNull(),
+    mlwKg: int("mlwKg").notNull(),
+    mzfwKg: int("mzfwKg").notNull(),
+    mrwKg: int("mrwKg"),
+    maxFuelKg: int("maxFuelKg").notNull(),
+    lmcLimitKg: int("lmcLimitKg").notNull(),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    typeVersionIdx: uniqueIndex("aircraft_type_balance_version_idx").on(
+      table.typeCode,
+      table.variant,
+      table.version
+    ),
+    statusIdx: index("aircraft_type_balance_status_idx").on(
+      table.approvalStatus
+    ),
+  })
+);
+
+export type AircraftTypeBalanceData =
+  typeof aircraftTypeBalanceData.$inferSelect;
+export type InsertAircraftTypeBalanceData =
+  typeof aircraftTypeBalanceData.$inferInsert;
+
+/**
+ * Aircraft registry: one row per registration and effective period with the
+ * registration's DOW/DOI, structural limits (type values unless overridden),
+ * fuel capacity, cabin configuration version and CG envelope reference.
+ */
+export const aircraftRegistrations = mysqlTable(
+  "aircraft_registrations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    airlineId: int("airlineId").notNull(),
+    registration: varchar("registration", { length: 10 }).notNull(),
+    balanceDataId: int("balanceDataId").notNull(),
+    typeCode: varchar("typeCode", { length: 10 }).notNull(),
+    variant: varchar("variant", { length: 30 }).notNull().default(""),
+    dowKg: int("dowKg").notNull(),
+    /** Dry operating index, stored to 0.01 index units. */
+    doi: decimal("doi", { precision: 10, scale: 2 }).notNull(),
+    mtowKg: int("mtowKg"),
+    mlwKg: int("mlwKg"),
+    mzfwKg: int("mzfwKg"),
+    mrwKg: int("mrwKg"),
+    fuelCapacityKg: int("fuelCapacityKg").notNull(),
+    cabinConfigVersion: varchar("cabinConfigVersion", { length: 50 }).notNull(),
+    /** Must name an envelope set in the balance dataset payload. */
+    envelopeRef: varchar("envelopeRef", { length: 100 }).notNull(),
+    weighingReference: varchar("weighingReference", { length: 100 }),
+    approvalStatus: mysqlEnum("approvalStatus", [
+      "draft",
+      "operator_approved",
+      "withdrawn",
+    ])
+      .default("draft")
+      .notNull(),
+    approvalReference: varchar("approvalReference", { length: 100 }),
+    effectiveFrom: datetime("effectiveFrom").notNull(),
+    effectiveTo: datetime("effectiveTo"),
+    createdBy: int("createdBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    registrationEffectiveIdx: uniqueIndex(
+      "aircraft_registration_effective_idx"
+    ).on(table.registration, table.effectiveFrom),
+    airlineIdx: index("aircraft_registration_airline_idx").on(
+      table.airlineId,
+      table.registration
+    ),
+    balanceDataIdx: index("aircraft_registration_balance_idx").on(
+      table.balanceDataId
+    ),
+  })
+);
+
+export type AircraftRegistration = typeof aircraftRegistrations.$inferSelect;
+export type InsertAircraftRegistration =
+  typeof aircraftRegistrations.$inferInsert;
+
+/**
+ * Immutable load sheet editions. A row is inserted once; the only later writes
+ * are the preliminary -> final transition (signing) and final/preliminary ->
+ * superseded when a newer edition for the flight is issued. LMC editions copy
+ * the signed base figures and append to `lmcList`.
+ */
+export const loadSheets = mysqlTable(
+  "load_sheets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    flightId: int("flightId").notNull(),
+    registrationId: int("registrationId").notNull(),
+    balanceDataId: int("balanceDataId").notNull(),
+    edition: int("edition").notNull(),
+    basis: mysqlEnum("basis", ["full", "lmc"]).notNull(),
+    baseEditionId: int("baseEditionId"),
+    status: mysqlEnum("status", [
+      "preliminary",
+      "final",
+      "superseded",
+      "superseded_by_aircraft_change",
+    ])
+      .default("preliminary")
+      .notNull(),
+    /** Stays false until the capability catalog records operator dispatch acceptance. */
+    dispatchApproved: boolean("dispatchApproved").default(false).notNull(),
+    figures: json("figures").$type<Record<string, unknown>>().notNull(),
+    lmcList: json("lmcList").$type<Record<string, unknown>[]>().notNull(),
+    /** SHA-256 over figures and lmcList; verified on every read. */
+    digest: varchar("digest", { length: 64 }).notNull(),
+    preparedBy: int("preparedBy").notNull(),
+    preparedAt: timestamp("preparedAt").defaultNow().notNull(),
+    signedBy: int("signedBy"),
+    signedByName: varchar("signedByName", { length: 320 }),
+    signedAt: timestamp("signedAt"),
+    supersededAt: timestamp("supersededAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    flightEditionIdx: uniqueIndex("load_sheet_flight_edition_idx").on(
+      table.flightId,
+      table.edition
+    ),
+    flightStatusIdx: index("load_sheet_flight_status_idx").on(
+      table.flightId,
+      table.status
+    ),
+  })
+);
+
+export type LoadSheet = typeof loadSheets.$inferSelect;
+export type InsertLoadSheet = typeof loadSheets.$inferInsert;
+
+/**
+ * Audit of aircraft registration swaps against issued load sheets: who swapped,
+ * when, why, which editions were invalidated and what the recomputation under
+ * the new registration flagged for review.
+ */
+export const loadSheetAircraftChanges = mysqlTable(
+  "load_sheet_aircraft_changes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    flightId: int("flightId").notNull(),
+    fromRegistrationId: int("fromRegistrationId").notNull(),
+    toRegistrationId: int("toRegistrationId").notNull(),
+    invalidatedEditionIds: json("invalidatedEditionIds")
+      .$type<number[]>()
+      .notNull(),
+    review: json("review").$type<Record<string, unknown>>().notNull(),
+    reason: varchar("reason", { length: 500 }).notNull(),
+    changedBy: int("changedBy").notNull(),
+    changedByName: varchar("changedByName", { length: 320 }),
+    changedAt: timestamp("changedAt").defaultNow().notNull(),
+  },
+  table => ({
+    flightIdx: index("load_sheet_aircraft_change_flight_idx").on(
+      table.flightId,
+      table.changedAt
+    ),
+  })
+);
+
+export type LoadSheetAircraftChange =
+  typeof loadSheetAircraftChanges.$inferSelect;
+
+// ============================================================================
 // AI Dynamic Pricing System
 // ============================================================================
 

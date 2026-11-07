@@ -411,12 +411,20 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
 function CompartmentsTab({ flightId: _flightId }: { flightId: number }) {
   const { t } = useTranslation();
   const [aircraftTypeId, setAircraftTypeId] = useState("");
+  const [registrationId, setRegistrationId] = useState("");
   const { data: aircraftList } = trpc.dcs.getAircraftTypes.useQuery();
+  const { data: registrations } = trpc.weightBalance.listRegistrations.useQuery(
+    {}
+  );
 
   const parsedId = aircraftTypeId ? parseInt(aircraftTypeId) : 0;
+  const parsedRegistrationId = registrationId ? parseInt(registrationId) : 0;
   const { data: layout, isLoading } =
     trpc.loadPlanning.getCompartments.useQuery(
-      { aircraftTypeId: parsedId },
+      {
+        aircraftTypeId: parsedId,
+        registrationId: parsedRegistrationId || undefined,
+      },
       { enabled: parsedId > 0 }
     );
 
@@ -446,6 +454,32 @@ function CompartmentsTab({ flightId: _flightId }: { flightId: number }) {
               </SelectContent>
             </Select>
           </div>
+          <div className="flex-1 max-w-sm">
+            <Label>
+              {t(
+                "loadPlanning.registrationSource",
+                "Registration (AHM 560 holds)"
+              )}
+            </Label>
+            <Select value={registrationId} onValueChange={setRegistrationId}>
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={t(
+                    "loadPlanning.illustrativeLayout",
+                    "Illustrative layout (no registration)"
+                  )}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {registrations?.map(r => (
+                  <SelectItem key={r.id} value={r.id.toString()}>
+                    {r.registration} - {r.typeCode}
+                    {r.variant ? `-${r.variant}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </Card>
 
@@ -465,6 +499,20 @@ function CompartmentsTab({ flightId: _flightId }: { flightId: number }) {
               </h3>
               <span className="text-xs bg-muted px-2 py-1 rounded">
                 {layout.aircraftType.isWidebody ? "Widebody" : "Narrowbody"}
+              </span>
+              <span
+                className={`text-xs px-2 py-1 rounded ${
+                  layout.source === "ahm560"
+                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                    : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                }`}
+              >
+                {layout.source === "ahm560"
+                  ? `${t("loadPlanning.sourceAhm560", "AHM 560 dataset")}: ${layout.registration} ${layout.balanceDataset}`
+                  : t(
+                      "loadPlanning.sourceIllustrative",
+                      "Illustrative layout, not aircraft data"
+                    )}
               </span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">

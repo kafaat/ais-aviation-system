@@ -73,8 +73,9 @@
 | apisSubmission | blocked | Authority transport, credentials, acknowledgement and rejection fixtures |
 | alternatePayments | blocked | Invoice/session binding, amount/currency verification, settlement and refund acceptance for each provider |
 | bagDropHardware | demo | Certified scale, printer, conveyor and device heartbeat adapter |
-| weightBalance | demo | Approved aircraft data, calculation validation and operational sign-off |
-| loadPlanning | demo | Aircraft configuration, measured cargo and approved dispatch workflow |
+| aircraftRegistry | implemented | Validated JSON import of per-type AHM 560/565 datasets and per-registration DOW/DOI; no certified figures shipped, fictional training type is development-only and never approvable. Operator approval with a document reference is recorded per dataset and registration. |
+| weightBalance | demo | Engine computes DOW/DOI to ZFW/TOW/LAW, index to %MAC, envelopes, structural/compartment/zone limits, underload, LMC limit, trim and aircraft-change review on registry data with signed immutable editions; still gated. Release requires operator-approved datasets and registrations, confirmed standard masses, validation against the operator's reference load sheets and recorded dispatch acceptance; until then every edition is marked not dispatch-approved. |
+| loadPlanning | demo | Compartment layout comes from the aircraft registry when a registration is selected; item planning, ULD and optimisation remain illustrative until measured cargo and an approved dispatch workflow exist |
 | disasterRecovery | demo | Infrastructure adapter and observed restore/failover exercise |
 | warehouseExports | implemented | Migration applied; shared database and authorized export owner |
 | eventInbox | implemented | Migration applied; local transaction or authenticated receiver acknowledgement |
