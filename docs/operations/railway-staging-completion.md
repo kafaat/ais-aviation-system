@@ -67,36 +67,55 @@ under the same rules. Compose requires the variable at interpolation time.
 Staging activation plan (variables only, no values in this repository):
 
 1. `ais-auth` and `ais-web` already carry `AUTH_SERVICE_TOKEN` (names verified
-   read-only on 7 November). **Equality is proven by the auth service's own
-   request log, without reading either value:** the service enforces the
-   header whenever the variable is set, and on 3 November 09:36–09:37 UTC,
-   after both variables were set on 2 November, it answered
-   `POST /auth/verify-password` and `POST /auth/register` with 200 to a caller
-   on the private network. `ais-web` is the only service in the environment
-   besides `ais-auth` that holds the variable (`ais-acceptance` and
-   `ais-worker` do not), so the caller presented the identical value. Length is
-   not readable from the repository; the 2 November record states the values
-   were generated at random, and the new start-up rule will refuse a value
-   shorter than 32 characters, which is a visible failure, not a silent one.
-   `ais-auth` also carries a `DEBUG` variable whose value is not visible here;
-   the start-up refusal applies only when `DEBUG` is false or unset, so the
-   operator should confirm it is not `true` on staging, or the fail-closed
-   start-up is not exercised there (runtime enforcement still is).
+   read-only on 7 November; the connected API redacts values, reference
+   expressions and `DEBUG`). **Historical evidence, not a current proof:** the
+   auth service enforces the header whenever its variable is set, and on
+   3 November 09:36–09:37 UTC, after both variables were set on 2 November, it
+   answered `POST /auth/verify-password` and `POST /auth/register` with 200 to
+   a caller on the private network. `ais-web` is the only service in the
+   environment besides `ais-auth` that carries the variable name
+   (`ais-acceptance` and `ais-worker` do not), so on that date an internal
+   caller presented a value the service accepted. That shows the pair matched
+   on 3 November. It does not show the values are unchanged today, the
+   caller's identity, the current length or entropy, or the value of `DEBUG`.
+   The deployment history of both services from 5 November to 7 November
+   lists only commit-triggered deployments from `main`, which is consistent
+   with no variable edits in that window but is not a proof either.
+   **Pre-merge gate (operator, out of band, no values in GitHub or chat):**
+   confirm in the Railway dashboard that both values are identical, random and
+   at least 32 printable ASCII characters, or set one fresh `openssl rand -hex
+32` value on both services in a single change; and confirm `DEBUG` on
+   `ais-auth` is absent or `false`, because the start-up refusal applies only
+   outside `DEBUG` mode (runtime enforcement applies in every mode).
 2. Merge; Railway redeploys both services from `main`. The auth start-up log
    must show Uvicorn serving without a `ValidationError` naming
    `AUTH_SERVICE_TOKEN`; the web start-up log must not show `[security]
 AUTH_SERVICE_TOKEN`.
-3. Evidence of the handshake: one registration or login through the web
-   service returns 200 in the auth log, and an anonymous `POST /auth/login`
-   against the private auth URL returns 401 `Service credential required.`
-   `ais-worker` does not call the auth service and needs no copy.
+3. Evidence of the handshake on the merged commit: one registration or login
+   through the web service returns 200 in the auth log, and an anonymous
+   `POST /auth/login` against the private auth URL returns 401
+   `Service credential required.` `ais-worker` does not call the auth service
+   and needs no copy. Only this post-deploy observation proves current parity.
 
-Rollback: if either service fails to start, the fault is the variable, not the
-code path; restoring a valid value and redeploying is the fix. Reverting the
-merge re-opens the fail-open behaviour and is not an acceptable rollback for
-production. The staging secrets generated in the 2 November session were
-visible in that session's transcript and must be rotated before any
-production use, as recorded above.
+Diagnosis and recovery if a service fails to start after the merge. First
+read the failing service's deploy log and classify the cause; do not change a
+secret on the assumption that the secret is at fault.
+
+| Signal in the deploy log                                                            | Cause                                           | Recovery                                                                                              |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Auth: `ValidationError` whose message names `AUTH_SERVICE_TOKEN`                    | Missing, blank, placeholder, short or non-ASCII | Set a valid value on both services in one change and redeploy both                                    |
+| Web: `[security] AUTH_SERVICE_TOKEN ...` in `Server startup failed`                 | Same, on the web side                           | Same                                                                                                  |
+| Auth: `ValidationError` naming `DATABASE_URL` or `JWT_SECRET`                       | Unrelated variable (#303 rules)                 | Fix that variable; not caused by this change                                                          |
+| Build failure, image pull failure, health-check timeout without a `ValidationError` | Code or deployment configuration                | Treat as an ordinary deployment incident; roll the service back to the previous deployment in Railway |
+| Both services start, but logins fail and the auth log shows 401 on verify-password  | Values differ between the services              | Set one value on both services in a single change and redeploy both                                   |
+
+Rolling the merge back re-opens the fail-open behaviour and is not an
+acceptable production rollback; a Railway rollback of one service to its
+previous deployment is acceptable while the variable is corrected, because
+the previous auth build still enforces the header whenever the variable is
+set. The staging secrets generated in the 2 November session were visible in
+that session's transcript and must be rotated before any production use, as
+recorded above.
 
 ## Worker deployment: blocked until 2 November 2026, then deployed under isolation
 
