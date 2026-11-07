@@ -439,8 +439,10 @@ header and compared in constant time. The boundary fails closed on both sides:
 `GET /auth/health` stays public so orchestration can observe readiness.
 Known placeholders rejected everywhere include `CHANGE_ME`, `changeme`,
 `secret`, `token` and the former fixed development-example token. Uniform
-repeated-character values are also rejected; a minimum length is not proof of
-entropy. The `.env.example` token is intentionally blank: for development,
+repeated-character values are also rejected. Tokens use printable ASCII
+characters, so Node and Python agree on their lengths and exact bytes; a
+minimum length is not proof of entropy. The `.env.example` token is
+intentionally blank: for development,
 generate a fresh value locally and configure it on both sides. For deployment,
 generate the secret with `openssl rand -hex 32` and provision the identical
 value on the auth service and on every Node API replica (`api1`..`api3` in
