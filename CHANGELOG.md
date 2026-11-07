@@ -1,5 +1,26 @@
 # Changelog
 
+## What's Changed in v1.39.0
+
+<!-- ais-release-source: 97bfe08099c28e51665ddf5633c962e4b62f479c -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(ndc): gate servicing actions with a distribution capability matrix (#292) (bd567f72)
+- feat(crew): enforce FTL legality as a hard constraint on every assignment path (#293) (0d6f1ada)
+- feat(bsp): generate DISH RET, ingest HOT and gate settlement on reconciliation (#295) (6de8fba8)
+
+### Bug Fixes
+
+- fix(servicing): bind exchange consent to the quote version and prove the end-to-end journey (#296) (97bfe080)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.38.0...v1.39.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.38.0
 
 <!-- ais-release-source: 56554f82c9ed593c79a65b7e2978f7e5f10c4366 -->

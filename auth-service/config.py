@@ -9,6 +9,8 @@ import re
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 
 INSECURE_JWT_SECRETS = {
@@ -19,8 +21,8 @@ INSECURE_JWT_SECRETS = {
 
 
 class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/ais_aviation"
+    # Database: required in every environment, including development and tests.
+    DATABASE_URL: str
 
     # JWT: required in every environment. There is deliberately no usable default.
     JWT_SECRET: str
@@ -51,7 +53,18 @@ class Settings(BaseSettings):
         # Rewrite only a bare scheme. "pymysql://" also contains "mysql://",
         # so substring replacement corrupts already qualified SQLAlchemy URLs.
         if value.startswith("mysql://"):
-            return "mysql+pymysql://" + value[len("mysql://"):]
+            value = "mysql+pymysql://" + value[len("mysql://"):]
+        try:
+            url = make_url(value)
+        except (ArgumentError, ValueError):
+            raise ValueError("DATABASE_URL must be a valid SQLAlchemy connection URL") from None
+        if url.get_backend_name() == "mysql":
+            if not url.host or not url.database or not url.database.strip():
+                raise ValueError("DATABASE_URL must specify a MySQL host and database")
+            if any(character.isspace() for character in url.host):
+                raise ValueError("DATABASE_URL must specify a valid MySQL host")
+            if url.port is not None and not 1 <= url.port <= 65535:
+                raise ValueError("DATABASE_URL must specify a valid MySQL port")
         return value
 
     @field_validator("JWT_SECRET")
