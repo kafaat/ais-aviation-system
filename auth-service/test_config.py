@@ -170,7 +170,10 @@ class ServiceTokenConfigurationTest(unittest.TestCase):
                     self.assert_rejected(token, message="required outside DEBUG mode")
 
     def test_production_mode_rejects_placeholder_and_weak_tokens(self):
-        for token in ("CHANGE_ME", "change_me", " changeme ", "secret", "token"):
+        for token in (
+            "CHANGE_ME", "change_me", " changeme ", "secret", "token",
+            "local-development-auth-service-token-not-for-production",
+        ):
             with self.subTest(token=token):
                 self.assert_rejected(token, message="placeholder")
         for token in ("short", "x" * (SERVICE_TOKEN_MIN_LENGTH - 1)):
@@ -178,13 +181,15 @@ class ServiceTokenConfigurationTest(unittest.TestCase):
                 self.assert_rejected(token, message=f"at least {SERVICE_TOKEN_MIN_LENGTH} characters")
         with self.subTest(token="whitespace inside"):
             self.assert_rejected("a" * 20 + " " + "b" * 20, message="whitespace")
+        with self.subTest(token="repeated characters"):
+            self.assert_rejected("x" * SERVICE_TOKEN_MIN_LENGTH, message="repeated-character")
 
     def test_production_mode_accepts_a_usable_token_and_strips_it(self):
         settings = self.settings_for(f"  {TEST_SERVICE_TOKEN}  ")
         self.assertEqual(settings.AUTH_SERVICE_TOKEN, TEST_SERVICE_TOKEN)
         self.assertEqual(
-            self.settings_for("x" * SERVICE_TOKEN_MIN_LENGTH).AUTH_SERVICE_TOKEN,
-            "x" * SERVICE_TOKEN_MIN_LENGTH,
+            self.settings_for("Q3" + "x" * (SERVICE_TOKEN_MIN_LENGTH - 2)).AUTH_SERVICE_TOKEN,
+            "Q3" + "x" * (SERVICE_TOKEN_MIN_LENGTH - 2),
         )
 
     def test_debug_mode_keeps_explicit_fixtures_but_never_placeholders(self):
