@@ -2,6 +2,7 @@ import { createRetailOffer } from "./retail-offer.service";
 import {
   confirmNoChargeService,
   quotePaidOrderService,
+  stationServicingAcceptance,
 } from "./order-servicing.service";
 import { getFlightBaggageCloseout } from "./baggage-custody.service";
 import { TRPCError } from "@trpc/server";
@@ -16,6 +17,7 @@ import {
   seatInventory,
   seatMaps,
   specialServices,
+  bookingModifications,
 } from "../../drizzle/schema";
 import { cabinLayoutSchema } from "../contracts/seat-layout";
 import { buildSeatRecords } from "./seat-map.service";
@@ -919,11 +921,26 @@ export function confirmDeskDowngrade(
         quote.details?.refundDue !== input.expectedRefund
       )
         reject("Review a current downgrade quote for this passenger");
+      const [change] = await tx
+        .select()
+        .from(bookingModifications)
+        .where(eq(bookingModifications.id, id))
+        .for("update");
+      if (!change || change.bookingId !== input.bookingId)
+        reject("Review a current downgrade quote for this passenger");
+      // The agent accepts for the passenger: quote version and amount from the
+      // quote the desk holds, the agent, the reason and the desk quote event.
       const result = await confirmNoChargeService(
         id,
         c.booking.userId,
         stationTenant(actor),
-        tx
+        tx,
+        stationServicingAcceptance(change, {
+          actorId: actor.userId,
+          reason: input.reason,
+          reference: `dcs-operation-event:${quote.id}`,
+          expectedRefund: input.expectedRefund,
+        })
       );
       if (result.refundDue !== input.expectedRefund)
         reject("Downgrade terms have changed");

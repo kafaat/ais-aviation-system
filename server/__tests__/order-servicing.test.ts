@@ -231,6 +231,12 @@ async function payment(modificationId: number, amount: number) {
     })
   );
 }
+/** A voluntary exchange executes only with consent bound to the quote. */
+const accepted = (q: { quoteVersion?: string; totalCost: number }) => ({
+  quoteVersion: q.quoteVersion ?? "",
+  totalCost: q.totalCost,
+  currency: "SAR" as const,
+});
 describe("paid order servicing", () => {
   it("funds an explicitly scoped baggage snapshot only after collection", async () => {
     const quote = await quotePaidOrderService(
@@ -253,7 +259,9 @@ describe("paid order servicing", () => {
     await createOrderServiceCheckout(
       quote.modificationId,
       1,
-      "https://ais.example"
+      "https://ais.example",
+      3,
+      accepted(quote)
     );
     await payment(quote.modificationId, 5000);
     expect(fixture.rows("booking_ancillaries")[0]).toMatchObject({
@@ -289,7 +297,13 @@ describe("paid order servicing", () => {
       1,
       3
     );
-    await confirmNoChargeService(quote.modificationId, 1);
+    await confirmNoChargeService(
+      quote.modificationId,
+      1,
+      3,
+      undefined,
+      accepted(quote)
+    );
     expect(fixture.rows("booking_ancillaries")[0]).toMatchObject({
       weightSnapshotGrams: 5000,
       segmentId: 21,
@@ -345,7 +359,13 @@ describe("paid order servicing", () => {
       1,
       3
     );
-    await confirmNoChargeService(quote.modificationId, 1);
+    await confirmNoChargeService(
+      quote.modificationId,
+      1,
+      3,
+      undefined,
+      accepted(quote)
+    );
     expect(fixture.rows("order_service_refunds").map(r => r.amount)).toEqual([
       1200, 2800,
     ]);
@@ -367,13 +387,17 @@ describe("paid order servicing", () => {
     const checkout = await createOrderServiceCheckout(
       quote.modificationId,
       1,
-      "https://ais.example"
+      "https://ais.example",
+      3,
+      accepted(quote)
     );
     expect(
       await createOrderServiceCheckout(
         quote.modificationId,
         1,
-        "https://ais.example"
+        "https://ais.example",
+        3,
+        accepted(quote)
       )
     ).toEqual(checkout);
     expect(boundary.checkout).toHaveBeenCalledTimes(1);
@@ -411,7 +435,9 @@ describe("paid order servicing", () => {
     await createOrderServiceCheckout(
       quote.modificationId,
       1,
-      "https://ais.example"
+      "https://ais.example",
+      3,
+      accepted(quote)
     );
     fixture.rows("inventory_locks")[0].expiresAt = new Date(0);
     await payment(quote.modificationId, 3000);
@@ -439,7 +465,9 @@ describe("paid order servicing", () => {
       await createOrderServiceCheckout(
         quote.modificationId,
         1,
-        "https://ais.example"
+        "https://ais.example",
+        3,
+        accepted(quote)
       );
       fixture.rows("bookings")[0].codeshareAllotmentId = 9;
       if (kind === "legacy") {
@@ -473,7 +501,13 @@ describe("paid order servicing", () => {
       3
     );
     expect(quote.refundDue).toBe(4000);
-    await confirmNoChargeService(quote.modificationId, 1);
+    await confirmNoChargeService(
+      quote.modificationId,
+      1,
+      3,
+      undefined,
+      accepted(quote)
+    );
     expect(fixture.rows("order_service_refunds")[0].status).toBe("queued");
     expect(fixture.rows("financial_ledger")).toHaveLength(0);
     await processPendingOrderRefunds();
@@ -564,12 +598,30 @@ describe("paid order servicing", () => {
       requestChangeFlightDate({ ...input, tenantId: 4 })
     ).rejects.toThrow("Booking not found");
     await expect(
-      confirmNoChargeService(quote.modificationId, 1, 4)
+      confirmNoChargeService(
+        quote.modificationId,
+        1,
+        4,
+        undefined,
+        accepted(quote)
+      )
     ).rejects.toThrow();
-    const receipt = await confirmNoChargeService(quote.modificationId, 1, 3);
-    expect(await confirmNoChargeService(quote.modificationId, 1, 3)).toEqual(
-      receipt
+    const receipt = await confirmNoChargeService(
+      quote.modificationId,
+      1,
+      3,
+      undefined,
+      accepted(quote)
     );
+    expect(
+      await confirmNoChargeService(
+        quote.modificationId,
+        1,
+        3,
+        undefined,
+        accepted(quote)
+      )
+    ).toEqual(receipt);
     expect(fixture.rows("booking_segments")).toMatchObject([
       { id: 21, flightId: 12, segmentAmount: 4400 },
       { id: 22, flightId: 14, segmentAmount: 5600 },
@@ -633,7 +685,13 @@ describe("paid order servicing", () => {
     if (defect === "selling channel changed")
       fixture.rows("ndc_orders")[0].channel = "travel_agent";
     await expect(
-      createOrderServiceCheckout(q.modificationId, 1, "https://ais.example", 3)
+      createOrderServiceCheckout(
+        q.modificationId,
+        1,
+        "https://ais.example",
+        3,
+        accepted(q)
+      )
     ).rejects.toThrow();
     expect(boundary.checkout).not.toHaveBeenCalled();
     expect(change.checkoutRequestId).toBeFalsy();
@@ -648,16 +706,29 @@ describe("paid order servicing", () => {
     const q = await quotePaidOrderService(input, 1, 3);
     boundary.checkout.mockRejectedValueOnce(new Error("response lost"));
     await expect(
-      createOrderServiceCheckout(q.modificationId, 1, "https://ais.example", 3)
+      createOrderServiceCheckout(
+        q.modificationId,
+        1,
+        "https://ais.example",
+        3,
+        accepted(q)
+      )
     ).rejects.toThrow("response lost");
     await expect(
-      createOrderServiceCheckout(q.modificationId, 1, "https://ais.example", 4)
+      createOrderServiceCheckout(
+        q.modificationId,
+        1,
+        "https://ais.example",
+        4,
+        accepted(q)
+      )
     ).rejects.toThrow();
     await createOrderServiceCheckout(
       q.modificationId,
       1,
       "https://ais.example",
-      3
+      3,
+      accepted(q)
     );
     expect(boundary.checkout.mock.calls).toHaveLength(2);
     expect(boundary.checkout.mock.calls[0]).toEqual(
@@ -689,7 +760,8 @@ describe("paid order servicing", () => {
           q.modificationId,
           1,
           "https://ais.example",
-          3
+          3,
+          accepted(q)
         )
       ).rejects.toThrow("Issuing channel");
       expect(boundary.checkout).not.toHaveBeenCalled();
@@ -708,7 +780,13 @@ describe("paid order servicing", () => {
     );
     boundary.checkout.mockRejectedValueOnce(new Error("lost acknowledgement"));
     await expect(
-      createOrderServiceCheckout(q.modificationId, 1, "https://ais.example", 3)
+      createOrderServiceCheckout(
+        q.modificationId,
+        1,
+        "https://ais.example",
+        3,
+        accepted(q)
+      )
     ).rejects.toThrow("lost acknowledgement");
     const request = boundary.checkout.mock.calls[0][0];
     const session = {

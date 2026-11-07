@@ -7,6 +7,7 @@ import {
   paidServiceInput,
   quotePaidOrderService,
   confirmNoChargeService,
+  servicingConsentInput,
 } from "../services/order-servicing.service";
 import { responseContracts } from "../contracts/ndc";
 import { z } from "zod";
@@ -151,19 +152,33 @@ export const ndcRouter = router({
         requiresPayment: z.boolean(),
         refundDue: z.number().int(),
         currency: z.literal("SAR").optional(),
+        quoteVersion: z.string().optional(),
         seatExchange: seatExchangeSchema.optional(),
       })
     )
     .mutation(({ input, ctx }) =>
       quotePaidOrderService(input, ctx.user.id, ctx.tenantId)
     ),
+  /** Execution binds the passenger's consent to the quote version and amount. */
   confirmNoChargeService: protectedProcedure
-    .input(z.object({ modificationId: z.number().int().positive() }))
+    .input(
+      z.object({
+        modificationId: z.number().int().positive(),
+        /** Required for a voluntary itinerary exchange; checked after the quote's own preconditions. */
+        consent: servicingConsentInput.optional(),
+      })
+    )
     .output(
       z.object({ receiptId: z.string().uuid(), refundDue: z.number().int() })
     )
     .mutation(({ input, ctx }) =>
-      confirmNoChargeService(input.modificationId, ctx.user.id, ctx.tenantId)
+      confirmNoChargeService(
+        input.modificationId,
+        ctx.user.id,
+        ctx.tenantId,
+        undefined,
+        input.consent
+      )
     ),
   // ==========================================================================
   // Shopping & Offers

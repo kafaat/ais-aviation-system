@@ -318,6 +318,33 @@ export async function auditSensitiveDataAccess(
   });
 }
 
+/** A servicing command (quote, checkout, confirm, cancel, status) that named a
+ * booking or modification the caller does not own. The caller receives the same
+ * generic error as for a missing record, and a refused attempt changes no row:
+ * the attempt is kept as a structured warning for monitoring, not as an audit
+ * record. Identifiers only, no passenger data. */
+export function logServicingAccessDenied(scope: {
+  userId: number;
+  tenantId: number | null;
+  bookingId?: number;
+  modificationId?: number;
+  action: string;
+  requestId?: string;
+}): void {
+  logger.warn(
+    {
+      event: "servicing_access_denied",
+      actorId: scope.userId,
+      tenantId: scope.tenantId,
+      bookingId: scope.bookingId ?? null,
+      modificationId: scope.modificationId ?? null,
+      procedure: scope.action,
+      requestId: scope.requestId ?? null,
+    },
+    "Servicing command refused: caller does not own the record"
+  );
+}
+
 /**
  * Helper function to audit refund events
  */

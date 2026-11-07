@@ -349,7 +349,24 @@ export async function verifyPaidSectorExchange(
   assert.equal(quote.seatExchange.retainedAmount, 2000);
   assert.equal(quote.seatExchange.seats[0].ancillaryId, purchase.id);
   assert(quote.totalCost > 0);
-  const checkoutRequest = { bookingId, modificationId: quote.modificationId };
+  assert(quote.quoteVersion);
+  const checkoutRequest = {
+    bookingId,
+    modificationId: quote.modificationId,
+    consent: {
+      quoteVersion: quote.quoteVersion,
+      totalCost: quote.totalCost,
+      currency: "SAR" as const,
+    },
+  };
+  // Consent for a different amount or version never reaches the provider.
+  await assert.rejects(
+    paymentsRouter.createCaller(ctx).createModificationCheckout({
+      ...checkoutRequest,
+      consent: { ...checkoutRequest.consent, totalCost: quote.totalCost + 1 },
+    }),
+    /Quote changed/
+  );
   const checkout = paymentsRouter.createCaller(ctx);
   const provider = new Map<string, Stripe.Checkout.SessionCreateParams>();
   const originalCreate = stripe.checkout.sessions.create;

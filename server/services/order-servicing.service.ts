@@ -63,6 +63,7 @@ import {
   assertCapability,
   bookingDistributionContext,
 } from "./ndc-capability-matrix";
+import { logServicingAccessDenied } from "./audit.service";
 
 const ancillaryInput = z.object({
   ancillaryServiceId: z.number().int().positive(),
@@ -111,6 +112,28 @@ const segment = z.object({
   destinationId: z.number().int().optional(),
   ndc: z.record(z.string(), z.unknown()),
 });
+/** The passenger accepts one quote version and one amount. The server compares
+ * both against the stored quote before any charge or no-charge execution. */
+export const servicingConsentInput = z.object({
+  quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+  totalCost: z.number().int(),
+  currency: z.literal("SAR"),
+});
+export type ServicingConsent = z.infer<typeof servicingConsentInput>;
+/** Who accepted the quote: the passenger (the default for the client-facing
+ * procedures) or a station agent acting for the passenger under a recorded
+ * reason and desk reference. A station acceptance is the equivalent of
+ * passenger consent, never a bypass of the gate. */
+export const servicingAcceptor = z.object({
+  kind: z.enum(["passenger", "station_agent"]),
+  actorId: z.number().int().positive(),
+  reason: z.string().min(1).max(500).optional(),
+  reference: z.string().min(1).max(128).optional(),
+});
+export type ServicingAcceptor = z.infer<typeof servicingAcceptor>;
+export type ServicingAcceptance = ServicingConsent & {
+  acceptedBy?: ServicingAcceptor;
+};
 export const planSchema = z.object({
   version: z.literal(1),
   fingerprint: z.string(),
@@ -125,9 +148,84 @@ export const planSchema = z.object({
   ancillaries: z.array(
     ancillaryInput.extend({ unitTotal: z.number().int().nonnegative() })
   ),
+  consent: servicingConsentInput
+    .extend({
+      acceptedAt: z.iso.datetime(),
+      acceptedBy: servicingAcceptor.optional(),
+    })
+    .optional(),
 });
 export class OrderServicingUnavailable extends Error {}
+/** Same outward message as a missing record; the caller learns nothing about
+ * another family's booking. The outer, non-transactional layer audits it. */
+export class ServicingAccessDenied extends OrderServicingUnavailable {
+  constructor(
+    message: string,
+    readonly scope: {
+      userId: number;
+      tenantId: number | null;
+      bookingId?: number;
+      modificationId?: number;
+      action: string;
+    }
+  ) {
+    super(message);
+  }
+}
 const unavailable = (message: string) => new OrderServicingUnavailable(message);
+export const UNSUPPORTED_QUOTE_VERSION =
+  "Servicing quote version is not supported; request a new quote";
+/** Stored quotes from another contract version never execute or reach a provider. */
+export function parseServicingPlan(payload: unknown) {
+  const parsed = planSchema.safeParse(payload);
+  if (!parsed.success) throw unavailable(UNSUPPORTED_QUOTE_VERSION);
+  return parsed.data;
+}
+/** The quote version is the digest of the amounts the passenger saw. */
+export function servicingQuoteVersion(
+  change: Pick<
+    typeof bookingModifications.$inferSelect,
+    "originalAmount" | "newAmount" | "modificationFee" | "priceDifference"
+  >
+) {
+  return quoteTermsHash(
+    change.originalAmount,
+    change.newAmount,
+    change.modificationFee,
+    change.priceDifference
+  );
+}
+export const CONSENT_MISMATCH =
+  "Quote changed; review the new amount and accept it again";
+export const CONSENT_REQUIRED =
+  "Accept the quoted version and amount before confirming this itinerary change";
+/** A voluntary itinerary exchange executes only with consent bound to the
+ * quote version and amount. A local ticket revalidation (same fare, evidence
+ * checked by the quote) and an added service keep their own preconditions; the
+ * caller sees those business refusals before any consent requirement. */
+export function assertServicingConsent(
+  change: typeof bookingModifications.$inferSelect,
+  consent: ServicingAcceptance | undefined,
+  plan?: z.infer<typeof planSchema>
+) {
+  if (!consent) {
+    if (plan && plan.segments.length && !plan.revalidation)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: CONSENT_REQUIRED,
+      });
+    return;
+  }
+  if (
+    consent.quoteVersion !== servicingQuoteVersion(change) ||
+    consent.totalCost !== change.totalCost ||
+    consent.currency !== "SAR"
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: CONSENT_MISMATCH,
+    });
+}
 async function itinerary(tx: SettlementTx, booking: Booking) {
   const legs = await tx
     .select()
@@ -226,6 +324,44 @@ function quoteTermsHash(
   });
 }
 
+/** A desk agent confirming for the passenger supplies an explicit station
+ * authorisation: the version and amount of the quote the desk holds (read from
+ * the modification row the desk quote names), cross-checked against the refund
+ * the agent re-asserts, plus the agent, the command reason and the desk
+ * reference. Recorded on the executed record like passenger consent. */
+export function stationServicingAcceptance(
+  change: Pick<
+    typeof bookingModifications.$inferSelect,
+    | "originalAmount"
+    | "newAmount"
+    | "modificationFee"
+    | "priceDifference"
+    | "totalCost"
+  >,
+  authorisation: {
+    actorId: number;
+    reason: string;
+    reference: string;
+    expectedRefund: number;
+  }
+): ServicingAcceptance {
+  if (Math.max(0, -change.totalCost) !== authorisation.expectedRefund)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Downgrade terms have changed",
+    });
+  return {
+    quoteVersion: servicingQuoteVersion(change),
+    totalCost: change.totalCost,
+    currency: "SAR",
+    acceptedBy: {
+      kind: "station_agent",
+      actorId: authorisation.actorId,
+      reason: authorisation.reason,
+      reference: authorisation.reference,
+    },
+  };
+}
 export async function quotePaidOrderService(
   raw: z.infer<typeof paidServiceInput>,
   userId: number,
@@ -246,7 +382,12 @@ export async function quotePaidOrderService(
       booking.userId !== userId ||
       (tenantId !== null && booking.tenantId !== tenantId)
     )
-      throw unavailable("Owned booking not found");
+      throw new ServicingAccessDenied("Owned booking not found", {
+        userId,
+        tenantId,
+        bookingId: input.bookingId,
+        action: "order.servicing.quote",
+      });
     await assertTenantOperational(tx, booking.tenantId);
     return withTransactionalIdempotency(
       {
@@ -681,6 +822,7 @@ export async function quotePaidOrderService(
             originalAmount: booking.totalAmount,
             expiresAt: expiry,
             currency: "SAR" as const,
+            quoteVersion: plan.termsHash,
             seatExchange,
             requiresPayment: newAmount > booking.totalAmount,
             refundDue: Math.max(0, booking.totalAmount - newAmount),
@@ -690,9 +832,21 @@ export async function quotePaidOrderService(
       tx
     );
   };
-  return transaction
-    ? quoteInTransaction(transaction)
-    : withInventoryTransaction(db, quoteInTransaction);
+  if (transaction) return quoteInTransaction(transaction);
+  return loggedServicing(() =>
+    withInventoryTransaction(db, quoteInTransaction)
+  );
+}
+/** Warn about a denied cross-owner attempt after its transaction has rolled
+ * back. A refused attempt changes no row; the caller's error stays generic. */
+export async function loggedServicing<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof ServicingAccessDenied)
+      logServicingAccessDenied(error.scope);
+    throw error;
+  }
 }
 /** Lock and validate the same version before creating checkout and again after verified collection. */
 export async function validatePaidServiceQuote(
@@ -700,7 +854,7 @@ export async function validatePaidServiceQuote(
   booking: Booking,
   change: typeof bookingModifications.$inferSelect
 ) {
-  const plan = planSchema.parse(change.servicingPayload);
+  const plan = parseServicingPlan(change.servicingPayload);
   if (
     booking.paymentStatus !== "paid" ||
     !booking.seatsReserved ||
@@ -1231,7 +1385,8 @@ export async function confirmNoChargeService(
   modificationId: number,
   userId: number,
   tenantId: number | null = null,
-  transaction?: SettlementTx
+  transaction?: SettlementTx,
+  consent?: ServicingAcceptance
 ) {
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
@@ -1240,23 +1395,34 @@ export async function confirmNoChargeService(
     .from(bookingModifications)
     .where(eq(bookingModifications.id, modificationId))
     .limit(1);
+  const denied = (bookingId?: number) =>
+    new ServicingAccessDenied("Owned modification not found", {
+      userId,
+      tenantId,
+      bookingId,
+      modificationId,
+      action: "order.servicing.confirm",
+    });
   if (!hint || hint.userId !== userId)
-    throw unavailable("Owned modification not found");
+    return loggedServicing(() => Promise.reject(denied(hint?.bookingId)));
   const confirm = async (tx: SettlementTx) => {
     const [booking] = await tx
       .select()
       .from(bookings)
       .where(eq(bookings.id, hint.bookingId))
       .for("update");
+    if (
+      !booking ||
+      booking.userId !== userId ||
+      (tenantId !== null && booking.tenantId !== tenantId)
+    )
+      throw denied(hint.bookingId);
     const [change] = await tx
       .select()
       .from(bookingModifications)
       .where(eq(bookingModifications.id, modificationId))
       .for("update");
     if (
-      !booking ||
-      booking.userId !== userId ||
-      (tenantId !== null && booking.tenantId !== tenantId) ||
       !change ||
       change.bookingId !== booking.id ||
       change.userId !== userId ||
@@ -1269,9 +1435,31 @@ export async function confirmNoChargeService(
         refundDue: Math.max(0, -change.totalCost),
       };
     await assertNoCollectionReview(tx, booking.id);
+    // The quote's own preconditions (state, schedule, revalidation evidence)
+    // are judged first; consent is the last gate before execution.
+    const { plan } = await validatePaidServiceQuote(tx, booking, change);
+    assertServicingConsent(change, consent, plan);
+    if (consent) {
+      // The accepted version, amount and acceptor stay on the record that executes.
+      plan.consent = {
+        ...consent,
+        acceptedBy: consent.acceptedBy ?? {
+          kind: "passenger",
+          actorId: userId,
+        },
+        acceptedAt: new Date().toISOString(),
+      };
+      await tx
+        .update(bookingModifications)
+        .set({ servicingPayload: plan })
+        .where(eq(bookingModifications.id, change.id));
+      change.servicingPayload = plan;
+    }
     return applyPaidOrderModification(tx, booking, change, {
       kind: "authorized_no_charge",
     });
   };
-  return transaction ? confirm(transaction) : db.transaction(confirm);
+  return loggedServicing(() =>
+    transaction ? confirm(transaction) : db.transaction(confirm)
+  );
 }

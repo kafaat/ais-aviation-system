@@ -220,18 +220,30 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
   const accept = async () => {
     if (!canConfirm || disabled || expiry <= Date.now() || !commandSlot) return;
     const key = readModificationCommand(commandSlot)?.key;
+    // The server binds this acceptance to the quote version and amount shown.
+    if (!pending.quoteVersion)
+      throw new Error(t("modifyBooking.exchange.review"));
+    const accepted = {
+      quoteVersion: pending.quoteVersion,
+      totalCost: pending.totalCost,
+      currency: "SAR" as const,
+    };
     if (pending.totalCost > 0) {
       const result = await checkout.mutateAsync({
         bookingId: booking.id,
         modificationId: pending.modificationId,
         provider: "stripe",
+        consent: accepted,
       });
       if (!result.url)
         throw new Error(t("modifyBooking.exchange.paymentUnavailable"));
       acknowledgeCommand(key);
       window.location.assign(result.url);
     } else {
-      await confirm.mutateAsync({ modificationId: pending.modificationId });
+      await confirm.mutateAsync({
+        modificationId: pending.modificationId,
+        consent: accepted,
+      });
       setConsent(null);
       acknowledgeCommand(key);
       await refresh();

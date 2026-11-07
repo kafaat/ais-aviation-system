@@ -1,4 +1,6 @@
 import { createOrderServiceCheckout } from "../services/order-service-checkout.service";
+import { servicingConsentInput } from "../services/order-servicing.service";
+import { logServicingAccessDenied } from "../services/audit.service";
 import {
   createBookingCheckout,
   expireBookingCheckout,
@@ -231,6 +233,9 @@ export const paymentsRouter = router({
           .positive()
           .describe("Modification request ID"),
         provider: providerEnum.optional().default("stripe"),
+        /** The accepted version and amount; required for a voluntary exchange,
+         * checked by the service after the quote's own preconditions. */
+        consent: servicingConsentInput.optional(),
       })
     )
     .output(responseContracts["createModificationCheckout"])
@@ -257,6 +262,13 @@ export const paymentsRouter = router({
         !bookingData ||
         (ctx.tenantId != null && bookingData.tenantId !== ctx.tenantId)
       ) {
+        logServicingAccessDenied({
+          userId: ctx.user.id,
+          tenantId: ctx.tenantId,
+          bookingId: input.bookingId,
+          modificationId: input.modificationId,
+          action: "order.servicing.checkout",
+        });
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",
@@ -311,7 +323,8 @@ export const paymentsRouter = router({
           ctx.user.id,
           process.env.VITE_APP_URL ||
             `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`,
-          ctx.tenantId
+          ctx.tenantId,
+          input.consent
         );
       }
       const authoritativeAmount = modification.totalCost;
