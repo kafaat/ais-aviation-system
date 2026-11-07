@@ -29,7 +29,7 @@ class Upstream(http.server.BaseHTTPRequestHandler):
     readiness_status = 200
     last_path = ""
 
-    def do_GET(self):
+    def _respond(self, with_body: bool):
         type(self).last_path = self.path
         if self.path == "/api/trpc/health.ready":
             status = type(self).readiness_status
@@ -40,7 +40,14 @@ class Upstream(http.server.BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(b'{"upstream":"controlled-test"}')
+        if with_body:
+            self.wfile.write(b'{"upstream":"controlled-test"}')
+
+    def do_GET(self):
+        self._respond(True)
+
+    def do_HEAD(self):
+        self._respond(False)
 
     def log_message(self, *_args):
         pass
@@ -52,9 +59,15 @@ def free_port():
         return sock.getsockname()[1]
 
 
-def request_status(url):
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *_args):
+        return None
+
+
+def request_status(url, method="GET"):
+    opener = urllib.request.build_opener(NoRedirect)
     try:
-        with urllib.request.urlopen(url, timeout=3) as response:
+        with opener.open(urllib.request.Request(url, method=method), timeout=3) as response:
             return response.status
     except urllib.error.HTTPError as exc:
         return exc.code
@@ -66,12 +79,24 @@ class NginxHealthContract(unittest.TestCase):
         self.assertIsNotNone(nginx, "nginx binary required; no silent skip")
         source = SOURCE.read_text(encoding="utf-8")
         blocks = re.findall(r"(?m)^\s*location\s*=\s*/health\s*\{[^{}]*\}", source)
-        self.assertEqual(len(blocks), 1, "one exact-match /health location required")
-        block = blocks[0]
-        self.assertRegex(block, r"proxy_pass\s+http://ais_api/api/trpc/health\.ready\s*;")
-        self.assertNotIn("health.check", block)
+        self.assertEqual(
+            len(blocks), 2,
+            "exact-match /health required in both HTTP loopback and HTTPS servers",
+        )
+        for block in blocks:
+            self.assertRegex(
+                block, r"proxy_pass\s+http://ais_api/api/trpc/health\.ready\s*;"
+            )
+            self.assertNotIn("health.check", block)
+        self.assertIn("allow 127.0.0.1;", blocks[0])
+        self.assertIn("deny all;", blocks[0])
+        compose = (ROOT / "docker-compose.production.yml").read_text(encoding="utf-8")
+        self.assertIn('"http://127.0.0.1/health"', compose)
         upstream_port = free_port()
         proxy_port = free_port()
+        loopback_port = free_port()
+        while loopback_port in (proxy_port, upstream_port):
+            loopback_port = free_port()
         upstream = http.server.ThreadingHTTPServer(("127.0.0.1", upstream_port), Upstream)
         threading.Thread(target=upstream.serve_forever, daemon=True).start()
         try:
@@ -86,8 +111,12 @@ class NginxHealthContract(unittest.TestCase):
                     "http {\n"
                     "  access_log off;\n"
                     f"  upstream ais_api {{ server 127.0.0.1:{upstream_port}; }}\n"
+                    f"  server {{ listen 127.0.0.1:{loopback_port};\n"
+                    f"{blocks[0]}\n"
+                    "    location / { return 301 https://ais.example.com$request_uri; }\n"
+                    "  }\n"
                     f"  server {{ listen 127.0.0.1:{proxy_port};\n"
-                    f"{block}\n"
+                    f"{blocks[1]}\n"
                     "    location / { return 404; }\n"
                     "  }\n}\n",
                     encoding="utf-8",
@@ -102,10 +131,11 @@ class NginxHealthContract(unittest.TestCase):
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 )
                 try:
-                    url = f"http://127.0.0.1:{proxy_port}/health"
+                    http_url = f"http://127.0.0.1:{loopback_port}/health"
+                    tls_route_url = f"http://127.0.0.1:{proxy_port}/health"
                     for _ in range(100):
                         try:
-                            status = request_status(url)
+                            status = request_status(http_url)
                             break
                         except (OSError, TimeoutError):
                             if process.poll() is not None:
@@ -114,11 +144,18 @@ class NginxHealthContract(unittest.TestCase):
                     else:
                         self.fail("nginx never listened")
                     self.assertEqual(status, 200)
-                    self.assertEqual(Upstream.last_path, "/api/trpc/health.ready")
+                    for url in (http_url, tls_route_url):
+                        self.assertEqual(request_status(url), 200)
+                        self.assertEqual(request_status(url, method="HEAD"), 200)
+                        self.assertEqual(Upstream.last_path, "/api/trpc/health.ready")
                     Upstream.readiness_status = 503
-                    self.assertEqual(request_status(url), 503)
-                    self.assertEqual(Upstream.last_path, "/api/trpc/health.ready")
-                    self.assertEqual(request_status(url + "/other"), 404)
+                    for url in (http_url, tls_route_url):
+                        self.assertEqual(request_status(url), 503)
+                        self.assertEqual(request_status(url, method="HEAD"), 503)
+                        self.assertEqual(Upstream.last_path, "/api/trpc/health.ready")
+                    # Non-health HTTP requests must still redirect to HTTPS.
+                    self.assertEqual(request_status(http_url + "/other"), 301)
+                    self.assertEqual(request_status(tls_route_url + "/other"), 404)
                     self.assertEqual(
                         request_status(f"http://127.0.0.1:{proxy_port}/api/trpc/health.check"),
                         404,
