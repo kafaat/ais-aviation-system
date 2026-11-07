@@ -21,6 +21,9 @@ export const crewRuleSchema = z
     maxDuty7DayMinutes: z.number().int().positive().max(10080),
     // These cumulative flight-time limits are operator data. The service does
     // not ship a regulatory table or infer a value when either is omitted.
+    // They are evaluated by the crew legality engine (the single authority for
+    // cumulative flight time), which applies the stricter of the active FTL
+    // rule set and this signed profile; validateDuty does not re-evaluate them.
     maxFlightTime28DayMinutes: z
       .number()
       .int()
@@ -184,26 +187,14 @@ export function validateDuty(
     );
   }
   let proposed24 = 0;
-  // A rolling total can increase only while a flight/duty is in progress.
-  // Check affected interval endpoints under the rule effective for that leg.
+  // A rolling total can increase only while a duty is in progress. Check the
+  // affected interval endpoints under the rule effective for that leg. The
+  // cumulative flight-time limits (28/365 days) are not evaluated here: the
+  // crew legality engine reads them from this profile and is their single
+  // authority.
   for (const leg of allLegs) {
     const profile = leg === proposed ? rule : futureRules.get(leg);
     if (!profile) continue;
-    for (const [days, limit] of [
-      [28, profile.maxFlightTime28DayMinutes],
-      [365, profile.maxFlightTime365DayMinutes],
-    ] as const) {
-      if (limit === undefined) continue;
-      const end = leg.arrival.getTime(),
-        start = end - days * 86400000;
-      if (!inWindow(start, end, proposed.departure, proposed.arrival)) continue;
-      const total = allLegs.reduce(
-        (sum, l) => sum + inWindow(start, end, l.departure, l.arrival),
-        0
-      );
-      if (total > limit)
-        violations.push(`Rolling ${days}-day flight-time limit exceeded`);
-    }
     for (const days of [1, 7]) {
       const end = leg.end.getTime(),
         start = end - days * 86400000;

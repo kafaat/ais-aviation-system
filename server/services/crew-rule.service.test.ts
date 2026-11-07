@@ -2,12 +2,20 @@ import { createHmac, randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   airlines,
+  airports,
   aviationEvidence,
   crewAssignments,
+  crewFtlFdpLimits,
+  crewFtlLimits,
+  crewFtlRuleSets,
+  crewLegalityOverrides,
+  crewLegalityVerdicts,
   crewMembers,
+  crewStandbyDuties,
   flights,
 } from "../../drizzle/schema";
 import { authorityRelationalFixture } from "../__tests__/helpers/authority-relational-fixture";
+import { easaOroFtlRuleSet } from "./crew-ftl-rule-set";
 import type { SettlementTx } from "./booking-settlement.service";
 import type { EvidenceEnvelope } from "./aviation-evidence.service";
 
@@ -98,6 +106,59 @@ function seedPolicy(
     observedAt: "2030-06-01 00:00:00",
   });
 }
+/** The legality engine is a hard constraint on the assignment writer: seed an
+ * operator-confirmed, active EASA rule set so the operator-profile behaviour
+ * under test is reachable. Rows go in one by one (the fixture cannot rewrite
+ * multi-row inserts). */
+function seedActiveRuleSet(id = 1) {
+  const doc = easaOroFtlRuleSet();
+  fixture.insert(crewFtlRuleSets, {
+    id,
+    airlineId: 1,
+    tenantId: 101,
+    code: doc.code,
+    version: doc.version,
+    name: doc.name,
+    jurisdiction: doc.jurisdiction,
+    effectiveFrom: "2014-02-18 00:00:00",
+    effectiveTo: null,
+    sourceUrl: doc.sourceUrl,
+    sourceNotes: doc.sourceNotes,
+    valuesStatus: doc.valuesStatus,
+    approvalStatus: "operator_confirmed",
+    operatorConfirmed: 1,
+    confirmedBy: 7,
+    confirmedAt: "2030-05-01 00:00:00",
+    confirmationNote: "Synthetic fixture; values not operator-verified",
+    active: 1,
+    activatedBy: 7,
+    activatedAt: "2030-05-01 00:00:00",
+    allowsOverride: 0,
+    importedBy: 7,
+  });
+  for (const row of doc.fdpLimits)
+    fixture.insert(crewFtlFdpLimits, {
+      ruleSetId: id,
+      tableKind: row.table,
+      bandStartMinute: row.bandStartMinute,
+      bandEndMinute: row.bandEndMinute,
+      sectorsFrom: row.sectorsFrom,
+      sectorsTo: row.sectorsTo,
+      qualifier: row.qualifier,
+      maxFdpMinutes: row.maxFdpMinutes,
+      sourceStatus: row.sourceStatus,
+    });
+  for (const row of doc.limits)
+    fixture.insert(crewFtlLimits, {
+      ruleSetId: id,
+      limitKey: row.key,
+      qualifier: row.qualifier,
+      value: row.value,
+      unit: row.unit,
+      reference: row.reference,
+      sourceStatus: row.sourceStatus,
+    });
+}
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2030-06-01T00:00:00.000Z"));
@@ -105,9 +166,16 @@ beforeEach(() => {
   vi.stubEnv(source.secretEnv, randomBytes(32).toString("hex"));
   fixture = authorityRelationalFixture([
     airlines,
+    airports,
     aviationEvidence,
     crewMembers,
     crewAssignments,
+    crewStandbyDuties,
+    crewFtlRuleSets,
+    crewFtlFdpLimits,
+    crewFtlLimits,
+    crewLegalityOverrides,
+    crewLegalityVerdicts,
     flights,
   ]);
   state.db = fixture.db;
@@ -138,6 +206,7 @@ beforeEach(() => {
     status: "scheduled",
   });
   seedPolicy();
+  seedActiveRuleSet();
 });
 afterEach(() => {
   state.db = null;
@@ -328,6 +397,17 @@ describe("crew profile and assignment authority over executing SQL", () => {
       ruleEvidenceId: 10,
       dutyStartTime: "2030-06-15 11:00:00.000",
       dutyEndTime: "2030-06-15 14:30:00.000",
+      legalityVerdictId: 1,
+    });
+    // The legality gate logged its verdict against the active rule set.
+    expect(fixture.rows(crewLegalityVerdicts)).toHaveLength(1);
+    expect(fixture.rows(crewLegalityVerdicts)[0]).toMatchObject({
+      ruleSetId: 1,
+      crewMemberId: 1,
+      flightId: 1,
+      path: "manual",
+      verdict: "legal",
+      blocked: 0,
     });
     const locks = fixture.queries.filter(query =>
       /for update$/i.test(query.sql)
@@ -347,11 +427,31 @@ describe("crew profile and assignment authority over executing SQL", () => {
         eventType: "crew.assignment_created",
       })
     );
+    expect(state.event).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        aggregateType: "crewLegalityVerdict",
+        tenantId: 101,
+        eventType: "crew.legality_verdict_recorded",
+      })
+    );
     await expect(assignCrewWithRules(assignment)).rejects.toThrow(
       "already assigned"
     );
     expect(fixture.rows(crewAssignments)).toHaveLength(1);
-    expect(state.event).toHaveBeenCalledTimes(1);
+    // One verdict event and one assignment event; the duplicate is rejected
+    // before either gate runs.
+    expect(state.event).toHaveBeenCalledTimes(2);
+    expect(fixture.rows(crewLegalityVerdicts)).toHaveLength(1);
+  });
+
+  it("blocks the assignment when no operator-confirmed FTL rule set is active, logging the verdict", async () => {
+    fixture.sqlite.exec("UPDATE crew_ftl_rule_sets SET active = 0");
+    await expect(assignCrewWithRules(assignment)).rejects.toThrow(
+      "no active operator-confirmed FTL rule set"
+    );
+    expect(fixture.rows(crewAssignments)).toEqual([]);
+    expect(state.event).not.toHaveBeenCalled();
   });
 
   it("rolls the assignment back when its event cannot be recorded", async () => {

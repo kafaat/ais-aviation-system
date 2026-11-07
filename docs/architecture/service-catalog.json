@@ -1416,6 +1416,8 @@
         "server/services/apis-paxlst.ts",
         "server/services/apis-pnrgov.ts",
         "server/services/apis.service.ts",
+        "server/services/crew-legality-engine.ts",
+        "server/services/crew-legality.service.ts",
         "server/services/flights.service.ts",
         "server/services/price-calendar.service.ts",
         "server/services/sale-fare-rules.ts",
@@ -1712,12 +1714,22 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/crew-legality.service.ts",
         "server/services/crew-rule.service.ts",
-        "server/services/required-value.ts"
+        "server/services/outbox.service.ts",
+        "server/services/required-value.ts",
+        "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["airlines", "crewAssignments", "crewMembers", "flights"],
-        "writes": ["crewAssignments"]
+        "reads": [
+          "airlines",
+          "crewAssignments",
+          "crewMembers",
+          "crewPairings",
+          "crewStandbyDuties",
+          "flights"
+        ],
+        "writes": ["crewAssignments", "crewPairings", "crewStandbyDuties"]
       },
       "replacement": null
     },
@@ -1735,6 +1747,91 @@
       "tableExpressions": {
         "reads": [],
         "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/crew-ftl-rule-set.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/crew-ftl-rule-set.ts",
+      "domain": "airline-operations",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/crew.ts",
+        "server/services/crew-legality.service.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/crew-legality-engine.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/crew-legality-engine.ts",
+      "domain": "airline-operations",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/crew-legality.service.ts"],
+      "dependencies": ["server/services/civil-day.ts"],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/crew-legality.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/crew-legality.service.ts",
+      "domain": "airline-operations",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/crew.ts",
+        "server/services/crew-assignment.service.ts",
+        "server/services/crew-rule.service.ts",
+        "server/services/recovery-feasibility.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/civil-day.ts",
+        "server/services/crew-ftl-rule-set.ts",
+        "server/services/crew-legality-engine.ts",
+        "server/services/outbox.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "airports",
+          "crewAssignments",
+          "crewFtlFdpLimits",
+          "crewFtlLimits",
+          "crewFtlRuleSets",
+          "crewLegalityOverrides",
+          "crewLegalityVerdicts",
+          "crewMembers",
+          "crewStandbyDuties",
+          "destination",
+          "flights",
+          "origin"
+        ],
+        "writes": [
+          "crewFtlFdpLimits",
+          "crewFtlLimits",
+          "crewFtlRuleSets",
+          "crewLegalityOverrides",
+          "crewLegalityVerdicts"
+        ]
       },
       "replacement": null
     },
@@ -1758,6 +1855,7 @@
         "server/db.ts",
         "server/services/aviation-evidence.service.ts",
         "server/services/crew-duty-policy.ts",
+        "server/services/crew-legality.service.ts",
         "server/services/outbox.service.ts",
         "server/services/tenant.service.ts"
       ],
@@ -4681,6 +4779,8 @@
         "server/services/booking-invoice.service.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/bookings.service.ts",
+        "server/services/crew-assignment.service.ts",
+        "server/services/crew-legality.service.ts",
         "server/services/crew-rule.service.ts",
         "server/services/cron.service.ts",
         "server/services/departure-control.service.ts",
@@ -5863,6 +5963,7 @@
         "drizzle/schema.ts",
         "server/services/aircraft-rotation.service.ts",
         "server/services/aviation-evidence.service.ts",
+        "server/services/crew-legality.service.ts",
         "server/services/crew-rule.service.ts",
         "server/services/idempotency-v2.service.ts"
       ],
@@ -6973,6 +7074,7 @@
         "server/services/booking-checkout.service.ts",
         "server/services/booking-invoice.service.ts",
         "server/services/bookings.service.ts",
+        "server/services/crew-assignment.service.ts",
         "server/services/crew-rule.service.ts",
         "server/services/dcs-operations.service.ts",
         "server/services/dcs-station.service.ts",

@@ -1,10 +1,19 @@
 import { requireValue } from "./required-value";
 import {
   assignCrewWithRules,
+  assignCrewWithRulesTx,
   evaluateCrewDuty,
   evaluateCrewCandidates,
   getCrewRules,
+  type AssignCrewWithRulesInput,
 } from "./crew-rule.service";
+import {
+  CrewLegalityError,
+  enforceCrewLegality,
+  previewCandidateLegality,
+} from "./crew-legality.service";
+import { recordEvent } from "./outbox.service";
+import { assertTenantOperational } from "./tenant.service";
 /**
  * Crew Assignment Service
  *
@@ -15,10 +24,12 @@ import { getDb } from "../db";
 import {
   crewMembers,
   crewAssignments,
+  crewPairings,
+  crewStandbyDuties,
   flights,
   airlines,
 } from "../../drizzle/schema";
-import { eq, and, sql, ne } from "drizzle-orm";
+import { eq, and, sql, ne, inArray, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 // ============================================================================
 // Types
@@ -148,10 +159,404 @@ export async function getCrewMemberById(id: number) {
   };
 }
 // ============================================================================
-// Assign Crew to Flight
+// Assign Crew to Flight (manual path)
 // ============================================================================
 export const assignCrewToFlight = (input: CrewAssignmentInput) =>
-  assignCrewWithRules(input);
+  assignCrewWithRules({ ...input, path: "manual" });
+
+// ============================================================================
+// Bulk roster (rostering path). Each line is its own gated transaction so a
+// blocked line does not silently roll back accepted lines; the result lists
+// every outcome.
+// ============================================================================
+export interface RosterLine {
+  flightId: number;
+  crewMemberId: number;
+  role: "captain" | "first_officer" | "purser" | "cabin_crew";
+  notes?: string;
+}
+export async function bulkAssignRoster(input: {
+  lines: RosterLine[];
+  pairingId?: number | null;
+  assignedBy: number;
+  tenantId?: number | null;
+}) {
+  if (!input.lines.length || input.lines.length > 200)
+    throw new Error("A roster batch holds between 1 and 200 lines");
+  const seen = new Set<string>();
+  for (const line of input.lines) {
+    const key = `${line.flightId}:${line.crewMemberId}`;
+    if (seen.has(key)) throw new Error("Duplicate roster line");
+    seen.add(key);
+  }
+  if (input.pairingId) {
+    const db = getDb();
+    if (!db) throw new Error("Crew storage unavailable");
+    const [pairing] = await db
+      .select()
+      .from(crewPairings)
+      .where(eq(crewPairings.id, input.pairingId))
+      .limit(1);
+    if (!pairing) throw new Error("Pairing not found");
+    const legs = new Set(pairing.legs.map(l => l.flightId));
+    if (input.lines.some(l => !legs.has(l.flightId)))
+      throw new Error("Roster line is not a leg of the pairing");
+  }
+  const results = [];
+  for (const line of input.lines) {
+    try {
+      const assigned = await assignCrewWithRules({
+        ...line,
+        path: "bulk_roster",
+        pairingId: input.pairingId ?? null,
+        assignedBy: input.assignedBy,
+        tenantId: input.tenantId,
+      });
+      results.push({
+        flightId: line.flightId,
+        crewMemberId: line.crewMemberId,
+        role: line.role,
+        status: "assigned" as const,
+        assignmentId: assigned.id,
+        verdict: assigned.legality.verdict,
+        verdictId: assigned.legality.verdictId,
+        error: null,
+      });
+    } catch (error) {
+      results.push({
+        flightId: line.flightId,
+        crewMemberId: line.crewMemberId,
+        role: line.role,
+        status: "blocked" as const,
+        assignmentId: null,
+        verdict:
+          error instanceof CrewLegalityError && error.verdict
+            ? error.verdict.verdict
+            : null,
+        verdictId: error instanceof CrewLegalityError ? error.verdictId : null,
+        error: error instanceof Error ? error.message : "Assignment failed",
+      });
+    }
+  }
+  return {
+    total: results.length,
+    assigned: results.filter(r => r.status === "assigned").length,
+    blocked: results.filter(r => r.status === "blocked").length,
+    lines: results,
+  };
+}
+
+// ============================================================================
+// Pairings (trip definitions) are kept apart from rostering individuals.
+// ============================================================================
+export async function createPairing(input: {
+  code: string;
+  flightIds: number[];
+  homeBaseAirportId?: number | null;
+  createdBy: number;
+  tenantId: number | null;
+}) {
+  const db = getDb();
+  if (!db) throw new Error("Crew storage unavailable");
+  if (!input.flightIds.length || input.flightIds.length > 20)
+    throw new Error("A pairing holds between 1 and 20 legs");
+  return await db.transaction(async tx => {
+    const legs = await tx
+      .select()
+      .from(flights)
+      .where(inArray(flights.id, input.flightIds));
+    if (legs.length !== new Set(input.flightIds).size)
+      throw new Error("Pairing legs must be distinct existing flights");
+    const airlineId = legs[0].airlineId;
+    if (legs.some(l => l.airlineId !== airlineId))
+      throw new Error("Pairing legs must belong to one operator");
+    if (
+      input.tenantId !== null &&
+      legs.some(l => l.tenantId !== input.tenantId)
+    )
+      throw new Error("Pairing legs are outside the tenant scope");
+    const ordered = [...legs].sort(
+      (a, b) => a.departureTime.getTime() - b.departureTime.getTime()
+    );
+    for (let i = 1; i < ordered.length; i++)
+      if (ordered[i].departureTime < ordered[i - 1].arrivalTime)
+        throw new Error("Pairing legs overlap");
+    const [result] = await tx.insert(crewPairings).values({
+      airlineId,
+      tenantId: input.tenantId,
+      code: input.code,
+      homeBaseAirportId: input.homeBaseAirportId ?? null,
+      startsAt: ordered[0].departureTime,
+      endsAt: ordered[ordered.length - 1].arrivalTime,
+      legs: ordered.map(l => ({ flightId: l.id })),
+      createdBy: input.createdBy,
+    });
+    const pairingId = Number(result.insertId);
+    await recordEvent(tx, {
+      aggregateType: "crewPairing",
+      aggregateId: pairingId,
+      tenantId: input.tenantId,
+      eventType: "crew.pairing_created",
+      payload: {
+        pairingId,
+        airlineId,
+        code: input.code,
+        legs: ordered.length,
+        createdBy: input.createdBy,
+      },
+    });
+    return { id: pairingId, code: input.code, legs: ordered.length };
+  });
+}
+
+export async function listPairings(filters: {
+  tenantId: number | null;
+  airlineId?: number;
+}) {
+  const db = getDb();
+  if (!db) throw new Error("Crew storage unavailable");
+  return await db
+    .select()
+    .from(crewPairings)
+    .where(
+      and(
+        filters.tenantId === null
+          ? undefined
+          : sql`${crewPairings.tenantId} <=> ${filters.tenantId}`,
+        filters.airlineId
+          ? eq(crewPairings.airlineId, filters.airlineId)
+          : undefined
+      )
+    )
+    .orderBy(desc(crewPairings.startsAt))
+    .limit(200);
+}
+
+// ============================================================================
+// Standby duties and activation (standby activation path)
+// ============================================================================
+export async function createStandby(input: {
+  crewMemberId: number;
+  kind: "airport" | "home";
+  startsAt: Date;
+  endsAt: Date;
+  locationAirportId?: number | null;
+  createdBy: number;
+  tenantId: number | null;
+}) {
+  const db = getDb();
+  if (!db) throw new Error("Crew storage unavailable");
+  if (input.endsAt <= input.startsAt)
+    throw new Error("Standby must end after it starts");
+  if (input.endsAt.getTime() - input.startsAt.getTime() > 24 * 3600000)
+    throw new Error("Standby longer than 24 hours is not supported");
+  const [crew] = await db
+    .select()
+    .from(crewMembers)
+    .where(eq(crewMembers.id, input.crewMemberId))
+    .limit(1);
+  if (!crew) throw new Error("Crew member not found");
+  const [result] = await db.insert(crewStandbyDuties).values({
+    airlineId: crew.airlineId,
+    tenantId: input.tenantId,
+    crewMemberId: input.crewMemberId,
+    kind: input.kind,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    locationAirportId: input.locationAirportId ?? null,
+    createdBy: input.createdBy,
+  });
+  return { id: Number(result.insertId) };
+}
+
+export async function listStandby(filters: {
+  tenantId: number | null;
+  crewMemberId?: number;
+  from?: Date;
+}) {
+  const db = getDb();
+  if (!db) throw new Error("Crew storage unavailable");
+  const rows = await db
+    .select({ duty: crewStandbyDuties, crew: crewMembers })
+    .from(crewStandbyDuties)
+    .innerJoin(crewMembers, eq(crewMembers.id, crewStandbyDuties.crewMemberId))
+    .where(
+      and(
+        filters.tenantId === null
+          ? undefined
+          : sql`${crewStandbyDuties.tenantId} <=> ${filters.tenantId}`,
+        filters.crewMemberId
+          ? eq(crewStandbyDuties.crewMemberId, filters.crewMemberId)
+          : undefined,
+        filters.from
+          ? sql`${crewStandbyDuties.endsAt} > ${filters.from}`
+          : undefined
+      )
+    )
+    .orderBy(desc(crewStandbyDuties.startsAt))
+    .limit(200);
+  return rows.map(({ duty, crew }) => ({
+    ...duty,
+    crewName: `${crew.firstName} ${crew.lastName}`,
+    employeeId: crew.employeeId,
+    role: crew.role,
+  }));
+}
+
+/** Activating standby is an assignment: it goes through the same gated writer
+ * inside one transaction with the standby state change. */
+export async function activateStandby(input: {
+  standbyId: number;
+  flightId: number;
+  role: "captain" | "first_officer" | "purser" | "cabin_crew";
+  actorId: number;
+  tenantId: number | null;
+  notes?: string;
+}) {
+  const db = getDb();
+  if (!db) throw new Error("Crew storage unavailable");
+  const [hint] = await db
+    .select()
+    .from(crewStandbyDuties)
+    .where(eq(crewStandbyDuties.id, input.standbyId))
+    .limit(1);
+  if (!hint) throw new Error("Standby duty not found");
+  return db.transaction(async tx => {
+    await tx
+      .select()
+      .from(airlines)
+      .where(eq(airlines.id, hint.airlineId))
+      .for("update");
+    const [standby] = await tx
+      .select()
+      .from(crewStandbyDuties)
+      .where(eq(crewStandbyDuties.id, input.standbyId))
+      .for("update");
+    if (!standby || standby.status !== "planned")
+      throw new Error("Standby duty is not available for activation");
+    if (input.tenantId !== null && standby.tenantId !== input.tenantId)
+      throw new Error("Standby duty is outside the tenant scope");
+    await assertTenantOperational(tx, standby.tenantId);
+    const [flight] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, input.flightId))
+      .limit(1);
+    if (!flight) throw new Error("Flight not found");
+    if (
+      flight.departureTime < standby.startsAt ||
+      flight.departureTime > standby.endsAt
+    )
+      throw new Error("Flight departure lies outside the standby window");
+    const assignment: AssignCrewWithRulesInput = {
+      flightId: input.flightId,
+      crewMemberId: standby.crewMemberId,
+      role: input.role,
+      assignedBy: input.actorId,
+      tenantId: input.tenantId,
+      notes: input.notes,
+      path: "standby_activation",
+      standbyId: standby.id,
+    };
+    // The standby itself stops counting as standby once activated; the duty
+    // starts at the standby start (airport standby counts in full).
+    await tx
+      .update(crewStandbyDuties)
+      .set({ status: "activated", activatedAt: new Date() })
+      .where(eq(crewStandbyDuties.id, standby.id));
+    const assigned = await assignCrewWithRulesTx(tx, assignment);
+    await tx
+      .update(crewStandbyDuties)
+      .set({ activatedAssignmentId: assigned.id })
+      .where(eq(crewStandbyDuties.id, standby.id));
+    await recordEvent(tx, {
+      aggregateType: "crewStandby",
+      aggregateId: standby.id,
+      tenantId: standby.tenantId,
+      eventType: "crew.standby_activated",
+      payload: {
+        standbyId: standby.id,
+        crewMemberId: standby.crewMemberId,
+        flightId: input.flightId,
+        assignmentId: assigned.id,
+        actorId: input.actorId,
+      },
+    });
+    return { standbyId: standby.id, ...assigned };
+  });
+}
+
+/** Read-only verdict for the admin page; logged as a preview, never blocking. */
+export async function previewAssignmentLegality(input: {
+  crewMemberId: number;
+  flightId: number;
+  tenantId: number | null;
+  actorId: number;
+}) {
+  const db = getDb();
+  if (!db) throw new Error("Crew storage unavailable");
+  const [flight] = await db
+    .select()
+    .from(flights)
+    .where(eq(flights.id, input.flightId))
+    .limit(1);
+  if (!flight)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+  if (input.tenantId !== null && flight.tenantId !== input.tenantId)
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Flight is outside the tenant scope",
+    });
+  const [crew] = await db
+    .select()
+    .from(crewMembers)
+    .where(eq(crewMembers.id, input.crewMemberId))
+    .limit(1);
+  if (!crew)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Crew member not found",
+    });
+  if (crew.airlineId !== flight.airlineId)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Crew member belongs to another operator",
+    });
+  const profile = await evaluateCrewDuty(db, crew.id, {
+    flightId: flight.id,
+    departureTime: flight.departureTime,
+    arrivalTime: flight.arrivalTime,
+    aircraftType: flight.aircraftType,
+    tenantId: flight.tenantId,
+  });
+  const gate = await enforceCrewLegality(db, {
+    crewMemberId: crew.id,
+    airlineId: crew.airlineId,
+    tenantId: flight.tenantId,
+    flightId: flight.id,
+    reportAt: profile.duty.start,
+    releaseAt: profile.duty.end,
+    path: "preview",
+    actorId: input.actorId,
+    fallbackTimeZone: profile.profileTimeZone,
+    operatorLimits: profile.operatorLimits,
+  });
+  return {
+    crewMemberId: crew.id,
+    crewName: `${crew.firstName} ${crew.lastName}`,
+    flightId: flight.id,
+    flightNumber: flight.flightNumber,
+    reportAt: profile.duty.start,
+    releaseAt: profile.duty.end,
+    operatorProfile: {
+      compliant: profile.compliant,
+      violations: profile.violations,
+    },
+    verdictId: gate.verdictId,
+    ruleSetId: gate.ruleSetId,
+    ...gate.verdict,
+  };
+}
 // ============================================================================
 // Remove Crew from Flight
 // ============================================================================
@@ -829,10 +1234,46 @@ export async function findReplacementCrew(
     tenantId: flight.tenantId,
   });
   const byCrew = new Map(checks.map(c => [c.crewMemberId, c]));
+  const legality = checks.length
+    ? await previewCandidateLegality(db, pool, {
+        flightId,
+        tenantId: flight.tenantId,
+        reportAt: checks[0].duty.start,
+        releaseAt: checks[0].duty.end,
+        fallbackTimeZone: checks[0].profileTimeZone,
+        operatorLimits: checks[0].operatorLimits,
+      })
+    : new Map<number, never>();
   const results = pool
     .map(candidate => {
       const check = byCrew.get(candidate.id);
       if (!check) throw new Error("Crew assessment is unavailable");
+      const legal = legality.get(candidate.id);
+      const legalitySummary = legal
+        ? "checks" in legal
+          ? {
+              verdict: legal.verdict,
+              failedRules: legal.checks
+                .filter(
+                  c => c.status === "fail" || c.status === "not_evaluable"
+                )
+                .map(c => c.code),
+              fatigueLevel: legal.fatigue.level,
+              fdpMarginMinutes:
+                legal.checks.find(c => c.code === "FDP_MAX")?.margin ?? null,
+            }
+          : {
+              verdict: legal.verdict,
+              failedRules: ["RULE_SET_ACTIVE"],
+              fatigueLevel: null,
+              fdpMarginMinutes: null,
+            }
+        : {
+            verdict: "illegal" as const,
+            failedRules: ["NOT_EVALUATED"],
+            fatigueLevel: null,
+            fdpMarginMinutes: null,
+          };
       let qualifiedAircraft: string[] = [];
       try {
         const parsed: unknown = JSON.parse(
@@ -843,7 +1284,10 @@ export async function findReplacementCrew(
       } catch {
         /* The shared rule authority rejects malformed qualifications. */
       }
-      const available = check.compliant && check.conflicts.length === 0;
+      const available =
+        check.compliant &&
+        check.conflicts.length === 0 &&
+        legalitySummary.verdict !== "illegal";
       return {
         crewMember: {
           id: candidate.id,
@@ -855,7 +1299,8 @@ export async function findReplacementCrew(
           medicalExpiry: candidate.medicalExpiry,
         },
         available,
-        ftlCompliant: check.compliant,
+        ftlCompliant: check.compliant && legalitySummary.verdict !== "illegal",
+        legality: legalitySummary,
         dutyHoursOnDate: Math.round(check.dutyHours * 100) / 100,
         conflicts: check.conflicts,
         score: (available ? 95 : 0) + Math.max(0, 5 - check.dutyHours),
