@@ -75,9 +75,10 @@ Staging activation plan (variables only, no values in this repository):
    a caller on the private network. `ais-web` is the only service in the
    environment besides `ais-auth` that carries the variable name
    (`ais-acceptance` and `ais-worker` do not), so on that date an internal
-   caller presented a value the service accepted. That shows the pair matched
-   on 3 November. It does not show the values are unchanged today, the
-   caller's identity, the current length or entropy, or the value of `DEBUG`.
+   caller presented a credential the service accepted. The caller's identity
+   is not recorded, and current web/auth parity remains unproven: nothing here
+   shows the values are unchanged today, the current length or entropy, or the
+   value of `DEBUG`.
    The deployment history of both services from 5 November to 7 November
    lists only commit-triggered deployments from `main`, which is consistent
    with no variable edits in that window but is not a proof either.
@@ -101,20 +102,36 @@ Diagnosis and recovery if a service fails to start after the merge. First
 read the failing service's deploy log and classify the cause; do not change a
 secret on the assumption that the secret is at fault.
 
-| Signal in the deploy log                                                            | Cause                                           | Recovery                                                                                              |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Auth: `ValidationError` whose message names `AUTH_SERVICE_TOKEN`                    | Missing, blank, placeholder, short or non-ASCII | Set a valid value on both services in one change and redeploy both                                    |
-| Web: `[security] AUTH_SERVICE_TOKEN ...` in `Server startup failed`                 | Same, on the web side                           | Same                                                                                                  |
-| Auth: `ValidationError` naming `DATABASE_URL` or `JWT_SECRET`                       | Unrelated variable (#303 rules)                 | Fix that variable; not caused by this change                                                          |
-| Build failure, image pull failure, health-check timeout without a `ValidationError` | Code or deployment configuration                | Treat as an ordinary deployment incident; roll the service back to the previous deployment in Railway |
-| Both services start, but logins fail and the auth log shows 401 on verify-password  | Values differ between the services              | Set one value on both services in a single change and redeploy both                                   |
+| Signal in the deploy log                                                            | Cause                                           | Recovery                                                                                      |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Auth: `ValidationError` whose message names `AUTH_SERVICE_TOKEN`                    | Missing, blank, placeholder, short or non-ASCII | Set a valid value on both services in one change and redeploy both                            |
+| Web: `[security] AUTH_SERVICE_TOKEN ...` in `Server startup failed`                 | Same, on the web side                           | Same                                                                                          |
+| Auth: `ValidationError` naming `DATABASE_URL` or `JWT_SECRET`                       | Unrelated variable (#303 rules)                 | Fix that variable; not caused by this change                                                  |
+| Build failure, image pull failure, health-check timeout without a `ValidationError` | Code or deployment configuration                | Repair the configuration or roll forward with a corrected image; see the rollback rules below |
+| Both services start, but logins fail and the auth log shows 401 on verify-password  | Values differ between the services              | Set one value on both services in a single change and redeploy both                           |
 
-Rolling the merge back re-opens the fail-open behaviour and is not an
-acceptable production rollback; a Railway rollback of one service to its
-previous deployment is acceptable while the variable is corrected, because
-the previous auth build still enforces the header whenever the variable is
-set. The staging secrets generated in the 2 November session were visible in
-that session's transcript and must be rotated before any production use, as
+Rollback rules. Neither kind of rollback is automatically safe:
+
+- A **source rollback** (reverting the merge on `main`) restores the fail-open
+  code on both sides and is never an acceptable recovery for this change.
+- A **platform rollback** of `ais-auth` to its previous Railway deployment is
+  unsafe whenever `AUTH_SERVICE_TOKEN` is missing, blank or otherwise refused
+  on that service, which is exactly the first failure row above: the previous
+  auth build (`main@3a34fb6`, `require_service_token` returns early when the
+  variable is empty) would serve the password routes to anonymous callers.
+  While the variable is being repaired the credentialed endpoints stay
+  unavailable; that is the intended fail-closed state, not an outage to work
+  around. A platform rollback of `ais-auth` may be used only for a code or
+  deployment fault when the variable on that service is already confirmed
+  present and valid, and it must be followed by the same negative and positive
+  checks as step 3: anonymous and wrong-credential `POST /auth/login` on the
+  private network return 401, and one Node → FastAPI login returns 200.
+- A platform rollback of `ais-web` alone does not re-open the auth service,
+  but the previous web build omits the header when its variable is empty, so
+  it must also be followed by the step 3 checks.
+
+The staging secrets generated in the 2 November session were visible in that
+session's transcript and must be rotated before any production use, as
 recorded above.
 
 ## Worker deployment: blocked until 2 November 2026, then deployed under isolation
