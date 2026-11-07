@@ -170,7 +170,16 @@ test("owner revalidates an open local coupon to a different date once and recove
   await rows("UPDATE ticket_coupons SET status='C' WHERE id=?", [
     originalCoupon.id,
   ]);
-  const confirm = { modificationId: quote.modificationId };
+  if (!quote.quoteVersion) throw new Error("Quote version missing");
+  // Execution binds the passenger's consent to the quote version and amount.
+  const confirm = {
+    modificationId: quote.modificationId,
+    consent: {
+      quoteVersion: quote.quoteVersion,
+      totalCost: quote.totalCost,
+      currency: "SAR" as const,
+    },
+  };
   await expect(
     client.ndc.confirmNoChargeService.mutate(confirm)
   ).rejects.toThrow(/local ticket revalidation/i);
@@ -199,7 +208,9 @@ test("owner revalidates an open local coupon to a different date once and recove
   expect(recovered?.receiptId).toBeTruthy();
   const replay = await client.ndc.confirmNoChargeService.mutate(confirm);
   expect(replay.receiptId).toBe(recovered?.receiptId);
-  const history = await client.modifications.getDetails.query(confirm);
+  const history = await client.modifications.getDetails.query({
+    modificationId: confirm.modificationId,
+  });
   expect(history.executionEventId).toBe(replay.receiptId);
   expect(history.revalidation).toEqual(recovered?.revalidation);
   expect(await getCoupon()).toEqual([{ ...originalCoupon, flightId: to }]);

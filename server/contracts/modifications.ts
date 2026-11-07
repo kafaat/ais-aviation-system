@@ -14,6 +14,7 @@ export const responseContracts = {
     requiresPayment: z.boolean(),
     expiresAt: z.date().optional(),
     currency: z.literal("SAR").optional(),
+    quoteVersion: z.string().optional(),
     seatExchange: seatExchangeSchema.optional(),
   }),
   requestUpgrade: z.object({
@@ -26,6 +27,7 @@ export const responseContracts = {
     requiresPayment: z.boolean(),
     expiresAt: z.date().optional(),
     currency: z.literal("SAR").optional(),
+    quoteVersion: z.string().optional(),
     seatExchange: seatExchangeSchema.optional(),
   }),
   getDetails: z.object({

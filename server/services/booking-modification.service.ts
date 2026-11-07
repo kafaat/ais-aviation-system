@@ -17,6 +17,7 @@ import {
   withTransactionalIdempotency,
   calculateRequestHash,
 } from "./idempotency-v2.service";
+import { logServicingAccessDenied } from "./audit.service";
 export interface ChangeFlightDateInput {
   bookingId: number;
   userId: number;
@@ -40,7 +41,21 @@ async function requestService(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
-  return withInventoryTransaction(db, async tx => {
+  class ForeignBooking extends TRPCError {}
+  try {
+    return await withInventoryTransaction(db, tx => quote(tx));
+  } catch (error) {
+    // Recorded after rollback so the audit row outlives the refused command.
+    if (error instanceof ForeignBooking)
+      logServicingAccessDenied({
+        userId: input.userId,
+        tenantId: input.tenantId ?? null,
+        bookingId: input.bookingId,
+        action: "order.servicing.quote",
+      });
+    throw error;
+  }
+  async function quote(tx: Parameters<typeof quotePaidOrderService>[3] & {}) {
     const [booking] = await tx
       .select()
       .from(bookings)
@@ -52,7 +67,7 @@ async function requestService(
       !booking ||
       (input.tenantId != null && input.tenantId !== booking.tenantId)
     )
-      throw new TRPCError({
+      throw new ForeignBooking({
         code: "NOT_FOUND",
         message: "Booking not found",
       });
@@ -149,7 +164,7 @@ async function requestService(
       },
       tx
     );
-  });
+  }
 }
 export const requestChangeFlightDate = (input: ChangeFlightDateInput) =>
   requestService(input);
