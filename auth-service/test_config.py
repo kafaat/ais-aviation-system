@@ -183,6 +183,8 @@ class ServiceTokenConfigurationTest(unittest.TestCase):
             self.assert_rejected("a" * 20 + " " + "b" * 20, message="whitespace")
         with self.subTest(token="repeated characters"):
             self.assert_rejected("x" * SERVICE_TOKEN_MIN_LENGTH, message="repeated-character")
+        with self.subTest(token="unicode"):
+            self.assert_rejected("é" * 40, message="printable ASCII")
 
     def test_production_mode_accepts_a_usable_token_and_strips_it(self):
         settings = self.settings_for(f"  {TEST_SERVICE_TOKEN}  ")
