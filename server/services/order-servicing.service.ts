@@ -47,6 +47,7 @@ import {
 import { assertTenantOperational } from "./tenant.service";
 import { recordEvent } from "./outbox.service";
 import { planOrderRefund } from "./order-refunds.service";
+import { auditServicingAccessDenied } from "./audit.service";
 
 const ancillaryInput = z.object({
   ancillaryServiceId: z.number().int().positive(),
@@ -83,6 +84,14 @@ const segment = z.object({
   destinationId: z.number().int().optional(),
   ndc: z.record(z.string(), z.unknown()),
 });
+/** The passenger accepts one quote version and one amount. The server compares
+ * both against the stored quote before any charge or no-charge execution. */
+export const servicingConsentInput = z.object({
+  quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+  totalCost: z.number().int(),
+  currency: z.literal("SAR"),
+});
+export type ServicingConsent = z.infer<typeof servicingConsentInput>;
 export const planSchema = z.object({
   version: z.literal(1),
   fingerprint: z.string(),
@@ -96,9 +105,65 @@ export const planSchema = z.object({
   ancillaries: z.array(
     ancillaryInput.extend({ unitTotal: z.number().int().nonnegative() })
   ),
+  consent: servicingConsentInput
+    .extend({ acceptedAt: z.iso.datetime() })
+    .optional(),
 });
 export class OrderServicingUnavailable extends Error {}
+/** Same outward message as a missing record; the caller learns nothing about
+ * another family's booking. The outer, non-transactional layer audits it. */
+export class ServicingAccessDenied extends OrderServicingUnavailable {
+  constructor(
+    message: string,
+    readonly scope: {
+      userId: number;
+      tenantId: number | null;
+      bookingId?: number;
+      modificationId?: number;
+      action: string;
+    }
+  ) {
+    super(message);
+  }
+}
 const unavailable = (message: string) => new OrderServicingUnavailable(message);
+export const UNSUPPORTED_QUOTE_VERSION =
+  "Servicing quote version is not supported; request a new quote";
+/** Stored quotes from another contract version never execute or reach a provider. */
+export function parseServicingPlan(payload: unknown) {
+  const parsed = planSchema.safeParse(payload);
+  if (!parsed.success) throw unavailable(UNSUPPORTED_QUOTE_VERSION);
+  return parsed.data;
+}
+/** The quote version is the digest of the amounts the passenger saw. */
+export function servicingQuoteVersion(
+  change: Pick<
+    typeof bookingModifications.$inferSelect,
+    "originalAmount" | "newAmount" | "modificationFee" | "priceDifference"
+  >
+) {
+  return quoteTermsHash(
+    change.originalAmount,
+    change.newAmount,
+    change.modificationFee,
+    change.priceDifference
+  );
+}
+export const CONSENT_MISMATCH =
+  "Quote changed; review the new amount and accept it again";
+/** Consent is bound to the quote version and amount; anything else is a stale screen. */
+export function assertServicingConsent(
+  change: typeof bookingModifications.$inferSelect,
+  consent: ServicingConsent | undefined
+) {
+  if (!consent) return;
+  if (
+    consent.quoteVersion !== servicingQuoteVersion(change) ||
+    consent.totalCost !== change.totalCost ||
+    consent.currency !== "SAR"
+  )
+    throw unavailable(CONSENT_MISMATCH);
+}
 async function itinerary(tx: SettlementTx, booking: Booking) {
   const legs = await tx
     .select()
@@ -232,7 +297,12 @@ export async function quotePaidOrderService(
       booking.userId !== userId ||
       (tenantId !== null && booking.tenantId !== tenantId)
     )
-      throw unavailable("Owned booking not found");
+      throw new ServicingAccessDenied("Owned booking not found", {
+        userId,
+        tenantId,
+        bookingId: input.bookingId,
+        action: "order.servicing.quote",
+      });
     await assertTenantOperational(tx, booking.tenantId);
     return withTransactionalIdempotency(
       {
@@ -577,6 +647,7 @@ export async function quotePaidOrderService(
             originalAmount: booking.totalAmount,
             expiresAt: expiry,
             currency: "SAR" as const,
+            quoteVersion: plan.termsHash,
             seatExchange,
             requiresPayment: newAmount > booking.totalAmount,
             refundDue: Math.max(0, booking.totalAmount - newAmount),
@@ -586,9 +657,21 @@ export async function quotePaidOrderService(
       tx
     );
   };
-  return transaction
-    ? quoteInTransaction(transaction)
-    : withInventoryTransaction(db, quoteInTransaction);
+  if (transaction) return quoteInTransaction(transaction);
+  return auditedServicing(() =>
+    withInventoryTransaction(db, quoteInTransaction)
+  );
+}
+/** Audit a denied cross-owner attempt after its transaction has rolled back, so
+ * the record survives the rollback and the caller's error stays generic. */
+export async function auditedServicing<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof ServicingAccessDenied)
+      await auditServicingAccessDenied(error.scope);
+    throw error;
+  }
 }
 /** Lock and validate the same version before creating checkout and again after verified collection. */
 export async function validatePaidServiceQuote(
@@ -596,7 +679,7 @@ export async function validatePaidServiceQuote(
   booking: Booking,
   change: typeof bookingModifications.$inferSelect
 ) {
-  const plan = planSchema.parse(change.servicingPayload);
+  const plan = parseServicingPlan(change.servicingPayload);
   if (
     booking.paymentStatus !== "paid" ||
     !booking.seatsReserved ||
@@ -978,7 +1061,8 @@ export async function applyPaidOrderModification(
 export async function confirmNoChargeService(
   modificationId: number,
   userId: number,
-  tenantId: number | null = null
+  tenantId: number | null = null,
+  consent?: ServicingConsent
 ) {
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
@@ -987,37 +1071,61 @@ export async function confirmNoChargeService(
     .from(bookingModifications)
     .where(eq(bookingModifications.id, modificationId))
     .limit(1);
-  if (!hint || hint.userId !== userId)
-    throw unavailable("Owned modification not found");
-  return db.transaction(async tx => {
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, hint.bookingId))
-      .for("update");
-    const [change] = await tx
-      .select()
-      .from(bookingModifications)
-      .where(eq(bookingModifications.id, modificationId))
-      .for("update");
-    if (
-      !booking ||
-      booking.userId !== userId ||
-      (tenantId !== null && booking.tenantId !== tenantId) ||
-      !change ||
-      change.bookingId !== booking.id ||
-      change.userId !== userId ||
-      change.totalCost > 0
-    )
-      throw unavailable("Verified payment is required");
-    if (change.status === "completed" && change.executionEventId)
-      return {
-        receiptId: change.executionEventId,
-        refundDue: Math.max(0, -change.totalCost),
-      };
-    await assertNoCollectionReview(tx, booking.id);
-    return applyPaidOrderModification(tx, booking, change, {
-      kind: "authorized_no_charge",
+  const denied = (bookingId?: number) =>
+    new ServicingAccessDenied("Owned modification not found", {
+      userId,
+      tenantId,
+      bookingId,
+      modificationId,
+      action: "order.servicing.confirm",
     });
-  });
+  if (!hint || hint.userId !== userId)
+    return auditedServicing(() => Promise.reject(denied()));
+  return auditedServicing(() =>
+    db.transaction(async tx => {
+      const [booking] = await tx
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, hint.bookingId))
+        .for("update");
+      if (
+        !booking ||
+        booking.userId !== userId ||
+        (tenantId !== null && booking.tenantId !== tenantId)
+      )
+        throw denied(hint.bookingId);
+      const [change] = await tx
+        .select()
+        .from(bookingModifications)
+        .where(eq(bookingModifications.id, modificationId))
+        .for("update");
+      if (
+        !change ||
+        change.bookingId !== booking.id ||
+        change.userId !== userId ||
+        change.totalCost > 0
+      )
+        throw unavailable("Verified payment is required");
+      if (change.status === "completed" && change.executionEventId)
+        return {
+          receiptId: change.executionEventId,
+          refundDue: Math.max(0, -change.totalCost),
+        };
+      assertServicingConsent(change, consent);
+      await assertNoCollectionReview(tx, booking.id);
+      if (consent) {
+        // The accepted version and amount stay on the record that executes.
+        const plan = parseServicingPlan(change.servicingPayload);
+        plan.consent = { ...consent, acceptedAt: new Date().toISOString() };
+        await tx
+          .update(bookingModifications)
+          .set({ servicingPayload: plan })
+          .where(eq(bookingModifications.id, change.id));
+        change.servicingPayload = plan;
+      }
+      return applyPaidOrderModification(tx, booking, change, {
+        kind: "authorized_no_charge",
+      });
+    })
+  );
 }

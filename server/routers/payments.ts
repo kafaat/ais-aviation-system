@@ -1,4 +1,6 @@
 import { createOrderServiceCheckout } from "../services/order-service-checkout.service";
+import { servicingConsentInput } from "../services/order-servicing.service";
+import { auditServicingAccessDenied } from "../services/audit.service";
 import {
   createBookingCheckout,
   expireBookingCheckout,
@@ -22,7 +24,6 @@ import {
 import { and, eq } from "drizzle-orm";
 import { isAdmin } from "../services/rbac.service";
 import { isBookingOwnedBy } from "../services/access-control.service";
-import { assertNoCollectionReview } from "../services/booking-settlement.service";
 import {
   listSettlementReviews,
   requestSettlementReviewRefund,
@@ -31,7 +32,6 @@ import * as paymentHistoryService from "../services/payment-history.service";
 import {
   getAllProviderInfo,
   getAvailableProviderInfo,
-  createCheckoutWithProvider,
   verifyPaymentWithProvider,
   type PaymentProviderType,
 } from "../services/payment-providers";
@@ -187,6 +187,8 @@ export const paymentsRouter = router({
           .positive()
           .describe("Modification request ID"),
         provider: providerEnum.optional().default("stripe"),
+        /** Required for servicing quotes: the accepted version and amount. */
+        consent: servicingConsentInput.optional(),
       })
     )
     .output(responseContracts["createModificationCheckout"])
@@ -213,6 +215,13 @@ export const paymentsRouter = router({
         !bookingData ||
         (ctx.tenantId != null && bookingData.tenantId !== ctx.tenantId)
       ) {
+        await auditServicingAccessDenied({
+          userId: ctx.user.id,
+          tenantId: ctx.tenantId,
+          bookingId: input.bookingId,
+          modificationId: input.modificationId,
+          action: "order.servicing.checkout",
+        });
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",
@@ -262,96 +271,29 @@ export const paymentsRouter = router({
             message:
               "Paid order servicing requires the verified Stripe settlement adapter",
           });
+        if (!input.consent)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Accept the quoted version and amount before paying for this change",
+          });
         return createOrderServiceCheckout(
           input.modificationId,
           ctx.user.id,
           process.env.VITE_APP_URL ||
             `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`,
-          ctx.tenantId
+          ctx.tenantId,
+          input.consent
         );
       }
-      const authoritativeAmount = modification.totalCost;
-      await assertNoCollectionReview(database, bookingData.id);
-      // Never the client's Origin: a bearer client could point the
-      // post-payment redirect (carrying the session id) anywhere.
-      const appBaseUrl =
-        process.env.VITE_APP_URL ||
-        `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`;
-
-      const providerId = (input.provider || "stripe") as PaymentProviderType;
-
-      if (providerId === "stripe") {
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ["card"],
-          line_items: [
-            {
-              price_data: {
-                currency: "sar",
-                product_data: {
-                  name: `Booking Modification - ${bookingData.bookingReference}`,
-                  description: `Modification #${input.modificationId}`,
-                },
-                unit_amount: authoritativeAmount,
-              },
-              quantity: 1,
-            },
-          ],
-          mode: "payment",
-          success_url: `${appBaseUrl}/my-bookings?modification=success&session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${appBaseUrl}/my-bookings?modification=cancelled`,
-          customer_email: ctx.user.email || undefined,
-          client_reference_id: ctx.user.id.toString(),
-          metadata: {
-            bookingId: input.bookingId.toString(),
-            modificationId: input.modificationId.toString(),
-            userId: ctx.user.id.toString(),
-            type: "modification",
-            authoritativeAmount: authoritativeAmount.toString(),
-          },
-          payment_intent_data: {
-            metadata: {
-              bookingId: input.bookingId.toString(),
-              modificationId: input.modificationId.toString(),
-              userId: ctx.user.id.toString(),
-              type: "modification",
-              authoritativeAmount: authoritativeAmount.toString(),
-            },
-          },
-        });
-
-        return {
-          provider: "stripe",
-          sessionId: session.id,
-          url: session.url,
-        };
-      }
-
-      const result = await createCheckoutWithProvider(providerId, {
-        bookingId: input.bookingId,
-        userId: ctx.user.id,
-        amount: authoritativeAmount,
-        currency: "SAR",
-        customerEmail: ctx.user.email || undefined,
-        customerName: ctx.user.name || undefined,
-        bookingReference: bookingData.bookingReference,
-        pnr: bookingData.pnr,
-        description: `Booking Modification - ${bookingData.bookingReference}`,
-        successUrl: `${appBaseUrl}/my-bookings?modification=success`,
-        cancelUrl: `${appBaseUrl}/my-bookings?modification=cancelled`,
-        metadata: {
-          bookingId: input.bookingId.toString(),
-          modificationId: input.modificationId.toString(),
-          userId: ctx.user.id.toString(),
-          type: "modification",
-          authoritativeAmount: authoritativeAmount.toString(),
-        },
+      // A modification quoted before frozen checkout requests existed has no
+      // saved request body or invoice hash to bind a provider call to, so a
+      // retry could create a second unkeyed session. Re-quote instead.
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "This change was quoted before frozen checkout requests existed; request a new quote",
       });
-
-      return {
-        provider: result.provider,
-        sessionId: result.sessionId,
-        url: result.url,
-      };
     }),
 
   /**

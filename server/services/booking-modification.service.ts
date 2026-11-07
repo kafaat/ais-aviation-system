@@ -1,5 +1,4 @@
 import { withInventoryTransaction } from "./inventory-capacity.service";
-import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -14,6 +13,7 @@ import {
   withTransactionalIdempotency,
   calculateRequestHash,
 } from "./idempotency-v2.service";
+import { auditServicingAccessDenied } from "./audit.service";
 export interface ChangeFlightDateInput {
   bookingId: number;
   userId: number;
@@ -21,7 +21,9 @@ export interface ChangeFlightDateInput {
   newFlightId: number;
   replaceFlightId?: number;
   reason?: string;
-  idempotencyKey?: string;
+  /** Client-owned command key. A retry after a lost response must carry the
+   * same key to receive the same quote; the server never invents one. */
+  idempotencyKey: string;
 }
 export interface UpgradeCabinInput {
   bookingId: number;
@@ -29,15 +31,34 @@ export interface UpgradeCabinInput {
   tenantId?: number | null;
   newCabinClass: "business";
   reason?: string;
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 async function requestService(
   input: ChangeFlightDateInput | UpgradeCabinInput
 ) {
-  const key = input.idempotencyKey ?? randomUUID();
+  const key = input.idempotencyKey;
+  if (typeof key !== "string" || key.length < 8 || key.length > 100)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "A client idempotency key of 8 to 100 characters is required",
+    });
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
-  return withInventoryTransaction(db, async tx => {
+  class ForeignBooking extends TRPCError {}
+  try {
+    return await withInventoryTransaction(db, tx => quote(tx));
+  } catch (error) {
+    // Recorded after rollback so the audit row outlives the refused command.
+    if (error instanceof ForeignBooking)
+      await auditServicingAccessDenied({
+        userId: input.userId,
+        tenantId: input.tenantId ?? null,
+        bookingId: input.bookingId,
+        action: "order.servicing.quote",
+      });
+    throw error;
+  }
+  async function quote(tx: Parameters<typeof quotePaidOrderService>[3] & {}) {
     const [booking] = await tx
       .select()
       .from(bookings)
@@ -49,7 +70,7 @@ async function requestService(
       !booking ||
       (input.tenantId != null && input.tenantId !== booking.tenantId)
     )
-      throw new TRPCError({
+      throw new ForeignBooking({
         code: "NOT_FOUND",
         message: "Booking not found",
       });
@@ -107,7 +128,7 @@ async function requestService(
       },
       tx
     );
-  });
+  }
 }
 export const requestChangeFlightDate = (input: ChangeFlightDateInput) =>
   requestService(input);

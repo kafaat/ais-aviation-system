@@ -29,7 +29,7 @@ export const modificationsRouter = router({
         newFlightId: z.number(),
         replaceFlightId: z.number().int().positive().optional(),
         reason: z.string().max(1000).optional(),
-        idempotencyKey: z.string().min(8).max(100).optional(),
+        idempotencyKey: z.string().min(8).max(100),
       })
     )
     .output(responseContracts["requestChangeDate"])
@@ -53,7 +53,7 @@ export const modificationsRouter = router({
       z.object({
         bookingId: z.number(),
         reason: z.string().max(1000).optional(),
-        idempotencyKey: z.string().min(8).max(100).optional(),
+        idempotencyKey: z.string().min(8).max(100),
       })
     )
     .output(responseContracts["requestUpgrade"])

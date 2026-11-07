@@ -28,7 +28,8 @@ export type AuditEventType =
   | "PRICE_UPDATED"
   | "ADMIN_ACCESS"
   | "DATA_EXPORT"
-  | "SENSITIVE_DATA_ACCESS";
+  | "SENSITIVE_DATA_ACCESS"
+  | "ACCESS_DENIED";
 
 export type AuditEventCategory =
   | "auth"
@@ -315,6 +316,37 @@ export async function auditSensitiveDataAccess(
     resourceType: dataType,
     resourceId: dataId,
     changeDescription: `Accessed ${dataType} (${dataId}): ${reason}`,
+  });
+}
+
+/** A servicing command (quote, checkout, confirm, cancel, status) that named a
+ * booking or modification the caller does not own. The caller receives the same
+ * generic error as for a missing record; the attempt itself is what is kept. */
+export async function auditServicingAccessDenied(scope: {
+  userId: number;
+  tenantId: number | null;
+  bookingId?: number;
+  modificationId?: number;
+  action: string;
+  requestId?: string;
+}): Promise<void> {
+  await createAuditLog({
+    eventType: "ACCESS_DENIED",
+    eventCategory: "access",
+    outcome: "failure",
+    severity: "medium",
+    userId: scope.userId,
+    actorType: "user",
+    requestId: scope.requestId,
+    resourceType: scope.modificationId ? "booking_modification" : "booking",
+    resourceId: String(scope.modificationId ?? scope.bookingId ?? ""),
+    changeDescription: `Denied ${scope.action}: caller does not own the record`,
+    metadata: {
+      action: scope.action,
+      tenantId: scope.tenantId,
+      bookingId: scope.bookingId ?? null,
+      modificationId: scope.modificationId ?? null,
+    },
   });
 }
 
