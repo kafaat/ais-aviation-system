@@ -505,6 +505,13 @@
       "when": 1793906448232,
       "tag": "0071_flight_review_helpful_votes",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "5",
+      "when": 1794057719325,
+      "tag": "0072_ndc_capability_matrix",
+      "breakpoints": true
     }
   ]
 }

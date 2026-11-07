@@ -26,6 +26,23 @@ export const capabilityCatalog = [
       "Local paid SAR itinerary exchange and catalog entitlements before check-in; same tenant/airline and cabin across up to six segments, no unresolved ancillary fulfillment. Original Stripe payer refund receipts required for a lower fare.",
   },
   {
+    id: "ndcCapabilityMatrix",
+    implementation: "implemented",
+    owner: "ndc-capability-matrix.service and ndc-capability-seed",
+    consumer:
+      "ndc.capabilities, modifications.exchangeContext, order-servicing, seat-exchange and ndc-unpaid gates",
+    requirement:
+      "Per carrier/seller/channel/schema-version/action rows gate shop, order create, voluntary change, ancillary change, seat move, refund and name correction; only confirmed rows authorize. Seeded: direct channel 21.3 vocabulary from repository evidence, Lufthansa Group 24.1 vs 17.2 (passenger split, involuntary change), unconfirmed Finnair 21.3 and Iberia 24.1 rows; GDS/OTA/NDC channel defaults are unsupported until the operator confirms a contracted seller. Each row also records where the partner carries the stable idempotency key versus the per-attempt trace/transaction id.",
+  },
+  {
+    id: "ndcSchemaEndpoints",
+    implementation: "blocked",
+    owner: "ndc.service and ndc router",
+    consumer: "external sellers and aggregators",
+    requirement:
+      "Internally implemented: 21.3 message names (AirShopping, OfferPrice, OrderCreate, OrderRetrieve, OrderCancel, OrderChange, ancillary add) over tRPC/OpenAPI JSON for the direct channel. Not exposed externally: no schema-conformant 17.2, 21.3 or 24.1 XML/JSON endpoint, seller authentication, look-to-book protection or IATA ARM registration; passenger split and involuntary change are not implemented for any version.",
+  },
+  {
     id: "ndcExternalFulfillment",
     implementation: "blocked",
     owner: "contracted ticket/EMD provider",

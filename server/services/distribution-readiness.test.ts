@@ -7,6 +7,7 @@ import {
   ndcOffers,
   ndcOrders,
   bookings,
+  distributionCapabilities,
   interlineAgreements,
   gdsConnections,
   gdsMessages,
@@ -141,6 +142,9 @@ beforeEach(() => {
     ndcOffers,
     ndcOrders,
     bookings,
+    // OrderCreate consults the distribution capability matrix (seeded rows
+    // allow the direct channel; the table only holds operator overrides).
+    distributionCapabilities,
     interlineAgreements,
     gdsConnections,
     gdsMessages,

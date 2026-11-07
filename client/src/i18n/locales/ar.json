@@ -187,7 +187,8 @@
     "bspReporting": "تقارير BSP",
     "dataWarehouse": "مستودع البيانات",
     "sla": "مراقبة SLA",
-    "disasterRecovery": "التعافي من الكوارث"
+    "disasterRecovery": "التعافي من الكوارث",
+    "ndcCapabilities": "قدرات توزيع NDC"
   },
   "home": {
     "hero": {
@@ -2664,7 +2665,12 @@
     "upgradeError": "فشل في تقديم طلب الترقية",
     "selectFlightError": "يرجى اختيار رحلة جديدة",
     "paymentInitiated": "تم بدء عملية الدفع! يرجى إكمال الدفع.",
-    "paymentError": "فشل في بدء عملية الدفع. يرجى المحاولة مرة أخرى."
+    "paymentError": "فشل في بدء عملية الدفع. يرجى المحاولة مرة أخرى.",
+    "capability": {
+      "blocked": "{{action}} غير متاح للناقل {{carrier}} عبر قناة {{channel}} (مخطط {{version}}): {{reason}}",
+      "seatMoveUnavailable": "لا يمكن نقل المقاعد المدفوعة للناقل {{carrier}} عبر قناة {{channel}} (مخطط {{version}})؛ أي تبديل يحتاج نقل مقعد سيُحال للمراجعة.",
+      "unconfirmed": "يتطلب تأكيد المشغّل"
+    }
   },
   "payment": {
     "selectPaymentMethod": "اختر طريقة الدفع",
@@ -4894,5 +4900,82 @@
     "agentPortal": "بوابة وكيل السفر",
     "passengerSummary": "{{count}} ركاب",
     "perPassenger": "السعر للبالغ الواحد؛ تؤكد أسعار الركاب قبل الحجز."
+  },
+  "ndcCapabilities": {
+    "title": "قدرات توزيع NDC",
+    "subtitle": "أي إجراءات الخدمة يدعمها كل ناقل وبائع وقناة وإصدار مخطط. الصفوف المؤكدة فقط تجيز الإجراء؛ التركيبات غير المعروفة تُرفض.",
+    "matrix": "مصفوفة القدرات",
+    "resolve": "حلّ تركيبة",
+    "resolveHint": "أدخل الناقل والبائع والقناة وإصدار المخطط لمعرفة الإجراءات التي ستُعرض.",
+    "filterChannel": "القناة",
+    "allChannels": "كل القنوات",
+    "carrier": "الناقل",
+    "seller": "البائع",
+    "channel": "القناة",
+    "schemaVersion": "إصدار المخطط",
+    "action": "الإجراء",
+    "support": "الدعم",
+    "confirmation": "التأكيد",
+    "effective": "السريان",
+    "effectiveFrom": "ساري من",
+    "effectiveTo": "ساري حتى",
+    "evidence": "الدليل",
+    "evidenceUrl": "رابط الدليل",
+    "evidenceNote": "ملاحظة الدليل",
+    "source": "المصدر",
+    "precedence": "الأسبقية",
+    "open": "مفتوح",
+    "seed": "أساسي",
+    "database": "مخزّن",
+    "add": "إضافة صف أو تجاوز",
+    "edit": "تعديل",
+    "save": "حفظ الصف",
+    "delete": "حذف التجاوز",
+    "saved": "تم حفظ صف القدرة",
+    "deleted": "أُزيل التجاوز المخزّن؛ يسري الصف الأساسي مجدداً",
+    "allowed": "يُعرض",
+    "blocked": "لا يُعرض",
+    "noRows": "لا توجد صفوف تطابق هذا الفلتر.",
+    "wildcardHint": "استخدم * لأي ناقل أو بائع؛ يقبل المخطط 24.1 أو 17.2-21.3 أو *.",
+    "channels": {
+      "direct": "مباشر",
+      "ndc": "NDC",
+      "gds": "GDS",
+      "ota": "وكالة إلكترونية"
+    },
+    "supports": {
+      "supported": "مدعوم",
+      "unsupported": "غير مدعوم",
+      "partial": "جزئي",
+      "unknown": "غير معروف"
+    },
+    "confirmations": {
+      "confirmed": "مؤكد",
+      "unconfirmed": "غير مؤكد"
+    },
+    "precedences": {
+      "exact_version": "إصدار مطابق",
+      "version_range": "نطاق إصدارات",
+      "channel_default": "افتراضي القناة",
+      "none": "لا صف"
+    },
+    "actions": {
+      "shop": "البحث",
+      "price": "التسعير",
+      "order_create": "إنشاء الطلب",
+      "pay": "الدفع",
+      "order_change_voluntary": "تغيير طوعي",
+      "order_change_involuntary": "تغيير غير طوعي",
+      "passenger_split": "تقسيم الركاب",
+      "seat_move": "نقل المقعد",
+      "seat_fee_refund": "استرداد رسم المقعد",
+      "ancillary_change": "تغيير الخدمات الإضافية",
+      "refund": "الاسترداد",
+      "reissue": "إعادة الإصدار",
+      "name_correction": "تصحيح الاسم"
+    },
+    "idempotencyKeyHeader": "موضع مفتاح التكرار الآمن",
+    "traceIdHeader": "موضع معرّف التتبع/المعاملة",
+    "idempotencyHint": "يُعاد مفتاح التكرار الآمن دون تغيير في كل إعادة محاولة للأمر نفسه؛ أما معرّف التتبع أو المعاملة فيتغيّر في كل استدعاء. لا تُرسل أحدهما مكان الآخر."
   }
 }

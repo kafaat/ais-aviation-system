@@ -187,7 +187,8 @@
     "bspReporting": "BSP Reporting",
     "dataWarehouse": "Data Warehouse",
     "sla": "SLA Monitoring",
-    "disasterRecovery": "Disaster Recovery"
+    "disasterRecovery": "Disaster Recovery",
+    "ndcCapabilities": "NDC Capabilities"
   },
   "home": {
     "hero": {
@@ -2664,7 +2665,12 @@
     "upgradeError": "Failed to request upgrade",
     "selectFlightError": "Please select a new flight",
     "paymentInitiated": "Payment initiated! Please complete your payment.",
-    "paymentError": "Failed to initiate payment. Please try again."
+    "paymentError": "Failed to initiate payment. Please try again.",
+    "capability": {
+      "blocked": "{{action}} is not available for carrier {{carrier}} on the {{channel}} channel (schema {{version}}): {{reason}}",
+      "seatMoveUnavailable": "Paid seats cannot be moved for carrier {{carrier}} on the {{channel}} channel (schema {{version}}); an exchange that needs a seat move will be held for review.",
+      "unconfirmed": "requires operator confirmation"
+    }
   },
   "payment": {
     "selectPaymentMethod": "Select Payment Method",
@@ -4894,5 +4900,82 @@
     "agentPortal": "Travel agent portal",
     "passengerSummary": "{{count}} passengers",
     "perPassenger": "Price per adult; passenger fares are confirmed before booking."
+  },
+  "ndcCapabilities": {
+    "title": "NDC Distribution Capabilities",
+    "subtitle": "Which servicing actions each carrier, seller, channel and schema version supports. Only confirmed rows authorize an action; unknown combinations fail closed.",
+    "matrix": "Capability matrix",
+    "resolve": "Resolve a combination",
+    "resolveHint": "Enter a carrier, seller, channel and schema version to see which actions would be offered.",
+    "filterChannel": "Channel",
+    "allChannels": "All channels",
+    "carrier": "Carrier",
+    "seller": "Seller",
+    "channel": "Channel",
+    "schemaVersion": "Schema version",
+    "action": "Action",
+    "support": "Support",
+    "confirmation": "Confirmation",
+    "effective": "Effective",
+    "effectiveFrom": "Effective from",
+    "effectiveTo": "Effective to",
+    "evidence": "Evidence",
+    "evidenceUrl": "Evidence URL",
+    "evidenceNote": "Evidence note",
+    "source": "Source",
+    "precedence": "Precedence",
+    "open": "open",
+    "seed": "seed",
+    "database": "stored",
+    "add": "Add or override row",
+    "edit": "Edit",
+    "save": "Save row",
+    "delete": "Delete override",
+    "saved": "Capability row saved",
+    "deleted": "Stored override removed; the seeded row applies again",
+    "allowed": "Offered",
+    "blocked": "Not offered",
+    "noRows": "No capability rows match this filter.",
+    "wildcardHint": "Use * for any carrier or seller; schema accepts 24.1, 17.2-21.3 or *.",
+    "channels": {
+      "direct": "Direct",
+      "ndc": "NDC",
+      "gds": "GDS",
+      "ota": "OTA"
+    },
+    "supports": {
+      "supported": "Supported",
+      "unsupported": "Unsupported",
+      "partial": "Partial",
+      "unknown": "Unknown"
+    },
+    "confirmations": {
+      "confirmed": "Confirmed",
+      "unconfirmed": "Unconfirmed"
+    },
+    "precedences": {
+      "exact_version": "Exact version",
+      "version_range": "Version range",
+      "channel_default": "Channel default",
+      "none": "No row"
+    },
+    "actions": {
+      "shop": "Shop",
+      "price": "Price",
+      "order_create": "Order create",
+      "pay": "Pay",
+      "order_change_voluntary": "Voluntary change",
+      "order_change_involuntary": "Involuntary change",
+      "passenger_split": "Passenger split",
+      "seat_move": "Seat move",
+      "seat_fee_refund": "Seat fee refund",
+      "ancillary_change": "Ancillary change",
+      "refund": "Refund",
+      "reissue": "Reissue",
+      "name_correction": "Name correction"
+    },
+    "idempotencyKeyHeader": "Idempotency key location",
+    "traceIdHeader": "Trace / transaction id location",
+    "idempotencyHint": "The idempotency key is replayed unchanged on every retry of one command; the trace or transaction id changes on every call. Never send one as the other."
   }
 }
