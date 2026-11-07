@@ -121,6 +121,8 @@ class Settings(BaseSettings):
             )
         if token and any(character.isspace() for character in token):
             raise ValueError("AUTH_SERVICE_TOKEN must not contain whitespace")
+        if token and not all(33 <= ord(character) <= 126 for character in token):
+            raise ValueError("AUTH_SERVICE_TOKEN must use printable ASCII characters")
         if len(token) >= SERVICE_TOKEN_MIN_LENGTH and len(set(token)) == 1:
             raise ValueError("AUTH_SERVICE_TOKEN must not use a repeated-character value")
         return token
