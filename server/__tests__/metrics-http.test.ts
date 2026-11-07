@@ -168,7 +168,16 @@ async function expectMetrics(response: Response) {
 }
 
 describe("entry point /api/metrics over HTTP", () => {
-  it.each([undefined, "", "   ", "invalid token", '"quoted"', "token\n", "A", "a".repeat(31)])(
+  it.each([
+    undefined,
+    "",
+    "   ",
+    "invalid token",
+    '"quoted"',
+    "token\n",
+    "A",
+    "a".repeat(31),
+  ])(
     "disables production scrapes with unusable configuration %j",
     async configured => {
       vi.stubEnv("METRICS_TOKEN", configured);
