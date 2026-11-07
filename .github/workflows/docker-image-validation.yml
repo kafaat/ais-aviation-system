@@ -36,6 +36,15 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      - name: Verify Nginx public readiness proxy
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends nginx
+          fi
+          python3 scripts/ci/test_nginx_health_proxy.py -v
       - name: Build, validate and boot the production-only images
         id: images
         run: bash scripts/ci/docker-image-smoke.sh
