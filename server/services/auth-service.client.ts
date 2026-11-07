@@ -100,7 +100,12 @@ class AuthServiceClient {
 
   constructor() {
     const token = process.env.AUTH_SERVICE_TOKEN?.trim() ?? "";
-    this.credentialProblem = authServiceCredentialProblem(token);
+    // Development may boot with an absent token for diagnostics, but it must
+    // never transmit a registration/login password to an uncredentialed
+    // service. FastAPI would reject the request, so refuse it locally first.
+    this.credentialProblem = token
+      ? authServiceCredentialProblem(token)
+      : "AUTH_SERVICE_TOKEN is not configured; auth requests are disabled";
     this.client = axios.create({
       baseURL: AUTH_SERVICE_URL,
       timeout: 5000,
