@@ -273,10 +273,13 @@ const sector = {
   departureTime: new Date("2030-01-15T12:00:00Z"),
   status: "confirmed",
 };
+/** Digest of the quoted amounts; the server binds the passenger's consent to it. */
+const QUOTE_VERSION = "c".repeat(64);
 const quote = () => ({
   status: "pending",
   modificationId: 91,
   reviewRequired: false,
+  quoteVersion: QUOTE_VERSION,
   totalCost: 0,
   originalAmount: 10000,
   newAmount: 10000,
@@ -323,6 +326,28 @@ async function modification(overrides: Handlers = {}) {
   return { ...fixture, ...view };
 }
 
+it("never confirms a quote that carries no version to consent to", async () => {
+  const { quoteVersion: _omitted, ...unversioned } = quote();
+  const { requests } = await modification({
+    "modifications.exchangeContext": () => ({
+      sectors: [sector],
+      latest: unversioned,
+    }),
+  });
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: i18n.t("modifyBooking.exchange.confirm"),
+    })
+  );
+  await elapse();
+  expect(
+    requests.some(request =>
+      /createModificationCheckout|confirmNoChargeService/.test(request.path)
+    )
+  ).toBe(false);
+});
+
 it("requires consent to the current quote and records a no-charge confirmation before showing its receipt", async () => {
   let latest = quote();
   const { requests } = await modification({
@@ -343,7 +368,13 @@ it("requires consent to the current quote and records a no-charge confirmation b
   expect(
     requests.filter(request => request.path === "ndc.confirmNoChargeService")
   ).toEqual([
-    { path: "ndc.confirmNoChargeService", input: { modificationId: 91 } },
+    {
+      path: "ndc.confirmNoChargeService",
+      input: {
+        modificationId: 91,
+        consent: { quoteVersion: QUOTE_VERSION, totalCost: 0, currency: "SAR" },
+      },
+    },
   ]);
   expect(screen.getByText("RECEIPT91")).toBeVisible();
   expect(
@@ -828,7 +859,16 @@ it.each(["missing URL", "provider failure"])(
     ).toEqual([
       {
         path: "payments.createModificationCheckout",
-        input: { bookingId: 7, modificationId: 91, provider: "stripe" },
+        input: {
+          bookingId: 7,
+          modificationId: 91,
+          provider: "stripe",
+          consent: {
+            quoteVersion: QUOTE_VERSION,
+            totalCost: 2500,
+            currency: "SAR",
+          },
+        },
       },
     ]);
     expect(

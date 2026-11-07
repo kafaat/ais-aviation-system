@@ -297,27 +297,6 @@ try {
       id,
       id
     );
-    // The FTL legality engine blocks every assignment path without an
-    // operator-confirmed active rule set; the fixture confirms the EASA seed.
-    const legality =
-      await import("../../server/services/crew-legality.service");
-    const ruleSet = await legality.importRuleSet({
-      airlineId: id,
-      tenantId: id,
-      actorId: id,
-      template: "EASA-ORO-FTL",
-    });
-    await legality.confirmRuleSet({
-      ruleSetId: ruleSet.id,
-      actorId: id,
-      tenantId: id,
-      note: "Synthetic acceptance fixture; values not operator-verified",
-    });
-    await legality.activateRuleSet({
-      ruleSetId: ruleSet.id,
-      actorId: id,
-      tenantId: id,
-    });
     await db.insert(s.crewMembers).values({
       id,
       employeeId: "RESEARCH-CREW",
@@ -595,7 +574,20 @@ try {
           id
         );
         assert(quote.refundDue > 0);
-        await confirmNoChargeService(quote.modificationId, id);
+        assert(quote.quoteVersion);
+        // A voluntary exchange executes only with consent bound to the quote
+        // version and amount, exactly as the dialog sends it.
+        await confirmNoChargeService(
+          quote.modificationId,
+          id,
+          null,
+          undefined,
+          {
+            quoteVersion: quote.quoteVersion,
+            totalCost: quote.totalCost,
+            currency: "SAR",
+          }
+        );
         let result = await getFinancialSummary();
         assert.equal(result.refundedAmount, 0);
         const refunds = await db
