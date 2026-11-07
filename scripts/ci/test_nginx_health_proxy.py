@@ -28,9 +28,11 @@ SOURCE = Path(os.environ.get("AIS_NGINX_CONFIG", str(ROOT / "nginx.conf")))
 class Upstream(http.server.BaseHTTPRequestHandler):
     readiness_status = 200
     last_path = ""
+    last_method = ""
 
     def _respond(self, with_body: bool):
         type(self).last_path = self.path
+        type(self).last_method = self.command
         if self.path == "/api/trpc/health.ready":
             status = type(self).readiness_status
         elif self.path == "/api/trpc/health.check":
@@ -47,7 +49,11 @@ class Upstream(http.server.BaseHTTPRequestHandler):
         self._respond(True)
 
     def do_HEAD(self):
-        self._respond(False)
+        # Emulate the actual tRPC HEAD behavior: 204 without readiness evaluation.
+        type(self).last_path = self.path
+        type(self).last_method = "HEAD"
+        self.send_response(204)
+        self.end_headers()
 
     def log_message(self, *_args):
         pass
@@ -88,6 +94,7 @@ class NginxHealthContract(unittest.TestCase):
                 block, r"proxy_pass\s+http://ais_api/api/trpc/health\.ready\s*;"
             )
             self.assertNotIn("health.check", block)
+            self.assertIn("proxy_method GET;", block)
         self.assertIn("allow 127.0.0.1;", blocks[0])
         self.assertIn("deny all;", blocks[0])
         compose = (ROOT / "docker-compose.production.yml").read_text(encoding="utf-8")
@@ -147,11 +154,13 @@ class NginxHealthContract(unittest.TestCase):
                     for url in (http_url, tls_route_url):
                         self.assertEqual(request_status(url), 200)
                         self.assertEqual(request_status(url, method="HEAD"), 200)
+                        self.assertEqual(Upstream.last_method, "GET")
                         self.assertEqual(Upstream.last_path, "/api/trpc/health.ready")
                     Upstream.readiness_status = 503
                     for url in (http_url, tls_route_url):
                         self.assertEqual(request_status(url), 503)
                         self.assertEqual(request_status(url, method="HEAD"), 503)
+                        self.assertEqual(Upstream.last_method, "GET")
                         self.assertEqual(Upstream.last_path, "/api/trpc/health.ready")
                     # Non-health HTTP requests must still redirect to HTTPS.
                     self.assertEqual(request_status(http_url + "/other"), 301)
