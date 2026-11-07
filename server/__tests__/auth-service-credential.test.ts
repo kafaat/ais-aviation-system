@@ -118,7 +118,7 @@ describe("auth service credential policy", () => {
     expect(requests.every(r => r.token === usable)).toBe(true);
   });
 
-  it("development may run without a credential but never with a placeholder", async () => {
+  it("development may boot without a credential but never sends passwords without one", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AUTH_SERVICE_TOKEN", "");
     const first = await load();
@@ -126,8 +126,17 @@ describe("auth service credential policy", () => {
     expect(first.authServiceCredentialProblem("local-fixture", false)).toBe(
       null
     );
-    await first.authServiceClient.login("someone@example.test", "x");
-    expect(requests).toEqual([{ path: "/auth/login", token: undefined }]);
+    const responses = await Promise.all([
+      first.authServiceClient.register("someone@example.test", "password", "Name"),
+      first.authServiceClient.login("someone@example.test", "password"),
+      first.authServiceClient.verifyPassword("someone@example.test", "password"),
+    ]);
+    expect(responses).toEqual([
+      { success: false, message: "Auth service unavailable" },
+      { success: false, message: "Auth service unavailable" },
+      { success: false, message: "Auth service unavailable" },
+    ]);
+    expect(requests).toEqual([]);
 
     vi.resetModules();
     vi.stubEnv("AUTH_SERVICE_TOKEN", "CHANGE_ME");
