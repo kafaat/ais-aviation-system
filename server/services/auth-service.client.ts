@@ -47,6 +47,8 @@ export function authServiceCredentialProblem(
       : null;
   }
   if (/\s/.test(token)) return "AUTH_SERVICE_TOKEN must not contain whitespace";
+  if (token && !/^[\x21-\x7e]+$/.test(token))
+    return "AUTH_SERVICE_TOKEN must use printable ASCII characters";
   if (INSECURE_SERVICE_TOKENS.has(token.toLowerCase()))
     return "AUTH_SERVICE_TOKEN must not be a placeholder value";
   if (
