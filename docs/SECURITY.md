@@ -390,8 +390,10 @@ a configured token still requires authentication in those modes.
 
 Generate a dedicated random token, for example with `openssl rand -hex 32`, and
 set it as the web process's `METRICS_TOKEN` through your secret manager. Use the
-token alone, not the `Bearer` scheme prefix. Tokens must contain one or more ASCII
-letters, digits or `-._~+/`, optionally followed by `=` padding; whitespace,
+token alone, not the `Bearer` scheme prefix. In production tokens require at
+least 32 ASCII characters; use a cryptographically random secret (length alone
+does not prove entropy). Allowed characters are ASCII letters, digits or
+`-._~+/`, optionally followed by `=` padding; whitespace,
 quotes and other characters are invalid. Do not commit the value or log request
 authorization headers.
 
