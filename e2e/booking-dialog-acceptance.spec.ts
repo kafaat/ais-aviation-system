@@ -164,7 +164,12 @@ test("a consented paid modification reaches its returned checkout URL without ma
     })
   );
   let received:
-    | { bookingId: number; modificationId: number; provider: string }
+    | {
+        bookingId: number;
+        modificationId: number;
+        provider: string;
+        consent?: { quoteVersion: string; totalCost: number; currency: string };
+      }
     | undefined;
   // The response to payments.createModificationCheckout is mocked here.
   // This verifies consent, the quote identifier and UI navigation only;
@@ -192,10 +197,17 @@ test("a consented paid modification reaches its returned checkout URL without ma
   await expect(
     page.getByRole("heading", { name: "Synthetic modification checkout" })
   ).toBeVisible();
+  // The dialog binds the passenger's consent to the quote version and amount
+  // it displayed; the server refuses a checkout whose consent does not match.
   expect(received).toEqual({
     bookingId: booking.bookingId,
     modificationId: quote.modificationId,
     provider: "stripe",
+    consent: {
+      quoteVersion: quote.quoteVersion,
+      totalCost: quote.totalCost,
+      currency: "SAR",
+    },
   });
   const after = (
     await client.modifications.exchangeContext.query({
