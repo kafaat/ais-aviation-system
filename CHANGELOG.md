@@ -1,5 +1,27 @@
 # Changelog
 
+## What's Changed in v1.39.1
+
+<!-- ais-release-source: bb57cfed9cdd0838ab36c09494afc52ed68297e9 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(auth): require explicit validated database connection (f285bc59)
+
+### Other Changes
+
+- Initial plan (5632609a)
+- Merge main into auth database configuration fix for current-base verification (c8d5f7c7)
+- Merge main v1.39.0 into auth-service database configuration fix (0f1b7184)
+- Merge pull request #303 from kafaat/copilot/fix-auth-require-explicit-db-url (bb57cfed)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.39.0...v1.39.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.39.0
 
 <!-- ais-release-source: 97bfe08099c28e51665ddf5633c962e4b62f479c -->
