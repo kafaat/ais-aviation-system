@@ -437,16 +437,22 @@ header and compared in constant time. The boundary fails closed on both sides:
 | Compose                 | `AUTH_SERVICE_TOKEN` unset in the shell or `.env`                                          | `docker compose` refuses to interpolate; no service starts                |
 
 `GET /auth/health` stays public so orchestration can observe readiness.
-Placeholders rejected everywhere include `CHANGE_ME`, `changeme`, `secret`,
-`token` and the example-file names; development may use the explicit fixture in
-`.env.example`, which is itself refused as a production value only by its length
-rule if shortened. Generate the production value with `openssl rand -hex 32` and
-provision the identical value on the auth service and on every Node API replica
-(`api1`..`api3` in `docker-compose.production.yml`, `app` in
-`docker-compose.prod.yml`, `ais-web` and `ais-auth` on Railway). Rotate both
-copies together: set the new value on the auth service and the API replicas,
-restart the auth service first, then the API replicas, and confirm in the auth
-log that logins return 200 while an anonymous probe returns 401.
+Known placeholders rejected everywhere include `CHANGE_ME`, `changeme`,
+`secret`, `token` and the former fixed development-example token. Uniform
+repeated-character values are also rejected; a minimum length is not proof of
+entropy. The `.env.example` token is intentionally blank: for development,
+generate a fresh value locally and configure it on both sides. For deployment,
+generate the secret with `openssl rand -hex 32` and provision the identical
+value on the auth service and on every Node API replica (`api1`..`api3` in
+`docker-compose.production.yml`, `app` in `docker-compose.prod.yml`,
+`ais-web` and `ais-auth` on Railway).
+
+**Rotation is not automatically zero downtime:** the protocol accepts one
+current token, so restarting either side with a different value before the
+other may temporarily break logins. Coordinate an approved maintenance window
+or a staged shared-variable rollout, verify the private service handshake
+afterward, and retain a working matching value as the configuration rollback.
+Do not roll back the code to its previous fail-open behavior.
 
 Evidence: `auth-service/test_config.py` (start-up refusal), `auth-service/test_http_contract.py`
 (401/503 contracts), `server/__tests__/auth-service-credential.test.ts` (Node
