@@ -6251,12 +6251,18 @@ export const compensationClaims = mysqlTable(
       "eu261",
       "dot",
       "local",
+      "uk261",
     ]).notNull(),
     claimType: mysqlEnum("claimType", [
       "delay",
       "cancellation",
       "denied_boarding",
       "downgrade",
+      "baggage_delay",
+      "baggage_loss",
+      "baggage_damage",
+      "tarmac_delay",
+      "care",
     ]).notNull(),
     flightDistance: int("flightDistance"),
     delayMinutes: int("delayMinutes"),
@@ -6310,6 +6316,116 @@ export const compensationRules = mysqlTable("compensation_rules", {
   isActive: boolean("isActive").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+/**
+ * Passenger-rights rule model with provenance. Definitions are seeded from
+ * shared/passenger-rights/rule-sets.ts; the rows carry source URLs,
+ * confirmation status and operator confirmations for non-official values.
+ */
+export const passengerRightsRuleSets = mysqlTable(
+  "passenger_rights_rule_sets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    jurisdiction: varchar("jurisdiction", { length: 32 }).notNull(),
+    version: varchar("version", { length: 64 }).notNull(),
+    effectiveFrom: datetime("effectiveFrom"),
+    effectiveTo: datetime("effectiveTo"),
+    sourceUrl: varchar("sourceUrl", { length: 500 }).notNull(),
+    sourceKind: mysqlEnum("sourceKind", ["official", "secondary"]).notNull(),
+    confirmationStatus: mysqlEnum("confirmationStatus", [
+      "official",
+      "secondary",
+      "disputed",
+      "not_yet_applicable",
+    ]).notNull(),
+    governingLanguage: varchar("governingLanguage", { length: 8 }).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    jurisdictionIdx: uniqueIndex(
+      "passenger_rights_rule_set_jurisdiction_idx"
+    ).on(table.jurisdiction),
+  })
+);
+
+/** One row per rule; conflicting candidates share a disputeGroup and need confirmation. */
+export const passengerRightsRules = mysqlTable(
+  "passenger_rights_rules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    ruleSetId: int("ruleSetId").notNull(),
+    ruleCode: varchar("ruleCode", { length: 120 }).notNull(),
+    jurisdiction: varchar("jurisdiction", { length: 32 }).notNull(),
+    claimTypes: json("claimTypes").notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    article: varchar("article", { length: 120 }),
+    /** thresholds, amount model, care, time limits, exclusions, sources, note */
+    definition: json("definition").notNull(),
+    confirmationStatus: mysqlEnum("confirmationStatus", [
+      "official",
+      "secondary",
+      "disputed",
+      "not_yet_applicable",
+    ]).notNull(),
+    disputeGroup: varchar("disputeGroup", { length: 64 }),
+    candidate: varchar("candidate", { length: 16 }),
+    isActive: boolean("isActive").default(true).notNull(),
+    confirmedAt: datetime("confirmedAt"),
+    confirmedBy: int("confirmedBy"),
+    confirmationReference: varchar("confirmationReference", { length: 500 }),
+    rejectedAt: datetime("rejectedAt"),
+    rejectedBy: int("rejectedBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    codeIdx: uniqueIndex("passenger_rights_rule_code_idx").on(table.ruleCode),
+    setIdx: index("passenger_rights_rule_set_idx").on(table.ruleSetId),
+    disputeIdx: index("passenger_rights_rule_dispute_idx").on(
+      table.disputeGroup
+    ),
+  })
+);
+
+/** Involuntary refund deadlines (US DOT 14 CFR 260: 7 business days card / 20 days other). */
+export const passengerRightsRefundDeadlines = mysqlTable(
+  "passenger_rights_refund_deadlines",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    jurisdiction: varchar("jurisdiction", { length: 32 }).notNull(),
+    ruleCode: varchar("ruleCode", { length: 120 }).notNull(),
+    trigger: mysqlEnum("trigger", [
+      "carrier_cancellation",
+      "significant_change",
+    ]).notNull(),
+    tenderClass: mysqlEnum("tenderClass", ["card", "other"]).notNull(),
+    triggeredAt: datetime("triggeredAt").notNull(),
+    dueAt: datetime("dueAt").notNull(),
+    basis: varchar("basis", { length: 255 }).notNull(),
+    completedAt: datetime("completedAt"),
+    ledgerId: int("ledgerId"),
+    metOnTime: boolean("metOnTime"),
+    openedBy: int("openedBy"),
+    note: varchar("note", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    bookingIdx: index("passenger_rights_refund_booking_idx").on(
+      table.bookingId
+    ),
+    dueIdx: index("passenger_rights_refund_due_idx").on(
+      table.completedAt,
+      table.dueAt
+    ),
+  })
+);
+export type PassengerRightsRuleRow = typeof passengerRightsRules.$inferSelect;
+export type PassengerRightsRefundDeadline =
+  typeof passengerRightsRefundDeadlines.$inferSelect;
 
 /** Local document coupons. External carrier issuance and uplift require separate evidence. */
 export const ticketCoupons = mysqlTable(

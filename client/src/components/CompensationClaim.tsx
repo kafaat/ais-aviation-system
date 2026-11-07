@@ -11,8 +11,14 @@ import {
   OperationalReadState,
   useOperationalLabels,
 } from "./OperationalReadState";
-type Disruption = "delay" | "cancellation" | "denied_boarding" | "downgrade";
-type Regulation = "eu261" | "dot" | "local";
+import {
+  claimTypeLabel,
+  PassengerRightsEvaluation,
+} from "./PassengerRightsEvaluation";
+import { CLAIM_TYPE_BY_STORED } from "@shared/passenger-rights/stored";
+type Disruption = keyof typeof CLAIM_TYPE_BY_STORED;
+type Regulation = "eu261" | "dot" | "local" | "uk261";
+const DISRUPTIONS = Object.keys(CLAIM_TYPE_BY_STORED) as Disruption[];
 export function CompensationClaim({
   bookingId,
   bookingReference,
@@ -28,7 +34,14 @@ export function CompensationClaim({
   const [type, setType] = useState<Disruption>("delay");
   const [regulation, setRegulation] = useState<Regulation | "">("");
   const [arrivalDelay, setArrivalDelay] = useState("");
+  const [departureDelay, setDepartureDelay] = useState("");
+  const [baggageDays, setBaggageDays] = useState("");
+  const [tarmac, setTarmac] = useState("");
   const minutes = arrivalDelay.trim() ? Number(arrivalDelay) : NaN;
+  const numberOr = (value: string) =>
+    value.trim() && Number.isFinite(Number(value)) && Number(value) >= 0
+      ? Number(value)
+      : undefined;
   const [reason, setReason] = useState("");
   const targets = trpc.compensation.claimTargets.useQuery({ bookingId });
   const claims = trpc.compensation.getMyClaims.useQuery(undefined, {
@@ -40,8 +53,19 @@ export function CompensationClaim({
   const selectedPassenger =
     passengerId ||
     (targets.data?.passengers.length === 1 ? targets.data.passengers[0].id : 0);
-  const assessment = trpc.compensation.checkEligibility.useQuery(
-    { bookingId, flightId: selectedFlight, disruptionType: type },
+  const preview = trpc.compensation.previewEntitlements.useQuery(
+    {
+      bookingId,
+      flightId: selectedFlight,
+      claimType: type,
+      regulationType: regulation || undefined,
+      facts: {
+        arrivalDelayMinutes: numberOr(arrivalDelay),
+        departureDelayMinutes: numberOr(departureDelay),
+        baggageDelayDays: numberOr(baggageDays),
+        tarmacMinutes: numberOr(tarmac),
+      },
+    },
     { enabled: selectedFlight > 0 }
   );
   const file = trpc.compensation.fileClaim.useMutation({
@@ -52,6 +76,24 @@ export function CompensationClaim({
     },
     onError: e => toast.error(e.message),
   });
+  const factField = (
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    step = "any"
+  ) => (
+    <label className="block">
+      {label}
+      <input
+        className="border block p-2"
+        type="number"
+        min="0"
+        step={step}
+        value={value}
+        onChange={event => set(event.target.value)}
+      />
+    </label>
+  );
   return (
     <section className={className}>
       <h3>
@@ -62,12 +104,16 @@ export function CompensationClaim({
           {claims.data?.map(claim => (
             <li className="border p-3 my-2" key={claim.id}>
               #{claim.id} · {claim.status} · {l("الرحلة", "Flight")}{" "}
-              {claim.flightId}
+              {claim.flightId} ·{" "}
+              {claimTypeLabel(
+                CLAIM_TYPE_BY_STORED[claim.claimType],
+                l("ar", "en")
+              )}
               <p>
                 {l("التقدير", "Estimate")}:{" "}
                 {claim.calculatedAmount === null
                   ? l("بانتظار التقييم", "Awaiting assessment")
-                  : `${(claim.calculatedAmount / 100).toFixed(2)} SAR`}
+                  : `${(claim.calculatedAmount / 100).toFixed(2)} ${claim.currency}`}
               </p>
               {claim.approvedAmount !== null && (
                 <p>
@@ -75,7 +121,7 @@ export function CompensationClaim({
                     "المعتمد؛ لا يعني الصرف",
                     "Approved; does not indicate payout"
                   )}
-                  : {(claim.approvedAmount / 100).toFixed(2)} SAR
+                  : {(claim.approvedAmount / 100).toFixed(2)} {claim.currency}
                 </p>
               )}
             </li>
@@ -137,16 +183,9 @@ export function CompensationClaim({
               value={type}
               onChange={e => setType(e.target.value as Disruption)}
             >
-              {(
-                [
-                  "delay",
-                  "cancellation",
-                  "denied_boarding",
-                  "downgrade",
-                ] as const
-              ).map(value => (
+              {DISRUPTIONS.map(value => (
                 <option key={value} value={value}>
-                  {value}
+                  {claimTypeLabel(CLAIM_TYPE_BY_STORED[value], l("ar", "en"))}
                 </option>
               ))}
             </select>
@@ -163,19 +202,71 @@ export function CompensationClaim({
               onChange={e => setRegulation(e.target.value as Regulation)}
             >
               <option value="">{l("اختر الأساس", "Choose basis")}</option>
+              <option value="local">
+                {l("السعودية (لائحة GACA 2023)", "Saudi Arabia (GACA 2023)")}
+              </option>
               <option value="eu261">EU261</option>
-              <option value="dot">US DOT</option>
-              <option value="local">{l("محلي", "Local")}</option>
+              <option value="uk261">UK261</option>
+              <option value="dot">US DOT 14 CFR 260</option>
             </select>
           </label>
+          <fieldset className="space-y-2 border p-3">
+            <legend>
+              {l(
+                "وقائع تقريبية للمعاينة فقط (غير موثقة)",
+                "Approximate facts for the preview only (unverified)"
+              )}
+            </legend>
+            {(type === "delay" || type === "downgrade") &&
+              factField(
+                l(
+                  "الدقائق بين الوصول المحدد في الحجز والوصول الفعلي",
+                  "Minutes between your booked and actual arrival"
+                ),
+                arrivalDelay,
+                setArrivalDelay
+              )}
+            {type === "care" &&
+              factField(
+                l("دقائق تأخير المغادرة", "Departure delay in minutes"),
+                departureDelay,
+                setDepartureDelay
+              )}
+            {type === "baggage_delay" &&
+              factField(
+                l("أيام تأخير الأمتعة", "Days the bag was delayed"),
+                baggageDays,
+                setBaggageDays,
+                "1"
+              )}
+            {type === "tarmac_delay" &&
+              factField(
+                l("دقائق الانتظار على المدرج", "Minutes held on the tarmac"),
+                tarmac,
+                setTarmac
+              )}
+          </fieldset>
           {selectedFlight > 0 && (
-            <OperationalReadState query={assessment}>
-              <p>
-                {l(
-                  "تحتاج المطالبة إلى سياسة معتمدة ودليل للمسافة وتحويل العملة قبل تحديد الأهلية أو المبلغ.",
-                  "Approved policy, distance and currency evidence are required before entitlement or amount can be determined."
-                )}
-              </p>
+            <OperationalReadState query={preview}>
+              {preview.data && (
+                <div className="border p-3 space-y-2" aria-live="polite">
+                  <p className="font-medium">
+                    {l(
+                      "ما قد تستحقه (غير ملزم)",
+                      "What you may be entitled to (non-binding)"
+                    )}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {l(
+                      "معاينة إرشادية فقط. يُقرَّر الاستحقاق والمبلغ بعد مراجعة الأدلة؛ القيم المستندة إلى مصادر ثانوية أو متضاربة تُعرض ولا تُعتمد قبل تأكيدها.",
+                      preview.data.disclaimer
+                    )}
+                  </p>
+                  <PassengerRightsEvaluation
+                    evaluation={preview.data.evaluation}
+                  />
+                </div>
+              )}
             </OperationalReadState>
           )}
           <label>
@@ -203,20 +294,6 @@ export function CompensationClaim({
           <legend>
             {l("دليل تأخير الوصول في السعودية", "Saudi arrival delay guide")}
           </legend>
-          <label className="block">
-            {l(
-              "الدقائق بين الوصول المحدد في الحجز والوصول الفعلي",
-              "Minutes between your booked and actual arrival"
-            )}
-            <input
-              className="border block p-2"
-              type="number"
-              min="0"
-              step="any"
-              value={arrivalDelay}
-              onChange={event => setArrivalDelay(event.target.value)}
-            />
-          </label>
           {Number.isFinite(minutes) && minutes >= 0 && (
             <p aria-live="polite">
               {l(
@@ -229,7 +306,7 @@ export function CompensationClaim({
           )}
           <p>
             {l(
-              "يراجع المختص انطباق اللائحة وظروف الرحلة قبل اعتماد التعويض. تُقيَّم حقوق الرعاية وفق تأخير المغادرة.",
+              "يراجع المختص انطباق اللائحة وظروف الرحلة قبل اعتماد التعويض. تُقيَّم حقوق الرعاية وفق تأخير المغادرة.",
               "A reviewer checks the route and circumstances before approving compensation. Care depends on departure delay."
             )}
           </p>

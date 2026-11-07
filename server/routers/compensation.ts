@@ -1,5 +1,9 @@
 import { getClaimTargets } from "../services/booking-flight-membership.service";
-import { responseContracts } from "../contracts/compensation";
+import {
+  regulationTypes,
+  responseContracts,
+  storedClaimTypes,
+} from "../contracts/compensation";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import {
@@ -7,6 +11,7 @@ import {
   processClaim,
   getClaimById,
   getClaimsByUser,
+  getClaimEvaluation,
   calculateTotalLiability,
   autoAssessEligibility,
   getAllClaims,
@@ -14,11 +19,83 @@ import {
   getCompensationRules,
   updateCompensationRule,
 } from "../services/compensation.service";
+import {
+  confirmRule,
+  evaluateForReview,
+  listRuleCatalog,
+  previewEntitlements,
+  serializeEvaluation,
+  syncRuleCatalog,
+} from "../services/passenger-rights.service";
+import {
+  listRefundDeadlines,
+  openRefundDeadline,
+} from "../services/passenger-rights-refund.service";
+import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
+
+const reference = z.string().trim().min(5).max(500);
+const minorUnits = z.number().int().nonnegative().max(2_147_483_647);
+const reviewerFacts = z.object({
+  actualArrivalUtc: z.string().datetime().optional(),
+  departureDelayMinutes: z.number().nonnegative().optional(),
+  cancellation: z
+    .object({
+      noticeDays: z.number().int().nonnegative().optional(),
+      reroutedArrivalDelayMinutes: z.number().nonnegative().optional(),
+    })
+    .optional(),
+  deniedBoarding: z
+    .object({
+      involuntary: z.boolean(),
+      alternativeArrivalDelayMinutes: z.number().nonnegative().optional(),
+      alternativeDepartureWithinMinutes: z.number().nonnegative().optional(),
+    })
+    .optional(),
+  downgrade: z.boolean().optional(),
+  baggage: z
+    .object({
+      delayDays: z.number().int().nonnegative().optional(),
+      receiptsMinorUnits: minorUnits.optional(),
+      receiptsCurrency: z.string().length(3).optional(),
+    })
+    .optional(),
+  tarmacMinutes: z.number().nonnegative().optional(),
+  careExpenses: z
+    .object({
+      receiptsMinorUnits: minorUnits,
+      receiptsCurrency: z.string().length(3),
+    })
+    .optional(),
+  refundTrigger: z
+    .object({
+      triggeredAt: z.string().datetime(),
+      tenderClass: z.enum(["card", "other"]),
+    })
+    .optional(),
+  extraordinaryCircumstances: z.boolean().optional(),
+  passengerCaused: z.boolean().optional(),
+});
+const ticketValue = z.object({
+  minorUnits,
+  currency: z.string().length(3),
+  basis: z.string().trim().min(3).max(120),
+  reference,
+});
+const rightsEvidence = z.object({
+  ruleCode: z.string().trim().min(5).max(120),
+  scopeAndExceptionReview: reference,
+  factsReference: reference,
+  facts: reviewerFacts,
+  ticketValue: ticketValue.optional(),
+  distanceKm: z.number().int().positive().optional(),
+  distanceReference: reference.optional(),
+  fxRecordId: z.number().int().positive().optional(),
+});
 
 /**
  * Compensation Router
- * Handles EU261/DOT compensation claims for flight disruptions
+ * Jurisdiction-aware passenger-rights claims (GACA, EU261, UK261, US DOT).
  */
 export const compensationRouter = router({
   claimTargets: protectedProcedure
@@ -47,13 +124,8 @@ export const compensationRouter = router({
         bookingId: z.number(),
         flightId: z.number().int().positive().optional(),
         passengerId: z.number().int().positive().optional(),
-        regulationType: z.enum(["eu261", "dot", "local"]),
-        claimType: z.enum([
-          "delay",
-          "cancellation",
-          "denied_boarding",
-          "downgrade",
-        ]),
+        regulationType: z.enum(regulationTypes),
+        claimType: z.enum(storedClaimTypes),
         reason: z.string().max(1000).optional(),
       })
     )
@@ -108,12 +180,7 @@ export const compensationRouter = router({
       z.object({
         bookingId: z.number(),
         flightId: z.number().int().positive().optional(),
-        disruptionType: z.enum([
-          "delay",
-          "cancellation",
-          "denied_boarding",
-          "downgrade",
-        ]),
+        disruptionType: z.enum(storedClaimTypes),
       })
     )
     .output(responseContracts["checkEligibility"])
@@ -125,6 +192,41 @@ export const compensationRouter = router({
         input.flightId
       );
     }),
+
+  /**
+   * Non-binding "what you may be entitled to" preview with the jurisdiction
+   * determination. Passenger-entered facts are labelled unverified.
+   */
+  previewEntitlements: protectedProcedure
+    .input(
+      z.object({
+        bookingId: z.number().int().positive(),
+        flightId: z.number().int().positive().optional(),
+        claimType: z.enum(storedClaimTypes),
+        regulationType: z.enum(regulationTypes).optional(),
+        facts: z
+          .object({
+            arrivalDelayMinutes: z
+              .number()
+              .nonnegative()
+              .max(10_080)
+              .optional(),
+            departureDelayMinutes: z
+              .number()
+              .nonnegative()
+              .max(10_080)
+              .optional(),
+            baggageDelayDays: z.number().int().nonnegative().max(60).optional(),
+            tarmacMinutes: z.number().nonnegative().max(1_440).optional(),
+            involuntaryDeniedBoarding: z.boolean().optional(),
+          })
+          .default({}),
+      })
+    )
+    .output(responseContracts["previewEntitlements"])
+    .query(({ ctx, input }) =>
+      previewEntitlements({ ...input, userId: ctx.user.id })
+    ),
 
   /**
    * Process a claim - approve, deny, or partially approve (admin)
@@ -151,6 +253,7 @@ export const compensationRouter = router({
             sarPerXdrMillionths: z.number().int().positive().safe(),
           })
           .optional(),
+        rightsEvidence: rightsEvidence.optional(),
         decision: z.enum(["approved", "denied", "partial"]),
         approvedAmount: z.number().min(0).optional(),
         denialReason: z.string().max(1000).optional(),
@@ -164,6 +267,7 @@ export const compensationRouter = router({
           actorId: ctx.user.id,
           evidence: input.evidence,
           gacaArrivalEvidence: input.gacaArrivalEvidence,
+          rightsEvidence: input.rightsEvidence,
           decision: input.decision,
           approvedAmount: input.approvedAmount,
           denialReason: input.denialReason,
@@ -177,6 +281,50 @@ export const compensationRouter = router({
         });
       }
     }),
+
+  /** Dry-run of the engine with reviewer facts, before deciding (admin). */
+  evaluateForReview: adminProcedure
+    .input(
+      z.object({
+        claimId: z.number().int().positive(),
+        facts: reviewerFacts,
+        factsReference: reference,
+        ticketValue: ticketValue.optional(),
+        distanceKm: z.number().int().positive().optional(),
+        distanceReference: reference.optional(),
+        fxRecordId: z.number().int().positive().optional(),
+      })
+    )
+    .output(responseContracts["evaluateForReview"])
+    .query(async ({ input }) => {
+      const db = getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+      const claim = await getClaimById(input.claimId);
+      const review = await evaluateForReview(db, {
+        flightId: claim.flightId,
+        bookingId: claim.bookingId,
+        claimType: claim.claimType,
+        regulationType: claim.regulationType,
+        settlementCurrency: claim.currency,
+        facts: input.facts,
+        factsReference: input.factsReference,
+        ticketValue: input.ticketValue,
+        distanceKm: input.distanceKm,
+        distanceReference: input.distanceReference,
+        fxRecordId: input.fxRecordId,
+        now: new Date(),
+      });
+      return {
+        ruleSource: review.ruleSource as "database" | "built-in",
+        evaluation: serializeEvaluation(review.evaluation),
+      };
+    }),
+
+  /** Stored evaluation trace of a decided claim (admin). */
+  getClaimEvaluation: adminProcedure
+    .input(z.object({ claimId: z.number().int().positive() }))
+    .output(responseContracts["getClaimEvaluation"])
+    .query(({ input }) => getClaimEvaluation(input.claimId)),
 
   /**
    * Get all claims with filters and pagination (admin)
@@ -194,7 +342,7 @@ export const compensationRouter = router({
             "appealed",
           ])
           .optional(),
-        regulationType: z.enum(["eu261", "dot", "local"]).optional(),
+        regulationType: z.enum(regulationTypes).optional(),
         page: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(20),
       })
@@ -279,5 +427,70 @@ export const compensationRouter = router({
               : "Failed to update compensation rule",
         });
       }
+    }),
+
+  /** Rule sets with provenance and confirmation state (admin). */
+  getRuleCatalog: adminProcedure
+    .output(responseContracts["getRuleCatalog"])
+    .query(() => listRuleCatalog()),
+
+  /** Upsert the built-in seed into the catalogue tables (admin). */
+  syncRuleCatalog: adminProcedure
+    .output(responseContracts["syncRuleCatalog"])
+    .mutation(({ ctx }) => syncRuleCatalog(ctx.user.id)),
+
+  /** Operator confirmation of a secondary or disputed value (admin). */
+  confirmRule: adminProcedure
+    .input(
+      z.object({
+        ruleCode: z.string().trim().min(5).max(120),
+        decision: z.enum(["confirmed", "rejected"]),
+        reference,
+      })
+    )
+    .output(responseContracts["confirmRule"])
+    .mutation(({ input, ctx }) =>
+      confirmRule({ ...input, actorId: ctx.user.id })
+    ),
+
+  /** US DOT refund deadlines; `overdueOnly` is the admin overdue list. */
+  listRefundDeadlines: adminProcedure
+    .input(
+      z
+        .object({ overdueOnly: z.boolean().default(false) })
+        .default({ overdueOnly: false })
+    )
+    .output(responseContracts["listRefundDeadlines"])
+    .query(({ input }) => listRefundDeadlines(input)),
+
+  /** Record that an involuntary refund became due for a booking (admin). */
+  openRefundDeadline: adminProcedure
+    .input(
+      z.object({
+        bookingId: z.number().int().positive(),
+        trigger: z.enum(["carrier_cancellation", "significant_change"]),
+        tenderClass: z.enum(["card", "other"]),
+        triggeredAt: z.string().datetime(),
+        note: z.string().trim().max(500).optional(),
+      })
+    )
+    .output(responseContracts["openRefundDeadline"])
+    .mutation(({ input, ctx }) => {
+      const db = getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+      const triggeredAt = new Date(input.triggeredAt);
+      if (triggeredAt.getTime() > Date.now())
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Trigger time cannot be in the future",
+        });
+      return openRefundDeadline(db, {
+        bookingId: input.bookingId,
+        trigger: input.trigger,
+        tenderClass: input.tenderClass,
+        triggeredAt,
+        openedBy: ctx.user.id,
+        note: input.note,
+      });
     }),
 });

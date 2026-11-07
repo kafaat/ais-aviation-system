@@ -3,6 +3,18 @@ import {
   GACA_PASSENGER_RIGHTS,
 } from "../../shared/gaca-arrival-delay";
 import { resolveClaimFlight } from "./booking-flight-membership.service";
+import {
+  evaluateForReview,
+  haversineBetweenCodes,
+  JURISDICTION_BY_REGULATION,
+  type RegulationType,
+  type ReviewerFacts,
+  type StoredClaimType,
+} from "./passenger-rights.service";
+import {
+  awardableEntitlement,
+  type TicketValue,
+} from "../../shared/passenger-rights";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -23,8 +35,8 @@ export interface CompensationClaim {
   bookingId: number;
   flightId: number;
   passengerId: number | null;
-  regulationType: "eu261" | "dot" | "local";
-  claimType: "delay" | "cancellation" | "denied_boarding" | "downgrade";
+  regulationType: RegulationType;
+  claimType: StoredClaimType;
   flightDistance: number | null;
   delayMinutes: number | null;
   calculatedAmount: number | null; // SAR cents; NULL until supported by approved evidence
@@ -86,204 +98,13 @@ const CLAIMS_TABLE = "compensation_claims";
 const RULES_TABLE = "compensation_rules";
 
 // ============================================================================
-// EU261 Compensation Calculation
-// ============================================================================
-
-/**
- * EU261 compensation tiers based on flight distance:
- * - Short haul (<=1500 km): EUR 250
- * - Medium haul (1500-3500 km): EUR 400
- * - Long haul (>3500 km): EUR 600
- *
- * EUR amounts are converted to SAR cents at a fixed reference rate of 4.1 SAR/EUR.
- * The actual conversion rate should be configurable in production.
- */
-const EUR_TO_SAR_RATE = 4.1;
-
-// EU261 thresholds in EUR
-const EU261_SHORT_HAUL_EUR = 25000; // 250 EUR in cents
-const EU261_MEDIUM_HAUL_EUR = 40000; // 400 EUR in cents
-const EU261_LONG_HAUL_EUR = 60000; // 600 EUR in cents
-
-// Minimum delay (minutes) for EU261 eligibility
-const EU261_DELAY_THRESHOLD_MINUTES = 180; // 3 hours
-
-/**
- * Calculate EU261 compensation based on distance and delay
- * Returns amount in SAR cents
- */
-export async function calculateEU261Compensation(
-  flightId: number,
-  delayMinutes: number,
-  distance: number
-): Promise<{
-  eligible: boolean;
-  amount: number;
-  currency: string;
-  eurAmount: number;
-  reason: string;
-  distanceBand: "short" | "medium" | "long";
-}> {
-  // Check minimum delay threshold
-  if (delayMinutes < EU261_DELAY_THRESHOLD_MINUTES) {
-    return {
-      eligible: false,
-      amount: 0,
-      currency: "SAR",
-      eurAmount: 0,
-      reason: `Delay of ${delayMinutes} minutes is below the EU261 threshold of ${EU261_DELAY_THRESHOLD_MINUTES} minutes`,
-      distanceBand: "short",
-    };
-  }
-
-  let eurAmount: number;
-  let distanceBand: "short" | "medium" | "long";
-
-  if (distance <= 1500) {
-    eurAmount = EU261_SHORT_HAUL_EUR;
-    distanceBand = "short";
-  } else if (distance <= 3500) {
-    eurAmount = EU261_MEDIUM_HAUL_EUR;
-    distanceBand = "medium";
-  } else {
-    eurAmount = EU261_LONG_HAUL_EUR;
-    distanceBand = "long";
-  }
-
-  // 50% reduction for delays between 3-4 hours on long-haul with arrival delay < 4h
-  if (distanceBand === "long" && delayMinutes >= 180 && delayMinutes < 240) {
-    eurAmount = Math.round(eurAmount * 0.5);
-  }
-
-  // Convert EUR cents to SAR cents
-  const sarAmount = Math.round(eurAmount * EUR_TO_SAR_RATE);
-
-  // Verify flight exists
-  const db = await getDb();
-  if (db) {
-    const [flight] = await db
-      .select({ id: flights.id })
-      .from(flights)
-      .where(eq(flights.id, flightId))
-      .limit(1);
-
-    if (!flight) {
-      return {
-        eligible: false,
-        amount: 0,
-        currency: "SAR",
-        eurAmount: 0,
-        reason: "Flight not found",
-        distanceBand,
-      };
-    }
-  }
-
-  return {
-    eligible: true,
-    amount: sarAmount,
-    currency: "SAR",
-    eurAmount,
-    reason: `EU261: ${distanceBand} haul (${distance} km), ${delayMinutes} min delay`,
-    distanceBand,
-  };
-}
-
-// ============================================================================
-// DOT Compensation Calculation
-// ============================================================================
-
-/**
- * US DOT compensation rules:
- * - Denied boarding (involuntary): 200-400% of one-way fare
- * - Tarmac delays > 3 hours (domestic) or > 4 hours (international): penalty-based
- *
- * Returns amount in SAR cents
- */
-export async function calculateDOTCompensation(
-  flightId: number,
-  type: "denied_boarding" | "tarmac_delay"
-): Promise<{
-  eligible: boolean;
-  amount: number;
-  currency: string;
-  reason: string;
-  ruleApplied: string;
-}> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const [flight] = await db
-    .select({
-      id: flights.id,
-      economyPrice: flights.economyPrice,
-      businessPrice: flights.businessPrice,
-      flightNumber: flights.flightNumber,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (!flight) {
-    return {
-      eligible: false,
-      amount: 0,
-      currency: "SAR",
-      reason: "Flight not found",
-      ruleApplied: "none",
-    };
-  }
-
-  if (type === "denied_boarding") {
-    // DOT rule: 200% of one-way fare for delays 1-2 hours, 400% for >2 hours
-    // We use economy price as the base fare; max $775 / $1,550 USD
-    const baseFare = flight.economyPrice;
-    const compensationAmount = baseFare * 4; // 400% for >2 hour alternative
-
-    return {
-      eligible: true,
-      amount: compensationAmount,
-      currency: "SAR",
-      reason: `DOT denied boarding: 400% of base fare (${(baseFare / 100).toFixed(2)} SAR)`,
-      ruleApplied: "dot_denied_boarding_400pct",
-    };
-  }
-
-  if (type === "tarmac_delay") {
-    // DOT tarmac delay rule: airlines face penalties for tarmac delays
-    // exceeding 3 hours (domestic) or 4 hours (international)
-    // Compensation is typically a fixed amount per passenger
-    const fixedCompensation = 50000; // 500 SAR (fixed penalty equivalent)
-
-    return {
-      eligible: true,
-      amount: fixedCompensation,
-      currency: "SAR",
-      reason: "DOT tarmac delay: fixed compensation per passenger",
-      ruleApplied: "dot_tarmac_delay_fixed",
-    };
-  }
-
-  return {
-    eligible: false,
-    amount: 0,
-    currency: "SAR",
-    reason: `Unknown DOT compensation type: ${type}`,
-    ruleApplied: "none",
-  };
-}
-
-// ============================================================================
 // Flight Distance Calculation (Haversine)
 // ============================================================================
 
 /**
- * Calculate distance between two airports using the Haversine formula.
- * Falls back to a straight-line estimate if coordinates aren't available.
+ * Great-circle distance between two airports from the shared coordinate table.
+ * Falls back to a labelled estimate when coordinates are unknown; the review
+ * path records the source so an estimate is never mistaken for evidence.
  */
 export async function calculateFlightDistance(
   originId: number,
@@ -297,23 +118,13 @@ export async function calculateFlightDistance(
     });
 
   const [origin] = await db
-    .select({
-      id: airports.id,
-      code: airports.code,
-      city: airports.city,
-      country: airports.country,
-    })
+    .select({ id: airports.id, code: airports.code, country: airports.country })
     .from(airports)
     .where(eq(airports.id, originId))
     .limit(1);
 
   const [destination] = await db
-    .select({
-      id: airports.id,
-      code: airports.code,
-      city: airports.city,
-      country: airports.country,
-    })
+    .select({ id: airports.id, code: airports.code, country: airports.country })
     .from(airports)
     .where(eq(airports.id, destinationId))
     .limit(1);
@@ -325,67 +136,10 @@ export async function calculateFlightDistance(
     });
   }
 
-  // Well-known airport coordinate lookup for common routes
-  // In production this would come from the database or an API
-  const airportCoords: Record<string, { lat: number; lng: number }> = {
-    JED: { lat: 21.6796, lng: 39.1565 },
-    RUH: { lat: 24.9576, lng: 46.6988 },
-    DMM: { lat: 26.4712, lng: 49.7979 },
-    MED: { lat: 24.5534, lng: 39.705 },
-    AHB: { lat: 18.2404, lng: 42.6567 },
-    CAI: { lat: 30.1219, lng: 31.4056 },
-    DXB: { lat: 25.2532, lng: 55.3657 },
-    LHR: { lat: 51.47, lng: -0.4543 },
-    CDG: { lat: 49.0097, lng: 2.5479 },
-    JFK: { lat: 40.6413, lng: -73.7781 },
-    IST: { lat: 41.2753, lng: 28.7519 },
-    KUL: { lat: 2.7456, lng: 101.7099 },
-    BOM: { lat: 19.0896, lng: 72.8656 },
-    SIN: { lat: 1.3644, lng: 103.9915 },
-    FRA: { lat: 50.0379, lng: 8.5622 },
-    AMS: { lat: 52.3105, lng: 4.7683 },
-  };
-
-  const originCoords = airportCoords[origin.code];
-  const destCoords = airportCoords[destination.code];
-
-  if (originCoords && destCoords) {
-    return haversineDistance(
-      originCoords.lat,
-      originCoords.lng,
-      destCoords.lat,
-      destCoords.lng
-    );
-  }
-
-  // Fallback: return a default estimate based on whether domestic or international
-  if (origin.country === destination.country) {
-    return 800; // Default domestic distance in km
-  }
-  return 3000; // Default international distance in km
-}
-
-function haversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371; // Earth's radius in km
-  const dLat = toRadians(lat2 - lat1);
-  const dLon = toRadians(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Math.round(R * c);
-}
-
-function toRadians(degrees: number): number {
-  return degrees * (Math.PI / 180);
+  const km = haversineBetweenCodes(origin.code, destination.code);
+  if (km !== null) return km;
+  // Fallback: a default estimate based on whether domestic or international
+  return origin.country === destination.country ? 800 : 3000;
 }
 
 // ============================================================================
@@ -399,8 +153,8 @@ export async function createClaim(input: {
   bookingId: number;
   flightId?: number;
   passengerId?: number;
-  regulationType: "eu261" | "dot" | "local";
-  claimType: "delay" | "cancellation" | "denied_boarding" | "downgrade";
+  regulationType: RegulationType;
+  claimType: StoredClaimType;
   reason?: string;
   userId: number;
 }): Promise<CompensationClaim> {
@@ -445,6 +199,17 @@ export async function createClaim(input: {
   return claim;
 }
 
+export interface RightsEvidence {
+  ruleCode: string;
+  scopeAndExceptionReview: string;
+  factsReference: string;
+  facts: ReviewerFacts;
+  ticketValue?: TicketValue;
+  distanceKm?: number;
+  distanceReference?: string;
+  fxRecordId?: number;
+}
+
 /**
  * Process (approve/deny) a compensation claim (admin)
  */
@@ -467,6 +232,8 @@ export async function processClaim(input: {
     fxReference: string;
     sarPerXdrMillionths: number;
   };
+  /** Engine-backed basis: one rule of the filed jurisdiction, with recorded facts. */
+  rightsEvidence?: RightsEvidence;
   actorId: number;
 }): Promise<CompensationClaim> {
   const db = await getDb();
@@ -485,7 +252,83 @@ export async function processClaim(input: {
       });
     const approval = input.decision !== "denied";
     const gaca = input.gacaArrivalEvidence;
+    const rights = input.rightsEvidence;
     let award;
+    let rightsReview:
+      | {
+          evaluation: Awaited<
+            ReturnType<typeof evaluateForReview>
+          >["evaluation"];
+          settlementMinorUnits: number;
+          delayMinutes: number | undefined;
+          distanceKm: number | undefined;
+          ruleSource: string;
+        }
+      | undefined;
+    if (rights) {
+      if (
+        gaca ||
+        input.evidence ||
+        input.approvedAmount !== undefined ||
+        input.decision !== "approved"
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Select a single basis for a full engine-assessed award",
+        });
+      if (
+        !rights.ruleCode.startsWith(
+          `${JURISDICTION_BY_REGULATION[claim.regulationType]}.`
+        )
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Rule does not belong to the claim's filed jurisdiction",
+        });
+      if (
+        [rights.scopeAndExceptionReview, rights.factsReference].some(
+          v => !v?.trim()
+        )
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Scope review and facts references are required",
+        });
+      const now = new Date();
+      const review = await evaluateForReview(tx, {
+        flightId: claim.flightId,
+        bookingId: claim.bookingId,
+        claimType: claim.claimType,
+        regulationType: claim.regulationType,
+        settlementCurrency: claim.currency,
+        facts: rights.facts,
+        factsReference: rights.factsReference,
+        ticketValue: rights.ticketValue,
+        distanceKm: rights.distanceKm,
+        distanceReference: rights.distanceReference,
+        fxRecordId: rights.fxRecordId,
+        now,
+      });
+      const outcome = awardableEntitlement(review.evaluation, rights.ruleCode);
+      if (!outcome.ok)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Engine evaluation does not support an award: ${outcome.reason}`,
+        });
+      const settlement = outcome.entitlement.settlement;
+      if (!settlement || settlement.currency !== claim.currency)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Settlement currency differs from the claim currency",
+        });
+      rightsReview = {
+        evaluation: review.evaluation,
+        settlementMinorUnits: settlement.minorUnits,
+        delayMinutes: review.context.facts.arrivalDelayMinutes?.value,
+        distanceKm: review.context.itinerary.distanceKm?.value,
+        ruleSource: review.ruleSource,
+      };
+    }
     if (gaca) {
       if (
         claim.regulationType !== "local" ||
@@ -547,6 +390,7 @@ export async function processClaim(input: {
     if (
       approval &&
       !award &&
+      !rightsReview &&
       (!input.evidence ||
         !Number.isSafeInteger(input.approvedAmount) ||
         (input.approvedAmount ?? 0) <= 0)
@@ -580,14 +424,25 @@ export async function processClaim(input: {
       .set({
         status: approval ? "approved" : "denied",
         approvedAmount: approval
-          ? (award?.halalas ?? input.approvedAmount)
+          ? (award?.halalas ??
+            rightsReview?.settlementMinorUnits ??
+            input.approvedAmount)
           : null,
         ...(award && {
           calculatedAmount: award.halalas,
           delayMinutes: Math.floor(award.minutes),
         }),
+        ...(rightsReview && {
+          calculatedAmount: rightsReview.settlementMinorUnits,
+          ...(rightsReview.delayMinutes !== undefined && {
+            delayMinutes: Math.floor(rightsReview.delayMinutes),
+          }),
+        }),
         denialReason: approval ? null : input.denialReason,
-        flightDistance: input.evidence?.distanceKm ?? claim.flightDistance,
+        flightDistance:
+          input.evidence?.distanceKm ??
+          rightsReview?.distanceKm ??
+          claim.flightDistance,
         reviewEvidence: {
           ...input.evidence,
           ...(gaca &&
@@ -596,6 +451,16 @@ export async function processClaim(input: {
               source: GACA_PASSENGER_RIGHTS,
               ...gaca,
               tariffXdr: award.sdr,
+            }),
+          ...(rights &&
+            rightsReview && {
+              basis: "passenger-rights-engine",
+              ruleCode: rights.ruleCode,
+              ruleSource: rightsReview.ruleSource,
+              scopeAndExceptionReview: rights.scopeAndExceptionReview,
+              factsReference: rights.factsReference,
+              fxRecordId: rights.fxRecordId ?? null,
+              evaluation: JSON.parse(JSON.stringify(rightsReview.evaluation)),
             }),
           actorId: input.actorId,
           reviewedAt: new Date().toISOString(),
@@ -609,6 +474,33 @@ export async function processClaim(input: {
       .where(eq(compensationClaims.id, claim.id));
     return updated;
   });
+}
+
+/** Reviewer trace stored with the decision (admin). */
+export async function getClaimEvaluation(claimId: number) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+  const [claim] = await db
+    .select({
+      id: compensationClaims.id,
+      status: compensationClaims.status,
+      reviewEvidence: compensationClaims.reviewEvidence,
+    })
+    .from(compensationClaims)
+    .where(eq(compensationClaims.id, claimId))
+    .limit(1);
+  if (!claim) throw new TRPCError({ code: "NOT_FOUND" });
+  return {
+    claimId: claim.id,
+    status: claim.status,
+    reviewEvidence:
+      claim.reviewEvidence == null
+        ? null
+        : (JSON.parse(JSON.stringify(claim.reviewEvidence)) as Record<
+            string,
+            unknown
+          >),
+  };
 }
 
 /**
@@ -808,7 +700,7 @@ export async function calculateTotalLiability(flightId: number): Promise<{
  */
 export async function autoAssessEligibility(
   bookingId: number,
-  _disruptionType: "delay" | "cancellation" | "denied_boarding" | "downgrade",
+  _disruptionType: StoredClaimType,
   userId: number,
   requestedFlightId?: number
 ) {

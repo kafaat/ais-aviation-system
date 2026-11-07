@@ -54,6 +54,15 @@ import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Redirect } from "wouter";
+import {
+  type EvaluationView,
+  PassengerRightsEvaluation,
+} from "@/components/PassengerRightsEvaluation";
+import { useOperationalLabels } from "@/components/OperationalReadState";
+import {
+  CLAIM_TYPE_BY_STORED,
+  JURISDICTION_BY_REGULATION,
+} from "@shared/passenger-rights/stored";
 
 // ============================================================================
 // Types
@@ -67,7 +76,7 @@ type ClaimStatus =
   | "paid"
   | "appealed";
 
-type RegulationType = "eu261" | "dot" | "local";
+type RegulationType = "eu261" | "dot" | "local" | "uk261";
 
 // ============================================================================
 // Helper Components
@@ -119,12 +128,15 @@ function RegBadge({ type }: { type: RegulationType }) {
     eu261: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
     dot: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
     local: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+    uk261:
+      "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
   };
 
   const labels: Record<RegulationType, string> = {
     eu261: "EU261",
     dot: "US DOT",
-    local: "Local",
+    local: "GACA",
+    uk261: "UK261",
   };
 
   return (
@@ -239,6 +251,31 @@ function ClaimsQueue() {
   const [actualArrival, setActualArrival] = useState("");
   const [arrivalSource, setArrivalSource] = useState("");
   const [sarPerSdr, setSarPerSdr] = useState("");
+  const [useEngine, setUseEngine] = useState(false);
+  const [ruleCode, setRuleCode] = useState("");
+  const [factsReference, setFactsReference] = useState("");
+  const [fxRecordId, setFxRecordId] = useState("");
+  const [factActualArrival, setFactActualArrival] = useState("");
+  const [factDepartureDelay, setFactDepartureDelay] = useState("");
+  const [factNoticeDays, setFactNoticeDays] = useState("");
+  const [factReroutedDelay, setFactReroutedDelay] = useState("");
+  const [factAltArrival, setFactAltArrival] = useState("");
+  const [factAltDeparture, setFactAltDeparture] = useState("");
+  const [factBagDays, setFactBagDays] = useState("");
+  const [factReceipts, setFactReceipts] = useState("");
+  const [factReceiptsCurrency, setFactReceiptsCurrency] = useState("SAR");
+  const [factTarmac, setFactTarmac] = useState("");
+  const [factExtraordinary, setFactExtraordinary] = useState(false);
+  const [factPassengerCaused, setFactPassengerCaused] = useState(false);
+  const [trace, setTrace] = useState<EvaluationView | null>(null);
+  const [traceClaimId, setTraceClaimId] = useState<number | null>(null);
+  const l = useOperationalLabels();
+  const utils = trpc.useUtils();
+  const catalog = trpc.compensation.getRuleCatalog.useQuery();
+  const storedTrace = trpc.compensation.getClaimEvaluation.useQuery(
+    { claimId: traceClaimId ?? 0 },
+    { enabled: traceClaimId !== null }
+  );
 
   const {
     data: claimsData,
@@ -262,6 +299,85 @@ function ClaimsQueue() {
     selectedClaim?.regulationType === "local" &&
     selectedClaim.claimType === "delay";
   const gacaMode = allowsGaca && useGaca;
+  const engineMode = decision === "approved" && useEngine && !gacaMode;
+  const engineRules =
+    selectedClaim && catalog.data
+      ? catalog.data.ruleSets
+          .filter(
+            set =>
+              set.jurisdiction ===
+              JURISDICTION_BY_REGULATION[selectedClaim.regulationType]
+          )
+          .flatMap(set => set.rules)
+          .filter(rule =>
+            rule.claimTypes.includes(
+              CLAIM_TYPE_BY_STORED[selectedClaim.claimType]
+            )
+          )
+      : [];
+  const optionalNumber = (value: string) =>
+    value.trim() && Number.isFinite(Number(value)) ? Number(value) : undefined;
+  const reviewerFacts = () => {
+    const receipts = optionalNumber(factReceipts);
+    const receiptsMinor =
+      receipts === undefined ? undefined : Math.round(receipts * 100);
+    return {
+      actualArrivalUtc: utcIso(factActualArrival) || undefined,
+      departureDelayMinutes: optionalNumber(factDepartureDelay),
+      cancellation:
+        selectedClaim?.claimType === "cancellation"
+          ? {
+              noticeDays: optionalNumber(factNoticeDays),
+              reroutedArrivalDelayMinutes: optionalNumber(factReroutedDelay),
+            }
+          : undefined,
+      deniedBoarding:
+        selectedClaim?.claimType === "denied_boarding"
+          ? {
+              involuntary: true,
+              alternativeArrivalDelayMinutes: optionalNumber(factAltArrival),
+              alternativeDepartureWithinMinutes:
+                optionalNumber(factAltDeparture),
+            }
+          : undefined,
+      downgrade: selectedClaim?.claimType === "downgrade" || undefined,
+      baggage: selectedClaim?.claimType.startsWith("baggage")
+        ? {
+            delayDays: optionalNumber(factBagDays),
+            receiptsMinorUnits: receiptsMinor,
+            receiptsCurrency:
+              receiptsMinor === undefined ? undefined : factReceiptsCurrency,
+          }
+        : undefined,
+      tarmacMinutes: optionalNumber(factTarmac),
+      careExpenses:
+        selectedClaim?.claimType === "care" && receiptsMinor !== undefined
+          ? {
+              receiptsMinorUnits: receiptsMinor,
+              receiptsCurrency: factReceiptsCurrency,
+            }
+          : undefined,
+      extraordinaryCircumstances: factExtraordinary || undefined,
+      passengerCaused: factPassengerCaused || undefined,
+    };
+  };
+  const engineInput = () => ({
+    facts: reviewerFacts(),
+    factsReference,
+    fxRecordId: optionalNumber(fxRecordId),
+  });
+  const runEvaluation = async () => {
+    if (!selectedClaimId) return;
+    try {
+      const result = await utils.compensation.evaluateForReview.fetch({
+        claimId: selectedClaimId,
+        ...engineInput(),
+      });
+      setTrace(result.evaluation);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  };
   // datetime-local values are read as UTC, which is what the label asks for.
   const utcIso = (value: string) =>
     value && Number.isFinite(Date.parse(`${value}:00Z`))
@@ -291,6 +407,22 @@ function ClaimsQueue() {
   const resetProcessForm = () => {
     setSelectedClaimId(null);
     setUseGaca(false);
+    setUseEngine(false);
+    setRuleCode("");
+    setFactsReference("");
+    setFxRecordId("");
+    setFactActualArrival("");
+    setFactDepartureDelay("");
+    setFactNoticeDays("");
+    setFactReroutedDelay("");
+    setFactAltArrival("");
+    setFactAltDeparture("");
+    setFactBagDays("");
+    setFactReceipts("");
+    setFactTarmac("");
+    setFactExtraordinary(false);
+    setFactPassengerCaused(false);
+    setTrace(null);
     setScheduledArrival("");
     setActualArrival("");
     setArrivalSource("");
@@ -311,10 +443,17 @@ function ClaimsQueue() {
       claimId: selectedClaimId,
       decision,
       approvedAmount:
-        decision !== "denied" && !gacaMode && approvedAmount
+        decision !== "denied" && !gacaMode && !engineMode && approvedAmount
           ? Math.round(parseFloat(approvedAmount) * 100)
           : undefined,
       denialReason: decision === "denied" ? denialReason : undefined,
+      rightsEvidence: engineMode
+        ? {
+            ruleCode,
+            scopeAndExceptionReview: policyReference,
+            ...engineInput(),
+          }
+        : undefined,
       gacaArrivalEvidence: gacaMode
         ? {
             scopeAndExceptionReview: policyReference,
@@ -326,7 +465,7 @@ function ClaimsQueue() {
           }
         : undefined,
       evidence:
-        decision === "denied" || gacaMode
+        decision === "denied" || gacaMode || engineMode
           ? undefined
           : {
               policyReference,
@@ -415,6 +554,7 @@ function ClaimsQueue() {
                 {t("compensation.admin.allRegulations", "All Regulations")}
               </SelectItem>
               <SelectItem value="eu261">EU261</SelectItem>
+              <SelectItem value="uk261">UK261</SelectItem>
               <SelectItem value="dot">US DOT</SelectItem>
               <SelectItem value="local">
                 {t("compensation.localRegulation", "Local")}
@@ -500,6 +640,17 @@ function ClaimsQueue() {
                         onClick={() => openProcessDialog(claim.id)}
                       >
                         {t("compensation.admin.process", "Process")}
+                      </Button>
+                    )}
+                    {(claim.status === "approved" ||
+                      claim.status === "denied" ||
+                      claim.status === "paid") && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setTraceClaimId(claim.id)}
+                      >
+                        {t("compensation.rights.trace", "Trace")}
                       </Button>
                     )}
                   </TableCell>
@@ -616,6 +767,230 @@ function ClaimsQueue() {
                 العاشرة
               </label>
             )}
+            {decision === "approved" && !gacaMode && (
+              <label className="block">
+                <input
+                  type="checkbox"
+                  checked={useEngine}
+                  onChange={e => setUseEngine(e.target.checked)}
+                />{" "}
+                {t(
+                  "compensation.rights.engineBasis",
+                  "Passenger-rights engine basis (jurisdiction rule with trace)"
+                )}
+              </label>
+            )}
+            {engineMode && selectedClaim && (
+              <div className="space-y-2">
+                <Label>{t("compensation.rights.rule", "Rule")}</Label>
+                <select
+                  className="border block p-2 w-full"
+                  value={ruleCode}
+                  onChange={e => setRuleCode(e.target.value)}
+                >
+                  <option value="">—</option>
+                  {engineRules.map(rule => (
+                    <option key={rule.code} value={rule.code}>
+                      {rule.code} · {rule.title} [{rule.confirmationStatus}]
+                    </option>
+                  ))}
+                </select>
+                {[
+                  {
+                    label: t(
+                      "compensation.rights.scopeReview",
+                      "Scope and exceptions review reference"
+                    ),
+                    value: policyReference,
+                    set: setPolicyReference,
+                  },
+                  {
+                    label: t(
+                      "compensation.rights.factsReference",
+                      "Facts evidence reference"
+                    ),
+                    value: factsReference,
+                    set: setFactsReference,
+                  },
+                  {
+                    label: t(
+                      "compensation.rights.fxRecordId",
+                      "FX record id (exchange_rates) when currencies differ"
+                    ),
+                    value: fxRecordId,
+                    set: setFxRecordId,
+                    type: "number",
+                  },
+                  ...(selectedClaim.claimType === "delay" ||
+                  selectedClaim.claimType === "downgrade"
+                    ? [
+                        {
+                          label: t(
+                            "compensation.rights.actualArrival",
+                            "Actual arrival (UTC); schedule comes from the flight record"
+                          ),
+                          value: factActualArrival,
+                          set: setFactActualArrival,
+                          type: "datetime-local",
+                        },
+                      ]
+                    : []),
+                  ...(selectedClaim.claimType === "care"
+                    ? [
+                        {
+                          label: t(
+                            "compensation.rights.departureDelay",
+                            "Departure delay (minutes)"
+                          ),
+                          value: factDepartureDelay,
+                          set: setFactDepartureDelay,
+                          type: "number",
+                        },
+                      ]
+                    : []),
+                  ...(selectedClaim.claimType === "cancellation"
+                    ? [
+                        {
+                          label: t(
+                            "compensation.rights.noticeDays",
+                            "Days of notice before departure"
+                          ),
+                          value: factNoticeDays,
+                          set: setFactNoticeDays,
+                          type: "number",
+                        },
+                        {
+                          label: t(
+                            "compensation.rights.reroutedDelay",
+                            "Rerouted arrival delay (minutes)"
+                          ),
+                          value: factReroutedDelay,
+                          set: setFactReroutedDelay,
+                          type: "number",
+                        },
+                      ]
+                    : []),
+                  ...(selectedClaim.claimType === "denied_boarding"
+                    ? [
+                        {
+                          label: t(
+                            "compensation.rights.altArrival",
+                            "Alternative arrival delay (minutes)"
+                          ),
+                          value: factAltArrival,
+                          set: setFactAltArrival,
+                          type: "number",
+                        },
+                        {
+                          label: t(
+                            "compensation.rights.altDeparture",
+                            "Alternative departure within (minutes of schedule)"
+                          ),
+                          value: factAltDeparture,
+                          set: setFactAltDeparture,
+                          type: "number",
+                        },
+                      ]
+                    : []),
+                  ...(selectedClaim.claimType === "baggage_delay"
+                    ? [
+                        {
+                          label: t(
+                            "compensation.rights.bagDays",
+                            "Baggage delay (days)"
+                          ),
+                          value: factBagDays,
+                          set: setFactBagDays,
+                          type: "number",
+                        },
+                      ]
+                    : []),
+                  ...(selectedClaim.claimType.startsWith("baggage") ||
+                  selectedClaim.claimType === "care"
+                    ? [
+                        {
+                          label: t(
+                            "compensation.rights.receipts",
+                            "Receipts total (major units)"
+                          ),
+                          value: factReceipts,
+                          set: setFactReceipts,
+                          type: "number",
+                        },
+                        {
+                          label: t(
+                            "compensation.rights.receiptsCurrency",
+                            "Receipts currency"
+                          ),
+                          value: factReceiptsCurrency,
+                          set: setFactReceiptsCurrency,
+                        },
+                      ]
+                    : []),
+                  ...(selectedClaim.claimType === "tarmac_delay"
+                    ? [
+                        {
+                          label: t(
+                            "compensation.rights.tarmac",
+                            "Tarmac delay (minutes)"
+                          ),
+                          value: factTarmac,
+                          set: setFactTarmac,
+                          type: "number",
+                        },
+                      ]
+                    : []),
+                ].map(field => (
+                  <label className="block" key={field.label}>
+                    {field.label}
+                    <Input
+                      type={field.type ?? "text"}
+                      dir={field.type ? "ltr" : undefined}
+                      value={field.value}
+                      onChange={e => field.set(e.target.value)}
+                    />
+                  </label>
+                ))}
+                <label className="block">
+                  <input
+                    type="checkbox"
+                    checked={factExtraordinary}
+                    onChange={e => setFactExtraordinary(e.target.checked)}
+                  />{" "}
+                  {t(
+                    "compensation.rights.extraordinary",
+                    "Extraordinary circumstances established"
+                  )}
+                </label>
+                <label className="block">
+                  <input
+                    type="checkbox"
+                    checked={factPassengerCaused}
+                    onChange={e => setFactPassengerCaused(e.target.checked)}
+                  />{" "}
+                  {t("compensation.rights.passengerCaused", "Passenger-caused")}
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={runEvaluation}
+                  disabled={factsReference.trim().length < 5}
+                >
+                  {t("compensation.rights.evaluate", "Evaluate (dry run)")}
+                </Button>
+                {trace && (
+                  <div className="max-h-72 overflow-auto border rounded p-2">
+                    <PassengerRightsEvaluation evaluation={trace} showTrace />
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {l(
+                    "لا يُعتمد المبلغ إلا إذا كانت القاعدة المختارة قابلة للاعتماد في التقييم؛ يُحفظ التقييم كاملاً كدليل مراجعة.",
+                    "The amount is approved only when the chosen rule is awardable in the evaluation; the full evaluation is stored as review evidence."
+                  )}
+                </p>
+              </div>
+            )}
             {gacaMode && (
               <div className="space-y-2">
                 {[
@@ -679,7 +1054,7 @@ function ClaimsQueue() {
                 )}
               </div>
             )}
-            {decision !== "denied" && !gacaMode && (
+            {decision !== "denied" && !gacaMode && !engineMode && (
               <div className="space-y-2">
                 <Label htmlFor="approved-amount">
                   {t(
@@ -699,7 +1074,7 @@ function ClaimsQueue() {
               </div>
             )}
 
-            {decision !== "denied" && !gacaMode && (
+            {decision !== "denied" && !gacaMode && !engineMode && (
               <div className="space-y-2">
                 {[
                   {
@@ -777,8 +1152,13 @@ function ClaimsQueue() {
                     !arrivalSource.trim() ||
                     !policyReference.trim() ||
                     !fxReference.trim())) ||
+                (engineMode &&
+                  (!ruleCode ||
+                    policyReference.trim().length < 5 ||
+                    factsReference.trim().length < 5)) ||
                 (decision !== "denied" &&
                   !gacaMode &&
+                  !engineMode &&
                   (!approvedAmount ||
                     !policyReference ||
                     !fxReference ||
@@ -794,6 +1174,373 @@ function ClaimsQueue() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Stored evaluation trace */}
+      <Dialog
+        open={traceClaimId !== null}
+        onOpenChange={open => !open && setTraceClaimId(null)}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {t("compensation.rights.storedTrace", "Review evidence")} #
+              {traceClaimId}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                "compensation.rights.storedTraceDescription",
+                "Evaluation stored with the decision: rules considered, inputs, amounts and the FX record."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto space-y-2">
+            {storedTrace.data?.reviewEvidence &&
+            isEvaluation(storedTrace.data.reviewEvidence.evaluation) ? (
+              <PassengerRightsEvaluation
+                evaluation={storedTrace.data.reviewEvidence.evaluation}
+                showTrace
+              />
+            ) : (
+              <pre className="text-xs whitespace-pre-wrap">
+                {JSON.stringify(storedTrace.data?.reviewEvidence, null, 2)}
+              </pre>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function isEvaluation(value: unknown): value is EvaluationView {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as EvaluationView).jurisdictions) &&
+    Array.isArray((value as EvaluationView).entitlements)
+  );
+}
+
+// ============================================================================
+// Rule catalogue (passenger-rights rule sets with provenance)
+// ============================================================================
+
+function RuleCatalogue() {
+  const { t } = useTranslation();
+  const l = useOperationalLabels();
+  const catalog = trpc.compensation.getRuleCatalog.useQuery();
+  const [reference, setReference] = useState("");
+  const sync = trpc.compensation.syncRuleCatalog.useMutation({
+    onSuccess: r => {
+      toast.success(`${r.inserted} inserted, ${r.updated} updated`);
+      void catalog.refetch();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const confirm = trpc.compensation.confirmRule.useMutation({
+    onSuccess: () => void catalog.refetch(),
+    onError: e => toast.error(e.message),
+  });
+  if (catalog.isLoading) return <Skeleton className="h-96 w-full" />;
+  if (!catalog.data) return null;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <p className="text-sm text-muted-foreground">
+          {t("compensation.rights.catalogSource", "Catalogue source")}:{" "}
+          {catalog.data.source}
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => sync.mutate()}
+          disabled={sync.isPending}
+        >
+          {t("compensation.rights.syncSeed", "Sync seeded rule sets")}
+        </Button>
+        <label className="block text-sm">
+          {t(
+            "compensation.rights.confirmationReference",
+            "Confirmation reference (governing text check)"
+          )}
+          <Input
+            value={reference}
+            onChange={e => setReference(e.target.value)}
+            className="w-80"
+          />
+        </label>
+      </div>
+      {catalog.data.ruleSets.map(set => (
+        <Card key={set.jurisdiction} className="shadow-sm rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-base">
+              {set.jurisdiction} · {set.version} ·{" "}
+              <Badge variant="outline">{set.confirmationStatus}</Badge>
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {set.notes}{" "}
+              <a className="underline" href={set.sourceUrl} rel="noreferrer">
+                {t("compensation.rights.source", "source")}
+              </a>{" "}
+              · {t("compensation.rights.effectiveFrom", "effective from")}{" "}
+              {set.effectiveFrom ?? l("غير محدد", "TBD")}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("compensation.rights.rule", "Rule")}</TableHead>
+                  <TableHead>
+                    {t("compensation.admin.amount", "Amount")}
+                  </TableHead>
+                  <TableHead>
+                    {t("compensation.rights.status", "Status")}
+                  </TableHead>
+                  <TableHead>
+                    {t("compensation.admin.actions", "Actions")}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {set.rules.map(rule => (
+                  <TableRow key={rule.code}>
+                    <TableCell className="text-sm">
+                      <span className="font-mono text-xs">{rule.code}</span>
+                      <br />
+                      {rule.title}
+                      {rule.note && (
+                        <p className="text-xs text-muted-foreground">
+                          {rule.note}
+                        </p>
+                      )}
+                      <p className="text-xs">
+                        {rule.sources.map((s, i) => (
+                          <span key={s.url}>
+                            {i > 0 && ", "}
+                            <a
+                              className="underline"
+                              href={s.url}
+                              rel="noreferrer"
+                            >
+                              {s.title}
+                            </a>{" "}
+                            [{s.kind}]
+                          </span>
+                        ))}
+                      </p>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      {JSON.stringify(rule.amount)}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      <Badge
+                        variant={
+                          rule.confirmationStatus === "disputed"
+                            ? "destructive"
+                            : rule.confirmationStatus === "official"
+                              ? "default"
+                              : "outline"
+                        }
+                      >
+                        {rule.confirmationStatus}
+                      </Badge>
+                      {rule.disputeGroup && (
+                        <p className="text-xs">
+                          {t("compensation.rights.candidate", "candidate")}{" "}
+                          {rule.candidate} · {rule.disputeGroup}
+                        </p>
+                      )}
+                      {rule.confirmation && (
+                        <p className="text-xs">
+                          {rule.confirmation.decision} ·{" "}
+                          {rule.confirmation.reference}
+                        </p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {rule.requiresConfirmation &&
+                        catalog.data?.source === "database" && (
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={
+                                reference.trim().length < 5 || confirm.isPending
+                              }
+                              onClick={() =>
+                                confirm.mutate({
+                                  ruleCode: rule.code,
+                                  decision: "confirmed",
+                                  reference,
+                                })
+                              }
+                            >
+                              {t("compensation.rights.confirm", "Confirm")}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={
+                                reference.trim().length < 5 || confirm.isPending
+                              }
+                              onClick={() =>
+                                confirm.mutate({
+                                  ruleCode: rule.code,
+                                  decision: "rejected",
+                                  reference,
+                                })
+                              }
+                            >
+                              {t("compensation.rights.reject", "Reject")}
+                            </Button>
+                          </div>
+                        )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// US DOT refund deadlines
+// ============================================================================
+
+function RefundDeadlines() {
+  const { t } = useTranslation();
+  const [overdueOnly, setOverdueOnly] = useState(true);
+  const [bookingId, setBookingId] = useState("");
+  const [trigger, setTrigger] = useState<
+    "carrier_cancellation" | "significant_change"
+  >("carrier_cancellation");
+  const [tenderClass, setTenderClass] = useState<"card" | "other">("card");
+  const [triggeredAt, setTriggeredAt] = useState("");
+  const list = trpc.compensation.listRefundDeadlines.useQuery({ overdueOnly });
+  const open = trpc.compensation.openRefundDeadline.useMutation({
+    onSuccess: r => {
+      toast.success(`${r.ruleCode} · ${new Date(r.dueAt).toISOString()}`);
+      void list.refetch();
+    },
+    onError: e => toast.error(e.message),
+  });
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "compensation.rights.refundRule",
+          "14 CFR 260: 7 business days (card) or 20 calendar days (other) from the involuntary trigger. Weekends excluded; US federal holidays are not modelled."
+        )}
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Input
+          className="w-32"
+          placeholder={t("compensation.admin.booking", "Booking")}
+          value={bookingId}
+          onChange={e => setBookingId(e.target.value)}
+        />
+        <select
+          className="border p-2"
+          value={trigger}
+          onChange={e => setTrigger(e.target.value as typeof trigger)}
+        >
+          <option value="carrier_cancellation">carrier_cancellation</option>
+          <option value="significant_change">significant_change</option>
+        </select>
+        <select
+          className="border p-2"
+          value={tenderClass}
+          onChange={e => setTenderClass(e.target.value as typeof tenderClass)}
+        >
+          <option value="card">card</option>
+          <option value="other">other</option>
+        </select>
+        <Input
+          type="datetime-local"
+          dir="ltr"
+          value={triggeredAt}
+          onChange={e => setTriggeredAt(e.target.value)}
+        />
+        <Button
+          size="sm"
+          disabled={!bookingId || !triggeredAt || open.isPending}
+          onClick={() =>
+            open.mutate({
+              bookingId: Number(bookingId),
+              trigger,
+              tenderClass,
+              triggeredAt: new Date(`${triggeredAt}:00Z`).toISOString(),
+            })
+          }
+        >
+          {t("compensation.rights.openDeadline", "Record refund due")}
+        </Button>
+        <label className="text-sm">
+          <input
+            type="checkbox"
+            checked={overdueOnly}
+            onChange={e => setOverdueOnly(e.target.checked)}
+          />{" "}
+          {t("compensation.rights.overdueOnly", "Overdue only")}
+        </label>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t("compensation.admin.booking", "Booking")}</TableHead>
+            <TableHead>{t("compensation.rights.trigger", "Trigger")}</TableHead>
+            <TableHead>{t("compensation.rights.dueAt", "Due")}</TableHead>
+            <TableHead>{t("compensation.rights.status", "Status")}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {list.data?.map(row => (
+            <TableRow key={row.id}>
+              <TableCell>B-{row.bookingId}</TableCell>
+              <TableCell className="text-sm">
+                {row.trigger} · {row.tenderClass} ·{" "}
+                {new Date(row.triggeredAt).toISOString()}
+              </TableCell>
+              <TableCell className="text-sm">
+                {new Date(row.dueAt).toISOString()}
+                <p className="text-xs text-muted-foreground">{row.basis}</p>
+              </TableCell>
+              <TableCell>
+                {row.completedAt ? (
+                  <Badge variant={row.metOnTime ? "default" : "destructive"}>
+                    {row.metOnTime
+                      ? t("compensation.rights.metOnTime", "Refunded on time")
+                      : t("compensation.rights.late", "Refunded late")}
+                  </Badge>
+                ) : row.overdue ? (
+                  <Badge variant="destructive">
+                    {t("compensation.rights.overdue", "Overdue")}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">
+                    {t("compensation.rights.open", "Open")}
+                  </Badge>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+          {list.data?.length === 0 && (
+            <TableRow>
+              <TableCell
+                colSpan={4}
+                className="text-center text-muted-foreground"
+              >
+                {t("compensation.rights.noDeadlines", "No refund deadlines")}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -1163,7 +1910,7 @@ export function CompensationManagement() {
         <p className="text-muted-foreground">
           {t(
             "compensation.admin.pageSubtitle",
-            "EU261, US DOT, and local compensation claims tracking"
+            "GACA 2023, EU261, UK261 and US DOT passenger-rights claims with auditable evaluation"
           )}
         </p>
       </div>
@@ -1186,6 +1933,14 @@ export function CompensationManagement() {
             <Settings className="h-4 w-4" />
             {t("compensation.admin.rules", "Rules")}
           </TabsTrigger>
+          <TabsTrigger value="catalogue" className="gap-2">
+            <Scale className="h-4 w-4" />
+            {t("compensation.rights.catalogue", "Rule catalogue")}
+          </TabsTrigger>
+          <TabsTrigger value="refunds" className="gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            {t("compensation.rights.refundDeadlines", "Refund deadlines")}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="claims" className="mt-4">
@@ -1198,6 +1953,14 @@ export function CompensationManagement() {
 
         <TabsContent value="rules" className="mt-4">
           <RulesConfiguration />
+        </TabsContent>
+
+        <TabsContent value="catalogue" className="mt-4">
+          <RuleCatalogue />
+        </TabsContent>
+
+        <TabsContent value="refunds" className="mt-4">
+          <RefundDeadlines />
         </TabsContent>
       </Tabs>
     </div>

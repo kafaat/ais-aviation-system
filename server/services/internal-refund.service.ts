@@ -26,6 +26,8 @@ import {
 import { assertNoOrderRefundPending } from "./order-refunds.service";
 import { recordEvent } from "./outbox.service";
 import { flightBookingCondition } from "./flight-state.service";
+// Passenger-rights hook (workstream 9): US DOT 14 CFR 260 refund-timeline tracking.
+import { settleRefundDeadlines } from "./passenger-rights-refund.service";
 
 export const internalRefundInput = z.object({
   bookingId: z.number().int().positive(),
@@ -34,6 +36,11 @@ export const internalRefundInput = z.object({
   approvalReference: z.string().trim().min(3).max(200),
   reason: z.string().trim().min(3).max(500),
   cancelItinerary: z.boolean(),
+  /** Passenger-rights hook: when set, the refund is an involuntary one and its
+   * US DOT deadline row is settled (or opened and settled) against this receipt. */
+  involuntaryTrigger: z
+    .enum(["carrier_cancellation", "significant_change"])
+    .optional(),
 });
 export const internalRefundResult = z.object({
   ledgerId: z.number().int().positive(),
@@ -347,6 +354,20 @@ export async function refundInternalFunding(
           requestId: input.requestId,
         }),
       });
+      // --- Passenger-rights hook (US DOT refund timeline) -------------------
+      // Internal funding is never a card tender, so the 20-calendar-day limit
+      // applies. Open deadlines for the booking are settled against this receipt.
+      if (input.cancelItinerary || input.involuntaryTrigger) {
+        await settleRefundDeadlines(tx, {
+          bookingId: booking.id,
+          ledgerId: receipt.insertId,
+          completedAt: new Date(),
+          tenderClass: "other",
+          trigger: input.involuntaryTrigger,
+          actorId,
+        });
+      }
+      // --- end passenger-rights hook ----------------------------------------
       if (input.cancelItinerary) {
         await tx
           .update(bookings)
