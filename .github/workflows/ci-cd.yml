@@ -108,6 +108,8 @@ jobs:
             echo "::error::The following files have formatting issues:"
             git diff --name-only
             echo ""
+            echo "Formatter diff (first 400 lines):"
+            git --no-pager diff -- . | sed -n '1,400p'
             echo "Run 'pnpm format' locally and commit the changes."
             exit 1
           fi
