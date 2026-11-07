@@ -23,6 +23,7 @@ const INSECURE_SERVICE_TOKENS = new Set([
   "auth_service_token",
   "auth-service-token",
   "your-auth-service-token",
+  "local-development-auth-service-token-not-for-production",
   "placeholder",
   "secret",
   "token",
@@ -32,8 +33,8 @@ export const AUTH_SERVICE_TOKEN_MIN_LENGTH = 32;
 /**
  * Why the configured service credential cannot be used, or null when it can.
  * Production requires an explicit random value of at least 32 characters;
- * development and test may run without one (the auth service then answers
- * 503) but never with a placeholder.
+ * development and test may start without one, but the client suppresses
+ * password-bearing requests locally; no mode accepts a placeholder.
  */
 export function authServiceCredentialProblem(
   value: string | undefined,
@@ -48,6 +49,8 @@ export function authServiceCredentialProblem(
   if (/\s/.test(token)) return "AUTH_SERVICE_TOKEN must not contain whitespace";
   if (INSECURE_SERVICE_TOKENS.has(token.toLowerCase()))
     return "AUTH_SERVICE_TOKEN must not be a placeholder value";
+  if (token.length >= AUTH_SERVICE_TOKEN_MIN_LENGTH && new Set(token).size === 1)
+    return "AUTH_SERVICE_TOKEN must not use a repeated-character value";
   if (production && token.length < AUTH_SERVICE_TOKEN_MIN_LENGTH)
     return `AUTH_SERVICE_TOKEN must be at least ${AUTH_SERVICE_TOKEN_MIN_LENGTH} characters in production`;
   return null;
