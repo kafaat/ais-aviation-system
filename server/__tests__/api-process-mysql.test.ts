@@ -1,4 +1,10 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createServer as createPortReservation } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import mysql from "mysql2/promise";
 import Redis from "ioredis";
@@ -207,6 +213,115 @@ nativeDescribe.sequential(
       expect(trpcData(recovered.body)).toEqual({ ready: true });
       expect(api!.pid).toBe(pid);
     }, 25_000);
+
+    it("proves the Nginx loopback health path against the real API process and native MySQL", async () => {
+      phase = "real Nginx to API readiness";
+      const nginxConfig = await readFile("nginx.conf", "utf8");
+      const healthLocations = Array.from(
+        nginxConfig.matchAll(/^\s*location\s*=\s*\/health\s*\{[^{}]*\}/gm),
+        match => match[0]
+      );
+      expect(healthLocations).toHaveLength(2);
+      expect(healthLocations[0]).toContain("allow 127.0.0.1;");
+      expect(healthLocations[0]).toContain("deny all;");
+      expect(healthLocations[0]).toContain(
+        "proxy_pass http://ais_api/api/trpc/health.ready;"
+      );
+      const portHolder = createPortReservation();
+      await new Promise<void>((resolve, reject) => {
+        portHolder.once("error", reject);
+        portHolder.listen(0, "127.0.0.1", resolve);
+      });
+      const address = portHolder.address();
+      if (!address || typeof address === "string")
+        throw new Error("Cannot reserve Nginx test port");
+      const port = address.port;
+      await new Promise<void>(resolve => portHolder.close(() => resolve()));
+      const upstream = new URL(api!.origin);
+      const directory = await mkdtemp(join(tmpdir(), "ais-live-nginx-"));
+      const configuration = join(directory, "nginx.conf");
+      let nginx: ReturnType<typeof spawn> | undefined;
+      let errors = "";
+      try {
+        const configText = [
+          "worker_processes 1;",
+          "pid " + directory + "/nginx.pid;",
+          "error_log " + directory + "/error.log warn;",
+          "events { worker_connections 128; }",
+          "http {",
+          "  access_log off;",
+          "  upstream ais_api { server 127.0.0.1:" + upstream.port + "; }",
+          "  server { listen 127.0.0.1:" + port + ";",
+          healthLocations[0],
+          "    location / { return 301 https://ais.example.com$request_uri; }",
+          "  }",
+          "}",
+        ].join("\n");
+        await writeFile(configuration, configText);
+        const syntax = spawnSync(
+          "nginx",
+          ["-t", "-c", configuration, "-p", directory],
+          { encoding: "utf8" }
+        );
+        expect(syntax.status, syntax.stderr || syntax.error?.message).toBe(0);
+        nginx = spawn(
+          "nginx",
+          ["-c", configuration, "-p", directory, "-g", "daemon off;"],
+          { stdio: ["ignore", "ignore", "pipe"] }
+        );
+        nginx.stderr?.on("data", (chunk: Buffer) => {
+          errors = (errors + chunk.toString("utf8")).slice(-3000);
+        });
+        const healthUrl = "http://127.0.0.1:" + port + "/health";
+        let connected = false;
+        for (let attempt = 0; attempt < 80; attempt++) {
+          try {
+            const probe = await fetch(healthUrl, {
+              signal: AbortSignal.timeout(1000),
+            });
+            if (probe.status === 200) {
+              connected = true;
+              break;
+            }
+          } catch {
+            // The process may not have opened its listener yet.
+          }
+          if (nginx.exitCode !== null)
+            throw new Error("Nginx exited unexpectedly: " + errors);
+          await delay(50);
+        }
+        expect(connected, errors).toBe(true);
+        const live = await fetch(healthUrl, { signal: AbortSignal.timeout(3000) });
+        expect(live.status).toBe(200);
+        expect((await live.text())).toContain('"ready":true');
+        expect((await fetch(healthUrl, { method: "HEAD" })).status).toBe(200);
+        const notHealth = await fetch(
+          "http://127.0.0.1:" + port + "/api/trpc/health.check",
+          { redirect: "manual" }
+        );
+        expect(notHealth.status).toBe(301);
+        // Disconnect only the child API's database transport. The source MySQL
+        // remains healthy and the proxy must reflect the child readiness.
+        api!.proxy.disconnect();
+        phase = "real Nginx to API during native DB outage";
+        const down = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
+        expect(down.status).toBe(503);
+        assertPublicResponse(await down.text());
+        expect((await fetch(healthUrl, { method: "HEAD" })).status).toBe(503);
+        api!.proxy.reconnect();
+        phase = "real Nginx to API after native DB recovery";
+        await ready();
+        expect((await fetch(healthUrl, { signal: AbortSignal.timeout(3000) })).status).toBe(200);
+      } finally {
+        api!.proxy.reconnect();
+        if (nginx && nginx.exitCode === null) {
+          nginx.kill("SIGTERM");
+          await Promise.race([once(nginx, "exit"), delay(1500)]);
+          if (nginx.exitCode === null) nginx.kill("SIGKILL");
+        }
+        await rm(directory, { recursive: true, force: true });
+      }
+    }, 30_000);
 
     it("keeps detailed health protected on both registered transports", async () => {
       phase = "protected health";
