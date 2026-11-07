@@ -40,8 +40,13 @@ test.beforeEach(async ({ page }) => {
   // Use the actual registration contract and browser password login. Sharing
   // one customer across all five payment journeys exhausts the legitimate
   // per-user financial-write quota and couples otherwise independent tests.
+  // The auth service serves only callers holding the shared credential.
+  const serviceToken = process.env.AUTH_SERVICE_TOKEN;
+  if (!serviceToken)
+    throw new Error("Owned UI-05 auth service credential is required");
   const registration = await page.request.post(`${authService}/auth/register`, {
     data: customer,
+    headers: { "X-Auth-Service-Token": serviceToken },
   });
   expect(registration.ok(), "Actual customer registration must succeed").toBe(
     true
