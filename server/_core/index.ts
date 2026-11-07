@@ -1,3 +1,6 @@
+// Load .env before evaluating dependencies that capture service configuration
+// at module import time (notably auth-service.client).
+import "dotenv/config";
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
 import { assertAuthServiceCredential } from "../services/auth-service.client";
 import { assertProviderBoundary } from "./provider-boundary";
@@ -15,7 +18,6 @@ import {
   startSLAMonitoring,
   stopSLAMonitoring,
 } from "../services/sla-monitoring.service";
-import "dotenv/config";
 // Initialize Sentry first (before other imports that might throw)
 import { initSentry, flushSentry } from "../services/sentry.service";
 
