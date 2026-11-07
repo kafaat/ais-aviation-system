@@ -127,9 +127,15 @@ async function startServer() {
   // Route labels, memory, CPU and error rates are operational detail;
   // production requires a usable scraper token; local modes may omit it.
   const metricsTokenPattern = /^[A-Za-z0-9._~+/-]+=*$/;
+  const usableMetricsToken = (value: string | undefined) =>
+    Boolean(
+      value &&
+        metricsTokenPattern.test(value) &&
+        (process.env.NODE_ENV !== "production" || value.length >= 32)
+    );
   if (
     process.env.NODE_ENV === "production" &&
-    !metricsTokenPattern.test(process.env.METRICS_TOKEN ?? "")
+    !usableMetricsToken(process.env.METRICS_TOKEN)
   )
     console.warn(
       "[security] METRICS_TOKEN is absent or invalid: /api/metrics is disabled."
@@ -138,7 +144,7 @@ async function startServer() {
     const expected = process.env.METRICS_TOKEN;
     if (
       (process.env.NODE_ENV === "production" || expected) &&
-      !metricsTokenPattern.test(expected ?? "")
+      !usableMetricsToken(expected)
     ) {
       res
         .status(503)
