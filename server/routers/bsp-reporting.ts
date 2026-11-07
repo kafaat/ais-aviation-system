@@ -12,7 +12,8 @@ import { responseContracts } from "../contracts/bsp-reporting";
  *
  * Admin endpoints for IATA BSP (Billing and Settlement Plan) reporting,
  * AHC (Airlines Handling Charges) reports, settlement cycle management,
- * reconciliation, HOT file exports, and IATA compliance validation.
+ * internal reconciliation and IATA compliance validation. RET/HOT exchange
+ * with the BSP and the settlement gate live in the bspSettlement router.
  */
 
 import { z } from "zod";
@@ -23,7 +24,6 @@ import {
   calculateAgentCommissions,
   getSettlementCycle,
   reconcileBSPTransactions,
-  generateHOTFile,
   validateIATACompliance,
 } from "../services/bsp-reporting.service";
 
@@ -324,21 +324,8 @@ export const bspReportingRouter = router({
       };
     }),
 
-  /**
-   * Export IATA HOT (Hand Off Tape) file for the current cycle
-   */
-  exportHOT: adminProcedure
-    .output(responseContracts["exportHOT"])
-    .mutation(async () => {
-      const result = await generateHOTFile();
-      return {
-        filename: result.filename,
-        content: result.content,
-        contentType: "text/plain",
-        recordCount: result.recordCount,
-        generatedAt: result.generatedAt.toISOString(),
-      };
-    }),
+  // HOT is the inbound billing file received from the BSP; the airline sends
+  // the RET. Both live in the bspSettlement router (server/routers/bsp-settlement.ts).
 
   /**
    * Get agent settlement data for a period

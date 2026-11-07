@@ -270,13 +270,6 @@ export const responseContracts = {
     ),
     reconciliationStatus: z.enum(["clean", "discrepancies_found"]),
   }),
-  exportHOT: z.object({
-    filename: z.string(),
-    content: z.string(),
-    contentType: z.string(),
-    recordCount: outputNumber,
-    generatedAt: z.string(),
-  }),
   getAgentSettlements: z.object({
     cycleNumber: outputNumber,
     period: z.object({ start: z.string(), end: z.string() }),

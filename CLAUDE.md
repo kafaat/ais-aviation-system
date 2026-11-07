@@ -567,6 +567,7 @@ Deployment receipts are tracked separately in [provider acceptance](docs/operati
 | ndcUnpaidServicing | implemented | Unpaid pending invoice, no active checkout, same airline/tenant SAR economy or business offer, canonical passengers; no EMD or external fulfillment certification |
 | ndcPaidServicing | implemented | Local paid SAR itinerary exchange and catalog entitlements before check-in; same tenant/airline and cabin across up to six segments, no unresolved ancillary fulfillment. Original Stripe payer refund receipts required for a lower fare. |
 | ndcExternalFulfillment | blocked | Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts |
+| bspSettlement | implemented | RET generation and HOT ingestion implemented; transmission and acceptance pending BSP link agreement. Direction: airline sends DISH RET, receives HOT. Transmission requires a confirmed settlement_link_specifications row, fare components for every line and a certified transport adapter; the record offsets are the AIS profile and must be certified against the DISH edition in the agreement. ARC/other plans are labelled stubs. |
 | kioskHardware | blocked | Authenticated device heartbeat and physical printer/scanner acceptance; digital documents are separate |
 | dcsDispatch | demo | Verified departure-control provider and dispatch acceptance |
 | gdsSynchronization | demo | Contracted GDS connection and round-trip order synchronization |

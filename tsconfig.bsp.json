@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "incremental": false, "types": ["node"] },
+  "include": [
+    "server/services/bsp-settlement.service.ts",
+    "server/services/bsp/*.ts",
+    "server/routers/bsp-settlement.ts",
+    "server/routers/bsp-reporting.ts",
+    "server/services/capability-catalog.service.ts",
+    "server/__tests__/bsp-*.test.ts"
+  ],
+  "exclude": ["node_modules"]
+}

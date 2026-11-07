@@ -34,6 +34,14 @@ export const capabilityCatalog = [
       "Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts",
   },
   {
+    id: "bspSettlement",
+    implementation: "implemented",
+    owner: "bsp-settlement.service and server/services/bsp",
+    consumer: "bspSettlement router and /admin/bsp-settlement",
+    requirement:
+      "RET generation and HOT ingestion implemented; transmission and acceptance pending BSP link agreement. Direction: airline sends DISH RET, receives HOT. Transmission requires a confirmed settlement_link_specifications row, fare components for every line and a certified transport adapter; the record offsets are the AIS profile and must be certified against the DISH edition in the agreement. ARC/other plans are labelled stubs.",
+  },
+  {
     id: "kioskHardware",
     implementation: "blocked",
     owner: "kiosk.service",
