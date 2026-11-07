@@ -65,6 +65,12 @@ describe("auth service credential policy", () => {
     ["blank", "   ", "required in production"],
     ["placeholder", "CHANGE_ME", "placeholder"],
     ["placeholder, other case", "changeme", "placeholder"],
+    [
+      "shipped development sample",
+      "local-development-auth-service-token-not-for-production",
+      "placeholder",
+    ],
+    ["repeated characters", "x".repeat(32), "repeated-character"],
     ["short", "x".repeat(31), "at least 32 characters"],
     ["whitespace inside", `${"a".repeat(20)} ${"b".repeat(20)}`, "whitespace"],
   ])(
@@ -127,9 +133,16 @@ describe("auth service credential policy", () => {
       null
     );
     const responses = await Promise.all([
-      first.authServiceClient.register("someone@example.test", "password", "Name"),
+      first.authServiceClient.register(
+        "someone@example.test",
+        "password",
+        "Name"
+      ),
       first.authServiceClient.login("someone@example.test", "password"),
-      first.authServiceClient.verifyPassword("someone@example.test", "password"),
+      first.authServiceClient.verifyPassword(
+        "someone@example.test",
+        "password"
+      ),
     ]);
     expect(responses).toEqual([
       { success: false, message: "Auth service unavailable" },
