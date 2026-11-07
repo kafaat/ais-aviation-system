@@ -67,10 +67,21 @@ under the same rules. Compose requires the variable at interpolation time.
 Staging activation plan (variables only, no values in this repository):
 
 1. `ais-auth` and `ais-web` already carry `AUTH_SERVICE_TOKEN` (names verified
-   read-only on 7 November; equality and length are not verified from the
-   repository). Before merging, the operator confirms in the Railway dashboard
-   that both values are identical and at least 32 characters, or sets a fresh
-   `openssl rand -hex 32` value on both services in one change.
+   read-only on 7 November). **Equality is proven by the auth service's own
+   request log, without reading either value:** the service enforces the
+   header whenever the variable is set, and on 3 November 09:36–09:37 UTC,
+   after both variables were set on 2 November, it answered
+   `POST /auth/verify-password` and `POST /auth/register` with 200 to a caller
+   on the private network. `ais-web` is the only service in the environment
+   besides `ais-auth` that holds the variable (`ais-acceptance` and
+   `ais-worker` do not), so the caller presented the identical value. Length is
+   not readable from the repository; the 2 November record states the values
+   were generated at random, and the new start-up rule will refuse a value
+   shorter than 32 characters, which is a visible failure, not a silent one.
+   `ais-auth` also carries a `DEBUG` variable whose value is not visible here;
+   the start-up refusal applies only when `DEBUG` is false or unset, so the
+   operator should confirm it is not `true` on staging, or the fail-closed
+   start-up is not exercised there (runtime enforcement still is).
 2. Merge; Railway redeploys both services from `main`. The auth start-up log
    must show Uvicorn serving without a `ValidationError` naming
    `AUTH_SERVICE_TOKEN`; the web start-up log must not show `[security]
