@@ -12,8 +12,12 @@ import {
   paymentReceipts,
 } from "../../drizzle/schema";
 import {
-  planSchema,
+  assertServicingConsent,
+  loggedServicing,
+  parseServicingPlan,
+  ServicingAccessDenied,
   validatePaidServiceQuote,
+  type ServicingAcceptance,
 } from "./order-servicing.service";
 import {
   assertNoCollectionReview,
@@ -33,7 +37,8 @@ export async function createOrderServiceCheckout(
   modificationId: number,
   userId: number,
   baseUrl: string,
-  tenantId: number | null = null
+  tenantId: number | null = null,
+  consent?: ServicingAcceptance
 ) {
   const db = await getDb();
   if (!db) throw new Error("Checkout storage unavailable");
@@ -42,104 +47,47 @@ export async function createOrderServiceCheckout(
     .from(bookingModifications)
     .where(eq(bookingModifications.id, modificationId))
     .limit(1);
-  if (!hint || hint.userId !== userId)
-    throw new Error("Owned modification not found");
-  const claim = await db.transaction(async tx => {
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, hint.bookingId))
-      .for("update");
-    const [change] = await tx
-      .select()
-      .from(bookingModifications)
-      .where(eq(bookingModifications.id, modificationId))
-      .for("update");
-    if (
-      !booking ||
-      booking.userId !== userId ||
-      (tenantId !== null && tenantId !== booking.tenantId) ||
-      !change ||
-      change.bookingId !== booking.id ||
-      change.userId !== userId ||
-      booking.status !== "confirmed" ||
-      change.status !== "pending" ||
-      change.totalCost <= 0
-    )
-      throw new Error("Modification is not payable");
-    await assertNoCollectionReview(tx, booking.id);
-    const { plan } = await validatePaidServiceQuote(tx, booking, change);
-    if (change.checkoutRequestId) {
-      const request = requestSchema.parse(change.checkoutData);
-      if (
-        request.amount !== change.totalCost ||
-        request.userId !== userId ||
-        request.bookingId !== booking.id
-      )
-        throw new Error("Checkout request changed");
-      return {
-        request,
-        requestId: change.checkoutRequestId,
-        sessionId: change.checkoutSessionId,
-        url: change.checkoutUrl,
-      };
-    }
-    const base = new URL(baseUrl);
-    if (
-      !["http:", "https:"].includes(base.protocol) ||
-      base.username ||
-      base.password
-    )
-      throw new Error("Invalid application URL");
-    const request = requestSchema.parse({
-      amount: change.totalCost,
-      bookingId: booking.id,
+  const denied = (bookingId?: number) =>
+    new ServicingAccessDenied("Owned modification not found", {
       userId,
-      expiresAt: Math.floor(Date.now() / 1000) + 31 * 60,
-      baseUrl: base.origin,
-      requestedAt: new Date().toISOString(),
+      tenantId,
+      bookingId,
+      modificationId,
+      action: "order.servicing.checkout",
     });
-    for (const leg of [...plan.segments].sort(
-      (a, b) => a.flightId - b.flightId
-    )) {
-      if (!leg.holdId) continue;
-      await tx
+  if (!hint || hint.userId !== userId)
+    return loggedServicing(() => Promise.reject(denied(hint?.bookingId)));
+  const claim = await loggedServicing(() =>
+    db.transaction(async tx => {
+      const [booking] = await tx
         .select()
-        .from(flights)
-        .where(eq(flights.id, leg.flightId))
-        .for("update");
-      const [hold] = await tx
-        .select()
-        .from(inventoryLocks)
-        .where(eq(inventoryLocks.id, leg.holdId))
+        .from(bookings)
+        .where(eq(bookings.id, hint.bookingId))
         .for("update");
       if (
-        !hold ||
-        hold.status !== "active" ||
-        hold.expiresAt <= new Date() ||
-        hold.userId !== userId ||
-        hold.flightId !== leg.flightId ||
-        hold.cabinClass !== leg.cabinClass ||
-        hold.numberOfSeats !== booking.numberOfPassengers
+        !booking ||
+        booking.userId !== userId ||
+        (tenantId !== null && tenantId !== booking.tenantId)
       )
-        throw new Error("Replacement capacity hold expired");
-      await tx
-        .update(inventoryLocks)
-        .set({ expiresAt: new Date((request.expiresAt + 60) * 1000) })
-        .where(eq(inventoryLocks.id, hold.id));
-    }
-    plan.expiresAt = new Date((request.expiresAt + 60) * 1000).toISOString();
-    const requestId = randomUUID();
-    await tx
-      .update(bookingModifications)
-      .set({
-        checkoutRequestId: requestId,
-        checkoutData: request,
-        servicingPayload: plan,
-      })
-      .where(eq(bookingModifications.id, modificationId));
-    return { request, requestId, sessionId: null, url: null };
-  });
+        throw denied(hint.bookingId);
+      const [change] = await tx
+        .select()
+        .from(bookingModifications)
+        .where(eq(bookingModifications.id, modificationId))
+        .for("update");
+      if (
+        !change ||
+        change.bookingId !== booking.id ||
+        change.userId !== userId ||
+        booking.status !== "confirmed" ||
+        change.status !== "pending" ||
+        change.totalCost <= 0
+      )
+        throw new Error("Modification is not payable");
+      await assertNoCollectionReview(tx, booking.id);
+      return claimCheckout(tx, booking, change, userId, baseUrl, consent);
+    })
+  );
   if (claim.sessionId && claim.url)
     return { provider: "stripe", sessionId: claim.sessionId, url: claim.url };
   if (Date.now() - Date.parse(claim.request.requestedAt) > 23 * 3600000)
@@ -153,6 +101,8 @@ export async function createOrderServiceCheckout(
     userId: String(userId),
     checkoutRequestId: claim.requestId,
   };
+  // The provider idempotency key is the saved checkout request, never the
+  // request trace: a retry runs in a new trace and must replay the same charge.
   const session = await stripe.checkout.sessions.create(
     {
       mode: "payment",
@@ -192,6 +142,96 @@ export async function createOrderServiceCheckout(
     );
   return { provider: "stripe", sessionId: session.id, url: session.url };
 }
+/** Validate the quote under the booking lock and save, once, the checkout
+ * request that every later attempt replays. */
+async function claimCheckout(
+  tx: SettlementTx,
+  booking: typeof bookings.$inferSelect,
+  change: Change,
+  userId: number,
+  baseUrl: string,
+  consent: ServicingAcceptance | undefined
+) {
+  const { plan } = await validatePaidServiceQuote(tx, booking, change);
+  // After the quote's own preconditions, before any provider call or state change.
+  assertServicingConsent(change, consent, plan);
+  if (change.checkoutRequestId) {
+    const request = requestSchema.parse(change.checkoutData);
+    if (
+      request.amount !== change.totalCost ||
+      request.userId !== userId ||
+      request.bookingId !== booking.id
+    )
+      throw new Error("Checkout request changed");
+    return {
+      request,
+      requestId: change.checkoutRequestId,
+      sessionId: change.checkoutSessionId,
+      url: change.checkoutUrl,
+    };
+  }
+  const base = new URL(baseUrl);
+  if (
+    !["http:", "https:"].includes(base.protocol) ||
+    base.username ||
+    base.password
+  )
+    throw new Error("Invalid application URL");
+  const request = requestSchema.parse({
+    amount: change.totalCost,
+    bookingId: booking.id,
+    userId,
+    expiresAt: Math.floor(Date.now() / 1000) + 31 * 60,
+    baseUrl: base.origin,
+    requestedAt: new Date().toISOString(),
+  });
+  for (const leg of [...plan.segments].sort(
+    (a, b) => a.flightId - b.flightId
+  )) {
+    if (!leg.holdId) continue;
+    await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, leg.flightId))
+      .for("update");
+    const [hold] = await tx
+      .select()
+      .from(inventoryLocks)
+      .where(eq(inventoryLocks.id, leg.holdId))
+      .for("update");
+    if (
+      !hold ||
+      hold.status !== "active" ||
+      hold.expiresAt <= new Date() ||
+      hold.userId !== userId ||
+      hold.flightId !== leg.flightId ||
+      hold.cabinClass !== leg.cabinClass ||
+      hold.numberOfSeats !== booking.numberOfPassengers
+    )
+      throw new Error("Replacement capacity hold expired");
+    await tx
+      .update(inventoryLocks)
+      .set({ expiresAt: new Date((request.expiresAt + 60) * 1000) })
+      .where(eq(inventoryLocks.id, hold.id));
+  }
+  plan.expiresAt = new Date((request.expiresAt + 60) * 1000).toISOString();
+  if (consent)
+    plan.consent = {
+      ...consent,
+      acceptedBy: consent.acceptedBy ?? { kind: "passenger", actorId: userId },
+      acceptedAt: request.requestedAt,
+    };
+  const requestId = randomUUID();
+  await tx
+    .update(bookingModifications)
+    .set({
+      checkoutRequestId: requestId,
+      checkoutData: request,
+      servicingPayload: plan,
+    })
+    .where(eq(bookingModifications.id, change.id));
+  return { request, requestId, sessionId: null, url: null };
+}
 type Change = typeof bookingModifications.$inferSelect;
 
 function matchesCheckout(change: Change, session: Stripe.Checkout.Session) {
@@ -221,7 +261,7 @@ async function releasePendingQuote(
   change: Change,
   expiry?: { sessionId: string; eventId: string }
 ) {
-  const plan = planSchema.parse(change.servicingPayload);
+  const plan = parseServicingPlan(change.servicingPayload);
   for (const leg of [...plan.segments].sort(
     (a, b) => a.flightId - b.flightId
   )) {
@@ -330,8 +370,20 @@ export async function cancelOrderServiceQuote(
     .from(bookingModifications)
     .where(eq(bookingModifications.id, modificationId))
     .limit(1);
+  const denied = () =>
+    loggedServicing(() =>
+      Promise.reject(
+        new ServicingAccessDenied("Owned servicing request not found", {
+          userId,
+          tenantId,
+          bookingId: hint?.bookingId,
+          modificationId,
+          action: "order.servicing.cancel",
+        })
+      )
+    );
   if (!hint || hint.userId !== userId || !hint.servicingPayload)
-    throw new Error("Owned servicing request not found");
+    return denied();
   const [owner] = await db
     .select()
     .from(bookings)
@@ -342,7 +394,7 @@ export async function cancelOrderServiceQuote(
     owner.userId !== userId ||
     (tenantId !== null && owner.tenantId !== tenantId)
   )
-    throw new Error("Owned servicing request not found");
+    return denied();
   if (hint.checkoutRequestId && !hint.checkoutSessionId)
     throw new Error("Checkout outcome must be reconciled before cancellation");
   if (hint.checkoutSessionId) {
