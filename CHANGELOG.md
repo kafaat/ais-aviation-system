@@ -2,13 +2,14 @@
 
 ## What's Changed in v1.39.1
 
-<!-- ais-release-source: 71b88afff76bea7e475f9ee04a522e1474b6d33f -->
+<!-- ais-release-source: 7609dd346fe0cb601df786c74fbb30d154677304 -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
 
 - fix(auth): require explicit validated database connection (f285bc59)
 - fix(ops): restore Nginx readiness and native proxy acceptance (#297) (71b88aff)
+- fix(metrics): fail closed for missing production scraper credentials (#302) (7609dd34)
 
 ### Other Changes
 
