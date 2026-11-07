@@ -119,6 +119,11 @@ let metrics: ReturnType<typeof vi.spyOn>;
 beforeAll(async () => {
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("METRICS_TOKEN", token);
+  // Production start-up refuses to run without the shared auth credential.
+  vi.stubEnv(
+    "AUTH_SERVICE_TOKEN",
+    "ais-metrics-http-fixture-auth-service-credential-2026"
+  );
   vi.stubEnv("TRUSTED_PROXIES", "loopback");
   vi.stubEnv("PORT", "0");
   const on = process.on.bind(process);

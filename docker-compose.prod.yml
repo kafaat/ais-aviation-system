@@ -11,7 +11,7 @@ services:
       - .env.prod
     environment:
       AUTH_SERVICE_URL: http://auth-service:8000
-      AUTH_SERVICE_TOKEN: ${AUTH_SERVICE_TOKEN:-}
+      AUTH_SERVICE_TOKEN: ${AUTH_SERVICE_TOKEN:?Set the shared auth service credential (at least 32 random characters) for the app and the auth service}
       MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-uniquelocal}
@@ -146,6 +146,8 @@ services:
       - .env.prod
     environment:
       DATABASE_URL: mysql+pymysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}
+      # The same value the app presents; Compose fails before start-up without it.
+      AUTH_SERVICE_TOKEN: ${AUTH_SERVICE_TOKEN:?Set the shared auth service credential (at least 32 random characters) for the app and the auth service}
     depends_on:
       migrator:
         condition: service_completed_successfully

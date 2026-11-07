@@ -129,6 +129,7 @@ container="$(docker run -d --network none --no-healthcheck \
   -e DATABASE_URL=mysql://image:image@127.0.0.1:3306/image_smoke \
   -e OAUTH_SERVER_URL=http://127.0.0.1:8000 \
   -e AUTH_SERVICE_URL=http://127.0.0.1:8000 \
+  -e AUTH_SERVICE_TOKEN=image-smoke-service-token-only-for-tests-not-a-deployment-key \
   -e BUILT_IN_FORGE_API_URL=http://127.0.0.1:9 \
   -e BUILT_IN_FORGE_API_KEY=image-smoke-placeholder \
   ais-build-check:runner)"

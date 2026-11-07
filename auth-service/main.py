@@ -95,12 +95,22 @@ def get_db() -> Generator[Session, None, None]:
 def require_service_token(
     x_auth_service_token: Optional[str] = Header(default=None),
 ) -> None:
-    """Only the Node backend may use this service. Enforced whenever a token is configured."""
+    """Only the Node backend may use this service.
+
+    Fail closed: without a configured credential no caller is served (503,
+    which can only happen in DEBUG mode because Settings refuses to start
+    otherwise); with one, a missing or wrong header is 401 and the comparison
+    is constant time.
+    """
     expected = settings.AUTH_SERVICE_TOKEN
     if not expected:
-        return
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service credential not configured.",
+        )
+    presented = (x_auth_service_token or "").encode()
     if not x_auth_service_token or not hmac.compare_digest(
-        x_auth_service_token.encode(), expected.encode()
+        presented, expected.encode()
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

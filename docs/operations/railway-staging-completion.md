@@ -54,6 +54,39 @@ alongside DB and Redis. Staging has synthetic payment configuration: do not
 replace it with a plausible-looking fake key or weaken readiness to get green.
 The precise failing dependency still needs authenticated operational evidence.
 
+### The service credential becomes mandatory, 7 November 2026
+
+Until this change the auth service enforced `AUTH_SERVICE_TOKEN` only when the
+variable happened to be set, and the Node client sent the header only when it
+happened to have one (issue #304). Both sides now fail closed: the auth service
+refuses to start outside `DEBUG` without an explicit value of at least 32
+characters that is not a placeholder, answers 503 to every password route when
+no value is configured, and the web process refuses to start in production
+under the same rules. Compose requires the variable at interpolation time.
+
+Staging activation plan (variables only, no values in this repository):
+
+1. `ais-auth` and `ais-web` already carry `AUTH_SERVICE_TOKEN` (names verified
+   read-only on 7 November; equality and length are not verified from the
+   repository). Before merging, the operator confirms in the Railway dashboard
+   that both values are identical and at least 32 characters, or sets a fresh
+   `openssl rand -hex 32` value on both services in one change.
+2. Merge; Railway redeploys both services from `main`. The auth start-up log
+   must show Uvicorn serving without a `ValidationError` naming
+   `AUTH_SERVICE_TOKEN`; the web start-up log must not show `[security]
+AUTH_SERVICE_TOKEN`.
+3. Evidence of the handshake: one registration or login through the web
+   service returns 200 in the auth log, and an anonymous `POST /auth/login`
+   against the private auth URL returns 401 `Service credential required.`
+   `ais-worker` does not call the auth service and needs no copy.
+
+Rollback: if either service fails to start, the fault is the variable, not the
+code path; restoring a valid value and redeploying is the fix. Reverting the
+merge re-opens the fail-open behaviour and is not an acceptable rollback for
+production. The staging secrets generated in the 2 November session were
+visible in that session's transcript and must be rotated before any
+production use, as recorded above.
+
 ## Worker deployment: blocked until 2 November 2026, then deployed under isolation
 
 The existing worker starts reconciliation, refund processing and other scheduled

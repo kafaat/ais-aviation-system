@@ -420,6 +420,42 @@ Rotate both copies together and verify that anonymous and wrong-token scrapes
 fail while the authorized scrape succeeds. No Kubernetes credentials are
 provided or created by this configuration.
 
+### Service-to-Service Auth Credential
+
+The FastAPI auth service answers password questions for any e-mail address, so
+only the Node backend may call it. Both processes share one secret,
+`AUTH_SERVICE_TOKEN`, presented on every call in the `X-Auth-Service-Token`
+header and compared in constant time. The boundary fails closed on both sides:
+
+| Side                    | Condition                                                                                  | Behaviour                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Auth service (any mode) | Credential configured, header missing or wrong                                             | HTTP 401 `Service credential required.` on register, login, verify        |
+| Auth service (any mode) | Credential not configured (only possible with `DEBUG=true`)                                | HTTP 503 `Service credential not configured.`; nothing is read or written |
+| Auth service start-up   | `DEBUG` unset or false and token missing, blank, placeholder or shorter than 32 characters | Settings validation fails before the database engine is created           |
+| Node web start-up       | `NODE_ENV=production` and token missing, blank, placeholder or shorter than 32 characters  | `startServer` throws; the process does not listen                         |
+| Node client (any mode)  | Unusable credential                                                                        | No request is sent; the caller sees `Auth service unavailable`            |
+| Compose                 | `AUTH_SERVICE_TOKEN` unset in the shell or `.env`                                          | `docker compose` refuses to interpolate; no service starts                |
+
+`GET /auth/health` stays public so orchestration can observe readiness.
+Placeholders rejected everywhere include `CHANGE_ME`, `changeme`, `secret`,
+`token` and the example-file names; development may use the explicit fixture in
+`.env.example`, which is itself refused as a production value only by its length
+rule if shortened. Generate the production value with `openssl rand -hex 32` and
+provision the identical value on the auth service and on every Node API replica
+(`api1`..`api3` in `docker-compose.production.yml`, `app` in
+`docker-compose.prod.yml`, `ais-web` and `ais-auth` on Railway). Rotate both
+copies together: set the new value on the auth service and the API replicas,
+restart the auth service first, then the API replicas, and confirm in the auth
+log that logins return 200 while an anonymous probe returns 401.
+
+Evidence: `auth-service/test_config.py` (start-up refusal), `auth-service/test_http_contract.py`
+(401/503 contracts), `server/__tests__/auth-service-credential.test.ts` (Node
+start-up and client policy), `scripts/ci/test_compose_auth_service_token.py`
+(real `docker compose config` interpolation, negative and positive), and the
+CI step "Verify auth service credential boundary over real HTTP", which runs
+`scripts/ci/auth_service_credential_probe.py` and the Node client against the
+live Uvicorn process with the correct and a wrong credential.
+
 ### Rate Limiting
 
 **Implementation:**

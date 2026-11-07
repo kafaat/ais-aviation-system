@@ -1,4 +1,5 @@
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
+import { assertAuthServiceCredential } from "../services/auth-service.client";
 import { assertProviderBoundary } from "./provider-boundary";
 import { timingSafeEqual } from "node:crypto";
 import { initTracing, stopTracing } from "./telemetry";
@@ -78,6 +79,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   assertIntegrationConfiguration();
+  // Production refuses to start without the shared auth-service credential;
+  // the auth service itself refuses to start without the same value.
+  assertAuthServiceCredential();
   const providerBoundary = assertProviderBoundary();
   log.info(
     { event: "provider_boundary_verified", providerBoundary },
