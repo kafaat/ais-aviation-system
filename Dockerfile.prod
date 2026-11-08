@@ -73,6 +73,9 @@ COPY --from=builder /app/package.json ./package.json
 
 # Copy built application (includes dist/public for serving client assets)
 COPY --from=builder /app/dist ./dist
+# Opt-in, private-network-only staging auth proof. Runtime Node is present;
+# Python and the repository test tree are deliberately absent from this image.
+COPY --from=builder /app/scripts/acceptance/private-auth-boundary-probe.mjs ./scripts/acceptance/private-auth-boundary-probe.mjs
 
 # Expose the port
 EXPOSE 3000

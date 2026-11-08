@@ -1,0 +1,34 @@
+name: AIS Private Auth Boundary Probe Tests
+
+on:
+  pull_request:
+    paths:
+      - "scripts/acceptance/private-auth-boundary-probe.mjs"
+      - "scripts/ci/private-auth-boundary-probe.test.mjs"
+      - "docs/operations/private-auth-boundary-staging-acceptance.md"
+      - "Dockerfile.prod"
+      - ".github/workflows/private-auth-boundary-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  private-auth-probe-unit:
+    name: Private Auth Probe (Loopback Only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout immutable PR source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Install pinned Node runtime
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Verify source syntax and isolated private HTTP protocol
+        run: |
+          node --check scripts/acceptance/private-auth-boundary-probe.mjs
+          node --test scripts/ci/private-auth-boundary-probe.test.mjs
