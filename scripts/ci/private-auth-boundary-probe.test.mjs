@@ -108,7 +108,9 @@ test("never follows auth-service redirects to another origin", async () => {
   const receipt = await runProbe(env);
   redirect = false;
   assert.equal(receipt.status, "FAIL");
-  assert.ok(receipt.checks.some(c => c.name === "private_transport_or_protocol"));
+  assert.ok(
+    receipt.checks.some(c => c.name === "private_transport_or_protocol")
+  );
   assert.equal(JSON.stringify(receipt).includes(token), false);
 });
 
