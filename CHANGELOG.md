@@ -1,5 +1,31 @@
 # Changelog
 
+## What's Changed in v1.39.1
+
+<!-- ais-release-source: 465b10d4c1d5d0728b9325c0ed21c7e9bdd02166 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(auth): require explicit validated database connection (f285bc59)
+- fix(ops): restore Nginx readiness and native proxy acceptance (#297) (71b88aff)
+- fix(metrics): fail closed for missing production scraper credentials (#302) (7609dd34)
+- fix(pwa): align installed-app shortcuts with registered routes (#299) (3a34fb64)
+- fix(auth): require a verified service credential across Node and FastAPI (#306) (465b10d4)
+
+### Other Changes
+
+- Initial plan (5632609a)
+- Merge main into auth database configuration fix for current-base verification (c8d5f7c7)
+- Merge main v1.39.0 into auth-service database configuration fix (0f1b7184)
+- Merge pull request #303 from kafaat/copilot/fix-auth-require-explicit-db-url (bb57cfed)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.39.0...v1.39.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.39.0
 
 <!-- ais-release-source: 97bfe08099c28e51665ddf5633c962e4b62f479c -->
