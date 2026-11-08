@@ -15,6 +15,11 @@
  *    disposable `*_test` database on the same server, refuses to run if that
  *    name is the application's database, and drops it afterwards. The suite
  *    additionally refuses any database whose name does not end in `_test`.
+ *    The one deliberate exception is the login journey below: it registers a
+ *    synthetic account *through the deployed web* (so the web, not this
+ *    runner, writes the row) and afterwards removes exactly that account's
+ *    rows by id and e-mail. Nothing else in the application database is read
+ *    or written.
  *  - **Not a sharer of the application's Redis keyspace.** It uses a separate
  *    logical database index (default 9; index 0 is refused because that is
  *    what the application uses) and flushes only that index.
@@ -36,8 +41,19 @@ import {
   type RowDataPacket,
 } from "mysql2/promise";
 import Redis from "ioredis";
+import {
+  runLoginJourney,
+  type LoginJourneyReport,
+  type SyntheticAccount,
+} from "./railway-login-journey";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const SYSTEM_SCHEMAS = [
+  "mysql",
+  "information_schema",
+  "performance_schema",
+  "sys",
+];
 const DATABASE_NAME = /^[a-z0-9_]{1,40}_test$/;
 
 interface Diagnosis {
@@ -199,6 +215,78 @@ async function probeWeb(baseUrl: URL): Promise<WebProbe[]> {
   return probes;
 }
 
+/** Finds the application database the deployed web writes to, so the synthetic
+ * login account can be removed afterwards. The admin URL may name it; when it
+ * does not, exactly one non-system, non-`_test` schema must own a `users`
+ * table. Anything ambiguous refuses rather than guesses. */
+async function applicationSchema(
+  admin: Connection,
+  fromUrl: string
+): Promise<string> {
+  if (fromUrl) return fromUrl;
+  const [rows] = await admin.query<RowDataPacket[]>(
+    `SELECT TABLE_SCHEMA AS name FROM information_schema.TABLES
+     WHERE TABLE_NAME = 'users' AND TABLE_SCHEMA NOT IN (?) AND TABLE_SCHEMA NOT LIKE '%\\_test'`,
+    [SYSTEM_SCHEMAS]
+  );
+  const names = rows.map(row => String(row.name));
+  if (names.length !== 1)
+    throw new Error(
+      `cannot identify the application database: ${names.length} candidates`
+    );
+  return names[0];
+}
+
+/** Removes exactly the rows the register/login journey created for the
+ * synthetic account. The schema name passed the same identifier regex as the
+ * disposable database, so interpolation is safe; every value is a parameter. */
+function syntheticAccountCleanup(admin: Connection, schema: string) {
+  if (!/^[a-z0-9_]{1,64}$/i.test(schema))
+    throw new Error("application database name is not a plain identifier");
+  return async (account: SyntheticAccount): Promise<string> => {
+    const counts: string[] = [];
+    const remove = async (table: string, where: string, params: unknown[]) => {
+      const [result] = await admin.query(
+        `DELETE FROM \`${schema}\`.\`${table}\` WHERE ${where}`,
+        params
+      );
+      counts.push(
+        `${table}=${(result as { affectedRows?: number }).affectedRows ?? 0}`
+      );
+    };
+    await remove("refresh_tokens", "userId = ?", [account.userId]);
+    await remove("security_events", "userId = ?", [account.userId]);
+    await remove("login_attempts", "email = ?", [account.email]);
+    await remove("users", "id = ? AND email = ?", [
+      account.userId,
+      account.email,
+    ]);
+    if (!counts.includes("users=1"))
+      throw new Error(`synthetic user row not removed (${counts.join(", ")})`);
+    return `deleted (${counts.join(", ")})`;
+  };
+}
+
+/** Drives the real register -> login -> session -> logout path through the
+ * deployed web over the private network. Unlike the health probe this is a
+ * verdict: the deployed web replica must complete a registered-user login
+ * against the deployed auth service with its own credential, or the run fails. */
+async function probeLogin(
+  baseUrl: URL,
+  admin: Connection,
+  schemaFromUrl: string
+): Promise<LoginJourneyReport> {
+  const schema = await applicationSchema(admin, schemaFromUrl);
+  const report = await runLoginJourney(
+    baseUrl,
+    syntheticAccountCleanup(admin, schema)
+  );
+  console.info(
+    `[railway-acceptance] login journey ${report.passed ? "PASS" : "FAIL"}: register ${report.registerStatus ?? "-"}, login ${report.loginStatus ?? "-"}, session ${report.sessionAccepted ? "accepted" : "not accepted"}, logout ${report.logoutStatus ?? "-"}, cleanup ${report.cleanup}${report.error ? `: ${report.error}` : ""}`
+  );
+  return report;
+}
+
 /** One-shot containers can exit before the platform's log shipper has read
  * their last lines; the first Railway run left no deployment log at all, and
  * the migrate service shows the same gap. A short pause after the summary is
@@ -269,6 +357,7 @@ async function main(): Promise<number> {
   let report: AcceptanceReport | null = null;
   let diagnosis: Diagnosis | null = null;
   let web: WebProbe[] | null = null;
+  let login: LoginJourneyReport | null = null;
   const timings: Record<string, number> = {};
   const mark = (label: string, since: number) => {
     timings[label] = Date.now() - since;
@@ -282,8 +371,32 @@ async function main(): Promise<number> {
     );
 
     const webBase = process.env.ACCEPTANCE_WEB_BASE_URL?.trim();
-    if (webBase) web = await probeWeb(new URL(webBase));
-    else console.info("[railway-acceptance] web probe skipped: no base URL");
+    if (webBase) {
+      web = await probeWeb(new URL(webBase));
+      const since = Date.now();
+      try {
+        login = await probeLogin(new URL(webBase), admin, applicationDatabase);
+      } catch (error) {
+        login = {
+          passed: false,
+          registerStatus: null,
+          loginStatus: null,
+          sessionIssued: false,
+          sessionAccepted: false,
+          logoutStatus: null,
+          cleanup: "not attempted",
+          latencyMs: Date.now() - since,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        console.error(
+          `[railway-acceptance] login journey could not run: ${login.error}`
+        );
+      }
+      mark("loginJourneyMs", since);
+    } else
+      console.info(
+        "[railway-acceptance] web probe and login journey skipped: no base URL"
+      );
 
     // Only this index is ever flushed, and index 0 was refused above.
     await redis.flushdb();
@@ -360,6 +473,14 @@ async function main(): Promise<number> {
     } catch {
       console.error("[railway-acceptance] acceptance produced no report");
     }
+    // The deployed web must complete a registered-user login against the
+    // deployed auth service; a refused handshake is a staging failure.
+    if (login && !login.passed) {
+      console.error(
+        "[railway-acceptance] login journey failed; the run is not accepted"
+      );
+      exitCode = exitCode === 0 ? 1 : exitCode;
+    }
     return exitCode;
   } finally {
     try {
@@ -387,6 +508,7 @@ async function main(): Promise<number> {
       environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? null,
       diagnosis,
       web,
+      login,
       timings,
       acceptance: report && {
         completed: report.completed,
