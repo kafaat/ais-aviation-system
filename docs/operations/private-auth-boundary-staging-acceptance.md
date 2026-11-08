@@ -9,6 +9,7 @@ Issue: [#103](https://github.com/kafaat/ais-aviation-system/issues/103). This is
 `scripts/acceptance/private-auth-boundary-probe.mjs` is a deliberately **opt-in** script shipped in the `ais-web` Node image. It has no automatic startup hook. It refuses public hosts, userinfo in URLs, path/query overrides, missing/unusable credentials, and a source SHA mismatch. It never prints the token, URL, request body, customer identity, or raw response body.
 
 The probe contacts the private auth service using **the running `ais-web` environment's own** `AUTH_SERVICE_URL` and `AUTH_SERVICE_TOKEN`. It makes no successful registration and uses only a synthetic, randomly named nonexistent account:
+
 - `GET /auth/health` returns 200;
 - all three password routes refuse **missing and wrong** service credentials (six negative checks, 401);
 - the legitimate shared token reaches password-verification logic (one generic invalid-email login 401 and one verification response `success=false` with HTTP 200).
@@ -17,9 +18,9 @@ Total: nine checks. A source-bound JSON receipt includes only statuses and the d
 
 ## Operator-only procedure
 
-1. First verify privately, **without putting values or hashes in GitHub/chat**, that `ais-web` and `ais-auth` have the same *random* at-least-32-character printable-ASCII `AUTH_SERVICE_TOKEN`, and that `ais-auth` has `DEBUG=false` and `ais-web` has `NODE_ENV=production`. The connector currently exposes names only. Reject any known compromised/test token, rotate both services in a coordinated maintenance window if needed.
+1. First verify privately, **without putting values or hashes in GitHub/chat**, that `ais-web` and `ais-auth` have the same _random_ at-least-32-character printable-ASCII `AUTH_SERVICE_TOKEN`, and that `ais-auth` has `DEBUG=false` and `ais-web` has `NODE_ENV=production`. The connector currently exposes names only. Reject any known compromised/test token, rotate both services in a coordinated maintenance window if needed.
 2. Independently read the exact deployed `main` commit SHA from GitHub/Railway. Obtain a trusted, authorized shell **inside the running `ais-web` service** on project `ais-aviation-staging` (environment label `production`). Do not run from a public browser or generic local shell, as the private host is not reachable and the web service secret would not be the same.
-3. Set only the *non-secret* acceptance inputs for that shell; the service's own runtime environment must provide `AUTH_SERVICE_URL`, `AUTH_SERVICE_TOKEN`, and `RAILWAY_GIT_COMMIT_SHA`:
+3. Set only the _non-secret_ acceptance inputs for that shell; the service's own runtime environment must provide `AUTH_SERVICE_URL`, `AUTH_SERVICE_TOKEN`, and `RAILWAY_GIT_COMMIT_SHA`:
 
    ```bash
    AIS_AUTH_PRIVATE_PROBE=1 AIS_EXPECTED_SOURCE_SHA=<verified-40-character-deployment-commit> \
@@ -27,7 +28,8 @@ Total: nine checks. A source-bound JSON receipt includes only statuses and the d
    ```
 
    If `RAILWAY_GIT_COMMIT_SHA` is absent, the probe returns BLOCKED. Fix source provenance instead of setting it to a guessed value. A PASS is only a private handshake observation for the exact revision at runtime.
-4. Save the redacted JSON receipt and attach only it (not CLI command history or environment dump) to #103. Record operator, UTC time, source SHA and the `DEBUG`/secret parity *attestation without values*. Keep stage/production acceptance separate. A real **user** login through the UI is still a different test and must use a separately approved synthetic user in staging.
+
+4. Save the redacted JSON receipt and attach only it (not CLI command history or environment dump) to #103. Record operator, UTC time, source SHA and the `DEBUG`/secret parity _attestation without values_. Keep stage/production acceptance separate. A real **user** login through the UI is still a different test and must use a separately approved synthetic user in staging.
 
 ## Rollback
 
