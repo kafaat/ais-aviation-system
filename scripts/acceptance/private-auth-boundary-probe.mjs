@@ -31,7 +31,8 @@ export function privateOrigin(value) {
   const hostname = url.hostname.toLowerCase();
   const allowed =
     ["127.0.0.1", "localhost", "auth-service", "ais-auth"].includes(hostname) ||
-    hostname.endsWith(".railway.internal");
+    hostname === "ais-auth.railway.internal" ||
+    hostname === "auth-service.railway.internal";
   if (
     !["http:", "https:"].includes(url.protocol) ||
     !allowed ||
@@ -62,6 +63,7 @@ async function request(origin, path, { method = "POST", body, token } = {}) {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
+    redirect: "error",
     signal: AbortSignal.timeout(6000),
   });
   const data = await response.json();

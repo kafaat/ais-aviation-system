@@ -6,7 +6,7 @@ Issue: [#103](https://github.com/kafaat/ais-aviation-system/issues/103). This is
 
 `#306` added fail-closed service-to-service authorization. GitHub CI proves behavior with synthetic credentials; the existing Railway staging receipt (171 passed) does **not** prove that the current `ais-web` secret is accepted by the current `ais-auth` service.
 
-`scripts/acceptance/private-auth-boundary-probe.mjs` is a deliberately **opt-in** script shipped in the `ais-web` Node image. It has no automatic startup hook. It refuses public hosts, userinfo in URLs, path/query overrides, missing/unusable credentials, and a source SHA mismatch. It never prints the token, URL, request body, customer identity, or raw response body.
+`scripts/acceptance/private-auth-boundary-probe.mjs` is a deliberately **opt-in** script shipped in the `ais-web` Node image. It has no automatic startup hook. It refuses public hosts and private non-auth services, userinfo in URLs, path/query overrides, missing/unusable credentials, and a source SHA mismatch. It never follows HTTP redirects or prints the token, URL, request body, customer identity, or raw response body.
 
 The probe contacts the private auth service using **the running `ais-web` environment's own** `AUTH_SERVICE_URL` and `AUTH_SERVICE_TOKEN`. It makes no successful registration and uses only a synthetic, randomly named nonexistent account:
 

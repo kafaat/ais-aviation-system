@@ -11,11 +11,17 @@ const token = "private-auth-acceptance-fixture-unique-2026";
 const sha = "a".repeat(40);
 const records = [];
 let broken = false;
+let redirect = false;
 const server = createServer(async (request, response) => {
   let content = "";
   for await (const chunk of request) content += chunk.toString();
   const presented = request.headers["x-auth-service-token"];
   if (request.method !== "GET") records.push([request.url, presented]);
+  if (redirect && request.url === "/auth/login") {
+    response.writeHead(302, { Location: "https://example.org/auth-redirect" });
+    response.end();
+    return;
+  }
   let status, data;
   if (request.url === "/auth/health") {
     status = 200;
@@ -50,6 +56,7 @@ test("refuses public, credential-bearing or path-extended URL", () => {
     "https://example.org",
     "http://10.0.0.4:8000",
     "https://ais-auth.up.railway.app",
+    "http://stripe-mock.railway.internal:8000",
     "http://local:pass@ais-auth:8000",
     "http://127.0.0.1:8000/admin",
   ])
@@ -93,6 +100,15 @@ test("fails when wrong credentials are accepted", async () => {
   broken = false;
   assert.equal(receipt.status, "FAIL");
   assert.ok(receipt.passed < 9);
+  assert.equal(JSON.stringify(receipt).includes(token), false);
+});
+
+test("never follows auth-service redirects to another origin", async () => {
+  redirect = true;
+  const receipt = await runProbe(env);
+  redirect = false;
+  assert.equal(receipt.status, "FAIL");
+  assert.ok(receipt.checks.some(c => c.name === "private_transport_or_protocol"));
   assert.equal(JSON.stringify(receipt).includes(token), false);
 });
 
