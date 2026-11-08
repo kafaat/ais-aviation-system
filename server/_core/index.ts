@@ -1,4 +1,8 @@
+// Load .env before evaluating dependencies that capture service configuration
+// at module import time (notably auth-service.client).
+import "dotenv/config";
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
+import { assertAuthServiceCredential } from "../services/auth-service.client";
 import { assertProviderBoundary } from "./provider-boundary";
 import { timingSafeEqual } from "node:crypto";
 import { initTracing, stopTracing } from "./telemetry";
@@ -14,7 +18,6 @@ import {
   startSLAMonitoring,
   stopSLAMonitoring,
 } from "../services/sla-monitoring.service";
-import "dotenv/config";
 // Initialize Sentry first (before other imports that might throw)
 import { initSentry, flushSentry } from "../services/sentry.service";
 
@@ -78,6 +81,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   assertIntegrationConfiguration();
+  // Production refuses to start without the shared auth-service credential;
+  // the auth service itself refuses to start without the same value.
+  assertAuthServiceCredential();
   const providerBoundary = assertProviderBoundary();
   log.info(
     { event: "provider_boundary_verified", providerBoundary },

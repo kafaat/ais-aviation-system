@@ -367,6 +367,7 @@ JWT_SECRET=<strong-secret>
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 AUTH_SERVICE_URL=http://localhost:8000    # FastAPI auth microservice
+AUTH_SERVICE_TOKEN=<32+ random chars>     # Same value on the auth service; required in production
 ```
 
 ## Security Considerations

@@ -2,7 +2,7 @@
 
 ## What's Changed in v1.39.1
 
-<!-- ais-release-source: 3a34fb645644b7b72023b5352d15352850bd958f -->
+<!-- ais-release-source: 465b10d4c1d5d0728b9325c0ed21c7e9bdd02166 -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
@@ -11,6 +11,7 @@
 - fix(ops): restore Nginx readiness and native proxy acceptance (#297) (71b88aff)
 - fix(metrics): fail closed for missing production scraper credentials (#302) (7609dd34)
 - fix(pwa): align installed-app shortcuts with registered routes (#299) (3a34fb64)
+- fix(auth): require a verified service credential across Node and FastAPI (#306) (465b10d4)
 
 ### Other Changes
 
