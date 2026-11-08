@@ -97,6 +97,15 @@ AUTH_SERVICE_TOKEN`.
    `POST /auth/login` against the private auth URL returns 401
    `Service credential required.` `ais-worker` does not call the auth service
    and needs no copy. Only this post-deploy observation proves current parity.
+   Since the acceptance runner's login journey (`scripts/ci/railway-login-journey.ts`)
+   this observation is produced on every deployment: `ais-acceptance` registers
+   a synthetic account through the deployed web's `auth.register`, logs it in
+   with `auth.login`, presents the issued bearer token to `auth.me`, revokes
+   the session with `auth.logout`, removes exactly that account's rows, and
+   records statuses only (no identity, password or token) under `login` in
+   `RAILWAY_ACCEPTANCE_SUMMARY`. A refused handshake fails the run. The 8
+   November one-shot probe (#307, receipt in #103) remains the record of the
+   first such proof; it does not need to be re-run.
 
 Diagnosis and recovery if a service fails to start after the merge. First
 read the failing service's deploy log and classify the cause; do not change a
