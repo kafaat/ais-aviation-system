@@ -149,9 +149,16 @@ if (!isMainThread) {
                 assert.equal(Atomics.load(state, READ_INDEX), finalWrite);
                 setImmediate(() => {
                   try {
-                    assert.equal(transport.ready, false);
+                    // The scheduling precondition is met: the worker's read
+                    // index skipped the captured write index. Up to
+                    // thread-stream 4.2.0 the READY wait compared the read
+                    // index with `===`, so this left `ready` false for ever
+                    // and only the logger's end()-first shutdown survived it;
+                    // 4.2.1 compares with `>=` and resolves readiness itself.
+                    // The shutdown contract below is asserted either way.
                     mark("readiness:overshot", {
                       capturedWrite,
+                      upstreamResolvedReadiness: transport.ready,
                       ...snapshot(),
                     });
                     resolvePrepared();
