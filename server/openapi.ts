@@ -211,8 +211,11 @@ export function buildOpenApiDocument(router: AnyRouter): OpenAPIObject {
   const procedures = Object.fromEntries(
     routes.map(({ name, procedure, meta }) => [
       name,
-      {
-        ...procedure,
+      // tRPC procedures are callables carrying `_def`; since trpc-to-openapi
+      // 3.5 the generator recognises a procedure only when the value is a
+      // function whose `_def.procedure` is true, so the documented view must
+      // stay callable rather than become a plain object spread.
+      Object.assign(function documentedProcedure() {}, procedure, {
         _def: {
           ...procedure._def,
           inputs: procedure._def.inputs.map(parser =>
@@ -231,7 +234,7 @@ export function buildOpenApiDocument(router: AnyRouter): OpenAPIObject {
             },
           },
         },
-      },
+      }),
     ])
   );
   const view = {
