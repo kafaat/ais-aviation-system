@@ -1914,5 +1914,72 @@
       "changed_file_eslint": "passed; final fare changes separately passed ESLint",
       "application_build": "passed; final backend date-only changes rebuilt separately before PR"
     }
+  },
+  "current_measurement": {
+    "date": "2026-11-09",
+    "role": "present_day_remeasurement_not_acceptance_source",
+    "note": "Full unit/integration suite and coverage re-measured on current main by the mandatory CI/CD Run Tests job with the coverage-evidence reconciliation (846 eligible files measured, exact match, no missing or unexpected records). source_revision above remains the accepted CI source of the 34 verified findings; this block records that every suite still passes on the present source. It does not re-prove each finding's original criterion individually and does not change any finding's status; the four partial findings keep their policy, product, physical and provider conditions.",
+    "source": {
+      "commit": "61f64b548b7624de97efb3bade1f50b71a9360a6",
+      "tree": "7fc5d0b61e801dd60b981113ebe1196c50dee9b4",
+      "dirty": false,
+      "configSha256": "7103e1f14ea4ac6233e45934b07ca5db50368bd4af531f1e0b56c36b2edb7901",
+      "packageSha256": "041d61c7b8cf9cad0988f471384fac0f752efdd7275288fbfc3fdbaa8e45cde4",
+      "lockSha256": "af4e0fd422a7bd638ecbee8f73215f9f1357815995743e5205e3728f25b7893e"
+    },
+    "run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42678996673",
+    "tests": {
+      "files": 441,
+      "passed": 6415,
+      "failed": 0
+    },
+    "coverage_all_files_percent": {
+      "statements": 56.17,
+      "branches": 52.1,
+      "functions": 52.01,
+      "lines": 55.37
+    },
+    "coverage_partitions": [
+      {
+        "flag": "server",
+        "records": 527,
+        "sha256": "6567371f55f8ac5de857aed27181d0e3078aa1f876ea91eed3289832c23cb780"
+      },
+      {
+        "flag": "client",
+        "records": 294,
+        "sha256": "375419f6948075b5966321e0980b0f975212884a879f482323a737db53ddf044"
+      },
+      {
+        "flag": "shared",
+        "records": 25,
+        "sha256": "c5c6b3d70bb63981b421f25e9bb57faa7871378b06f280ee45cc6300b08d5598"
+      }
+    ],
+    "reconciliation": {
+      "tracked": 2020,
+      "included": 1309,
+      "excluded": 463,
+      "outsideInclude": 711,
+      "eligible": 846,
+      "measured": 846,
+      "missing": [],
+      "unexpected": [],
+      "exactMatch": true
+    },
+    "staging_acceptance": {
+      "source": "61f64b548b7624de97efb3bade1f50b71a9360a6",
+      "passed": 171,
+      "skipped": 0,
+      "providerCalls": 0,
+      "loginJourney": "PASS",
+      "record": "ais-acceptance deployment 397210aa-0ded-4364-bffb-6d5485791074"
+    },
+    "open_partial_findings": {
+      "OPS-06": "operation/product owner decision: blanket remap refusal versus compatible-remap preservation",
+      "UI-05": "nonrefundable-fare cancellation with fee and receipt as a distinct policy; paid, cash and split flows have positive evidence",
+      "UI-07": "physical target-printer acceptance (barcode validity, margins, hardware output); browser print preview is not physical acceptance",
+      "CAP-01": "35 partial and 28 blocked report definitions await authoritative data or provider acceptance; promotions_verified stays 0"
+    }
   }
 }
