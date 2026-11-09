@@ -1,5 +1,29 @@
 # Changelog
 
+## What's Changed in v1.39.2
+
+<!-- ais-release-source: ce07843b480305da66ef72265ef0df90f42b5f84 -->
+<!-- ais-release-notes:start -->
+
+### Maintenance
+
+- chore(deps): bump schemathesis (50cc38a7)
+- chore(ci): bump the actions-compatible group with 3 updates (#311) (42e99661)
+- chore(deps): bump the auth-compatible group in /auth-service with 2 updates (#310) (76fbf8fc)
+- chore(deps): bump the npm-compatible group with 71 updates (#312) (ce07843b)
+
+### Other Changes
+
+- test(auth): add private staging credential handshake evidence probe (#307) (fe4dda3c)
+- test(acceptance): prove a registered-user login through the deployed web on every staging run (#308) (74a2cf86)
+- Merge pull request #309 from kafaat/dependabot/pip/scripts/contracts/contracts-compatible-80f50ae30b (75802e82)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.39.1...v1.39.2
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.39.1
 
 <!-- ais-release-source: 465b10d4c1d5d0728b9325c0ed21c7e9bdd02166 -->
