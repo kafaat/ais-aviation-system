@@ -198,6 +198,26 @@ describe("password verification through the real local HTTP client", () => {
     }
   );
 
+  it.each([
+    [409, "A user with this email already exists.", true],
+    [422, "Password must be at most 72 bytes", true],
+    [401, "Service credential required.", false],
+    [500, "Internal Server Error", false],
+  ])(
+    "surfaces a FastAPI {detail} only for %s business refusals",
+    async (status, detail, surfaced) => {
+      reply({ detail }, Number(status));
+      const { authServiceClient } =
+        await import("../services/auth-service.client");
+      await expect(
+        authServiceClient.register(credentials.email, credentials.password)
+      ).resolves.toEqual({
+        success: false,
+        message: surfaced ? detail : "Auth service unavailable",
+      });
+    }
+  );
+
   it("does not fall back to account lookup and sends no password when the service token is missing", async () => {
     vi.stubEnv("AUTH_SERVICE_TOKEN", "");
     // Even if the service would answer, the client refuses locally first: a

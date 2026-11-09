@@ -176,13 +176,24 @@ class AuthServiceClient {
             // An HTTP error can never authenticate, even if its body contains
             // a stale or malformed success response.
             const response = authResponseSchema.safeParse(error.response.data);
-            return {
-              success: false,
-              message:
-                response.success && !response.data.success
-                  ? (response.data.message ?? "Authentication failed")
-                  : "Auth service unavailable",
-            };
+            if (response.success && !response.data.success)
+              return {
+                success: false,
+                message: response.data.message ?? "Authentication failed",
+              };
+            // FastAPI business refusals arrive as {detail} with 409 (duplicate
+            // registration) or 422 (input rejected). Those are the caller's
+            // own mistake and are safe to show; every other status, including
+            // the 401 of a mis-shared service credential, stays generic.
+            const detail = (error.response.data as { detail?: unknown } | null)
+              ?.detail;
+            if (
+              [409, 422].includes(error.response.status) &&
+              typeof detail === "string" &&
+              detail.length <= 200
+            )
+              return { success: false, message: detail };
+            return { success: false, message: "Auth service unavailable" };
           }
           throw error;
         }

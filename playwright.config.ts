@@ -68,8 +68,10 @@ export default defineConfig({
     /* Screenshot on failure */
     screenshot: "only-on-failure",
 
-    /* Video on failure */
-    video: "retain-on-failure",
+    /* Video on failure; a pre-installed browser has no bundled ffmpeg. */
+    video: process.env.AIS_E2E_CHROMIUM_EXECUTABLE
+      ? "off"
+      : "retain-on-failure",
 
     /* Browser context options */
     viewport: { width: 1280, height: 720 },
@@ -109,7 +111,15 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
-          args: process.env.CI ? ["--disable-gpu", "--no-sandbox"] : [],
+          args:
+            process.env.CI || process.env.AIS_E2E_CHROMIUM_EXECUTABLE
+              ? ["--disable-gpu", "--no-sandbox"]
+              : [],
+          // A pre-installed Chromium for environments that must not download
+          // browsers; unset in CI, where Playwright's own browser is used.
+          ...(process.env.AIS_E2E_CHROMIUM_EXECUTABLE
+            ? { executablePath: process.env.AIS_E2E_CHROMIUM_EXECUTABLE }
+            : {}),
         },
       },
       dependencies: ["setup"],

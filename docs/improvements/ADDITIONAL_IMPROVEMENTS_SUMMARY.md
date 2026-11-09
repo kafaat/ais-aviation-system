@@ -185,7 +185,7 @@ const flight = await getOrSet(
 
 - `playwright.config.ts` - تكوين Playwright
 - `e2e/booking-flow.spec.ts` - اختبار تدفق الحجز الكامل
-- `e2e/currency.spec.ts` - اختبار العملات المتعددة
+- `e2e/currency.spec.ts` - اختبار العملات المتعددة (أُزيل في نوفمبر 2026: محدّد العملة `CurrencySelector` أُرشف في `.archive/incomplete-features` ولا توجد عملة عرض قابلة للاختيار في الواجهة الحالية؛ الأسعار تُعرض بالريال السعودي وتظهر في `SearchResults` بالمعرّف `flight-price`. انظر القضية #83)
 - `e2e/security.spec.ts` - اختبار الأمان
 
 ### الاختبارات
