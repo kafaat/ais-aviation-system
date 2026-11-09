@@ -691,6 +691,59 @@ jobs:
           AIS_E2E_HTML_REPORT_DIR: playwright-report/auth-logout
         run: pnpm exec playwright test e2e/auth-logout-acceptance.spec.ts --project=chromium
 
+      # The combined login/register page as built. The strict "auth" quota is
+      # five login/register attempts per IP per window, and every attempt here
+      # is real, so the spec runs as two phases on separate owned Redis indexes:
+      # login mode and sessions (one prepared session plus three UI logins), then
+      # register mode (one prepared session, two registrations, one auto-login).
+      - name: Run isolated authentication acceptance (login and sessions)
+        env:
+          BAGGAGE_AIRLINE_NUMERIC_CODE: "123"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+          REDIS_URL: redis://127.0.0.1:6379/6
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+          VITE_APP_ID: ais-aviation-system-test
+          OAUTH_SERVER_URL: http://localhost:3000
+          OWNER_OPEN_ID: test-owner-open-id
+          BUILT_IN_FORGE_API_URL: https://api.example.com
+          BUILT_IN_FORGE_API_KEY: test-forge-api-key
+          AUTH_SERVICE_URL: http://localhost:8000
+          AUTH_SERVICE_TOKEN: ci-auth-service-token-only-for-tests-not-a-deployment-key
+          CI: true
+          E2E_BASE_URL: http://localhost:3000
+          AIS_DISPOSABLE_DATABASE: true
+          AIS_E2E_SESSION_ACCOUNTS: regular
+          AIS_E2E_REPORT_DIR: test-results/auth-login
+          AIS_E2E_HTML_REPORT_DIR: playwright-report/auth-login
+        run: pnpm exec playwright test e2e/auth.spec.ts --project=chromium --grep "login mode|sessions|password reset"
+
+      - name: Run isolated authentication acceptance (registration)
+        env:
+          BAGGAGE_AIRLINE_NUMERIC_CODE: "123"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+          REDIS_URL: redis://127.0.0.1:6379/7
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+          VITE_APP_ID: ais-aviation-system-test
+          OAUTH_SERVER_URL: http://localhost:3000
+          OWNER_OPEN_ID: test-owner-open-id
+          BUILT_IN_FORGE_API_URL: https://api.example.com
+          BUILT_IN_FORGE_API_KEY: test-forge-api-key
+          AUTH_SERVICE_URL: http://localhost:8000
+          AUTH_SERVICE_TOKEN: ci-auth-service-token-only-for-tests-not-a-deployment-key
+          CI: true
+          E2E_BASE_URL: http://localhost:3000
+          AIS_DISPOSABLE_DATABASE: true
+          AIS_E2E_SESSION_ACCOUNTS: regular
+          AIS_E2E_REPORT_DIR: test-results/auth-register
+          AIS_E2E_HTML_REPORT_DIR: playwright-report/auth-register
+        run: pnpm exec playwright test e2e/auth.spec.ts --project=chromium --grep "register mode"
+
       - name: Run native financial dialog acceptance
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
