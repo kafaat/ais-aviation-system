@@ -39,18 +39,10 @@ import {
 // ============================================================================
 
 type APISSubmissionStatus =
-  | "pending"
-  | "submitted"
-  | "acknowledged"
-  | "rejected"
-  | "error";
+  "pending" | "submitted" | "acknowledged" | "rejected" | "error";
 
 type APISDataStatus =
-  | "incomplete"
-  | "complete"
-  | "validated"
-  | "submitted"
-  | "rejected";
+  "incomplete" | "complete" | "validated" | "submitted" | "rejected";
 
 interface PassengerStatus {
   passengerId: number;

@@ -64,11 +64,7 @@ import { Redirect } from "wouter";
 // ============================================================================
 
 type ExportType =
-  | "bookings"
-  | "flights"
-  | "revenue"
-  | "customers"
-  | "operational";
+  "bookings" | "flights" | "revenue" | "customers" | "operational";
 type ExportFormat = "csv" | "json" | "jsonl";
 type ScheduleFrequency = "daily" | "weekly" | "monthly";
 

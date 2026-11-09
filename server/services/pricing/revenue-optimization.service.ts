@@ -74,10 +74,7 @@ export interface ElasticityEstimate {
 }
 
 type OptGoal =
-  | "maximize_revenue"
-  | "maximize_load_factor"
-  | "maximize_yield"
-  | "balance";
+  "maximize_revenue" | "maximize_load_factor" | "maximize_yield" | "balance";
 
 // ============================================================================
 // Constants

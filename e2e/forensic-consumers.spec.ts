@@ -157,14 +157,12 @@ async function fixture() {
           );
           return row.insertId;
         } catch (error) {
-          if (
-            !(
-              error &&
-              typeof error === "object" &&
-              "code" in error &&
-              error.code === "ER_DUP_ENTRY"
-            )
-          )
+          if (!(
+            error &&
+            typeof error === "object" &&
+            "code" in error &&
+            error.code === "ER_DUP_ENTRY"
+          ))
             throw error;
         }
       }

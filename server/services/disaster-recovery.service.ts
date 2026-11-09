@@ -18,20 +18,13 @@ export type BackupComponent = "database" | "files" | "config" | "redis";
 export type BackupStatus = "started" | "completed" | "failed" | "verified";
 
 export type DRTestType =
-  | "failover"
-  | "backup_restore"
-  | "network_partition"
-  | "data_recovery";
+  "failover" | "backup_restore" | "network_partition" | "data_recovery";
 export type DRTestStatus = "scheduled" | "running" | "passed" | "failed";
 
 export type IncidentType = "outage" | "data_loss" | "performance" | "security";
 export type IncidentSeverity = "low" | "medium" | "high" | "critical";
 export type IncidentStatus =
-  | "open"
-  | "investigating"
-  | "mitigating"
-  | "resolved"
-  | "postmortem";
+  "open" | "investigating" | "mitigating" | "resolved" | "postmortem";
 
 export type RunbookScenario =
   | "db_failure"

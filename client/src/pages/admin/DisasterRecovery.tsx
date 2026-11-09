@@ -36,12 +36,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
 type Tab =
-  | "overview"
-  | "backups"
-  | "testing"
-  | "incidents"
-  | "runbooks"
-  | "recovery";
+  "overview" | "backups" | "testing" | "incidents" | "runbooks" | "recovery";
 
 export default function DisasterRecovery() {
   const { t } = useTranslation();
@@ -734,14 +729,9 @@ function BackupsTab() {
             onClick={() =>
               triggerMutation.mutate({
                 backupType: backupType as
-                  | "full"
-                  | "incremental"
-                  | "differential",
+                  "full" | "incremental" | "differential",
                 component: backupComponent as
-                  | "database"
-                  | "files"
-                  | "config"
-                  | "redis",
+                  "database" | "files" | "config" | "redis",
               })
             }
             className="gap-2"
@@ -1117,11 +1107,7 @@ function IncidentsTab() {
     statusFilter
       ? {
           status: statusFilter as
-            | "open"
-            | "investigating"
-            | "mitigating"
-            | "resolved"
-            | "postmortem",
+            "open" | "investigating" | "mitigating" | "resolved" | "postmortem",
         }
       : undefined
   );
@@ -1275,15 +1261,9 @@ function IncidentsTab() {
             onClick={() =>
               createMutation.mutate({
                 incidentType: form.incidentType as
-                  | "outage"
-                  | "data_loss"
-                  | "performance"
-                  | "security",
+                  "outage" | "data_loss" | "performance" | "security",
                 severity: form.severity as
-                  | "low"
-                  | "medium"
-                  | "high"
-                  | "critical",
+                  "low" | "medium" | "high" | "critical",
                 description: form.description,
                 impactAssessment: form.impactAssessment || undefined,
               })

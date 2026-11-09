@@ -287,13 +287,11 @@ export async function settleVerifiedPayment(
           .set({ stripePaymentIntentId: paymentIntentId })
           .where(eq(bookingModifications.id, change.id));
       } catch (error) {
-        if (
-          !(
-            error instanceof OrderServicingUnavailable ||
-            error instanceof BaggageCustodyConflict ||
-            error instanceof InventoryUnavailableError
-          )
-        )
+        if (!(
+          error instanceof OrderServicingUnavailable ||
+          error instanceof BaggageCustodyConflict ||
+          error instanceof InventoryUnavailableError
+        ))
           throw error;
         await requireCollectionReview(tx, payment, booking, error.message);
       }
@@ -508,12 +506,10 @@ async function confirmCollectedBooking(
   } catch (error) {
     // These errors occur before inventory is changed. Other failures must roll
     // back the whole transaction and remain retryable (never acknowledge them).
-    if (
-      !(
-        error instanceof InventoryUnavailableError ||
-        error instanceof BookingNotPendingError
-      )
-    )
+    if (!(
+      error instanceof InventoryUnavailableError ||
+      error instanceof BookingNotPendingError
+    ))
       throw error;
     await requireCollectionReview(tx, payment, booking, error.message, true);
   }

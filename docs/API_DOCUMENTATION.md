@@ -269,9 +269,7 @@ Create a new flight booking.
   flight: {
     /* flight details */
   }
-  passengers: Array<{
-    /* passenger details */
-  }>;
+  passengers: Array<{/* passenger details */}>;
   createdAt: string;
   paymentUrl: string; // Stripe checkout URL
 }
@@ -739,9 +737,7 @@ Retrieve all bookings with filtering (admin view).
     status: string;
     totalAmount: number;
     passenger: string; // Primary passenger name
-    flight: {
-      /* flight summary */
-    };
+    flight: {/* flight summary */};
     createdAt: string;
   }>;
   total: number;

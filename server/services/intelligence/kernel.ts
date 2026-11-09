@@ -439,8 +439,7 @@ export class IntelligenceKernel {
     // Operations contribution (40%)
     if (operations?.status === "completed") {
       const data = operations.data as
-        | { otp?: number | null; cancellationRate?: number | null }
-        | undefined;
+        { otp?: number | null; cancellationRate?: number | null } | undefined;
       const otp = data?.otp ?? 0;
       const cancelRate = data?.cancellationRate ?? 0;
       const opsScore =

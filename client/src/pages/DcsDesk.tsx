@@ -135,12 +135,7 @@ function ReturnBag({
 }
 
 type PassengerAction =
-  | "check_in"
-  | "board"
-  | "deplane"
-  | "deny"
-  | "allow"
-  | "offload";
+  "check_in" | "board" | "deplane" | "deny" | "allow" | "offload";
 const FLIGHTS_PER_PAGE = 50;
 type FlightCursor = { departureTime: Date; id: number };
 function allowedActions(passenger: Passenger): PassengerAction[] {

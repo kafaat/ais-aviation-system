@@ -1,8 +1,5 @@
 export type PassengerRightsJurisdiction =
-  | "gaca-2023"
-  | "eu261-2004"
-  | "uk261"
-  | "us-dot-14-cfr-260";
+  "gaca-2023" | "eu261-2004" | "uk261" | "us-dot-14-cfr-260";
 
 export type PassengerRightsEvent =
   | "delay"

@@ -17,10 +17,7 @@
 // ============================================================================
 
 export type SLAMetricType =
-  | "uptime"
-  | "response_time"
-  | "error_rate"
-  | "throughput";
+  "uptime" | "response_time" | "error_rate" | "throughput";
 
 export type SLASeverity = "warning" | "critical" | "resolved";
 
@@ -31,10 +28,7 @@ export type SLAReportStatus = "draft" | "published";
 export type SLAUnit = "percent" | "ms" | "per_minute";
 
 export type ServiceHealthStatus =
-  | "healthy"
-  | "degraded"
-  | "unhealthy"
-  | "unknown";
+  "healthy" | "degraded" | "unhealthy" | "unknown";
 
 export interface SLATarget {
   id: number;

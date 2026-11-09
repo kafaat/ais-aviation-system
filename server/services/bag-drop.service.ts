@@ -47,12 +47,7 @@ export type BagDropPaymentStatus = "none" | "pending" | "paid";
 
 /** Bag tag tracking status */
 export type BagTagStatus =
-  | "printed"
-  | "attached"
-  | "loaded"
-  | "transferred"
-  | "arrived"
-  | "lost";
+  "printed" | "attached" | "loaded" | "transferred" | "arrived" | "lost";
 
 /** Bag drop unit definition */
 export interface BagDropUnit {

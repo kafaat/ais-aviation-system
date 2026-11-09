@@ -15,8 +15,7 @@ describe.skipIf(!process.env.AIS_TEST_REDIS_SERVER_BIN)(
     let fixture: Awaited<ReturnType<typeof startNativeRedis>> | undefined;
     let reference: Redis | undefined;
     let cache:
-      | typeof import("../services/cache.service").cacheService
-      | undefined;
+      typeof import("../services/cache.service").cacheService | undefined;
     const prefix = `ais-rate-native-${randomUUID()}`;
 
     beforeAll(async () => {

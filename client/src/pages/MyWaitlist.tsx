@@ -51,11 +51,7 @@ import { ar, enUS } from "date-fns/locale";
 import { toast } from "sonner";
 
 type WaitlistStatus =
-  | "waiting"
-  | "offered"
-  | "confirmed"
-  | "expired"
-  | "cancelled";
+  "waiting" | "offered" | "confirmed" | "expired" | "cancelled";
 
 export default function MyWaitlist() {
   const { t, i18n } = useTranslation();

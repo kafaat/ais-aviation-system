@@ -16,8 +16,7 @@ const calls = vi.hoisted(() => ({
   create: vi.fn(),
   offer: vi.fn(),
   allocation: undefined as
-    | undefined
-    | { passengers: number; totalAmount: number },
+    undefined | { passengers: number; totalAmount: number },
 }));
 
 vi.mock("react-i18next", () => ({

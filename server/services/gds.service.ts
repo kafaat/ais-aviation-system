@@ -34,11 +34,7 @@ export type GdsEnvironment = "production" | "certification" | "test";
  * the DB column maps to active/inactive/maintenance/error.
  */
 export type GdsConnectionStatus =
-  | "active"
-  | "inactive"
-  | "maintenance"
-  | "error"
-  | "suspended";
+  "active" | "inactive" | "maintenance" | "error" | "suspended";
 
 export type GdsMessageType =
   | "availability_request"
@@ -1922,8 +1918,7 @@ export async function cancelBooking(
  */
 export async function getMessageLog(
   connectionIdOrFilters:
-    | number
-    | (MessageLogFilters & { connectionId: number }),
+    number | (MessageLogFilters & { connectionId: number }),
   filters?: MessageLogFilters
 ): Promise<{
   messages: GdsMessage[];

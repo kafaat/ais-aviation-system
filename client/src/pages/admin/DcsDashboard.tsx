@@ -639,10 +639,7 @@ function CrewTab() {
               createMutation.mutate({
                 ...form,
                 role: form.role as
-                  | "captain"
-                  | "first_officer"
-                  | "purser"
-                  | "cabin_crew",
+                  "captain" | "first_officer" | "purser" | "cabin_crew",
                 airlineId: parseInt(form.airlineId),
                 licenseNumber: form.licenseNumber || undefined,
                 email: form.email || undefined,

@@ -58,26 +58,15 @@ const MAX_PASSENGERS = 9;
 
 /** Cabin class options for NDC offers */
 export type NdcCabinClass =
-  | "first"
-  | "business"
-  | "premium_economy"
-  | "economy";
+  "first" | "business" | "premium_economy" | "economy";
 
 /** NDC distribution channel */
 export type NdcChannel =
-  | "direct"
-  | "ndc_aggregator"
-  | "gds"
-  | "ota"
-  | "travel_agent";
+  "direct" | "ndc_aggregator" | "gds" | "ota" | "travel_agent";
 
 /** NDC offer status */
 export type NdcOfferStatus =
-  | "active"
-  | "expired"
-  | "selected"
-  | "ordered"
-  | "cancelled";
+  "active" | "expired" | "selected" | "ordered" | "cancelled";
 
 /** NDC order status (canonical definition lives in the state machine). */
 export type { NdcOrderStatus };
@@ -1362,8 +1351,7 @@ export async function getOrder(
  */
 export async function cancelOrder(
   orderIdOrParams:
-    | string
-    | { orderId: string; userId?: number; reason?: string },
+    string | { orderId: string; userId?: number; reason?: string },
   reason?: string
 ): Promise<NdcOrderResponse> {
   const orderId =

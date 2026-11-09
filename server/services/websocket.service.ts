@@ -24,12 +24,7 @@ import { eq, inArray } from "drizzle-orm";
  * Flight Status Types for WebSocket communication
  */
 export type FlightStatusType =
-  | "scheduled"
-  | "boarding"
-  | "departed"
-  | "delayed"
-  | "cancelled"
-  | "landed";
+  "scheduled" | "boarding" | "departed" | "delayed" | "cancelled" | "landed";
 
 export interface FlightStatusMessage {
   type: "status_update" | "initial_status" | "error" | "subscribed";

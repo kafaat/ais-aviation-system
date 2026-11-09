@@ -108,8 +108,7 @@ function BookingForm({
   const searchParams = new URLSearchParams(search);
   const backToSearch = flightSearchPath(searchParams.get("search")) ?? "/";
   const cabinClass = (searchParams.get("class") || "economy") as
-    | "economy"
-    | "business";
+    "economy" | "business";
   const codeshareAllotmentId = searchParams.has("codeshareAllotmentId")
     ? Number(searchParams.get("codeshareAllotmentId"))
     : undefined;

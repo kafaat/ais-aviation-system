@@ -43,12 +43,7 @@ function assertEmdProviderAccepted() {
 export type EmdType = "EMD-S" | "EMD-A";
 
 export type EmdStatus =
-  | "issued"
-  | "used"
-  | "void"
-  | "exchanged"
-  | "refunded"
-  | "suspended";
+  "issued" | "used" | "void" | "exchanged" | "refunded" | "suspended";
 
 export type EmdReasonForIssuance =
   | "baggage"

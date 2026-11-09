@@ -81,13 +81,11 @@ export function allocatedAncillarySegmentId(item: Ancillary) {
   } catch {
     return;
   }
-  if (
-    !(
-      metadata?.source === "initial_booking" ||
-      metadata?.segmentAllocated === true ||
-      getBinding(item)
-    )
-  )
+  if (!(
+    metadata?.source === "initial_booking" ||
+    metadata?.segmentAllocated === true ||
+    getBinding(item)
+  ))
     return;
   if (!item.segmentId || item.scopeState !== "specific_segment")
     throw blocked("Ancillary segment allocation requires reconciliation");

@@ -40,12 +40,7 @@ import { ar } from "date-fns/locale";
 export type SeatType = "window" | "aisle" | "middle";
 export type CabinClass = "economy" | "business" | "first";
 export type MealPreference =
-  | "regular"
-  | "vegetarian"
-  | "vegan"
-  | "halal"
-  | "kosher"
-  | "gluten_free";
+  "regular" | "vegetarian" | "vegan" | "halal" | "kosher" | "gluten_free";
 
 export interface UserPreferencesFormData {
   preferredSeatType: SeatType;
