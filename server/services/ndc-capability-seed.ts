@@ -87,10 +87,7 @@ export interface CapabilityQuery {
 }
 
 export type CapabilityPrecedence =
-  | "exact_version"
-  | "version_range"
-  | "channel_default"
-  | "none";
+  "exact_version" | "version_range" | "channel_default" | "none";
 
 export interface CapabilityDecision {
   carrierCode: string;

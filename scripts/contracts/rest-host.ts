@@ -79,16 +79,12 @@ app.post("/__contract/reset", (req, res, next) => {
 app.use(
   "/api/rest",
   (req, res, next) => {
-    if (
-      !(
-        (req.method === "GET" &&
-          ["/notifications", "/notifications/unread-count"].includes(
-            req.path
-          )) ||
-        (req.method === "POST" &&
-          /^\/notifications\/(read-all|[^/]+\/read)$/.test(req.path))
-      )
-    ) {
+    if (!(
+      (req.method === "GET" &&
+        ["/notifications", "/notifications/unread-count"].includes(req.path)) ||
+      (req.method === "POST" &&
+        /^\/notifications\/(read-all|[^/]+\/read)$/.test(req.path))
+    )) {
       res.sendStatus(404);
       return;
     }

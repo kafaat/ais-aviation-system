@@ -61,9 +61,7 @@ export interface CreateInterlineAgreementInput {
   prorateValue?: string;
   baggageThroughCheck?: boolean;
   baggageRuleApplied?:
-    | "most_significant_carrier"
-    | "first_carrier"
-    | "each_carrier";
+    "most_significant_carrier" | "first_carrier" | "each_carrier";
   settlementMethod?: "bsp" | "bilateral" | "ich";
   validFrom: Date;
   validUntil?: Date;
@@ -75,9 +73,7 @@ export interface UpdateInterlineAgreementInput {
   prorateValue?: string;
   baggageThroughCheck?: boolean;
   baggageRuleApplied?:
-    | "most_significant_carrier"
-    | "first_carrier"
-    | "each_carrier";
+    "most_significant_carrier" | "first_carrier" | "each_carrier";
   settlementMethod?: "bsp" | "bilateral" | "ich";
   validFrom?: Date;
   validUntil?: Date;

@@ -31,12 +31,7 @@ export interface CompensationClaim {
   approvedAmount: number | null;
   currency: string;
   status:
-    | "pending"
-    | "under_review"
-    | "approved"
-    | "denied"
-    | "paid"
-    | "appealed";
+    "pending" | "under_review" | "approved" | "denied" | "paid" | "appealed";
   reason: string | null;
   denialReason: string | null;
   filedAt: Date;

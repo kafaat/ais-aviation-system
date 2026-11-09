@@ -41,10 +41,7 @@ export type BSPReportStatus = "draft" | "submitted" | "reconciled" | "settled";
 export type BSPTransactionType = "sale" | "refund" | "exchange" | "void";
 
 export type BSPTransactionStatus =
-  | "active"
-  | "voided"
-  | "disputed"
-  | "reconciled";
+  "active" | "voided" | "disputed" | "reconciled";
 
 export type AgentSettlementStatus = "pending" | "paid" | "disputed";
 

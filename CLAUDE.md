@@ -267,9 +267,7 @@ describe("Feature Name", () => {
 
   it("should do something specific", async () => {
     // Arrange
-    const input = {
-      /* test data */
-    };
+    const input = {/* test data */};
 
     // Act
     const result = await someFunction(input);

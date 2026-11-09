@@ -29,18 +29,10 @@ import { z } from "zod";
 export type APISDocumentType = "passport" | "national_id" | "visa";
 
 export type APISDataStatus =
-  | "incomplete"
-  | "complete"
-  | "validated"
-  | "submitted"
-  | "rejected";
+  "incomplete" | "complete" | "validated" | "submitted" | "rejected";
 
 export type APISSubmissionStatus =
-  | "pending"
-  | "submitted"
-  | "acknowledged"
-  | "rejected"
-  | "error";
+  "pending" | "submitted" | "acknowledged" | "rejected" | "error";
 
 export type APISMessageFormat = "paxlst" | "pnrgov";
 

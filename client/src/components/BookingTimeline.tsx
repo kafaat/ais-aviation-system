@@ -35,12 +35,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 
 export type BookingEventType =
-  | "booked"
-  | "paid"
-  | "checked_in"
-  | "boarded"
-  | "completed"
-  | "cancelled";
+  "booked" | "paid" | "checked_in" | "boarded" | "completed" | "cancelled";
 
 export type BookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
 export type PaymentStatus = "pending" | "paid" | "refunded" | "failed";

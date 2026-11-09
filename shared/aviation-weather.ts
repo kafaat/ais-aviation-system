@@ -79,9 +79,7 @@ export type WeatherReport = z.infer<typeof weatherReport>;
  * not the same as a high one, and an obscured sky reported without a vertical
  * visibility has a ceiling that exists but was not measured. */
 export type Ceiling =
-  | { kind: "none" }
-  | { kind: "at"; feet: number }
-  | { kind: "indeterminate" };
+  { kind: "none" } | { kind: "at"; feet: number } | { kind: "indeterminate" };
 
 const CEILING_COVERS: ReadonlySet<CloudCover> = new Set(["BKN", "OVC", "OVX"]);
 

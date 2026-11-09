@@ -78,9 +78,9 @@ nativeDescribe("local ticket revalidation acceptance on native MySQL", () => {
     application = await loadTicketApplication();
     const [rows] = await app()
       .database.getPool()!
-      .query<
-        import("mysql2").RowDataPacket[]
-      >("SELECT DATABASE() AS name, @@SESSION.time_zone AS zone");
+      .query<import("mysql2").RowDataPacket[]>(
+        "SELECT DATABASE() AS name, @@SESSION.time_zone AS zone"
+      );
     expect(rows[0]).toMatchObject({
       name: storage.databaseName,
       zone: "+00:00",

@@ -43,11 +43,7 @@ import {
 } from "./crew-legality-engine";
 
 export type AssignmentPath =
-  | "manual"
-  | "bulk_roster"
-  | "recovery_swap"
-  | "standby_activation"
-  | "preview";
+  "manual" | "bulk_roster" | "recovery_swap" | "standby_activation" | "preview";
 
 /** History window: 12 calendar months plus slack for the calendar-year rule. */
 const HISTORY_BACK_MS = 400 * 86_400_000;

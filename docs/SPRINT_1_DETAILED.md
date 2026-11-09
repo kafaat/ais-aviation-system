@@ -645,11 +645,7 @@ describe("Booking Flow", () => {
       const booking1 = await api.bookings.create.mutate({
         idempotencyKey: uuidv4(),
         flightId: flight.id,
-        passengers: [
-          {
-            /* ... */
-          },
-        ],
+        passengers: [{/* ... */}],
       });
 
       // Second booking (should fail)
@@ -657,11 +653,7 @@ describe("Booking Flow", () => {
         api.bookings.create.mutate({
           idempotencyKey: uuidv4(),
           flightId: flight.id,
-          passengers: [
-            {
-              /* ... */
-            },
-          ],
+          passengers: [{/* ... */}],
         })
       ).rejects.toThrow("No seats available");
     });
@@ -675,11 +667,7 @@ describe("Booking Flow", () => {
       const booking = await api.bookings.create.mutate({
         idempotencyKey: uuidv4(),
         flightId: flight.id,
-        passengers: [
-          {
-            /* ... */
-          },
-        ],
+        passengers: [{/* ... */}],
       });
 
       // Simulate payment failure
@@ -747,22 +735,14 @@ describe("Booking Flow", () => {
       const booking1 = await api.bookings.create.mutate({
         idempotencyKey,
         flightId: flight.id,
-        passengers: [
-          {
-            /* ... */
-          },
-        ],
+        passengers: [{/* ... */}],
       });
 
       // Duplicate request
       const booking2 = await api.bookings.create.mutate({
         idempotencyKey,
         flightId: flight.id,
-        passengers: [
-          {
-            /* ... */
-          },
-        ],
+        passengers: [{/* ... */}],
       });
 
       // Should return same booking

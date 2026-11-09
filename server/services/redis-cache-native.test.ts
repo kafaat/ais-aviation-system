@@ -33,8 +33,7 @@ nativeDescribe(
     let proxy: Awaited<ReturnType<typeof startRedisFaultProxy>> | undefined;
     let probe: Redis | undefined;
     let cache:
-      | (typeof import("./redis-cache.service"))["redisCacheService"]
-      | undefined;
+      (typeof import("./redis-cache.service"))["redisCacheService"] | undefined;
     beforeAll(async () => {
       native = await startNativeRedis();
       proxy = await startRedisFaultProxy(native.url);

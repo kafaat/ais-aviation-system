@@ -8,16 +8,7 @@ import React, {
 import { trpc } from "../lib/trpc";
 
 type SupportedCurrency =
-  | "SAR"
-  | "USD"
-  | "EUR"
-  | "GBP"
-  | "AED"
-  | "KWD"
-  | "BHD"
-  | "OMR"
-  | "QAR"
-  | "EGP";
+  "SAR" | "USD" | "EUR" | "GBP" | "AED" | "KWD" | "BHD" | "OMR" | "QAR" | "EGP";
 
 interface CurrencyContextType {
   currency: SupportedCurrency;

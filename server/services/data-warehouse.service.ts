@@ -36,11 +36,7 @@ import { eq, and, gte, lte, desc, sql, gt, getTableColumns } from "drizzle-orm";
 export type ExportFormat = "csv" | "json" | "jsonl";
 
 export type ExportType =
-  | "bookings"
-  | "flights"
-  | "revenue"
-  | "customers"
-  | "operational";
+  "bookings" | "flights" | "revenue" | "customers" | "operational";
 
 export type ExportStatus = "pending" | "processing" | "completed" | "failed";
 

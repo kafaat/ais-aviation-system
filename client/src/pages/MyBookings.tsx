@@ -719,10 +719,7 @@ export default function MyBookings() {
                               }
                               paymentStatus={
                                 booking.paymentStatus as
-                                  | "pending"
-                                  | "paid"
-                                  | "refunded"
-                                  | "failed"
+                                  "pending" | "paid" | "refunded" | "failed"
                               }
                               createdAt={booking.createdAt}
                               checkedIn={booking.checkedIn}

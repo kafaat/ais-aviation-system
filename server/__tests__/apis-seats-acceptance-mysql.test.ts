@@ -889,8 +889,7 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
     state.db = validatorDb;
     const validating = administrator().validatePassenger({ passengerId: 81 });
     let updating:
-      | ReturnType<ReturnType<typeof owner>["submitInfo"]>
-      | undefined;
+      ReturnType<ReturnType<typeof owner>["submitInfo"]> | undefined;
     let updateSettled = false;
     let nativeWait = false;
     try {

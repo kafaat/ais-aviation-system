@@ -16,10 +16,7 @@ const SECURITY_DATA_MAX = 100;
 const ASCII_PRINTABLE = /^[\x20-\x7E]*$/;
 
 export type BcbpCabinClass =
-  | "economy"
-  | "business"
-  | "premium_economy"
-  | "first";
+  "economy" | "business" | "premium_economy" | "first";
 export type BcbpPassengerType = "adult" | "child" | "infant";
 /** W web, K kiosk, M mobile, O airline agent; per BCBP Implementation Guide. */
 export type BcbpSource = "W" | "K" | "M" | "O";

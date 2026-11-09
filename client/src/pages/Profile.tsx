@@ -55,12 +55,7 @@ const AccountPrivacy = lazy(() => import("@/components/AccountPrivacy"));
 type SeatType = "window" | "aisle" | "middle";
 type CabinClass = "economy" | "business" | "first";
 type MealPreference =
-  | "regular"
-  | "vegetarian"
-  | "vegan"
-  | "halal"
-  | "kosher"
-  | "gluten_free";
+  "regular" | "vegetarian" | "vegan" | "halal" | "kosher" | "gluten_free";
 
 interface FormErrors {
   passportNumber?: string;

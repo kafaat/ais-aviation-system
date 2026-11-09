@@ -13,11 +13,7 @@ import { sendNotificationEmail } from "./email.service";
  * Notification types
  */
 export type NotificationType =
-  | "booking"
-  | "flight"
-  | "payment"
-  | "promo"
-  | "system";
+  "booking" | "flight" | "payment" | "promo" | "system";
 
 /**
  * Options for fetching notifications

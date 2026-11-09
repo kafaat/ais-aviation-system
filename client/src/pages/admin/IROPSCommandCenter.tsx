@@ -587,10 +587,7 @@ function EventsTab({
                     escalateMutation.mutate({
                       disruptionId: event.id,
                       level: escalateLevel as
-                        | "low"
-                        | "medium"
-                        | "high"
-                        | "critical",
+                        "low" | "medium" | "high" | "critical",
                     })
                   }
                   disabled={escalateMutation.isPending}

@@ -28,27 +28,17 @@ import { TRPCError } from "@trpc/server";
  * equipment_change for aircraft swap scenarios.
  */
 export type IROPSEventType =
-  | "delay"
-  | "cancellation"
-  | "diversion"
-  | "equipment_change";
+  "delay" | "cancellation" | "diversion" | "equipment_change";
 
 export type IROPSSeverity = "low" | "medium" | "high" | "critical";
 
 export type IROPSEventStatus = "active" | "recovering" | "resolved";
 
 export type IROPSActionType =
-  | "rebook"
-  | "hotel"
-  | "compensation"
-  | "notification"
-  | "meal_voucher";
+  "rebook" | "hotel" | "compensation" | "notification" | "meal_voucher";
 
 export type IROPSActionStatus =
-  | "pending"
-  | "in_progress"
-  | "completed"
-  | "failed";
+  "pending" | "in_progress" | "completed" | "failed";
 
 /**
  * Represents a full IROPS event with computed fields

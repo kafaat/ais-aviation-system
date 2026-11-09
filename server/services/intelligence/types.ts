@@ -13,21 +13,14 @@
 
 /** Severity levels for agent decisions */
 export type DecisionSeverity =
-  | "info"
-  | "warning"
-  | "critical"
-  | "action_required";
+  "info" | "warning" | "critical" | "action_required";
 
 /** Confidence level for agent outputs */
 export type ConfidenceLevel = "low" | "medium" | "high" | "very_high";
 
 /** Agent execution status */
 export type AgentStatus =
-  | "idle"
-  | "running"
-  | "completed"
-  | "failed"
-  | "timeout";
+  "idle" | "running" | "completed" | "failed" | "timeout";
 
 /** Base interface for all agent results */
 export interface AgentResult<T = unknown> {
@@ -222,11 +215,7 @@ export interface OperationalHealth {
 
 export interface OperationalAlert {
   type:
-    | "delay_cascade"
-    | "crew_shortage"
-    | "maintenance"
-    | "weather"
-    | "capacity";
+    "delay_cascade" | "crew_shortage" | "maintenance" | "weather" | "capacity";
   severity: DecisionSeverity;
   message: string;
   affectedFlights: number[];

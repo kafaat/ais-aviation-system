@@ -16,11 +16,7 @@ import type {
 
 export type LegalityVerdictKind = "legal" | "legal_with_extension" | "illegal";
 export type CheckStatus =
-  | "pass"
-  | "pass_with_extension"
-  | "fail"
-  | "advisory"
-  | "not_evaluable";
+  "pass" | "pass_with_extension" | "fail" | "advisory" | "not_evaluable";
 export type AcclimatisationState = "B" | "D" | "X";
 
 export interface Sector {
@@ -35,11 +31,7 @@ export interface Sector {
 }
 
 export type DutyKind =
-  | "fdp"
-  | "standby_airport"
-  | "standby_home"
-  | "positioning"
-  | "other";
+  "fdp" | "standby_airport" | "standby_home" | "positioning" | "other";
 
 export interface DutyPeriod {
   kind: DutyKind;

@@ -60,12 +60,7 @@ import { Redirect } from "wouter";
 // ============================================================================
 
 type ClaimStatus =
-  | "pending"
-  | "under_review"
-  | "approved"
-  | "denied"
-  | "paid"
-  | "appealed";
+  "pending" | "under_review" | "approved" | "denied" | "paid" | "appealed";
 
 type RegulationType = "eu261" | "dot" | "local";
 
