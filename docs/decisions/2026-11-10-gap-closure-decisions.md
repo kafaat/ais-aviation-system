@@ -5,16 +5,17 @@ prepared the same day. Each decision below separates what the software does,
 what an operating policy says, what hardware or an external party must
 accept, and what is deferred as product roadmap. The ledgers these decisions
 touch are named in each section; no new tracking issue duplicates an existing
-one.
+one. Section 6 was amended on the same day after the owner confirmed decision
+D6 as recorded in the #279 ADR comment; see that section for the correction.
 
-| #   | Topic                                     | Decision                                                                             | Ledger effect                                                                                            |
-| --- | ----------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| 1   | OPS-06 seat remap under operational block | Option A: permit a compatible remap under the safety conditions in section 1         | OPS-06 verified in `docs/remediation/coverage-closure-ledger.json`; policy text in `dcs-remap-policy.md` |
-| 2   | UI-07 bag-tag printer                     | Option B: external hardware acceptance pending, with a named owner role              | OPS row stays partial, classified `EXTERNAL_HARDWARE_ACCEPTANCE_PENDING`; receipt contents fixed         |
-| 3   | CAP-01 and the report catalog (#280)      | Hybrid: classify product scope first, then implement in waves                        | `product_scope` dimension added to the catalog; availability counts unchanged at 36/35/28                |
-| 4   | #103 staging secrets                      | Option A: authorised operator acts in the Railway dashboard and files an attestation | Attestation template in `docs/operations/staging-secret-attestation.md`; issue stays open until filed    |
-| 5   | Password reset                            | Implement as a later product capability, not as a condition of #103                  | Tracked as a feature issue with OWASP-aligned requirements                                               |
-| 6   | Multi-currency                            | SAR only for pricing, collection and refund now; design kept extensible              | No code change; `.archive` selector stays archived; prerequisites for a later activation recorded below  |
+| #   | Topic                                     | Decision                                                                                                  | Ledger effect                                                                                                                     |
+| --- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | OPS-06 seat remap under operational block | Option A: permit a compatible remap under the safety conditions in section 1                              | OPS-06 verified in `docs/remediation/coverage-closure-ledger.json`; policy text in `dcs-remap-policy.md`                          |
+| 2   | UI-07 bag-tag printer                     | Option B: external hardware acceptance pending, with a named owner role                                   | OPS row stays partial, classified `EXTERNAL_HARDWARE_ACCEPTANCE_PENDING`; receipt contents fixed                                  |
+| 3   | CAP-01 and the report catalog (#280)      | Hybrid: classify product scope first, then implement in waves                                             | `product_scope` dimension added to the catalog; availability counts unchanged at 36/35/28                                         |
+| 4   | #103 staging secrets                      | Option A: authorised operator acts in the Railway dashboard and files an attestation                      | Attestation template in `docs/operations/staging-secret-attestation.md`; issue stays open until filed                             |
+| 5   | Password reset                            | Implement as a later product capability, not as a condition of #103                                       | Tracked as a feature issue with OWASP-aligned requirements                                                                        |
+| 6   | Multi-currency                            | Approved product priority: start delivery now; deployed scope stays SAR until the gates in section 6 pass | Tracked as feature issue #319; no code change in this record; `.archive` selector stays archived until a real journey replaces it |
 
 ## 1. OPS-06 — compatible seat remap under operational constraints
 
@@ -116,19 +117,40 @@ changes, and no activation for users before an approved mail channel exists
 and the full journey is tested end to end. The present `fixme` in
 `e2e/auth.spec.ts` remains the marker until then.
 
-## 6. Multi-currency — SAR only for now
+## 6. Multi-currency — approved priority, SAR-only until the gates pass
 
-SAR remains the pricing, collection and refund currency in the current scope.
+**Amended 2026-11-10.** The first merged version of this record (#318) said
+"SAR only for now; multi-currency when the market requires it". That wording
+deferred a priority the owner had already set: decision D6 in the ADR comment
+on #279 (https://github.com/kafaat/ais-aviation-system/issues/279#issuecomment-6755203297)
+is to **prioritize the implementation of multi-currency now**, and the owner
+reconfirmed that choice when the discrepancy was raised. This section is the
+corrected record; the earlier wording is superseded.
+
+Two statements are kept apart. **Deployed capability:** SAR remains the
+pricing, collection and refund currency until every acceptance gate below is
+met; nothing may imply that production accepts non-SAR payment, and a purely
+cosmetic selector is not acceptable. **Product priority:** scope, owner
+assignment and delivery planning for multi-currency start now, tracked in
+feature issue #319, with Product and Finance/Revenue Accounting accountable
+and Pricing/Booking, Payments, Tax/Compliance, QA and the supported providers
+delivering.
+
 The design keeps display currency, ticketing currency and payment or refund
-currency as separate concepts. Activating a display currency later requires an
-approved exchange-rate source, a rate fixing moment, rounding and accounting
-rules, and acceptance, before any selector is enabled; a numeric conversion in
-the user interface is not sufficient. The archived selector under
-`.archive/incomplete-features` stays archived.
+currency as separate concepts. Activation of any non-SAR use case requires: an
+approved list of currencies and use cases; an authoritative exchange-rate source
+with timestamp and version and explicit rate-fixing rules; ISO 4217 minor-unit
+rounding and accounting rules; quote, checkout, ticket, receipt, ledger and
+reconciliation invariants; fee and tax handling; negative, concurrency and
+tenant tests; and payment-provider and regulatory acceptance for each
+settlement currency. The archived selector under `.archive/incomplete-features`
+stays archived until a tested end-to-end journey replaces it.
 
 ## Execution order
 
 1. #103 attestation by the operator.
 2. OPS-06 recorded as decided (this change).
 3. UI-07 owner and CAP-01 scope classification by their owners.
-4. Roadmap: password reset, then multi-currency when the market requires it.
+4. Multi-currency scope, owners and acceptance plan (#319), in parallel with
+   step 3; delivery waves follow once the plan is accepted.
+5. Roadmap: password reset (#317) as a later scoped release.
