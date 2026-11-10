@@ -185,6 +185,13 @@ export default defineConfig(({ mode }) => {
       },
       // Global test timeout
       testTimeout: 10000,
+      // Native MySQL suites truncate every table and drop triggers in their
+      // per-test hooks; on the shared CI database under load that DDL has
+      // exceeded the 10 s default, failing one case on the timeout and the
+      // next on the fixtures the interrupted hook left behind (wallet crossing
+      // and wallet dispute funding, 2026-11-10). Hooks get the setup budget;
+      // test bodies keep the 10 s limit.
+      hookTimeout: 60000,
       // Globals for testing-library matchers
       globals: true,
     },

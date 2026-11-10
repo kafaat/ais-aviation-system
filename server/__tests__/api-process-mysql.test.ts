@@ -822,30 +822,52 @@ nativeDescribe.sequential(
       phase = "real middleware quota exhaustion and window recovery";
       const pid = api!.pid;
       const livePaths = ["/api/rest/health/live", "/api/trpc/health.live"];
-      let apiLimited = false;
-      let apiAccepted = 0;
-      for (let attempt = 0; attempt <= 60; attempt++) {
-        const result = await request(livePaths[attempt % livePaths.length]);
-        expect(result.headers.get("x-ratelimit-limit")).toBe("60");
-        if (result.status === 429) {
-          apiLimited = true;
-          expect(result.headers.get("x-ratelimit-remaining")).toBe("0");
-          expect(Number(result.headers.get("retry-after"))).toBeGreaterThan(0);
-          expect(Number(result.headers.get("retry-after"))).toBeLessThanOrEqual(
-            60
-          );
-          expect(result.body).toMatchObject({
-            error: "TOO_MANY_REQUESTS",
-            limit: 60,
-          });
-          assertPublicResponse(result.text);
-          break;
+      // Both quotas use fixed one-minute windows. A sequential burst on a
+      // loaded runner can straddle a window reset, so the count of admitted
+      // requests starts again whenever the remaining header rises instead of
+      // falling; the assertion is still the real limiter's 429, never a fake
+      // clock or a test-only limit.
+      async function exhaust(
+        limit: number,
+        send: (attempt: number) => ReturnType<typeof request>,
+        admitted: (result: Awaited<ReturnType<typeof request>>) => void
+      ) {
+        let accepted = 0;
+        let previousRemaining = Number.POSITIVE_INFINITY;
+        for (let attempt = 0; attempt <= limit * 2 + 1; attempt++) {
+          const result = await send(attempt);
+          expect(result.headers.get("x-ratelimit-limit")).toBe(String(limit));
+          if (result.status === 429) {
+            expect(accepted).toBeGreaterThan(0);
+            expect(result.headers.get("x-ratelimit-remaining")).toBe("0");
+            expect(Number(result.headers.get("retry-after"))).toBeGreaterThan(
+              0
+            );
+            expect(
+              Number(result.headers.get("retry-after"))
+            ).toBeLessThanOrEqual(60);
+            return result;
+          }
+          admitted(result);
+          const remaining = Number(result.headers.get("x-ratelimit-remaining"));
+          if (remaining > previousRemaining) accepted = 0;
+          previousRemaining = remaining;
+          accepted++;
         }
-        expect(result.status).toBe(200);
-        apiAccepted++;
+        throw new Error(
+          `quota of ${limit} never answered 429 within ${limit * 2 + 2} requests`
+        );
       }
-      expect(apiAccepted).toBeGreaterThan(0);
-      expect(apiLimited).toBe(true);
+      const apiLimited = await exhaust(
+        60,
+        attempt => request(livePaths[attempt % livePaths.length]),
+        result => expect(result.status).toBe(200)
+      );
+      expect(apiLimited.body).toMatchObject({
+        error: "TOO_MANY_REQUESTS",
+        limit: 60,
+      });
+      assertPublicResponse(apiLimited.text);
       // Both transports share the original anonymous quota, even with Redis
       // unavailable. Switching routers must not bypass the exhausted bucket.
       for (const path of livePaths)
@@ -859,28 +881,14 @@ nativeDescribe.sequential(
         },
         body: "{}",
       };
-      let webhookLimited = false;
-      let webhookAccepted = 0;
-      for (let attempt = 0; attempt <= 50; attempt++) {
-        const result = await request("/api/stripe/webhook", invalidWebhook);
-        expect(result.headers.get("x-ratelimit-limit")).toBe("50");
-        if (result.status === 429) {
-          webhookLimited = true;
-          expect(result.headers.get("x-ratelimit-remaining")).toBe("0");
-          expect(Number(result.headers.get("retry-after"))).toBeGreaterThan(0);
-          expect(Number(result.headers.get("retry-after"))).toBeLessThanOrEqual(
-            60
-          );
-          expect(result.body).toMatchObject({ error: "TOO_MANY_REQUESTS" });
-          break;
-        }
+      const webhookLimited = await exhaust(
+        50,
+        () => request("/api/stripe/webhook", invalidWebhook),
         // An admitted invalid signature reaches the real raw-body handler;
         // it has no financial or receipt effect and is distinct from a 429.
-        expect(result.status).toBe(400);
-        webhookAccepted++;
-      }
-      expect(webhookAccepted).toBeGreaterThan(0);
-      expect(webhookLimited).toBe(true);
+        result => expect(result.status).toBe(400)
+      );
+      expect(webhookLimited.body).toMatchObject({ error: "TOO_MANY_REQUESTS" });
       // Real elapsed time, without fake clocks, quota resets or test-only limits.
       await expect
         .poll(
