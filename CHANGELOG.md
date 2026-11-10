@@ -1,5 +1,33 @@
 # Changelog
 
+## What's Changed in v1.39.3
+
+<!-- ais-release-source: 992b7a3b9b479a50ae726868ed71ac6fa53ca5f4 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(auth-service): apply Alpine package updates so the auth image passes the security gate (#324) (992b7a3b)
+
+### Documentation
+
+- docs(coverage): record the present-day re-measurement on current main in the closure ledger (#315) (941f86c9)
+- docs(coverage): re-bind the closure ledger to the current main source and verify UI-05 (#316) (8d7b251f)
+- docs(decisions): adopt the gap-closure decision package of 2026-11-10 (#318) (e652e035)
+- docs(decisions): correct decision 6 to the approved multi-currency priority (#320) (1c29db10)
+- docs(architecture): multi-currency scope, owner roles and acceptance matrix for #319 (#321) (b9addba2)
+- docs(architecture): record the YER default base currency, role authority and the multi-tenant platform ADR (#322) (3786c7b7)
+
+### Other Changes
+
+- test(e2e): migrate the authentication suite to the product as built and retire the currency spec (#314) (61f64b54)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.39.2...v1.39.3
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.39.2
 
 <!-- ais-release-source: ce07843b480305da66ef72265ef0df90f42b5f84 -->
