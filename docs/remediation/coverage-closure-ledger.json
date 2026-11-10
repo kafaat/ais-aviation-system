@@ -2,7 +2,7 @@
   "schema_version": 1,
   "baseline": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
   "source_revision": "941f86c996b43f6de61fd904259b882a1a39a9b4",
-  "policy": "source_revision is the actual accepted CI source (a main commit; every required workflow family ran on it and passed, see acceptance_runs). Thirty-five findings, including META-01 and UI-05, are verified by same-source evidence. OPS-06, UI-07 and CAP-01 remain partial with null accepted fields. Earlier accepted sources are retained in previous_acceptances; the current_measurement block records the raw coverage identities of the same source.",
+  "policy": "source_revision is the actual accepted CI source (a main commit; every required workflow family ran on it and passed, see acceptance_runs). Thirty-six findings, including META-01, UI-05 and OPS-06 (after the 2026-11-10 policy decision), are verified by same-source evidence. UI-07 and CAP-01 remain partial with null accepted fields: UI-07 awaits external hardware acceptance and CAP-01 awaits authoritative report sources under the product_scope classification. Earlier accepted sources are retained in previous_acceptances; the current_measurement block records the raw coverage identities of the same source.",
   "findings": [
     {
       "id": "BE-01",
@@ -596,24 +596,31 @@
     {
       "id": "OPS-06",
       "priority": "P1",
-      "status": "partial",
-      "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
-      "accepted_sha": null,
-      "acceptance_run": null,
+      "status": "verified",
+      "evidence": "docs/decisions/2026-11-10-gap-closure-decisions.md",
+      "accepted_sha": "941f86c996b43f6de61fd904259b882a1a39a9b4",
+      "acceptance_run": "https://github.com/kafaat/ais-aviation-system/actions/runs/42690069061",
       "prior_evidence": "docs/remediation/20261104-coverage-gap-remediation.md",
       "original_title": "إعادة تخطيط المقاعد وتخفيض درجة السفر وإغلاق الحالات غير مجرّبة",
       "original_acceptance": "1. موظف غير مخول، layout لطائرة أو شركة مختلفة، مقعد checked_in أو له boardingPass، seat feature مدفوع أو block تشغيلي: رفض remap وحفظ الحالة.\n2. عملية remap مسموحة تحفظ أعداد المقصورات وملكيات المقاعد وتسجل event مرة واحدة عند إعادة نفس المفتاح.\n3. quote ثم confirm مع expectedRefund مختلف أو quote قديم/لراكب آخر/مستأجر آخر؛ لا تغيير ولا استرداد.\n4. تأكيد downgrade مرتين مع نفس المفتاح لا يكرر الأثر المالي أو الحدث؛ فشل منتصف المعاملة يرجع الحالة كاملة.",
       "tests": [
-        "scripts/acceptance/dcs-counter-lifecycle.ts",
-        "client/src/components/__tests__/DcsStationActions.test.tsx"
+        "client/src/components/__tests__/DcsStationActions.test.tsx",
+        "docs/operations/dcs-remap-policy.md",
+        "scripts/acceptance/dcs-counter-lifecycle.ts"
       ],
-      "followup_state": "native_cases_passed_policy_conflict_remains",
-      "remaining_acceptance": [
-        "Resolve the original blanket operational-block remap refusal requirement against the implemented policy that permits a compatible remap preserving the block. Do not claim literal compliance or change operator policy solely to close the test row."
-      ],
+      "followup_state": "verified_on_current_main_source_after_policy_decision",
+      "remaining_acceptance": [],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": ["dcs-bsp/handoff.json"],
-      "local_observation": "The 38-case DCS group covers the missing authorization, remap, quote/replay and transaction-failure cells. It preserves the existing compatible operational-block remap policy."
+      "local_observation": "The 38-case DCS group covers the missing authorization, remap, quote/replay and transaction-failure cells. It preserves the existing compatible operational-block remap policy.",
+      "prior_partial_state": {
+        "remaining_acceptance": [
+          "Resolve the original blanket operational-block remap refusal requirement against the implemented policy that permits a compatible remap preserving the block. Do not claim literal compliance or change operator policy solely to close the test row."
+        ],
+        "followup_state": "native_cases_passed_policy_conflict_remains",
+        "assessed_on": "2026-11-05"
+      },
+      "policy_decision": "2026-11-10 option A: compatible remap permitted; a seat-bound block stays on its seat number and is never removed or moved, passenger-bound constraints stay with the seat identity, conflicts or unverifiable constraints refuse the transaction. The original blanket wording is superseded. Implemented by remapDeskSeats and proven by the native cases in scripts/acceptance/dcs-counter-lifecycle.ts (compatible remap preserving block, capacity and ownership with one event on replay; refusal matrix including an incompatible operational block) executed in Production Gates on the accepted source."
     },
     {
       "id": "OPS-07",
@@ -995,7 +1002,17 @@
       "remaining_acceptance": [
         "Supply the separate target-printer test required by the original criterion, including physical barcode and margin acceptance. Browser print substitution and print preview do not establish physical output."
       ],
-      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md"
+      "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
+      "acceptance_classification": "EXTERNAL_HARDWARE_ACCEPTANCE_PENDING",
+      "owner_role": "airport operations or the station departure-control provider",
+      "receipt_requirements": [
+        "printed tag specimen",
+        "margin check against the tag stock",
+        "successful scanner read of the barcode",
+        "encoded data matches the bag and flight record",
+        "printer model, driver and settings used"
+      ],
+      "decision": "docs/decisions/2026-11-10-gap-closure-decisions.md section 2"
     },
     {
       "id": "UI-08",
@@ -1231,7 +1248,8 @@
       ],
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": ["cap/handoff.json", "cap/executed-matrix.json"],
-      "local_observation": "109/109 native cases passed: 36 reports times golden API/CSV, tenant, period-or-refusal cells, plus one catalog-match assertion. API is the actual tRPC createCaller rather than HTTP transport; CSV is independently parsed. Twenty-two definitions support period boundaries and fourteen reject unsupported period input; the currency catalog retains its documented shared scope."
+      "local_observation": "109/109 native cases passed: 36 reports times golden API/CSV, tenant, period-or-refusal cells, plus one catalog-match assertion. API is the actual tRPC createCaller rather than HTTP transport; CSV is independently parsed. Twenty-two definitions support period boundaries and fourteen reject unsupported period input; the currency catalog retains its documented shared scope.",
+      "decision": "docs/decisions/2026-11-10-gap-closure-decisions.md section 3: product_scope dimension added to the catalog (all rows unclassified until the owner classifies); availability flags unchanged; first sources: sales-office assignments, document-validity policy, GDS receipts."
     },
     {
       "id": "UI-M01",
@@ -1280,9 +1298,9 @@
     "acceptance_note": "99 definitions remain 36 available, 35 partial and 28 blocked, with zero promotions. The 36 available definitions are verified on the accepted source; the other 63 definitions retain their missing-source and acceptance conditions."
   },
   "source_revision_role": "actual_ci_tested_source",
-  "worktree_state": "accepted_ci_source_with_three_partial_findings",
+  "worktree_state": "accepted_ci_source_with_two_partial_findings",
   "followup": {
-    "date": "2026-11-09",
+    "date": "2026-11-10",
     "document": "docs/remediation/2026-11-09-current-source-reacceptance.md",
     "original_workbook": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
     "original_criteria_field": "findings[].original_acceptance copied verbatim from original-gap-workbook-rows.json",
@@ -1292,23 +1310,22 @@
     "baseline_revision": "d68881c2128267cee31c7ebbca4a4e3eaeff5b14",
     "source_identity_note": "Accepted source SHA/tree come from CI; implementation and PR head are retained separately.",
     "formal_status_counts": {
-      "verified": 35,
-      "partial": 3
+      "verified": 36,
+      "partial": 2
     },
     "acceptance_group_counts": {
-      "verified": 35,
+      "verified": 36,
       "candidate_pending_ci": 0,
       "metadata_acceptance_pending": 0,
-      "original_acceptance_incomplete": 3,
+      "original_acceptance_incomplete": 2,
       "total": 38
     },
     "candidate_pending_ci": [],
     "metadata_acceptance_pending": [],
-    "original_acceptance_incomplete": ["OPS-06", "UI-07", "CAP-01"],
+    "original_acceptance_incomplete": ["UI-07", "CAP-01"],
     "remaining_acceptance": {
-      "OPS-06": "The original blanket refusal of operational-block remap conflicts with existing compatible-remap preservation behavior. Native checks do not resolve that policy requirement.",
-      "UI-07": "Separate target-printer barcode, margin and physical-output acceptance remains required.",
-      "CAP-01": "The 36 available reports have a local native matrix. The 35 partial and 28 blocked definitions retain their source and acceptance conditions, with zero promotions."
+      "UI-07": "EXTERNAL_HARDWARE_ACCEPTANCE_PENDING: target-printer receipt (specimen, margins, scanner read, data match, printer settings) by airport operations or the DCS provider.",
+      "CAP-01": "Product scope classification by the owner (product_scope on every catalog row), then sources for required reports in waves; availability flags stay 36/35/28 until each acceptance passes."
     },
     "no_current_acceptance_sha_or_run": false,
     "test_count_policy": "Counts belong to individual attempts. Shared suites, targeted reruns and overlapping unit groups are not summed into a new whole-repository result. Historical full_unit_attempt and local_checks are retained only in previous_followup.",
@@ -1860,7 +1877,8 @@
         }
       ]
     },
-    "previous_followup_document": "docs/remediation/2026-11-05-native-gap-acceptance.md"
+    "previous_followup_document": "docs/remediation/2026-11-05-native-gap-acceptance.md",
+    "decision_record": "docs/decisions/2026-11-10-gap-closure-decisions.md"
   },
   "implementation_commit": "941f86c996b43f6de61fd904259b882a1a39a9b4",
   "previous_followup": {

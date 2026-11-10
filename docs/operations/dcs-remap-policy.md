@@ -41,6 +41,20 @@ capacity and survive compatible remap” checks unchanged ownership, cabin and
 status, unchanged flight availability, the retained block, and one event on
 replay. The refusal matrix includes an incompatible operational block.
 
+## Decision adopted on 2026-11-10
+
+The repository owner adopted this behavior as the operating policy
+(see [the decision record](../decisions/2026-11-10-gap-closure-decisions.md)),
+with one clarification that the implementation already satisfies: constraints
+follow their source. A block attached to a seat stays on that seat number and
+is never moved to another seat or released by a replacement template; a
+constraint attached to a passenger's assignment stays with that seat's
+identity (cabin, type, price, tier and physical features) or the whole remap is
+refused. The former OPS-06 blanket wording (refuse any remap whenever a block
+exists) is superseded and kept on the ledger row for traceability. OPS-06 is
+verified on the accepted source `main@941f86c` by the native cases named
+above; no code change was required.
+
 ## Operating boundary
 
 A layout being active in the local application does not certify the aircraft,

@@ -14,6 +14,16 @@ different facts. The following prerequisites cannot be manufactured by a patch.
 | Resilience            | Observed backup restore, replication state, controlled failover and recovery-time measurements                                                      | Committed backup/restore gates retained; no claim of multi-region production acceptance                                    |
 | Accountability        | Accepted accountable owner, on-call contact and approval evidence for every domain                                                                  | Explicit nullable assignments in `service-ownership.json`; repository reviewer fallback is not domain ownership            |
 
+**Bag-tag reprint on the target printer (coverage finding UI-07).** Classified
+`EXTERNAL_HARDWARE_ACCEPTANCE_PENDING` on 2026-11-10 (decision record
+[2026-11-10](../decisions/2026-11-10-gap-closure-decisions.md), section 2).
+Owner role: airport operations or the station's departure-control provider.
+The promoting receipt must contain the printed tag specimen, the margin check
+against the tag stock, a successful scanner read of the barcode, a match of
+the encoded data against the bag and flight record, and the printer model,
+driver and settings. Browser printing or a PDF does not substitute for any of
+these; the software side is covered by the kiosk unit and browser tests.
+
 The [Honeywell station procedure](honeywell-station.md) covers Windows RAW routing,
 independent paper scans and disconnected-device reconciliation for boarding
 passes and baggage tags.
