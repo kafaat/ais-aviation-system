@@ -5,6 +5,7 @@ import {
   createPaidBookingNativeFixture,
   type PaidBookingNativeFixture,
 } from "./helpers/paid-booking-native-fixture";
+import { closePool } from "../db";
 
 /**
  * Scenarios S-01 and S-02 of docs/architecture/improvement-plan-2026-11.md.
@@ -39,6 +40,8 @@ nativeDescribe.sequential("retail offer consumption on native MySQL", () => {
     passengerTypes: ["adult"],
   };
 
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+
   beforeAll(async () => {
     fixture = await createPaidBookingNativeFixture("ais_confirmation");
     // The application's lazy connection must open against the disposable
@@ -48,6 +51,10 @@ nativeDescribe.sequential("retail offer consumption on native MySQL", () => {
   }, 60000);
 
   afterAll(async () => {
+    // Close the application's own pool before the disposable schema is
+    // dropped, and leave the environment as it was found.
+    await closePool().catch(() => undefined);
+    process.env.DATABASE_URL = originalDatabaseUrl;
     await fixture?.close();
   });
 
