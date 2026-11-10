@@ -2,7 +2,7 @@
 
 ## What's Changed in v1.39.3
 
-<!-- ais-release-source: d19247127a215b73f52da5644ec1bbeea6a8ea40 -->
+<!-- ais-release-source: 8873f9db73aa2391324af7b7a5e5779508089256 -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
@@ -22,6 +22,7 @@
 ### Other Changes
 
 - test(e2e): migrate the authentication suite to the product as built and retire the currency spec (#314) (61f64b54)
+- test: tolerate quota window rollover and give hooks a 60 s budget on the shared CI database (#326) (8873f9db)
 
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.39.2...v1.39.3
 
