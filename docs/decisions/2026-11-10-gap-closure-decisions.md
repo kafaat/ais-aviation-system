@@ -148,6 +148,21 @@ stays archived until a tested end-to-end journey replaces it. The current-state
 inventory, owner roles, acceptance matrix and delivery waves are in
 [multi-currency-scope.md](../architecture/multi-currency-scope.md).
 
+**Owner addendum, 2026-11-10 (#319, comment 6775309287).** The Yemeni rial
+(YER) is the product's default base currency, and the product must offer a
+controlled setting through which an authorised tenant administrator selects
+another base currency from the approved, enabled list. The setting is
+tenant-scoped, permission-checked and audited with actor, time, version and
+effective-from date; it applies to new quotes after that date and never
+changes the currency or amount of an existing booking, ticket, invoice,
+refund or ledger entry. The accounting functional currency is a separate
+Finance-governed setting that a pricing-default change never alters. The
+deployed implementation remains SAR until the gates pass; no base currency
+may be selectable before migrations, financial policy, provider integration
+and the tenant, negative and concurrency tests are accepted. Still open under
+G1: the allowed choices, markets, first transaction currencies and named
+owners.
+
 ## Execution order
 
 1. #103 attestation by the operator.
