@@ -144,7 +144,9 @@ rounding and accounting rules; quote, checkout, ticket, receipt, ledger and
 reconciliation invariants; fee and tax handling; negative, concurrency and
 tenant tests; and payment-provider and regulatory acceptance for each
 settlement currency. The archived selector under `.archive/incomplete-features`
-stays archived until a tested end-to-end journey replaces it.
+stays archived until a tested end-to-end journey replaces it. The current-state
+inventory, owner roles, acceptance matrix and delivery waves are in
+[multi-currency-scope.md](../architecture/multi-currency-scope.md).
 
 ## Execution order
 
