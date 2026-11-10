@@ -104,10 +104,14 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
     }
   });
 
+  // Truncating every table and dropping triggers is DDL on a shared CI MySQL;
+  // under load it has exceeded the default 10 s hook budget, failing one case
+  // on the timeout and the next on the fixtures it left behind. Give the hooks
+  // the same budget as setup.
   afterEach(async () => {
     await pool?.query("DROP TRIGGER IF EXISTS ais_wallet_fail_confirmation");
     await pool?.query("DROP TRIGGER IF EXISTS ais_wallet_fail_topup");
-  });
+  }, 60000);
 
   beforeEach(async () => {
     for (const name of tableNames)
@@ -183,7 +187,7 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
         type: "adult" as const,
       }))
     );
-  });
+  }, 60000);
 
   async function pendingTopUp(amount = 5000) {
     const [inserted] = await db.insert(schema.walletTransactions).values({
