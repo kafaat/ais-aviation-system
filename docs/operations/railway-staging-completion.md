@@ -106,6 +106,14 @@ AUTH_SERVICE_TOKEN`.
    `RAILWAY_ACCEPTANCE_SUMMARY`. A refused handshake fails the run. The 8
    November one-shot probe (#307, receipt in #103) remains the record of the
    first such proof; it does not need to be re-run.
+   Because `ais-acceptance` and `ais-web` roll out from the same commit at the
+   same moment, the runner first waits up to two minutes for the web replica
+   to answer `/api/rest/health/live` (`scripts/ci/railway-web-wait.ts`) and
+   records the wait under `webWait`. On 10 November 2026 the run on
+   `3786c7b` probed the web about one second after its container started,
+   every request failed with `fetch failed`, and the deployment was recorded
+   as crashed although all 171 checks passed; the wait removes that race
+   without passing an unreachable web.
 
 Diagnosis and recovery if a service fails to start after the merge. First
 read the failing service's deploy log and classify the cause; do not change a

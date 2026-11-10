@@ -2,12 +2,13 @@
 
 ## What's Changed in v1.39.3
 
-<!-- ais-release-source: 992b7a3b9b479a50ae726868ed71ac6fa53ca5f4 -->
+<!-- ais-release-source: d19247127a215b73f52da5644ec1bbeea6a8ea40 -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
 
 - fix(auth-service): apply Alpine package updates so the auth image passes the security gate (#324) (992b7a3b)
+- fix(ci): wait for the web replica before the Railway acceptance probes (#323) (d1924712)
 
 ### Documentation
 
