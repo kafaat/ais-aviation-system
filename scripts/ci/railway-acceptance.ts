@@ -46,6 +46,7 @@ import {
   type LoginJourneyReport,
   type SyntheticAccount,
 } from "./railway-login-journey";
+import { waitForWeb, type WebWaitReport } from "./railway-web-wait";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SYSTEM_SCHEMAS = [
@@ -357,6 +358,7 @@ async function main(): Promise<number> {
   let report: AcceptanceReport | null = null;
   let diagnosis: Diagnosis | null = null;
   let web: WebProbe[] | null = null;
+  let webWait: WebWaitReport | null = null;
   let login: LoginJourneyReport | null = null;
   const timings: Record<string, number> = {};
   const mark = (label: string, since: number) => {
@@ -372,6 +374,16 @@ async function main(): Promise<number> {
 
     const webBase = process.env.ACCEPTANCE_WEB_BASE_URL?.trim();
     if (webBase) {
+      // This one-shot and the web replica roll out from the same commit at
+      // the same time. Give the replica a bounded window to answer liveness
+      // before its probes and the login journey are judged; an unreachable
+      // web is still reported as such and still fails the run below.
+      const waitStarted = Date.now();
+      webWait = await waitForWeb(new URL(webBase));
+      mark("webWaitMs", waitStarted);
+      console.info(
+        `[railway-acceptance] web ${webWait.reachable ? "reachable" : "unreachable"} after ${webWait.attempts} attempt(s) in ${webWait.waitedMs}ms${webWait.lastError ? `: ${webWait.lastError}` : ""}`
+      );
       web = await probeWeb(new URL(webBase));
       const since = Date.now();
       try {
@@ -507,6 +519,7 @@ async function main(): Promise<number> {
       source: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
       environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? null,
       diagnosis,
+      webWait,
       web,
       login,
       timings,
