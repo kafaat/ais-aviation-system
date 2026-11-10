@@ -24,4 +24,15 @@ assert len({row["id"] for row in report_rows}) == 99
 counts = Counter(row["availability"] for row in report_rows)
 assert counts == {"available": 36, "partial": 35, "blocked": 28}, counts
 assert ledger["report_catalog"]["promotions_verified"] == 0, "Promotion requires separate evidence review"
+# Product scope is a separate dimension (decision 2026-11-10): the catalog maps
+# every report id to one of the declared values, and its tally matches that map.
+scope_values = set(catalog["product_scope_values"])
+assert scope_values == {"required", "planned", "optional", "out_of_scope", "unclassified"}, scope_values
+scope = catalog["product_scope"]
+assert set(scope) == {str(row["id"]) for row in report_rows}, "product_scope must name every report exactly once"
+for report_id, value in scope.items():
+    assert value in scope_values, f"Report {report_id} has no valid product_scope"
+assert catalog["counts"]["product_scope"] == dict(Counter(scope.values()))
+for row in report_rows:
+    assert "product_scope" not in row, "product_scope lives in the catalog map, not on the row the source-truth test compares"
 print("PASS: 38 distinct gaps, evidence guards, and 99 source-honest report classifications")
