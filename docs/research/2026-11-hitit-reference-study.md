@@ -311,3 +311,154 @@ exceptions, and a real DR receipt with measured figures; a customer × module ×
 version table separating announced from operated and accepted. None of these
 was sent to Hitit; the current phase needs no purchase or subscription, only
 requirements that can be proven and a check of what exists first.
+
+## Second addendum, 11 November 2026: cargo, identity and loyalty, intelligence, passenger-service continuity
+
+Third five-agent pass over Hitit's cargo suite (CGO, CRA, CFS, the Cargo iQ
+membership), the customer data platform and loyalty (CDP, LL), the AI page,
+the 2025 quarterly disclosures on pricing and notifications, the virtual
+interline analysis, the accessibility announcement and the public privacy
+policy, plus a reading of the committed attestation template and the bodies of
+#103, #279 and #327. Twelve observations, sixteen scenarios (H-41 to H-56), one
+scope correction. All PROPOSED and NOT_RUN; issue comments were not read in
+full and neither the repository head nor Railway was re-checked.
+
+**Executive result.** The right expansion for AIS starts with passenger
+identity, the agent's execution authority and the continuity of services after
+a flight change, with pricing measured before it is activated. Cargo is a
+separate line of business and is not added because it appears in a vendor's
+catalogue.
+
+### Scope correction: what the #103 attestation is
+
+The committed template (`docs/operations/staging-secret-attestation.md`) is an
+operator's attestation about the secrets of the Railway staging environment
+that carries the name `production`. It is not a device-acceptance receipt and
+not an air-operator certificate. Any earlier wording that tied its closure to
+printer or reader acceptance was wider than its scope; hardware stays on #279
+(UI-07), report sources on #280, currency decisions on #319. Status of its
+seven checks after this reading: none verified in this round. Checks 1, 3, 4
+and 5 need direct authorised observation of the environment and its change
+history; check 2 needs evidence of the generation method, not a successful
+login or a string length; check 6 is recorded on #103 for `6889760` and was
+not re-run; check 7 needs the auth log for the same window. No `yes` is
+entered for an observation that did not happen, and no secret value, digest,
+reference expression or screenshot belongs in the attestation.
+
+### Observations
+
+| Domain                    | What the documents show                                                                             | Source            | Use for AIS, and the limit of the judgement                                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cargo                     | CGO for operations, CRA for accounting, CFS for customs; split shipments, tracking, multi-leg       | CGO / CRA / CFS   | Baggage is not turned into cargo by adding an AWB field: shipment, piece and leg, weight and volume constraints, document identity, own settlement cycle          |
+| Membership and standard   | Cargo iQ strategic membership announced in 2023                                                     | Cargo iQ          | Membership proves no CDMP accreditation or ONE Record acceptance; evidence per capability, partner and version                                                    |
+| Identity                  | A profile for all travellers, not only loyalty members; CDP for data, LL for loyalty decisions      | CDP + LL          | Separate person, user, purchaser, passenger and programme membership; a shared e-mail does not make one person                                                    |
+| Loyalty programmes        | Multiple programmes, mile and point units, conversions, rewards                                     | LL                | A separate ledger per unit and programme; points are not cash currencies; build on the existing reversal after re-checking it                                     |
+| Consent and profile merge | Data unification and permissions described; merge/unmerge and consent-withdrawal contracts not      | CDP               | Questions, not proven absences: lineage, identity-collision review, message eligibility re-check at execution                                                     |
+| Privacy                   | A 25-page public policy, REV.04 of 20 April 2023                                                    | Privacy           | Wider than the cookie policy read earlier; it does not settle AI data contracts, training or exit export                                                          |
+| Agent execution           | MCP for external agents managing orders and pricing at product or bundle level                      | AI                | Tool scopes and authorization controls not disclosed; AIS: same user-permission guard, operation id, audit, financial limits; incoming text is data, not commands |
+| Measuring intelligence    | Service, pricing, delay, cargo and contract tasks listed without a reproducible evaluation protocol | AI                | Per task: metric, baseline, test set, critical errors; a fluent chatbot proves nothing about refund integrity                                                     |
+| Pricing and inventory     | June 2025: price and capacity cache, several optimisation sources, RM at MVP/test stage             | Q2 2025           | No inference of current maturity; separate search price from binding offer; name each engine's authority and inventory revision                                   |
+| Disruption service        | September 2025: notification channel switching, templates by cancellation reason                    | Q3 2025           | Message receipt is not passenger acceptance; link communication to the recovery-plan version and a separate accept/decline state                                  |
+| Self-connection           | Distribution article separates self-connection from through-check-in agreements                     | Virtual interline | Show baggage, protection and re-check scope per connection; two segments on one screen imply no protection                                                        |
+| Accessibility             | Announcement concerns hitit.com, not the operational SSR/PRM cycle                                  | Accessibility     | Separate interface usability from confirmed assistance per passenger and segment; rebooking re-confirms the service                                               |
+
+### Proposed model for identity and service continuity
+
+`user`, `customer`, `passenger`, `purchaser` and `loyaltyMember` are not one
+identifier. The user is the login actor; the purchaser owns the commercial
+transaction; the passenger benefits from a segment; membership belongs to a
+programme and a point unit. A purchaser may not travel; a family may share a
+contact channel. On a flight change, build one view of every service's state
+(seat, baggage, assistance, meal, paid service, voucher, notification), each
+with its own re-confirmation state; a successful rebooking does not prove that
+seat, assistance and supplier moved with it. Merging two profiles needs
+per-field provenance, a reviewable matching basis and reversibility; matching
+heuristics alone never grant booking access or point transfers.
+
+### Pricing and intelligence: from capability claim to measured experiment
+
+Record `experiment_id`, model and policy version, data time and the experiment
+unit with the offer; keep the assignment stable across retries; fix the bundle
+discount's allocation to line items so a partial refund stays explainable. For
+forecasts: time-based split, explicit cutoff, a seasonal-naive or comparable
+baseline, performance by route, season and horizon, uncertainty where needed.
+For pricing: net revenue after refunds and fees, not conversion alone. No
+marketing accuracy figure is adopted without denominator, error, sample and
+horizon. For agent execution: identity and authority come from a trusted
+context; text output and service descriptions are unauthorised data; every
+write passes the same domain guard, idempotency key, audit and decision limits;
+read-only is the proposed starting point until writes are accepted one by one.
+
+### Cargo: a scope decision before a build decision
+
+If AIS is to serve commercial cargo, the first slice is AWB, pieces and legs,
+capacity booking by weight and volume, handling and split-shipment states, then
+a ledger and matching; local data validity is separated from the external
+party's and customs' acknowledgement, and a submission is not a load approval.
+Integration with DCS and Weight and Balance goes through a contract, a version
+and operational approval; no safety algorithm or dangerous-goods rule is built
+from marketing pages. A customer, operation type, stations, carriers, external
+supplier and acceptance owner are named first; until then cargo is a studied
+option, not a commitment in the current wave.
+
+### Scenarios H-41 to H-56
+
+| ID   | Domain     | Case                                                             | Invariant                                                                                                                 | Scope                               |
+| ---- | ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| H-41 | CARGO      | Shipment of 10 pieces, 6 arrive                                  | No `delivered` for the whole shipment; the four pieces, their path and amounts recorded; retry does not duplicate the AWB | conditional cargo scope             |
+| H-42 | CARGO      | Two bookings within weight but over volume together              | Constraints enforced under concurrency; re-evaluated on aircraft change                                                   | conditional cargo scope             |
+| H-43 | CARGO      | Customs message sent without acknowledgement, late rejection     | `submitted` never becomes `accepted` by timeout; source, time, message and correction kept                                | simulator, then external party      |
+| H-44 | CARGO      | Duplicate CASS, then a credit memo for a partial shipment        | One entry; memo linked to the original; currency, period and carrier scope fixed                                          | DB and data contract                |
+| H-45 | IDENTITY   | Parent and two children on one e-mail, then a new account        | No identity, balance or access merge by inference                                                                         | API, data isolation (S-28)          |
+| H-46 | IDENTITY   | Wrong merge of two profiles, then rollback                       | Links restored with source history; no re-award and no lost reversal                                                      | DB, lineage                         |
+| H-47 | CONSENT    | Campaign queued, consent withdrawn before sending                | Purpose, channel and current state checked; flight notices independent of marketing                                       | worker, DB                          |
+| H-48 | LOYALTY    | Concurrent point transfer and expiry across two programmes       | No double spend; programme unit kept; deterministic time decision                                                         | concurrent DB (S-12)                |
+| H-49 | AGENT      | Malicious text in a service description requesting a refund      | No execution outside tool and authority; tenant identity from trusted context                                             | isolated negative test (S-27)       |
+| H-50 | AGENT      | Cancellation arrives twice after the user's authority is revoked | Prior outcome queryable within authority; no new unauthorised operation                                                   | API, replay (S-20/S-27)             |
+| H-51 | PRICING    | One item cancelled from a discounted bundle                      | Discount and tax shares preserved; no arbitrary full-discount refund                                                      | property tests, ledger (S-09, S-10) |
+| H-52 | PRICING    | Stale cache and an old inventory recommendation after a new one  | Re-validate at sale; refuse the older command; no silent break of an accepted offer                                       | concurrency, fencing (S-02, S-03)   |
+| H-53 | ML         | Occupancy or delay forecast on later flights                     | No leakage; baseline comparison; performance by horizon and route                                                         | offline evaluation                  |
+| H-54 | RECOVERY   | New alternative, then an old SMS link arrives                    | Link shows the version expired; old plan not applied; sending is not consent                                              | UI, outbox (S-13)                   |
+| H-55 | SSR        | Assistance passenger rebooked to another station                 | `requested` is not `confirmed`; supplier re-confirmation and handover documented                                          | operational simulator (S-13)        |
+| H-56 | CONNECTION | Self-connection without a carrier agreement                      | No promise of through-baggage, protection or final boarding pass that is not proven                                       | API, UI                             |
+
+The research numbering now runs H-01 to H-56; this is neither a count of
+executed tests nor fifty-six independent gaps. Scenarios overlap in their
+contracts and are merged with existing AIS tests before implementation.
+
+### Direct links to #327
+
+| Research topic                 | Existing path in the plan                         | What to add before any new work                                                     |
+| ------------------------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Agent and MCP authority        | S-20 (inventory), S-21 (audit), S-27 (behavioral) | Trace user, agent, tool and tenant identity; confirm each PR's real scope           |
+| Bundle discounts and refunds   | S-09, module 5, module 8                          | Discount and component allocation; repricing tied to the original version           |
+| Miles, conversion and reversal | Module 7                                          | Separate programme unit; concurrent expiry and transfer tests; build on what exists |
+| Service continuity             | Module 6 (extend `irops-recovery`)                | List of services needing re-confirmation; recovery-plan version in messages         |
+| Customer identity and export   | Module 4, S-19                                    | Export identity, consent and history relations without another tenant's data        |
+| Cargo                          | No module in the plan                             | Independent scope decision; not added to Wave A                                     |
+| Secrets attestation            | Wave D, #103                                      | The seven template items, separate from S-16 and S-26 and from hardware             |
+
+### Next tracing order
+
+1. Re-pin the AIS head and read the open PRs before reusing older review results.
+2. Trace person, passenger, user, loyalty and the purchaser-to-passenger relation, including family and guest bookings.
+3. Trace agent tools from entry to guard to money and booking writes and audit.
+4. Trace rebooking to every SSR, service and notification, not only a successful `flightId` change.
+5. Inventory stored price, binding offer, inventory engine and discount allocation before any AI pricing.
+6. Evaluate cargo only once its commercial scope is proven, with a limited accepted integration.
+
+None of this says the modules are missing; each item is a tracing question
+that ends in a code path and a test, or in a documented decision of
+non-applicability.
+
+### Source limits of this addendum
+
+The CDP page ends with an LL paragraph (editorial overlap, not a software
+defect); the large CDP brochure could not be fetched and was not used; the
+public privacy policy widens the earlier evidence but does not settle model
+training purposes or deletion. Sources: CGO, CRA, CFS, the Cargo iQ
+announcement (13 September 2023), CDP, LL, the CDP+LL product article
+(10 June 2026), the AI page, the Q2 and Q3 2025 disclosures, the virtual
+interline analysis, the accessibility announcement (1 October 2026), the
+privacy policy (REV.04, 20 April 2023), the bodies of #103, #279 and #327 and
+the committed attestation template.
