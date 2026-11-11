@@ -8,7 +8,10 @@ import {
 import { closePool } from "../db";
 
 /**
- * Scenarios S-01 and S-02 of docs/architecture/improvement-plan-2026-11.md.
+ * Native service-boundary coverage for S-01 and S-29 in the improvement plan.
+ * The expiry case covers rejection before locking only: S-02 expiry between
+ * lock and payment remains a separate journey. These tests do not execute
+ * booking creation, inventory reservation or payment collection.
  *
  * A retail offer is a purchasable quote. The booking command locks its row
  * FOR UPDATE, validates it (owner, flight, cabin, passenger types, expiry,
@@ -95,8 +98,21 @@ nativeDescribe.sequential("retail offer consumption on native MySQL", () => {
     });
   }
 
-  it("lets exactly one of two racing bookings consume the offer", async () => {
+  it("assigns the offer to exactly one of two distinct booking contenders", async () => {
+    const [firstBooking] = await fixture.db
+      .select()
+      .from(schema.bookings)
+      .where(eq(schema.bookings.id, 71));
+    await fixture.db.insert(schema.bookings).values({
+      ...firstBooking,
+      id: 72,
+      bookingReference: "NM0072",
+      pnr: "PN0072",
+    });
     const offer = await createOffer();
+    // This is the offer service boundary, not a simulated booking command.
+    // Neither contender is permitted to change inventory or collect money here.
+    const financialBefore = await fixture.financialSnapshot();
     let firstHoldsLock: () => void = () => undefined;
     const locked = new Promise<void>(resolve => {
       firstHoldsLock = resolve;
@@ -111,10 +127,10 @@ nativeDescribe.sequential("retail offer consumption on native MySQL", () => {
       return "consumed" as const;
     });
 
-    await locked;
+    await Promise.race([locked, first]);
     const second = fixture.db.transaction(async tx => {
       const row = await offers.lockRetailOffer(tx, offer.id, input);
-      await offers.consumeRetailOffer(tx, row, 71);
+      await offers.consumeRetailOffer(tx, row, 72);
       return "consumed" as const;
     });
 
@@ -126,7 +142,10 @@ nativeDescribe.sequential("retail offer consumption on native MySQL", () => {
 
     const row = await offerRow(offer.id);
     expect(row?.consumedBookingId).toBe(71);
-    expect(await consumedEvents(offer.id)).toHaveLength(1);
+    const events = await consumedEvents(offer.id);
+    expect(events).toHaveLength(1);
+    expect(events[0].payload).toMatchObject({ bookingId: 71 });
+    expect(await fixture.financialSnapshot()).toEqual(financialBefore);
   });
 
   it("refuses a later attempt against a consumed offer without a second event", async () => {
@@ -156,6 +175,44 @@ nativeDescribe.sequential("retail offer consumption on native MySQL", () => {
     const row = await offerRow(offer.id);
     expect(row?.consumedBookingId).toBeNull();
     expect(await consumedEvents(offer.id)).toHaveLength(0);
+  });
+
+  it("rejects a same-count passenger permutation without writes and accepts the quoted order", async () => {
+    const offer = await offers.createRetailOffer({
+      flightId: 41,
+      cabinClass: "economy",
+      passengerTypes: ["adult", "child"],
+      userId: owner,
+      sessionId: "native-offer-passenger-order",
+      channel: "direct",
+    });
+    const before = await offerRow(offer.id);
+    const financialBefore = await fixture.financialSnapshot();
+
+    await expect(
+      fixture.db.transaction(async tx => {
+        const row = await offers.lockRetailOffer(tx, offer.id, {
+          ...input,
+          passengerTypes: ["child", "adult"],
+        });
+        // Keep the real mutation behind the guard: an erroneously accepted
+        // permutation must fail this test through its persisted effects too.
+        await offers.consumeRetailOffer(tx, row, 71);
+      })
+    ).rejects.toThrow(/Offer expired, consumed or changed/);
+    expect(await offerRow(offer.id)).toEqual(before);
+    expect(await consumedEvents(offer.id)).toHaveLength(0);
+    expect(await fixture.financialSnapshot()).toEqual(financialBefore);
+
+    await fixture.db.transaction(async tx => {
+      const row = await offers.lockRetailOffer(tx, offer.id, {
+        ...input,
+        passengerTypes: ["adult", "child"],
+      });
+      await offers.consumeRetailOffer(tx, row, 71);
+    });
+    expect((await offerRow(offer.id))?.consumedBookingId).toBe(71);
+    expect(await consumedEvents(offer.id)).toHaveLength(1);
   });
 
   it("refuses another owner and another passenger mix without touching the row", async () => {
