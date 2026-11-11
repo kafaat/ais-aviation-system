@@ -232,6 +232,9 @@ an XML endpoint proves neither), IATA baggage tracking (four points, exchanged
 with partners), airport and DCS device specifications, APIS authority
 specifications, and the payment-gateway and bank contracts per currency.
 
+The full reference study, with its two addenda (R-01 to R-18, H-01 to H-56
+and the #103 scope correction), is [2026-11-hitit-reference-study.md](../research/2026-11-hitit-reference-study.md).
+
 **Three end-to-end case studies drawn from the Hitit Crane module map**
 (vendor documentation, not independent testing), each ending in a decisive
 acceptance test:
