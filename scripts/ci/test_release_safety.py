@@ -74,14 +74,14 @@ class ReleaseSafety(unittest.TestCase):
 
 
 class ShellSafety(unittest.TestCase):
-    def execute_with_fakes(self, script, fake_git, fake_gh='', extra_args=()):
+    def execute_with_fakes(self, script, fake_git, fake_gh='', extra_args=(), section='A'):
         with tempfile.TemporaryDirectory() as tmp:
             for name, body in [('git', fake_git), ('gh', fake_gh)]:
                 path = Path(tmp) / name
                 path.write_text('#!/bin/bash\nset -eu\n' + body)
                 path.chmod(0o755)
             candidates = Path(tmp) / 'candidates'
-            candidates.write_text('## A\nfeature/test\n')
+            candidates.write_text(f'## {section}\nfeature/test\n')
             env = dict(os.environ, PATH=tmp + ':' + os.environ['PATH'], CALL_LOG=tmp + '/calls', GITHUB_REPOSITORY='test/repo')
             args = ['bash', str(ROOT / script)]
             if 'prune' in script:
@@ -99,33 +99,77 @@ else echo previous; fi
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, 'tag=v1.8.0\nsha=previous\ncandidate=candidate\n')
 
-    def test_prune_uses_compare_and_swap_only_after_archive_and_pr_checks(self):
+    # Fakes for prune-branches.sh. Remote refs come from `git ls-remote --heads`
+    # (sha TAB ref); open and merged pull requests come from `gh api .../pulls`.
+    @staticmethod
+    def prune_git(tip, archive=None):
+        refs = f'{tip}\\trefs/heads/feature/test\\n'
+        if archive:
+            refs += f'{archive}\\trefs/heads/archive/feature/test\\n'
+        return f'''echo "$*" >> "$CALL_LOG"
+if [[ "$1" == ls-remote ]]; then printf '{refs}'; fi
+'''
+
+    @staticmethod
+    def prune_gh(open_heads='', merged_heads=''):
+        return f'''if [[ "$2" == *state=open* ]]; then printf '{open_heads}';
+elif [[ "$2" == *state=closed* ]]; then printf '{merged_heads}';
+else echo "unexpected gh call: $*" >&2; exit 9; fi
+'''
+
+    def test_prune_section_a_deletes_only_a_merged_pr_head_with_compare_and_swap(self):
         sha = 'a' * 40
-        git = 'echo "$*" >> "$CALL_LOG"\n'
-        gh = f'''if [[ "$2" == *pulls* ]]; then :; else printf 'refs/heads/feature/test {sha}\\nrefs/heads/archive/feature/test {sha}\\n'; fi\n'''
+        git = self.prune_git(sha)
+        gh = self.prune_gh(merged_heads=f'{sha}\\n')
         result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', git, gh, ('--apply',))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('--force-with-lease=refs/heads/feature/test:' + sha, log)
         self.assertIn(':refs/heads/feature/test', log)
         result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', git, gh)
         self.assertNotIn('push', log)
+        self.assertIn('would feature/test at ' + sha, result.stdout)
+        # The tip advanced after the merge: the merged head no longer matches.
+        advanced = self.prune_gh(merged_heads=('b' * 40) + '\\n')
+        result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', git, advanced, ('--apply',))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('push', log)
+        self.assertIn('not the head of a merged PR', result.stdout)
+
+    def test_prune_section_b_requires_exact_archive_copy(self):
+        sha = 'a' * 40
+        gh = self.prune_gh()
+        result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', self.prune_git(sha, sha), gh, ('--apply',), section='B')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--force-with-lease=refs/heads/feature/test:' + sha, log)
+        for git in [self.prune_git(sha), self.prune_git(sha, 'b' * 40)]:
+            result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', git, gh, ('--apply',), section='B')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn('push', log)
+            self.assertIn('exact archive copy required', result.stdout)
 
     def test_prune_rechecks_pr_before_push(self):
         sha = 'a' * 40
-        gh = f'''if [[ "$2" == *pulls* ]]; then
+        gh = f'''if [[ "$2" == *state=open* ]]; then
           if [[ -f "$CALL_LOG.pr" ]]; then echo feature/test; else touch "$CALL_LOG.pr"; fi
-        else printf 'refs/heads/feature/test {sha}\\nrefs/heads/archive/feature/test {sha}\\n'; fi
+        elif [[ "$2" == *state=closed* ]]; then echo {sha}; fi
 '''
-        result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', 'echo "$*" >> "$CALL_LOG"\n', gh, ('--apply',))
+        result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', self.prune_git(sha), gh, ('--apply',))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn('push', log)
         self.assertIn('changed during inspection', result.stdout)
 
-    def test_prune_refuses_open_pr_and_missing_archive(self):
-        for gh in ['echo feature/test\n', "if [[ \"$2\" == *pulls* ]]; then :; else echo 'refs/heads/feature/test " + 'a' * 40 + "'; fi\n"]:
-            result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', 'echo "$*" >> "$CALL_LOG"\n', gh, ('--apply',))
+    def test_prune_refuses_open_pr_and_unproven_tip(self):
+        sha = 'a' * 40
+        cases = [
+            ('A', self.prune_gh(open_heads='feature/test\\n', merged_heads=f'{sha}\\n'), 'open PR'),
+            ('A', self.prune_gh(), 'not the head of a merged PR'),
+            ('B', self.prune_gh(open_heads='feature/test\\n'), 'open PR'),
+        ]
+        for section, gh, reason in cases:
+            result, log = self.execute_with_fakes('scripts/ops/prune-branches.sh', self.prune_git(sha, sha), gh, ('--apply',), section=section)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertNotIn('push', log)
+            self.assertIn(reason, result.stdout)
 
 
 class BackupSafety(unittest.TestCase):
