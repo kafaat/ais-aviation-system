@@ -29,8 +29,10 @@ scripts/ops/prune-branches.sh scripts/ops/branch-prune-2026-11-11.txt --apply  #
 ```
 
 The script never deletes `main`, an `archive/*` branch or a branch with an open
-pull request, and deletes a section B branch only when its `archive/<name>`
-copy exists at the same tip.
+pull request. It deletes a section A branch only while its current tip is the
+head commit of a merged pull request from that branch (so the PR page can
+restore it), and a section B branch only when its `archive/<name>` copy exists
+at the same tip.
 
 ## Restoring a branch
 
@@ -47,4 +49,13 @@ copy exists at the same tip.
 
 ## Review hardening
 
-Every deletion requires an exact remote `archive/<name>` copy, including section A. A merged PR does not prove its branch has not advanced. Refresh all pages of open PRs and refs for each candidate; explicit Git force-with-lease refuses a moving tip. No deletions run in CI or this review. Archive creation and deletion remain separate operator actions. GitHub has no atomic open-PR-and-delete transaction: a concurrently opened PR remains a residual race; use an exclusive maintenance window for apply and retain archives.
+A merged PR does not prove its branch has not advanced, so the script checks the
+tip itself: a section A branch is deleted only while its current tip is the head
+commit of a merged PR from that branch, and a section B branch only with an exact
+remote `archive/<name>` copy. The owner chose this over archiving section A as
+well (which would have kept about 248 `archive/*` branches permanently). Refresh
+all pages of open PRs and refs for each candidate; explicit Git force-with-lease
+refuses a moving tip. No deletions run in CI or this review. Archive creation and
+deletion remain separate operator actions. GitHub has no atomic open-PR-and-delete
+transaction: a concurrently opened PR remains a residual race; use an exclusive
+maintenance window for apply and retain the section B archives.
