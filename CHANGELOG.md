@@ -1,5 +1,30 @@
 # Changelog
 
+## What's Changed in v1.39.4
+
+<!-- ais-release-source: 933db8e48edbb6bcc6a9b27f9a5b31fa517f1758 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix: close verified review defects and native acceptance gaps (#337) (933db8e4)
+
+### Documentation
+
+- docs(architecture): improvement plan from the sixteen-stage journey benchmark (#328) (30537cd3)
+
+### Other Changes
+
+- test(security): sweep every router procedure against a committed public allowlist (#329) (9d74a546)
+- test(ticketing): prove one ticket number under concurrent first reads on native MySQL (#330) (5289926d)
+- test: consolidate wave a scenarios, plan errata, hitit study and the branch prune list (#336) (98bca076)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.39.3...v1.39.4
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.39.3
 
 <!-- ais-release-source: 8873f9db73aa2391324af7b7a5e5779508089256 -->
