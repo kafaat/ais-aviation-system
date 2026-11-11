@@ -1,3 +1,4 @@
+import { flightPositionRanges } from "../services/flight-tracking.validation";
 import { responseContracts } from "../contracts/flight-tracking.router";
 /**
  * Flight Tracking Router
@@ -76,8 +77,8 @@ export const flightTrackingRouter = router({
     .input(
       z.object({
         flightId: z.number().int().positive(),
-        latitude: z.string(),
-        longitude: z.string(),
+        latitude: flightPositionRanges.latitude,
+        longitude: flightPositionRanges.longitude,
         altitude: z.number().int().min(0),
         heading: z.number().int().min(0).max(360),
         groundSpeed: z.number().int().min(0),
@@ -99,7 +100,7 @@ export const flightTrackingRouter = router({
         turbulence: z.enum(["none", "light", "moderate", "severe"]).optional(),
         distanceCovered: z.number().int().min(0).optional(),
         distanceRemaining: z.number().int().min(0).optional(),
-        progressPercent: z.string().optional(),
+        progressPercent: flightPositionRanges.progressPercent,
       })
     )
     .output(responseContracts["recordPosition"])

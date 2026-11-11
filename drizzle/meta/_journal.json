@@ -526,6 +526,13 @@
       "when": 1794062445845,
       "tag": "0074_bsp_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "5",
+      "when": 1794356609370,
+      "tag": "0075_favorite_price_observations",
+      "breakpoints": true
     }
   ]
 }

@@ -32,6 +32,8 @@ import {
   eq,
   ne,
   gte,
+  gt,
+  isNull,
   lt,
   lte,
   inArray,
@@ -343,6 +345,26 @@ export async function searchFlightsForAgent(
       message: "Database not available",
     });
 
+  const passengerCount = params.passengers ?? 1;
+  const cabinClass = params.cabinClass ?? "economy";
+  if (
+    !Number.isSafeInteger(passengerCount) ||
+    passengerCount < 1 ||
+    !["economy", "business"].includes(cabinClass)
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid cabin or passenger count",
+    });
+  const agent = await getAgentById(agentId);
+  if (!agent?.isActive || !agent.ownerUserId)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Agency must have an active, verified account owner before searching",
+    });
+  const owner = await validateAgentOwner(agent.ownerUserId);
+
   log.info(
     { agentId, origin: params.originCode, destination: params.destinationCode },
     "Agent searching flights"
@@ -387,6 +409,16 @@ export async function searchFlightsForAgent(
       and(
         eq(flights.originId, originAirport.id),
         eq(flights.destinationId, destinationAirport.id),
+        owner.tenantId == null
+          ? isNull(flights.tenantId)
+          : eq(flights.tenantId, owner.tenantId),
+        gt(flights.departureTime, new Date()),
+        gte(
+          cabinClass === "business"
+            ? flights.businessAvailable
+            : flights.economyAvailable,
+          passengerCount
+        ),
         gte(flights.departureTime, startOfDay),
         lt(flights.departureTime, endOfDay),
         inArray(flights.status, ["scheduled", "delayed"])

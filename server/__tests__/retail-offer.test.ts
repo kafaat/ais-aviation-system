@@ -80,6 +80,32 @@ describe("retail offer authority", () => {
       expect(() => validateRetailOffer(offer, request)).toThrow();
     }
   );
+  it("rejects passenger permutations before positional initial fare attribution", async () => {
+    const offer = await createRetailOffer(input);
+    expect(() =>
+      validateRetailOffer(offer, {
+        ...input,
+        passengerTypes: ["child", "adult"],
+      })
+    ).toThrow(/expired, consumed or changed/);
+  });
+  it("allows explicit servicing remapping only for the same passenger type multiset", async () => {
+    const offer = await createRetailOffer(input);
+    const request = {
+      ...input,
+      passengerTypes: ["child", "adult"],
+      remapPassengerTypes: true,
+    };
+    expect(
+      validateRetailOffer(offer, request).fareLines?.map(line => line.type)
+    ).toEqual(["adult", "child"]);
+    expect(() =>
+      validateRetailOffer(offer, {
+        ...request,
+        passengerTypes: ["adult", "adult"],
+      })
+    ).toThrow();
+  });
   it("rolls offer consumption back if event persistence fails", async () => {
     const offer = await createRetailOffer(input);
     fixture.failInsert("outbox");

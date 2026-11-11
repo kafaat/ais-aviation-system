@@ -155,3 +155,12 @@ export function formatDayOffset(offset: number): string {
   if (!offset || Number.isNaN(offset)) return "";
   return offset > 0 ? `+${offset}` : `${offset}`;
 }
+
+/** Hour used by departure filters, in the same zone as the displayed time. */
+export function flightDepartureHour(
+  date: DateInput,
+  timeZone?: AirportTimeZone
+): number {
+  const formatted = formatFlightTime(date, timeZone);
+  return formatted ? Number(formatted.slice(0, 2)) : NaN;
+}

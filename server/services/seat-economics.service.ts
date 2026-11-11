@@ -15,11 +15,12 @@
  * do not prove a discount was applied to the settled invoice.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { tenantCondition } from "./tenant-scope.service";
 import {
   bookings,
+  bookingSegments,
   passengers,
   bookingAncillaries,
   voucherUsage,
@@ -405,18 +406,40 @@ export async function getFlightEconomics(
 ): Promise<FlightEconomics> {
   const db = await getDbOrThrow();
 
-  const bookingRows = await db
+  const headerBookings = await db
     .select({ id: bookings.id })
     .from(bookings)
     .where(
       and(
         eq(bookings.flightId, flightId),
         eq(bookings.paymentStatus, "paid"),
-        // Tenant isolation (no-op when the caller has no tenant context).
+        // Tenant context is required for request-serving economics.
         tenantCondition(bookings.tenantId, opts.tenantId)
       )
     );
 
+  const sectorRows = await db
+    .select()
+    .from(bookingSegments)
+    .where(eq(bookingSegments.flightId, flightId));
+  const sectorBookingIds = [...new Set(sectorRows.map(s => s.bookingId))];
+  const sectorBookings = sectorBookingIds.length
+    ? await db
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(
+          and(
+            inArray(bookings.id, sectorBookingIds),
+            eq(bookings.paymentStatus, "paid"),
+            tenantCondition(bookings.tenantId, opts.tenantId)
+          )
+        )
+    : [];
+  const bookingRows = [
+    ...new Map(
+      [...headerBookings, ...sectorBookings].map(b => [b.id, b])
+    ).values(),
+  ];
   let seatCount = 0;
   let gross = 0;
   let discounts = 0;
@@ -428,7 +451,54 @@ export async function getFlightEconomics(
   // Per-booking economics are independent → fetch them concurrently so
   // latency doesn't grow linearly with the number of bookings on the flight.
   const economics = await Promise.all(
-    bookingRows.map(b => getBookingSeatEconomics(b.id))
+    bookingRows.map(async b => {
+      const econ = await getBookingSeatEconomics(b.id);
+      const segments = (
+        await db
+          .select()
+          .from(bookingSegments)
+          .where(eq(bookingSegments.bookingId, b.id))
+      ).sort((a, b) => a.segmentOrder - b.segmentOrder || a.id - b.id);
+      if (!segments.length) return econ;
+      const amounts = segments.map(s => s.segmentAmount);
+      if (
+        amounts.some(n => n === null || !Number.isSafeInteger(n) || n < 0) ||
+        amounts.reduce<number>((sum, n) => sum + (n ?? 0), 0) !==
+          econ.summary.gross
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Sector revenue allocation is incomplete; reconcile historical pricing before reporting",
+        });
+      const weights = amounts as number[];
+      const selected = segments
+        .map((s, i) =>
+          s.flightId === flightId && s.status !== "cancelled" ? i : -1
+        )
+        .filter(i => i >= 0);
+      const sum = (values: number[]) =>
+        selected.reduce((total, i) => total + values[i], 0);
+      const gross = sum(weights);
+      const discounts = sum(
+        allocateProportional(econ.summary.discounts, weights)
+      );
+      const totalCost = sum(
+        allocateProportional(econ.summary.totalCost, weights)
+      );
+      return {
+        ...econ,
+        summary: {
+          ...econ.summary,
+          seatCount: econ.summary.seatCount * selected.length,
+          gross,
+          discounts,
+          totalCost,
+          netRevenue: gross - discounts,
+          netContribution: gross - discounts - totalCost,
+        },
+      };
+    })
   );
 
   for (const econ of economics) {
@@ -444,7 +514,7 @@ export async function getFlightEconomics(
   return {
     flightId,
     currency,
-    bookingCount: bookingRows.length,
+    bookingCount: economics.filter(econ => econ.summary.seatCount > 0).length,
     seatCount,
     gross,
     discounts,

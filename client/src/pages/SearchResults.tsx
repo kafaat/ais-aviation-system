@@ -48,7 +48,11 @@ import { ar, enUS } from "date-fns/locale";
 import { toast } from "sonner";
 import type { FlightData } from "@/components/FlightCard";
 import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
-import { dayOffset, formatFlightTime } from "@/lib/flight-time";
+import {
+  dayOffset,
+  formatFlightTime,
+  flightDepartureHour,
+} from "@/lib/flight-time";
 import { flightSearchPath } from "@/lib/search-context";
 
 const CIVIL_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -228,10 +232,16 @@ function SearchResultsContent({ search }: { search: string }) {
       );
     }
 
+    // This endpoint returns direct flights only.
+    if (filters.stops.length && !filters.stops.includes("direct")) result = [];
+
     // Departure time filter
     if (filters.departureTime.length > 0) {
       result = result.filter(flight => {
-        const hour = new Date(flight.departureTime).getHours();
+        const hour = flightDepartureHour(
+          flight.departureTime,
+          flight.origin.timezone
+        );
         return filters.departureTime.some(timeSlot => {
           switch (timeSlot) {
             case "morning":
@@ -475,6 +485,7 @@ function SearchResultsContent({ search }: { search: string }) {
             {/* Filters */}
             <div data-testid="advanced-filters">
               <AdvancedFilters
+                directOnly
                 onApply={handleApplyFilters}
                 onReset={handleResetFilters}
               />

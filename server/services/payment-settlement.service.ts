@@ -568,18 +568,44 @@ async function recordReceipt(
     amount: payment.amount,
     currency: payment.currency.toUpperCase(),
   });
-  if (bookingId)
-    await tx.insert(payments).values({
-      bookingId,
-      amount: payment.amount,
-      currency: payment.currency.toUpperCase(),
-      method: "card",
-      provider: "stripe",
-      status: "completed",
-      transactionId: payment.paymentIntentId,
-      stripePaymentIntentId: payment.paymentIntentId,
-      idempotencyKey: `stripe:${payment.paymentIntentId}`,
-    });
+  if (bookingId) {
+    // A Checkout attempt may already have a pending history row. The owner
+    // lock serializes this adoption with the webhook and reconciliation job.
+    const attempts = await tx
+      .select()
+      .from(payments)
+      .where(eq(payments.stripePaymentIntentId, payment.paymentIntentId))
+      .for("update");
+    if (attempts.length > 1)
+      throw new Error("Ambiguous payment history requires reconciliation");
+    const attempt = attempts[0];
+    if (attempt) {
+      if (
+        attempt.bookingId !== bookingId ||
+        attempt.provider !== "stripe" ||
+        attempt.amount !== payment.amount ||
+        attempt.currency.toUpperCase() !== payment.currency.toUpperCase() ||
+        !["pending", "failed"].includes(attempt.status)
+      )
+        throw new Error("Payment attempt identity/amount/status mismatch");
+      await tx
+        .update(payments)
+        .set({ status: "completed", updatedAt: new Date() })
+        .where(eq(payments.id, attempt.id));
+    } else {
+      await tx.insert(payments).values({
+        bookingId,
+        amount: payment.amount,
+        currency: payment.currency.toUpperCase(),
+        method: "card",
+        provider: "stripe",
+        status: "completed",
+        transactionId: payment.paymentIntentId,
+        stripePaymentIntentId: payment.paymentIntentId,
+        idempotencyKey: `stripe:${payment.paymentIntentId}`,
+      });
+    }
+  }
   await tx.insert(financialLedger).values({
     bookingId,
     userId,

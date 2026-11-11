@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getDb, retrieve, transaction } = vi.hoisted(() => ({
+const { getDb, retrieve, transaction, settle } = vi.hoisted(() => ({
   getDb: vi.fn(),
   retrieve: vi.fn(),
   transaction: vi.fn(),
+  settle: vi.fn(),
 }));
 vi.mock("../../db", () => ({ getDb }));
+vi.mock("../payment-settlement.service", async importOriginal => ({
+  ...(await importOriginal<typeof import("../payment-settlement.service")>()),
+  settleVerifiedPayment: settle,
+}));
 vi.mock("../outbox.service", () => ({}));
 vi.mock("../booking-checkout.service", () => ({}));
 vi.mock("../booking-settlement.service", () => ({}));
@@ -101,11 +106,48 @@ describe("reconciliation provider observations", () => {
     expect(result).toMatchObject({ errors: 1, fixed: 0 });
     expect(update).not.toHaveBeenCalled();
   });
-  it("does not overwrite a payment already transitioned during provider retrieval", async () => {
+  it("delegates matching captures to the webhook's canonical settlement owner", async () => {
+    const booking = { id: 2, userId: 3, totalAmount: 1400 };
+    const query = {
+      from: () => query,
+      where: () => query,
+      for: vi
+        .fn()
+        .mockReturnValueOnce([booking])
+        .mockReturnValueOnce([
+          {
+            id: 1,
+            bookingId: 2,
+            status: "completed",
+            provider: "stripe",
+            amount: 1400,
+            currency: "SAR",
+            stripePaymentIntentId: "pi_test",
+          },
+        ]),
+    };
+    const tx = { select: () => query, update: vi.fn(), insert: vi.fn() };
+    transaction.mockImplementationOnce(callback => callback(tx));
+    retrieve.mockResolvedValue(intent);
+    const result = await runStripeReconciliation();
+    expect(result).toMatchObject({ errors: 0, fixed: 1 });
+    expect(settle).toHaveBeenCalledWith(tx, {
+      paymentIntentId: "pi_test",
+      amount: 1400,
+      currency: "sar",
+      metadata: { type: "booking", bookingId: "2", userId: "3" },
+      eventId: "reconciliation:pi_test",
+    });
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+  it("reports legacy paid bookings without receipts as manual review, never fixed", async () => {
     const booking = {
-      id: payment.bookingId,
-      userId: payment.bookingUserId,
+      id: 2,
+      userId: 3,
       totalAmount: 1400,
+      paymentStatus: "paid",
+      stripePaymentIntentId: "pi_test",
     };
     const query = {
       from: () => query,
@@ -113,17 +155,69 @@ describe("reconciliation provider observations", () => {
       for: () => [booking],
       limit: () => [],
     };
-    const update = () => ({
-      set: () => ({ where: () => [{ affectedRows: 0 }] }),
-    });
-    const insert = vi.fn();
-    transaction.mockImplementationOnce(callback =>
-      callback({ select: () => query, update, insert })
-    );
+    const tx = { select: () => query, update: vi.fn(), insert: vi.fn() };
+    transaction.mockImplementation(callback => callback(tx));
+    retrieve.mockResolvedValue(intent);
+    for (let run = 0; run < 2; run++) {
+      const result = await runStripeReconciliation();
+      expect(result).toMatchObject({
+        errors: 0,
+        fixed: 0,
+        skipped: 1,
+        totalAmountReconciled: 0,
+      });
+      expect(result.details[0]).toMatchObject({
+        newStatus: "pending",
+        action: "MANUAL_REVIEW_LEGACY_MISSING_RECEIPT",
+      });
+    }
+    expect(settle).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(tx.insert).not.toHaveBeenCalled();
+  });
+  it("does not report fixed when a canonical receipt exists but the selected history row stays pending", async () => {
+    const booking = {
+      id: 2,
+      userId: 3,
+      totalAmount: 1400,
+      paymentStatus: "paid",
+      stripePaymentIntentId: "pi_test",
+    };
+    const history = {
+      id: 1,
+      bookingId: 2,
+      status: "pending",
+      provider: "stripe",
+      amount: 1400,
+      currency: "SAR",
+      stripePaymentIntentId: "pi_test",
+    };
+    const query = {
+      from: () => query,
+      where: () => query,
+      for: vi
+        .fn()
+        .mockReturnValueOnce([booking])
+        .mockReturnValueOnce([history]),
+      limit: () => [{ paymentIntentId: "pi_test" }],
+    };
+    const tx = { select: () => query, update: vi.fn(), insert: vi.fn() };
+    transaction.mockImplementationOnce(callback => callback(tx));
     retrieve.mockResolvedValue(intent);
     const result = await runStripeReconciliation();
-    expect(result).toMatchObject({ errors: 1, fixed: 0 });
-    expect(insert).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      errors: 0,
+      fixed: 0,
+      skipped: 1,
+      totalAmountReconciled: 0,
+    });
+    expect(result.details[0]).toMatchObject({
+      newStatus: "pending",
+      action: "MANUAL_REVIEW_PAYMENT_HISTORY",
+    });
+    expect(settle).toHaveBeenCalledOnce();
+    expect(query.for).toHaveBeenLastCalledWith("update");
+    expect(tx.update).not.toHaveBeenCalled();
   });
   it("reports matching captures in dry-run without a write", async () => {
     retrieve.mockResolvedValue(intent);

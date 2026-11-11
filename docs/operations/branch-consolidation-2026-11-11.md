@@ -44,3 +44,7 @@ copy exists at the same tip.
 - Reference or exploratory work that is not meant to merge lives under
   `archive/` from the start, so it never looks like pending work.
 - Release Automation reads only `release/v*`; nothing here touches it.
+
+## Review hardening
+
+Every deletion requires an exact remote `archive/<name>` copy, including section A. A merged PR does not prove its branch has not advanced. Refresh all pages of open PRs and refs for each candidate; explicit Git force-with-lease refuses a moving tip. No deletions run in CI or this review. Archive creation and deletion remain separate operator actions. GitHub has no atomic open-PR-and-delete transaction: a concurrently opened PR remains a residual race; use an exclusive maintenance window for apply and retain archives.

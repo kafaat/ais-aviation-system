@@ -34,6 +34,7 @@ import {
 const provider = vi.hoisted(() => ({
   intent: null as Record<string, unknown> | null,
   retrieved: 0,
+  refunds: [] as any[],
 }));
 vi.mock("../services/stripe/client-factory", () => ({
   createStripeClient: () => ({
@@ -45,6 +46,32 @@ vi.mock("../services/stripe/client-factory", () => ({
       },
     },
   }),
+}));
+
+vi.mock("../stripe", () => ({
+  stripe: {
+    refunds: {
+      create: async (request: Stripe.RefundCreateParams) => {
+        const refund = {
+          id: "re_native_reconciliation",
+          status: "succeeded",
+          amount: request.amount,
+          currency: "sar",
+          payment_intent: request.payment_intent,
+          charge: "ch_native_refund",
+          metadata: request.metadata,
+        };
+        provider.refunds.push(refund);
+        return refund;
+      },
+      retrieve: async () => provider.refunds[0],
+      list: () => ({
+        async *[Symbol.asyncIterator]() {
+          for (const refund of provider.refunds) yield refund;
+        },
+      }),
+    },
+  },
 }));
 
 const nativeDescribe =
@@ -81,6 +108,7 @@ nativeDescribe.sequential(
       await fixture.seed();
       provider.intent = null;
       provider.retrieved = 0;
+      provider.refunds = [];
       api = await startApiProcessFixture(fixture.databaseUrl);
     }, 40000);
 
@@ -149,21 +177,8 @@ nativeDescribe.sequential(
       };
     }
 
-    /**
-     * The two writers do not leave the same rows behind. The webhook path
-     * (`settleVerifiedPayment` → `recordReceipt`) inserts a payment receipt, a
-     * new completed `payments` row and the ledger charge; the reconciliation
-     * path updates the seeded pending `payments` row, confirms the booking and
-     * writes the ledger charge, but no receipt. Refund services read receipts
-     * by intent id, so a booking funded only by reconciliation has no refund
-     * evidence (review finding REC-01, #333). The invariants below are the
-     * ones both paths must satisfy; the receipt and payment-row counts are
-     * asserted per winner and will tighten once the paths converge.
-     */
-    async function expectFundedOnce(
-      intentId: string,
-      settledBy: "webhook" | "job" | "either"
-    ) {
+    // Both writers must converge on the same receipt, payment and ledger.
+    async function expectFundedOnce(intentId: string) {
       const snapshot = await fixture.financialSnapshot();
       expect(snapshot.bookings).toMatchObject([
         {
@@ -183,20 +198,14 @@ nativeDescribe.sequential(
       expect(charges).toHaveLength(1);
       expect(snapshot.ledger).toHaveLength(1);
       expect(snapshot.confirmations).toHaveLength(1);
-      if (settledBy === "webhook")
-        expect(snapshot.receipts).toMatchObject([
-          { amount: 20000, refundedAmount: 0, settlementStatus: "applied" },
-        ]);
-      else if (settledBy === "job") expect(snapshot.receipts).toHaveLength(0);
-      else expect(snapshot.receipts.length).toBeLessThanOrEqual(1);
+      expect(snapshot.receipts).toMatchObject([
+        { amount: 20000, refundedAmount: 0, settlementStatus: "applied" },
+      ]);
       const paymentRows = await fixture.db
         .select()
         .from(schema.payments)
         .where(eq(schema.payments.stripePaymentIntentId, intentId));
-      // The seeded pending row must not survive as pending; the webhook path
-      // adds a second completed row for the same intent (REC-01).
-      expect(paymentRows.length).toBeGreaterThanOrEqual(1);
-      expect(paymentRows.length).toBeLessThanOrEqual(2);
+      expect(paymentRows).toHaveLength(1);
       expect(paymentRows.filter(row => row.status === "pending")).toEqual([]);
       expect(paymentRows.every(row => row.amount === 20000)).toBe(true);
       return snapshot;
@@ -239,8 +248,9 @@ nativeDescribe.sequential(
       // funded booking: nothing is double counted and nothing is reported as a
       // failed payment.
       expect(result.failed).toBe(0);
-      expect(result.fixed + result.skipped + result.errors).toBe(1);
-      await expectFundedOnce(intentId, "either");
+      expect(result.errors).toBe(0);
+      expect(result.fixed + result.skipped).toBe(1);
+      await expectFundedOnce(intentId);
     });
 
     it("lets reconciliation fund a booking whose webhook never arrived, and a later webhook adds nothing", async () => {
@@ -258,13 +268,34 @@ nativeDescribe.sequential(
         failed: 0,
         errors: 0,
       });
-      await expectFundedOnce(intentId, "job");
+      await expectFundedOnce(intentId);
 
-      // The late webhook finds the booking already paid for this intent and
-      // returns without writing; it does not back-fill the missing receipt.
+      // The late webhook observes the canonical receipt and adds nothing.
       const delivered = await deliverWebhook(intentId);
       expect(delivered.status).toBe(200);
-      await expectFundedOnce(intentId, "job");
+      await expectFundedOnce(intentId);
+    });
+
+    it("allows an ordinary refund from the receipt created by reconciliation alone", async () => {
+      const intentId = `pi_native_refundable_${randomUUID()}`;
+      await seedPendingPayment(intentId);
+      provider.intent = intent(intentId);
+      const result = await reconciliation.runStripeReconciliation({
+        lookbackDays: 30,
+      });
+      expect(result).toMatchObject({ fixed: 1, errors: 0 });
+      const { createRefund } = await import("../services/refunds.service");
+      const refund = await createRefund(
+        { bookingId: 71, userId: 9, amount: 10000 },
+        { id: 9, role: "admin" }
+      );
+      expect(refund).toMatchObject({ status: "succeeded", amount: 10000 });
+      const snapshot = await fixture.financialSnapshot();
+      expect(snapshot.receipts).toMatchObject([{ refundedAmount: 10000 }]);
+      expect(
+        snapshot.ledger.filter(row => row.type === "partial_refund")
+      ).toHaveLength(1);
+      expect(snapshot.bookings[0].status).toBe("cancelled");
     });
 
     it("leaves a pending payment untouched when the provider still reports it unpaid", async () => {

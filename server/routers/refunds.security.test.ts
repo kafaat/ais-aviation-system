@@ -300,3 +300,21 @@ describe("refund router authorization", () => {
     expect(mocks.createRefund).not.toHaveBeenCalled();
   });
 });
+
+it.each(["pending", "failed", "succeeded"])(
+  "audits submission without claiming completion for %s",
+  async status => {
+    mocks.createRefund.mockResolvedValue({
+      success: true,
+      refundId: "re_test",
+      amount: 8000,
+      cumulativeRefundedAmount: 8000,
+      remainingRefundableAmount: 2000,
+      status,
+    });
+    await refundsRouter
+      .createCaller(context("admin"))
+      .adminCreate({ bookingId: 1, userId: 1 });
+    expect(mocks.auditRefund.mock.calls[0][4]).toBe("REFUND_INITIATED");
+  }
+);

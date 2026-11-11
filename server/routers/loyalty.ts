@@ -136,7 +136,11 @@ export const loyaltyRouter = router({
     })
     .input(
       z.object({
-        userId: z.number().describe("User ID to award miles to"),
+        userId: z
+          .number()
+          .int()
+          .positive()
+          .describe("User ID to award miles to"),
         miles: z
           .number()
           .min(1)
@@ -146,11 +150,12 @@ export const loyaltyRouter = router({
       })
     )
     .output(responseContracts["awardBonusMiles"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       return await loyaltyService.awardBonusMiles(
         input.userId,
         input.miles,
-        input.reason
+        input.reason,
+        ctx.tenantId
       );
     }),
 

@@ -329,6 +329,8 @@ export function validateRetailOffer(
     channel: "direct" | "ndc";
     cabinClass: string;
     passengerTypes: string[];
+    /** Only servicing callers that remap fare lines by type may opt in. */
+    remapPassengerTypes?: boolean;
     fareClassId?: number;
     ruleSegmentCount?: number;
   },
@@ -366,8 +368,16 @@ export function validateRetailOffer(
     offer.digest !== offerDigest(offer.payload) ||
     (offer.channel === "ndc"
       ? payload.passengerTypes.length !== input.passengerTypes.length
-      : JSON.stringify([...payload.passengerTypes].sort()) !==
-        JSON.stringify([...input.passengerTypes].sort())) ||
+      : JSON.stringify(
+          input.remapPassengerTypes
+            ? [...payload.passengerTypes].sort()
+            : payload.passengerTypes
+        ) !==
+        JSON.stringify(
+          input.remapPassengerTypes
+            ? [...input.passengerTypes].sort()
+            : input.passengerTypes
+        )) ||
     payload.baseAmount + payload.taxesAndFees !== offer.totalAmount ||
     payload.totalAmount !== offer.totalAmount
   )

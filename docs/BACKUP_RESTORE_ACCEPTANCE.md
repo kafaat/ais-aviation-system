@@ -89,3 +89,7 @@ retention, offsite copies, encryption, storage failure recovery, point-in-time
 recovery and measured production RPO/RTO still require deployment-specific
 exercises. The isolated CI restore procedure is not an in-place production restore
 command. Payment fixtures make no provider HTTP calls.
+
+## Security-context approximation
+
+The Docker backup writer uses the generated job's non-root UID/GID, read-only root, dropped capabilities, no-new-privileges, and writable scratch tmpfs. The named volume is prepared with matching ownership as an approximation of fsGroup. This is not production PVC permission, CSI, seccomp-profile, SELinux, RPO or RTO certification. The isolated database server itself requires its normal initialization context.

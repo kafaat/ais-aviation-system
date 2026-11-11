@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "task_id": "ais-review-333-repair",
+  "checkpoint_id": "ais-review-333-repair-01",
+  "work_kind": "code",
+  "origin": "observed",
+  "created_at": "2026-11-11T00:27:43.489548+00:00",
+  "goal": "Repair documented review #333 on isolated branch; preserve SAR and existing authority boundaries.",
+  "input_bindings": {
+    "base_head": "603a59f6e1e6da1cc54297ec0e3e064dcd9beb1b",
+    "branch": "fix/review-333-sequential",
+    "source_hashes": "source-hashes.json"
+  },
+  "artifacts": [
+    {
+      "id": "finance",
+      "path": "finance.md",
+      "sha256": "70ba350c38f7c20d320efbe72226d652958256896661d3f277c884b98e1d4398"
+    },
+    {
+      "id": "identity",
+      "path": "identity.md",
+      "sha256": "e3f90661ef42f7589b0ddcdd9e27f6af7752240013b23763df3150ba13c9ddea"
+    },
+    {
+      "id": "operations",
+      "path": "operations.md",
+      "sha256": "736113f1380195c5a8c0909d84885be167ad4911e043341181af9e28cd49b118"
+    },
+    {
+      "id": "orders",
+      "path": "orders.md",
+      "sha256": "da21ba776aae4741c4e224f2ca93305ae626023e49bd671ebd7e01b0cf0d3d43"
+    },
+    {
+      "id": "economics",
+      "path": "economics.md",
+      "sha256": "2c92295933fa82045ddd1f3cdd357e38f2d19b7b1bef0c05fc154cb4ba747e0f"
+    },
+    {
+      "id": "runtime",
+      "path": "runtime.md",
+      "sha256": "13ccfd4f62b725c69074dcbd12c7e2ba23f76a8480e5478db06297ddfa85c0d0"
+    },
+    {
+      "id": "source-hashes",
+      "path": "source-hashes.json",
+      "sha256": "a82afa9456375c68926532eae099df2a56601ee0cf60fbb85b96ec232396f915"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "finance",
+      "status": "draft",
+      "effect": "local_write",
+      "depends_on": [],
+      "evidence_ids": ["finance"],
+      "next_action": "Confirm combined tests and CI; finance additionally resolve legacy reconciliation postcondition review."
+    },
+    {
+      "id": "identity",
+      "status": "running",
+      "effect": "local_write",
+      "depends_on": [],
+      "evidence_ids": ["identity"],
+      "next_action": "Confirm combined tests and CI; finance additionally resolve legacy reconciliation postcondition review."
+    },
+    {
+      "id": "operations",
+      "status": "running",
+      "effect": "local_write",
+      "depends_on": [],
+      "evidence_ids": ["operations"],
+      "next_action": "Confirm combined tests and CI; finance additionally resolve legacy reconciliation postcondition review."
+    },
+    {
+      "id": "orders",
+      "status": "running",
+      "effect": "local_write",
+      "depends_on": [],
+      "evidence_ids": ["orders"],
+      "next_action": "Confirm combined tests and CI; finance additionally resolve legacy reconciliation postcondition review."
+    },
+    {
+      "id": "economics",
+      "status": "running",
+      "effect": "local_write",
+      "depends_on": [],
+      "evidence_ids": ["economics"],
+      "next_action": "Confirm combined tests and CI; finance additionally resolve legacy reconciliation postcondition review."
+    },
+    {
+      "id": "runtime",
+      "status": "running",
+      "effect": "local_write",
+      "depends_on": [],
+      "evidence_ids": ["runtime"],
+      "next_action": "Confirm combined tests and CI; finance additionally resolve legacy reconciliation postcondition review."
+    }
+  ],
+  "validation": {
+    "typescript": "passed with NODE_OPTIONS=--max-old-space-size=6144; subsequent fixes require rerun",
+    "combined_tests": "running",
+    "native_mysql": "NOT_RUN locally; explicit Production Gates suites",
+    "python": "58 pass,2 skipped,1 blocked missing nginx"
+  },
+  "next_actions": [
+    "Resolve legacy no-receipt reconciliation false fixed result",
+    "Finish combined tests and lint",
+    "Commit and push branch, create draft PR and inspect CI",
+    "Do not deploy, delete branches, or certify external operator/device acceptance"
+  ]
+}

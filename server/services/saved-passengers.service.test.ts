@@ -10,18 +10,22 @@ import {
 } from "./saved-passengers.service";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { savedPassengers } from "../../drizzle/schema";
+import { savedPassengers, users } from "../../drizzle/schema";
 import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
 const dbAvailable = await isDatabaseAvailable();
 
 describe.skipIf(!dbAvailable)("Saved Passengers Service", () => {
-  const testUserId = 888888; // Use a high ID to avoid conflicts
+  let testUserId: number;
 
   beforeAll(async () => {
     // Cleanup any existing test data before starting
     const db = await getDb();
     if (db) {
+      const [created] = await db
+        .insert(users)
+        .values({ openId: `saved-passengers-test-${crypto.randomUUID()}` });
+      testUserId = created.insertId;
       await db
         .delete(savedPassengers)
         .where(eq(savedPassengers.userId, testUserId));
@@ -35,6 +39,7 @@ describe.skipIf(!dbAvailable)("Saved Passengers Service", () => {
       await db
         .delete(savedPassengers)
         .where(eq(savedPassengers.userId, testUserId));
+      await db.delete(users).where(eq(users.id, testUserId));
     }
   });
 

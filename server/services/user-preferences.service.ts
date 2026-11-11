@@ -36,33 +36,16 @@ export async function upsertUserPreferences(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Check if preferences exist
-  const existing = await getUserPreferences(userId);
+  // The unique userId arbitrates concurrent first writes. Update only supplied
+  // fields so disjoint passport/notification requests do not reset each other.
+  await db
+    .insert(userPreferences)
+    .values({ ...data, userId })
+    .onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
 
-  if (existing) {
-    // Update existing preferences
-    await db
-      .update(userPreferences)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(userPreferences.userId, userId));
-
-    const updated = await getUserPreferences(userId);
-    if (!updated) throw new Error("Failed to update preferences");
-    return updated;
-  } else {
-    // Create new preferences
-    await db.insert(userPreferences).values({
-      userId,
-      ...data,
-    });
-
-    const created = await getUserPreferences(userId);
-    if (!created) throw new Error("Failed to create preferences");
-    return created;
-  }
+  const persisted = await getUserPreferences(userId);
+  if (!persisted) throw new Error("Failed to save preferences");
+  return persisted;
 }
 
 /**

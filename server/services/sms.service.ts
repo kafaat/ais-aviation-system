@@ -29,6 +29,8 @@ export interface SMSResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  /** Provider acceptance could not be determined; never retry blindly. */
+  deliveryUnknown?: boolean;
 }
 
 export interface SMSTemplate {
@@ -203,18 +205,29 @@ class TwilioSMSProvider implements SMSProvider {
           if (typeof data.sid !== "string" || !data.sid.trim()) {
             return {
               success: false,
-              error: "Twilio did not return a message ID",
+              error:
+                "Twilio did not return a message ID; reconcile before retry",
+              deliveryUnknown: true,
             };
           }
           return { success: true, messageId: data.sid };
         }
         // Twilio responded with an error -> reachable, business error.
-        return { success: false, error: data.message || "Twilio API error" };
+        return response.status >= 500
+          ? {
+              success: false,
+              error:
+                data.message ||
+                "Twilio outcome unknown; reconcile before retry",
+              deliveryUnknown: true,
+            }
+          : { success: false, error: data.message || "Twilio API error" };
       });
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
+        deliveryUnknown: true,
       };
     }
   }
@@ -325,7 +338,11 @@ export async function sendSMS(
         phoneNumber: formattedPhone,
         message: body,
         type,
-        status: result.success ? "sent" : "failed",
+        status: result.success
+          ? "sent"
+          : result.deliveryUnknown
+            ? "pending"
+            : "failed",
         provider: providerName,
         providerMessageId: result.messageId,
         errorMessage: result.error,
@@ -360,7 +377,11 @@ export async function sendSMS(
         recipientAddress: formattedPhone,
         content: body,
         templateId,
-        status: result.success ? "sent" : "failed",
+        status: result.success
+          ? "sent"
+          : result.deliveryUnknown
+            ? "queued"
+            : "failed",
         sentAt: result.success ? new Date() : undefined,
         errorMessage: result.error,
         bookingId,
@@ -912,32 +933,64 @@ export async function resendSMS(logId: number): Promise<SMSResult> {
       });
     }
 
-    if (log.status === "sent" || log.status === "delivered") {
+    // Pending means either another worker owns the attempt or its provider
+    // outcome is unknown. Both require reconciliation, never a second send.
+    if (!["failed", "rejected"].includes(log.status) || log.providerMessageId) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "SMS was already delivered",
+        message: "SMS is already accepted or awaiting reconciliation",
+      });
+    }
+    const formattedPhone = formatPhoneNumber(log.phoneNumber);
+    const nextRetry = (log.retryCount ?? 0) + 1;
+    const [claim] = await db
+      .update(smsLogs)
+      .set({
+        retryCount: nextRetry,
+        status: "pending",
+        errorMessage: "Retry claimed; provider outcome pending",
+      })
+      .where(
+        and(
+          eq(smsLogs.id, logId),
+          eq(smsLogs.status, log.status),
+          eq(smsLogs.retryCount, log.retryCount ?? 0)
+        )
+      );
+    if (claim.affectedRows !== 1) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "SMS retry already claimed",
       });
     }
 
-    // Update retry count
+    // Update the same logical message, not an independent retry row which
+    // could itself be resent. A crash leaves the durable pending claim.
+    const result = await getSMSProvider().send({
+      to: formattedPhone,
+      body: log.message,
+      templateId: log.templateId ?? undefined,
+    });
     await db
       .update(smsLogs)
       .set({
-        retryCount: (log.retryCount ?? 0) + 1,
-        status: "pending",
+        status: result.success
+          ? "sent"
+          : result.deliveryUnknown
+            ? "pending"
+            : "failed",
+        provider: getProviderName(),
+        providerMessageId: result.messageId ?? null,
+        errorMessage: result.error ?? null,
+        sentAt: result.success ? new Date() : null,
       })
-      .where(eq(smsLogs.id, logId));
-
-    // Resend
-    const result = await sendSMS(
-      log.userId,
-      log.phoneNumber,
-      log.message,
-      log.type,
-      log.templateId ?? undefined,
-      log.bookingId ?? undefined,
-      log.flightId ?? undefined
-    );
+      .where(
+        and(
+          eq(smsLogs.id, logId),
+          eq(smsLogs.status, "pending"),
+          eq(smsLogs.retryCount, nextRetry)
+        )
+      );
 
     return result;
   } catch (error) {

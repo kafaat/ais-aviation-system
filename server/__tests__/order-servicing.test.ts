@@ -20,7 +20,10 @@ vi.mock("../stripe", () => ({
 vi.mock("../services/flights.service", () => ({
   calculateFlightPrice: async (f: any) => ({ price: f.economyPrice }),
 }));
-import { createRetailOffer } from "../services/retail-offer.service";
+import {
+  createRetailOffer,
+  offerDigest,
+} from "../services/retail-offer.service";
 import {
   quotePaidOrderService,
   confirmNoChargeService,
@@ -315,6 +318,50 @@ describe("paid order servicing", () => {
     });
   });
 
+  it("remaps reversed offer fare types to the canonical booked passengers", async () => {
+    fixture.rows("bookings")[0].numberOfPassengers = 2;
+    fixture.rows("passengers").push({
+      ...fixture.rows("passengers")[0],
+      id: 2,
+      type: "child",
+      firstName: "Child",
+    });
+    const selected = await createRetailOffer({
+      flightId: 11,
+      cabinClass: "economy",
+      passengerTypes: ["child", "adult"],
+      userId: 1,
+      channel: "direct",
+    });
+    const persisted = fixture
+      .rows("retail_offers")
+      .find(row => row.id === selected.id);
+    persisted.payload.fareLines = [
+      { type: "child", baseFare: 4000, tax: 0, bookingFee: 0, total: 4000 },
+      { type: "adult", baseFare: 6000, tax: 0, bookingFee: 0, total: 6000 },
+    ];
+    persisted.payload.baseAmount = 10000;
+    persisted.payload.taxesAndFees = 0;
+    persisted.payload.totalAmount = persisted.totalAmount = 10000;
+    persisted.digest = offerDigest(persisted.payload);
+    const quote = await quotePaidOrderService(
+      { bookingId: 7, offerIds: [selected.id], idempotencyKey: "remap-party" },
+      1,
+      3
+    );
+    const plan = fixture
+      .rows("booking_modifications")
+      .find(row => row.id === quote.modificationId).servicingPayload;
+    expect(
+      plan.segments[0].commercialQuote.lines.map((line: any) => [
+        line.type,
+        line.total,
+      ])
+    ).toEqual([
+      ["adult", 6000],
+      ["child", 4000],
+    ]);
+  });
   it("uses the same quote for the existing date-change screen and retries", async () => {
     fixture.rows("flights")[1].destinationId = 3;
     fixture.rows("flights")[0].departureTime = new Date(

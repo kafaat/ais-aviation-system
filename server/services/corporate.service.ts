@@ -70,9 +70,22 @@ export interface CorporateAccountFilters {
  * @param data - Corporate account data
  * @returns Created corporate account
  */
+function validateCorporateDiscount(percent: number | undefined) {
+  if (
+    percent !== undefined &&
+    (!Number.isFinite(percent) || percent < 0 || percent > 99.99)
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Corporate discount must be at least 0 and at most 99.99 percent",
+    });
+}
+
 export async function createCorporateAccount(
   data: CreateCorporateAccountInput
 ): Promise<CorporateAccount> {
+  validateCorporateDiscount(data.discountPercent);
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -290,6 +303,7 @@ export async function updateCorporateAccount(
   id: number,
   data: Partial<CreateCorporateAccountInput>
 ): Promise<CorporateAccount> {
+  validateCorporateDiscount(data.discountPercent);
   const db = await getDb();
   if (!db) {
     throw new TRPCError({

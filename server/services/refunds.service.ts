@@ -6,17 +6,13 @@ import Stripe from "stripe";
 import { getDb } from "../db";
 import {
   bookings,
-  users,
   flights,
   paymentSplits,
   paymentReceipts,
 } from "../../drizzle/schema";
 import { and, eq, isNotNull } from "drizzle-orm";
-import { sendRefundConfirmation } from "./email.service";
 import { quoteCancellationPolicy } from "./cancellation-policy.service";
 import { assertZeroCancellationAllowed } from "./zero-refund-cancellation.service";
-import { trackRefundIssued } from "./metrics.service";
-import { notifyRefundProcessed } from "./notification.service";
 import {
   getOrdinaryRefundCancellation,
   reserveOrdinaryRefundCancellation,
@@ -394,57 +390,8 @@ export async function createRefund(
     );
     const cumulativeRefundedAmount = sumRefundAmounts(refundsAfterOperation);
 
-    trackRefundIssued({
-      userId: input.userId,
-      bookingId: input.bookingId,
-      refundAmount: refund.amount || booking.totalAmount,
-      originalAmount: booking.totalAmount,
-      reason: input.reason,
-    });
-
-    try {
-      const [bookingDetails] = await database
-        .select({
-          bookingReference: bookings.bookingReference,
-          userName: users.name,
-          userEmail: users.email,
-          flightNumber: flights.flightNumber,
-        })
-        .from(bookings)
-        .innerJoin(users, eq(bookings.userId, users.id))
-        .innerJoin(flights, eq(bookings.flightId, flights.id))
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (bookingDetails && bookingDetails.userEmail) {
-        await sendRefundConfirmation({
-          passengerName: bookingDetails.userName || "Passenger",
-          passengerEmail: bookingDetails.userEmail,
-          bookingReference: bookingDetails.bookingReference,
-          flightNumber: bookingDetails.flightNumber,
-          refundAmount: refund.amount || booking.totalAmount,
-          refundReason: input.reason,
-          processingDays: 5,
-        });
-
-        console.info(
-          `[Refund] Confirmation email sent to ${bookingDetails.userEmail}`
-        );
-      }
-    } catch (emailError) {
-      console.error("[Refund] Error sending confirmation email:", emailError);
-    }
-
-    try {
-      await notifyRefundProcessed(
-        booking.userId,
-        refund.amount || booking.totalAmount,
-        booking.bookingReference || `#${input.bookingId}`
-      );
-    } catch (notifError) {
-      console.error("[Refund] Error sending in-app notification:", notifError);
-    }
-
+    // Completion effects are delivered from the verified transition's outbox
+    // event, including asynchronous success. A returned request is not success.
     return {
       success: true,
       refundId: refund.id,

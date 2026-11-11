@@ -49,6 +49,8 @@ vi.mock("../services/notification.service", () => ({
   createNotification: vi.fn(),
 }));
 
+import { sendRefundConfirmation } from "../services/email.service";
+import { notifyRefundProcessed } from "../services/notification.service";
 import { processStripeEvent } from "../webhooks/stripe";
 import {
   createRefund,
@@ -160,6 +162,7 @@ function seed(bookingOverrides: any = {}, extra: any = {}) {
   boundary.db = fixture.db;
 }
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(now);
   boundary.beforeList.mockReset();
@@ -877,4 +880,40 @@ it("records a genuine rounded zero time-tier quote without manufacturing a one-c
   });
   expect(fixture.rows("payment_receipts")[0].refundedAmount).toBe(0);
   expect(boundary.refundCreate).not.toHaveBeenCalled();
+});
+
+it.each(["pending", "failed", "requires_action"])(
+  "never announces completion for provider %s",
+  async status => {
+    boundary.refundStatus = status;
+    const result = await cancel();
+    expect(result.status).toBe(status);
+    expect(sendRefundConfirmation).not.toHaveBeenCalled();
+    expect(notifyRefundProcessed).not.toHaveBeenCalled();
+    expect(
+      fixture
+        .rows("outbox")
+        .filter(r => r.eventType === "booking.ordinary_refund_completed")
+    ).toHaveLength(0);
+  }
+);
+it("records a durable completion once when an asynchronous refund succeeds", async () => {
+  await cancel();
+  boundary.providerRefunds[0].status = "succeeded";
+  await event("evt_completed", "refund.updated", boundary.providerRefunds[0]);
+  await event(
+    "evt_completed_again",
+    "refund.updated",
+    boundary.providerRefunds[0]
+  );
+  const completed = fixture
+    .rows("outbox")
+    .filter(r => r.eventType === "booking.ordinary_refund_completed");
+  expect(completed).toHaveLength(1);
+  expect(completed[0].payload).toMatchObject({
+    bookingId: 7,
+    userId: 9,
+    amount: 5000,
+    refundId: "re_audit",
+  });
 });

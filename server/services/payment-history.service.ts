@@ -1,6 +1,23 @@
 import { getDb } from "../db";
-import { payments, bookings, flights, airports } from "../../drizzle/schema";
-import { eq, desc, and, sql, gte, lte, count, sum, SQL } from "drizzle-orm";
+import {
+  payments,
+  bookings,
+  flights,
+  airports,
+  financialLedger,
+} from "../../drizzle/schema";
+import {
+  eq,
+  desc,
+  and,
+  sql,
+  gte,
+  lte,
+  count,
+  sum,
+  SQL,
+  inArray,
+} from "drizzle-orm";
 
 export interface PaymentHistoryFilters {
   userId?: number;
@@ -78,6 +95,32 @@ export async function getUserPaymentHistory(
 /**
  * Get payment summary statistics for a user
  */
+// History is owned by the booking purchaser, including split contributions.
+// Refunded value is posted cash movement, not a mutable payment status; a
+// partially refunded payment deliberately remains completed.
+async function settledRefundAmount(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  userId?: number
+) {
+  const [row] = await db
+    .select({
+      amount: sql<string>`COALESCE(SUM(${financialLedger.amount} * 100), 0)`,
+    })
+    .from(financialLedger)
+    .innerJoin(bookings, eq(bookings.id, financialLedger.bookingId))
+    .where(
+      and(
+        inArray(financialLedger.type, ["refund", "partial_refund"]),
+        eq(financialLedger.currency, "SAR"),
+        userId === undefined ? undefined : eq(bookings.userId, userId)
+      )
+    );
+  const amount = Number(row.amount);
+  if (!Number.isSafeInteger(amount) || amount < 0)
+    throw new Error("Invalid settled refund total");
+  return amount;
+}
+
 export async function getUserPaymentStats(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -89,7 +132,6 @@ export async function getUserPaymentStats(userId: number) {
       completedCount: sql<number>`SUM(CASE WHEN ${payments.status} = 'completed' THEN 1 ELSE 0 END)`,
       completedAmount: sql<number>`SUM(CASE WHEN ${payments.status} = 'completed' THEN ${payments.amount} ELSE 0 END)`,
       refundedCount: sql<number>`SUM(CASE WHEN ${payments.status} = 'refunded' THEN 1 ELSE 0 END)`,
-      refundedAmount: sql<number>`SUM(CASE WHEN ${payments.status} = 'refunded' THEN ${payments.amount} ELSE 0 END)`,
       pendingCount: sql<number>`SUM(CASE WHEN ${payments.status} = 'pending' THEN 1 ELSE 0 END)`,
       failedCount: sql<number>`SUM(CASE WHEN ${payments.status} = 'failed' THEN 1 ELSE 0 END)`,
     })
@@ -103,7 +145,7 @@ export async function getUserPaymentStats(userId: number) {
     completedCount: Number(stats.completedCount) || 0,
     completedAmount: Number(stats.completedAmount) || 0,
     refundedCount: Number(stats.refundedCount) || 0,
-    refundedAmount: Number(stats.refundedAmount) || 0,
+    refundedAmount: await settledRefundAmount(db, userId),
     pendingCount: Number(stats.pendingCount) || 0,
     failedCount: Number(stats.failedCount) || 0,
   };
@@ -186,7 +228,6 @@ export async function getAdminPaymentStats() {
       completedCount: sql<number>`SUM(CASE WHEN ${payments.status} = 'completed' THEN 1 ELSE 0 END)`,
       completedAmount: sql<number>`SUM(CASE WHEN ${payments.status} = 'completed' THEN ${payments.amount} ELSE 0 END)`,
       refundedCount: sql<number>`SUM(CASE WHEN ${payments.status} = 'refunded' THEN 1 ELSE 0 END)`,
-      refundedAmount: sql<number>`SUM(CASE WHEN ${payments.status} = 'refunded' THEN ${payments.amount} ELSE 0 END)`,
       pendingCount: sql<number>`SUM(CASE WHEN ${payments.status} = 'pending' THEN 1 ELSE 0 END)`,
       failedCount: sql<number>`SUM(CASE WHEN ${payments.status} = 'failed' THEN 1 ELSE 0 END)`,
     })
@@ -212,7 +253,7 @@ export async function getAdminPaymentStats() {
     completedCount: Number(stats.completedCount) || 0,
     completedAmount: Number(stats.completedAmount) || 0,
     refundedCount: Number(stats.refundedCount) || 0,
-    refundedAmount: Number(stats.refundedAmount) || 0,
+    refundedAmount: await settledRefundAmount(db),
     pendingCount: Number(stats.pendingCount) || 0,
     failedCount: Number(stats.failedCount) || 0,
     todayPayments: Number(todayStats.todayPayments) || 0,

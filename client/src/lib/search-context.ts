@@ -32,3 +32,19 @@ export function flightSearchPath(
     return null;
   return `/search?${query}`;
 }
+
+/** Route-only alerts return to the form so the traveller can select a date. */
+export function flightSearchFormPath(
+  origin: number,
+  destination: number
+): string {
+  if (
+    !Number.isSafeInteger(origin) ||
+    !Number.isSafeInteger(destination) ||
+    origin <= 0 ||
+    destination <= 0 ||
+    origin === destination
+  )
+    return "/";
+  return `/?${new URLSearchParams({ origin: String(origin), destination: String(destination) })}`;
+}

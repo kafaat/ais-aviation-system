@@ -14,6 +14,8 @@ vi.mock("../../db", () => {
     update: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
+    transaction: vi.fn(),
+    for: vi.fn(),
   };
   return {
     getDb: vi.fn().mockResolvedValue(mockDb),
@@ -99,6 +101,12 @@ describe("Account Lock Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset default mock behaviors
+    mockDb.transaction.mockImplementation(
+      (run: (tx: unknown) => Promise<unknown>) => run(mockDb)
+    );
+    mockDb.for.mockImplementation(() =>
+      Promise.resolve([{ id: 1, ...mockDb.values.mock.calls.at(-1)?.[0] }])
+    );
     mockDb.insert.mockReturnThis();
     mockDb.values.mockReturnThis();
     mockDb.onDuplicateKeyUpdate.mockResolvedValue([{ affectedRows: 1 }]);
@@ -355,7 +363,7 @@ describe("Account Lock Service", () => {
       expect(result).toBe(true);
     });
 
-    it("should auto-unblock expired IP blocks", async () => {
+    it("treats expired IP blocks as inactive without mutating a stale snapshot", async () => {
       const pastDate = new Date();
       pastDate.setMinutes(pastDate.getMinutes() - 5);
 
@@ -365,7 +373,7 @@ describe("Account Lock Service", () => {
 
       const result = await isIpBlocked("10.0.0.1");
       expect(result).toBe(false);
-      expect(mockDb.update).toHaveBeenCalled();
+      expect(mockDb.update).not.toHaveBeenCalled();
     });
   });
 

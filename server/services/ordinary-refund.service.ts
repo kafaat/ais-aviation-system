@@ -364,6 +364,25 @@ export async function recordVerifiedOrdinaryRefund(
       eventId,
       refundId: refund.id,
     });
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, intent.bookingId));
+    if (!booking) throw new Error("Refund booking missing");
+    await recordEvent(tx, {
+      aggregateType: "booking",
+      aggregateId: intent.bookingId,
+      eventType: "booking.ordinary_refund_completed",
+      tenantId: booking.tenantId,
+      payload: {
+        bookingId: intent.bookingId,
+        userId: booking.userId,
+        actorId: intent.actorId,
+        amount: intent.amount,
+        refundId: refund.id,
+        paymentIntentId,
+      },
+    });
   }
   return true;
 }

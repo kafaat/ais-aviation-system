@@ -3,10 +3,18 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import type { MySqlTable } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql-proxy";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { airports, bookings, flights, payments } from "../../drizzle/schema";
+import {
+  airports,
+  bookings,
+  flights,
+  payments,
+  financialLedger,
+} from "../../drizzle/schema";
 import {
   getAdminPaymentHistory,
   getUserPaymentHistory,
+  getUserPaymentStats,
+  getAdminPaymentStats,
 } from "./payment-history.service";
 
 const state = vi.hoisted(() => ({ db: null as unknown }));
@@ -25,7 +33,13 @@ function insert(table: MySqlTable, values: Record<string, string | number>) {
 
 beforeEach(() => {
   database = new DatabaseSync(":memory:");
-  for (const table of [airports, bookings, flights, payments]) {
+  for (const table of [
+    airports,
+    bookings,
+    flights,
+    payments,
+    financialLedger,
+  ]) {
     database.exec(
       `CREATE TABLE \`${getTableName(table)}\` (${Object.values(
         getTableColumns(table)
@@ -155,5 +169,28 @@ describe("payment report pagination", () => {
       expect(empty).toEqual([]);
       expect(first[0]).toMatchObject({ origin: "AAA", destination: "BBB" });
     }
+  });
+});
+
+describe("settled refund statistics", () => {
+  it("includes partial posted deltas once and keeps booking ownership", async () => {
+    for (const [id, bookingId, amount, type] of [
+      [1, 1, "25.00", "partial_refund"],
+      [2, 1, "10.00", "partial_refund"],
+      [3, 2, "50.00", "refund"],
+    ] as const)
+      insert(financialLedger, { id, bookingId, amount, type, currency: "SAR" });
+    expect((await getUserPaymentStats(701)).refundedAmount).toBe(3500);
+    expect((await getUserPaymentStats(702)).refundedAmount).toBe(5000);
+    expect((await getAdminPaymentStats()).refundedAmount).toBe(8500);
+    // A pending/failed provider command has no posted financial delta.
+    insert(payments, {
+      id: 107,
+      bookingId: 1,
+      status: "refunded",
+      amount: 999,
+      currency: "SAR",
+    });
+    expect((await getUserPaymentStats(701)).refundedAmount).toBe(3500);
   });
 });

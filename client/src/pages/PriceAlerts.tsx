@@ -3,6 +3,7 @@
  * Manage price alerts for flight routes
  */
 
+import { flightSearchFormPath } from "@/lib/search-context";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
@@ -330,7 +331,10 @@ export default function PriceAlerts() {
                           {isPriceBelow && item.alert.isActive && (
                             <Button asChild size="sm" variant="default">
                               <Link
-                                href={`/search?from=${item.origin.id}&to=${item.destination.id}`}
+                                href={flightSearchFormPath(
+                                  item.origin.id,
+                                  item.destination.id
+                                )}
                               >
                                 <Search className="h-4 w-4 mr-1" />
                                 {t("priceAlerts.searchNow")}

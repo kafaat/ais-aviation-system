@@ -1395,6 +1395,26 @@ export const favoriteFlights = mysqlTable(
 export type FavoriteFlight = typeof favoriteFlights.$inferSelect;
 export type InsertFavoriteFlight = typeof favoriteFlights.$inferInsert;
 
+/** Observed route prices, separate from generated/delivered alert history. */
+export const favoritePriceObservations = mysqlTable(
+  "favorite_price_observations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    favoriteFlightId: int("favoriteFlightId").notNull(),
+    flightId: int("flightId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    price: int("price").notNull(),
+    observedAt: timestamp("observedAt").defaultNow().notNull(),
+  },
+  table => ({
+    observationUnique: uniqueIndex("favorite_price_observation_unique").on(
+      table.favoriteFlightId,
+      table.flightId,
+      table.cabinClass
+    ),
+  })
+);
+
 /**
  * Price Alert History
  * Track when price alerts were triggered

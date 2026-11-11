@@ -1,8 +1,9 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   favoriteFlights,
+  favoritePriceObservations,
   priceAlertHistory,
   flights,
   airports,
@@ -235,7 +236,19 @@ export async function deleteFavorite(favoriteId: number, userId: number) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Favorite not found" });
     }
 
-    await db.delete(favoriteFlights).where(eq(favoriteFlights.id, favoriteId));
+    await db.transaction(async tx => {
+      await tx
+        .select()
+        .from(favoriteFlights)
+        .where(eq(favoriteFlights.id, favoriteId))
+        .for("update");
+      await tx
+        .delete(favoritePriceObservations)
+        .where(eq(favoritePriceObservations.favoriteFlightId, favoriteId));
+      await tx
+        .delete(favoriteFlights)
+        .where(eq(favoriteFlights.id, favoriteId));
+    });
 
     return { success: true };
   } catch (error) {
@@ -316,86 +329,110 @@ export async function checkPriceAlertsAndNotify() {
       priceChange: number;
     }> = [];
 
-    // Check each favorite
-    for (const favorite of favoritesWithAlerts) {
-      if (!favorite.maxPrice) continue;
-
-      // Get upcoming flights for this route
-      const upcomingFlights = await db
-        .select()
-        .from(flights)
-        .where(
-          and(
-            eq(flights.originId, favorite.originId),
-            eq(flights.destinationId, favorite.destinationId),
-            favorite.airlineId
-              ? eq(flights.airlineId, favorite.airlineId)
-              : undefined,
-            eq(flights.status, "scheduled"),
-            gte(flights.departureTime, new Date()) // Only future flights
+    // Lock each favorite while observing its prices and recording alert intents.
+    // The observation is not a delivered alert; first observation never alerts.
+    for (const candidate of favoritesWithAlerts) {
+      const recorded = await db.transaction(async tx => {
+        const [favorite] = await tx
+          .select()
+          .from(favoriteFlights)
+          .where(eq(favoriteFlights.id, candidate.id))
+          .for("update");
+        if (!favorite?.enablePriceAlert || favorite.maxPrice == null) return [];
+        const now = new Date();
+        const upcomingFlights = await tx
+          .select()
+          .from(flights)
+          .where(
+            and(
+              eq(flights.originId, favorite.originId),
+              eq(flights.destinationId, favorite.destinationId),
+              favorite.airlineId
+                ? eq(flights.airlineId, favorite.airlineId)
+                : undefined,
+              eq(flights.status, "scheduled"),
+              gte(flights.departureTime, now)
+            )
           )
-        )
-        .limit(10);
-
-      // Check prices based on cabin class
-      for (const flight of upcomingFlights) {
-        const currentPrice =
-          favorite.cabinClass === "business"
-            ? flight.businessPrice
-            : flight.economyPrice;
-
-        // If price is below threshold and at least 24 hours since last alert
-        const shouldAlert =
-          currentPrice <= favorite.maxPrice &&
-          (!favorite.lastAlertSent ||
-            new Date().getTime() - favorite.lastAlertSent.getTime() >
-              24 * 60 * 60 * 1000);
-
-        if (shouldAlert) {
-          // Get the most recent alert for this favorite to calculate price change
-          const [recentAlert] = await db
+          .orderBy(asc(flights.departureTime), asc(flights.id))
+          .limit(10);
+        const [lastIntent] = await tx
+          .select()
+          .from(priceAlertHistory)
+          .where(eq(priceAlertHistory.favoriteFlightId, favorite.id))
+          .orderBy(
+            desc(priceAlertHistory.createdAt),
+            desc(priceAlertHistory.id)
+          )
+          .limit(1);
+        // Pending intents also throttle, without falsely declaring delivery.
+        const lastAlertAt = Math.max(
+          favorite.lastAlertSent?.getTime() ?? 0,
+          lastIntent?.createdAt?.getTime() ?? 0
+        );
+        const cooldownElapsed =
+          now.getTime() - lastAlertAt > 24 * 60 * 60 * 1000;
+        const cabinClass = favorite.cabinClass ?? "economy";
+        const newAlerts: typeof alertsToSend = [];
+        for (const flight of upcomingFlights) {
+          const currentPrice =
+            cabinClass === "business"
+              ? flight.businessPrice
+              : flight.economyPrice;
+          const match = and(
+            eq(favoritePriceObservations.favoriteFlightId, favorite.id),
+            eq(favoritePriceObservations.flightId, flight.id),
+            eq(favoritePriceObservations.cabinClass, cabinClass)
+          );
+          const [previous] = await tx
             .select()
-            .from(priceAlertHistory)
-            .where(eq(priceAlertHistory.favoriteFlightId, favorite.id))
-            .orderBy(desc(priceAlertHistory.createdAt))
+            .from(favoritePriceObservations)
+            .where(match)
             .limit(1);
-
-          const previousPrice = recentAlert?.newPrice || currentPrice;
-          const priceChange = currentPrice - previousPrice;
-
-          if (priceChange < 0) {
-            // Only alert on price drops
-            alertsToSend.push({
-              favoriteId: favorite.id,
+          if (previous) {
+            await tx
+              .update(favoritePriceObservations)
+              .set({ price: currentPrice, observedAt: now })
+              .where(match);
+          } else {
+            await tx.insert(favoritePriceObservations).values({
+              favoriteFlightId: favorite.id,
               flightId: flight.id,
-              userId: favorite.userId,
-              previousPrice,
-              newPrice: currentPrice,
-              priceChange,
+              cabinClass,
+              price: currentPrice,
+              observedAt: now,
             });
           }
+          if (
+            !previous ||
+            currentPrice >= previous.price ||
+            currentPrice > favorite.maxPrice ||
+            !cooldownElapsed
+          )
+            continue;
+          const alert = {
+            favoriteId: favorite.id,
+            flightId: flight.id,
+            userId: favorite.userId,
+            previousPrice: previous.price,
+            newPrice: currentPrice,
+            priceChange: currentPrice - previous.price,
+          };
+          const historyData: InsertPriceAlertHistory = {
+            favoriteFlightId: favorite.id,
+            flightId: flight.id,
+            previousPrice: alert.previousPrice,
+            newPrice: alert.newPrice,
+            priceChange: alert.priceChange,
+            alertSent: false,
+            createdAt: now,
+          };
+          await tx.insert(priceAlertHistory).values(historyData);
+          newAlerts.push(alert);
         }
-      }
-    }
-
-    // Record alerts in history
-    for (const alert of alertsToSend) {
-      const historyData: InsertPriceAlertHistory = {
-        favoriteFlightId: alert.favoriteId,
-        flightId: alert.flightId,
-        previousPrice: alert.previousPrice,
-        newPrice: alert.newPrice,
-        priceChange: alert.priceChange,
-        alertSent: false, // Will be updated after email is sent
-      };
-
-      await db.insert(priceAlertHistory).values(historyData);
-
-      // Update last alert sent time
-      await db
-        .update(favoriteFlights)
-        .set({ lastAlertSent: new Date() })
-        .where(eq(favoriteFlights.id, alert.favoriteId));
+        return newAlerts;
+      });
+      alertsToSend.push(...recorded);
     }
 
     return {

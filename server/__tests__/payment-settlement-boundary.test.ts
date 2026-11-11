@@ -95,6 +95,52 @@ beforeEach(() => {
 });
 
 describe("verified payment settlement", () => {
+  it.each(["pending", "failed"])(
+    "adopts the persisted %s Stripe attempt instead of duplicating payment history",
+    async status => {
+      const { payments } = await import("../../drizzle/schema");
+      await fixture.db.insert(payments).values({
+        id: 91,
+        bookingId: 7,
+        amount: 100000,
+        currency: "SAR",
+        provider: "stripe",
+        method: "card",
+        status,
+        stripePaymentIntentId: "pi_1",
+        transactionId: "pi_1",
+      });
+      await event("checkout.session.completed", payment());
+      await event("checkout.session.completed", payment());
+      expect(fixture.rows("payments")).toHaveLength(1);
+      expect(fixture.rows("payments")[0]).toMatchObject({
+        id: 91,
+        status: "completed",
+      });
+      expect(fixture.rows("payment_receipts")).toHaveLength(1);
+      expect(fixture.rows("financial_ledger")).toHaveLength(1);
+    }
+  );
+
+  it("rolls back a conflicting persisted payment attempt without issuing a receipt", async () => {
+    const { payments } = await import("../../drizzle/schema");
+    await fixture.db.insert(payments).values({
+      id: 91,
+      bookingId: 7,
+      amount: 90000,
+      currency: "SAR",
+      provider: "stripe",
+      method: "card",
+      status: "pending",
+      stripePaymentIntentId: "pi_1",
+    });
+    await expect(
+      event("checkout.session.completed", payment())
+    ).rejects.toThrow("Payment attempt identity/amount/status mismatch");
+    expect(fixture.rows("payment_receipts")).toHaveLength(0);
+    expect(fixture.rows("financial_ledger")).toHaveLength(0);
+    expect(fixture.rows("payments")[0].status).toBe("pending");
+  });
   it.each(["direct", "wallet", "split"] as const)(
     "funds scoped checkout items exactly once through %s",
     async method => {
