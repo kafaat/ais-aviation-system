@@ -17,7 +17,18 @@ import { allocateProportional } from "./seat-economics.service";
 import { createInventoryLock } from "./inventory-lock.service";
 import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import { TRPCError } from "@trpc/server";
-import { eq, and, gte, lte, desc, asc, lt, sql, inArray } from "drizzle-orm";
+import {
+  eq,
+  and,
+  gt,
+  gte,
+  lte,
+  desc,
+  asc,
+  lt,
+  sql,
+  inArray,
+} from "drizzle-orm";
 import { getDb, generateBookingReference } from "../db";
 import { canTransitionTo, type NdcOrderStatus } from "./ndc-order-state";
 import { recordEvent } from "./outbox.service";
@@ -566,6 +577,13 @@ export async function searchOffers(
   params: SearchOffersInput
 ): Promise<NdcOfferResponse[]> {
   requireLocalNdcOrigin(params);
+  if (params.returnDate != null)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Return itineraries are not supported by AirShopping; request a one-way offer",
+    });
+  const now = new Date();
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -644,6 +662,7 @@ export async function searchOffers(
         eq(flights.originId, params.originId),
         eq(flights.destinationId, params.destinationId),
         gte(flights.departureTime, startOfDay),
+        gt(flights.departureTime, now),
         lte(flights.departureTime, endOfDay),
         eq(flights.status, "scheduled")
       )
@@ -654,6 +673,7 @@ export async function searchOffers(
   const passengerCount = params.passengerCount;
   const filteredFlights = availableFlights.filter(
     (f: (typeof availableFlights)[number]) => {
+      if (f.departureTime <= new Date()) return false;
       if (cabinClass === "economy" || cabinClass === "premium_economy") {
         return f.economyAvailable >= passengerCount;
       }
@@ -932,6 +952,16 @@ export async function createOrder(
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: "An authenticated booking owner is required",
+    });
+  // AirShopping currently prices an adult-only profile from passengerCount.
+  // Legacy offers without a canonical snapshot cannot prove any other profile.
+  // Refuse before inventory, idempotency or invoice writes instead of silently
+  // assigning an adult quote to child/infant passengers.
+  if (params.passengers.some(passenger => passenger.type !== "adult"))
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Local NDC shopping currently quotes adults only; request a supported passenger profile",
     });
   const userId = params.userId;
   return withTransactionalIdempotency({

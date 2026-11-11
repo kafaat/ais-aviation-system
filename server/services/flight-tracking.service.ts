@@ -10,10 +10,11 @@
  * @module services/flight-tracking.service
  */
 
+import { flightPositionRangeSchema } from "./flight-tracking.validation";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { flightTracking, flights, airports } from "../../drizzle/schema";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, sql, inArray } from "drizzle-orm";
 
 // ============================================================================
 // Types
@@ -226,6 +227,14 @@ export async function recordFlightPosition(data: {
   distanceRemaining?: number;
   progressPercent?: string;
 }): Promise<{ id: number }> {
+  const parsed = flightPositionRangeSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid tracking coordinates or progress",
+      cause: parsed.error,
+    });
+  }
   const database = await getDb();
   if (!database) {
     throw new TRPCError({
@@ -236,8 +245,8 @@ export async function recordFlightPosition(data: {
 
   const result = await database.insert(flightTracking).values({
     flightId: data.flightId,
-    latitude: data.latitude,
-    longitude: data.longitude,
+    latitude: parsed.data.latitude,
+    longitude: parsed.data.longitude,
     altitude: data.altitude,
     heading: data.heading,
     groundSpeed: data.groundSpeed,
@@ -249,7 +258,7 @@ export async function recordFlightPosition(data: {
     turbulence: data.turbulence ?? null,
     distanceCovered: data.distanceCovered ?? null,
     distanceRemaining: data.distanceRemaining ?? null,
-    progressPercent: data.progressPercent ?? null,
+    progressPercent: parsed.data.progressPercent ?? null,
   });
 
   return { id: Number(result[0].insertId) };
@@ -307,7 +316,7 @@ export async function getActiveFlights(): Promise<
     .where(
       and(
         gte(flightTracking.recordedAt, tenMinutesAgo),
-        eq(flights.status, "scheduled")
+        inArray(flights.status, ["scheduled", "delayed"])
       )
     )
     .orderBy(desc(flightTracking.recordedAt));

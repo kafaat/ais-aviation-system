@@ -1,5 +1,5 @@
 # Remote branches to delete after the 2026-11-11 consolidation.
-# Section A: content already on main through a merged pull request (safe to delete; GitHub can restore from the PR page).
+# Section A: content already on main through a merged pull request (historical classification only; exact archive required before deletion).
 # Section B: diverged or never-merged branches; each has a copy at archive/<name> on the remote before deletion.
 ## A
 audit/ui-service-connectivity

@@ -4,6 +4,8 @@ import { getDb } from "../db";
 import {
   bookings,
   bookingRefundItems,
+  ordinaryBookingRefunds,
+  paymentReceipts,
   bookingRefundPlans,
   financialLedger,
   flights,
@@ -144,6 +146,29 @@ export async function getRefundStats(): Promise<RefundStats> {
             reviewAmount: sql<string>`COALESCE(SUM(CASE WHEN ${bookingRefundItems.status} IN ('failed','review_required') THEN ${bookingRefundItems.refundAmount} ELSE 0 END), 0)`,
           })
           .from(bookingRefundItems);
+        // Ordinary commands and split items are disjoint refund owners. Posted
+        // amounts above remain ledger-only, so success never counts twice.
+        const [ordinary] = await tx
+          .select({
+            pending: sql<string>`COALESCE(SUM(${ordinaryBookingRefunds.status} IN ('queued','requesting','pending')), 0)`,
+            pendingAmount: sql<string>`COALESCE(SUM(CASE WHEN ${ordinaryBookingRefunds.status} IN ('queued','requesting','pending') THEN ${ordinaryBookingRefunds.amount} ELSE 0 END), 0)`,
+            review: sql<string>`COALESCE(SUM(${ordinaryBookingRefunds.status} IN ('failed','review_required')), 0)`,
+            reviewAmount: sql<string>`COALESCE(SUM(CASE WHEN ${ordinaryBookingRefunds.status} IN ('failed','review_required') THEN ${ordinaryBookingRefunds.amount} ELSE 0 END), 0)`,
+          })
+          .from(ordinaryBookingRefunds)
+          .innerJoin(
+            paymentReceipts,
+            eq(
+              paymentReceipts.paymentIntentId,
+              ordinaryBookingRefunds.paymentIntentId
+            )
+          )
+          .where(
+            and(
+              eq(paymentReceipts.currency, "SAR"),
+              eq(paymentReceipts.kind, "booking")
+            )
+          );
         const [fees] = await tx
           .select({
             amount: sql<string>`COALESCE(SUM(${bookingRefundPlans.cancellationFee}), 0)`,
@@ -157,10 +182,13 @@ export async function getRefundStats(): Promise<RefundStats> {
           completedRefunds: count,
           totalRefundedAmount: integer(settled.amount),
           refundedBookings: bookingCount,
-          pendingRefunds: integer(requests.pending),
-          pendingRefundAmount: integer(requests.pendingAmount),
-          reviewRequiredRefunds: integer(requests.review),
-          reviewRequiredAmount: integer(requests.reviewAmount),
+          pendingRefunds: integer(requests.pending) + integer(ordinary.pending),
+          pendingRefundAmount:
+            integer(requests.pendingAmount) + integer(ordinary.pendingAmount),
+          reviewRequiredRefunds:
+            integer(requests.review) + integer(ordinary.review),
+          reviewRequiredAmount:
+            integer(requests.reviewAmount) + integer(ordinary.reviewAmount),
           retainedCancellationFees: integer(fees.amount),
           refundRate: allCount > 0 ? (bookingCount / allCount) * 100 : 0,
         };

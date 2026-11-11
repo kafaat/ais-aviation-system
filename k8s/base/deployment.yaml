@@ -1,7 +1,7 @@
 ---
 # AIS Aviation System - Kubernetes Deployment
 # This file is processed with envsubst during CI/CD
-# Required environment variables: IMAGE_TAG, NAMESPACE, REPLICAS
+# Required environment variables: IMAGE_TAG, SOURCE_SHA, NAMESPACE, REPLICAS
 
 apiVersion: apps/v1
 kind: Deployment
@@ -10,7 +10,9 @@ metadata:
   namespace: ${NAMESPACE}
   labels:
     app: ais-api
-    version: "${IMAGE_TAG}"
+    version: "${SOURCE_SHA}"
+  annotations:
+    ais.io/image: "${IMAGE_TAG}"
 spec:
   replicas: ${REPLICAS}
   revisionHistoryLimit: 5

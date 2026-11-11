@@ -794,19 +794,39 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
       Math.max(0, delayMinutes - alreadyShiftedMinutes) * 60000
   );
 
-  // Get all affected user IDs
+  // An account may buy unrelated journeys for different people. Only a
+  // persisted itinerary links these passengers to an onward sector; neither
+  // purchaser identity nor names/passport heuristics prove that connection.
+  const affectedSegments = await db
+    .select({
+      bookingId: bookingSegments.bookingId,
+      segmentOrder: bookingSegments.segmentOrder,
+    })
+    .from(bookingSegments)
+    .where(
+      and(
+        eq(bookingSegments.flightId, flightId),
+        ne(bookingSegments.status, "cancelled")
+      )
+    );
+  if (!affectedSegments.length) return [];
+
   const affectedBookings = await db
     .select({
-      userId: bookings.userId,
       bookingId: bookings.id,
       bookingReference: bookings.bookingReference,
     })
     .from(bookings)
-    .where(and(affectedBooking(flightId), ne(bookings.status, "cancelled")));
-
-  if (affectedBookings.length === 0) return [];
-
-  const userIds = affectedBookings.map(b => b.userId);
+    .where(
+      and(
+        inArray(bookings.id, [
+          ...new Set(affectedSegments.map(s => s.bookingId)),
+        ]),
+        ne(bookings.status, "cancelled")
+      )
+    );
+  if (!affectedBookings.length) return [];
+  const bookingIds = affectedBookings.map(b => b.bookingId);
 
   // Find connecting flights within 24h from destination
   const twentyFourHoursLater = new Date(flight.arrivalTime);
@@ -814,20 +834,21 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
 
   const connectingFlights = await db
     .select({
-      userId: bookings.userId,
-      bookingId: bookings.id,
+      bookingId: bookingSegments.bookingId,
+      segmentOrder: bookingSegments.segmentOrder,
       flightNumber: flights.flightNumber,
       departureTime: flights.departureTime,
       originId: flights.originId,
       destinationId: flights.destinationId,
     })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
+    .from(bookingSegments)
+    .innerJoin(flights, eq(bookingSegments.flightId, flights.id))
     .where(
       and(
-        inArray(bookings.userId, userIds),
+        inArray(bookingSegments.bookingId, bookingIds),
         eq(flights.originId, flight.destinationId),
-        ne(bookings.status, "cancelled"),
+        ne(bookingSegments.status, "cancelled"),
+        ne(flights.id, flightId),
         gte(flights.departureTime, flight.arrivalTime),
         lte(flights.departureTime, twentyFourHoursLater)
       )
@@ -852,7 +873,6 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
   }
 
   // Get passenger names for the affected bookings
-  const bookingIds = affectedBookings.map(b => b.bookingId);
   const paxList = await db
     .select({
       id: passengers.id,
@@ -876,8 +896,16 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
   }> = [];
 
   for (const conn of connectingFlights) {
-    const booking = affectedBookings.find(b => b.userId === conn.userId);
-    if (!booking) continue;
+    const booking = affectedBookings.find(b => b.bookingId === conn.bookingId);
+    if (
+      !booking ||
+      !affectedSegments.some(
+        segment =>
+          segment.bookingId === conn.bookingId &&
+          segment.segmentOrder < conn.segmentOrder
+      )
+    )
+      continue;
 
     const pax = paxList.filter(p => p.bookingId === booking.bookingId);
 

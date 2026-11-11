@@ -1120,19 +1120,16 @@ jobs:
             --timeout=300s \
             --env="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" \
             --command -- node --import tsx scripts/db/migrate.ts migrate
-
-      - name: Deploy to Kubernetes
+      - name: Deploy Kubernetes release set
         if: steps.staging-kube-config.outputs.configured == 'true'
+        id: deploy-set
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
           export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-staging"
           export REPLICAS="2"
-          envsubst < k8s/base/configmap.yaml | kubectl apply -f -
-          envsubst < k8s/base/background.yaml | kubectl apply -f -
-          envsubst < k8s/base/deployment.yaml | kubectl apply -f -
-          envsubst < k8s/base/service.yaml | kubectl apply -f -
-          envsubst < k8s/overlays/staging/ingress.yaml | kubectl apply -f -
+          export SOURCE_SHA="${{ needs.build.outputs.sha_short }}"
+          bash scripts/ci/deploy-k8s-set.sh staging
 
       - name: Wait for rollout
         if: steps.staging-kube-config.outputs.configured == 'true'
@@ -1140,7 +1137,6 @@ jobs:
           kubectl rollout status deployment/ais-api \
             --namespace=ais-staging \
             --timeout=300s
-
       - name: Run smoke tests
         if: steps.staging-kube-config.outputs.configured == 'true'
         id: smoke-tests
@@ -1149,12 +1145,9 @@ jobs:
           ./scripts/smoke-tests.sh ${{ vars.STAGING_URL }}
 
       - name: Rollback on failure
-        if: failure() && steps.staging-kube-config.outputs.configured == 'true' && steps.smoke-tests.outcome == 'failure'
+        if: failure() && steps.staging-kube-config.outputs.configured == 'true' && steps.deploy-set.outputs.mutated == 'true'
         run: |
-          echo "Smoke tests failed, initiating rollback..."
-          kubectl rollout undo deployment/ais-api --namespace=ais-staging
-          kubectl rollout status deployment/ais-api --namespace=ais-staging --timeout=180s
-          echo "Rollback completed"
+          python3 scripts/ci/k8s-release-set.py restore "$RUNNER_TEMP/ais-release-staging/state.json"
           exit 1
 
       - name: Notify deployment success
@@ -1348,29 +1341,18 @@ jobs:
             --env="DATABASE_URL=${{ secrets.PRODUCTION_DATABASE_URL }}" \
             --command -- node --import tsx scripts/db/migrate.ts migrate
 
-      - name: Save current deployment for rollback
+      - name: Deploy Kubernetes release set
         if: steps.kube-config.outputs.configured == 'true'
-        id: save-current
-        run: |
-          CURRENT_IMAGE=$(kubectl get deployment ais-api -n ais-production -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
-          echo "current_image=${CURRENT_IMAGE}" >> $GITHUB_OUTPUT
-          kubectl get deployment ais-api -n ais-production -o yaml > /tmp/current-deployment.yaml 2>/dev/null || true
-
-      - name: Deploy to Kubernetes (Blue-Green)
-        if: steps.kube-config.outputs.configured == 'true'
+        id: deploy-set
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
           export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-production"
           export REPLICAS="3"
-          envsubst < k8s/base/configmap.yaml | kubectl apply -f -
-          envsubst < k8s/base/background.yaml | kubectl apply -f -
-          envsubst < k8s/base/deployment.yaml | kubectl apply -f -
-          kubectl rollout status deployment/ais-api \
-            --namespace=ais-production \
-            --timeout=300s
+          export SOURCE_SHA="${{ needs.build.outputs.sha_short }}"
+          bash scripts/ci/deploy-k8s-set.sh production
 
-      - name: Run pre-switch health checks
+      - name: Run release health checks
         if: steps.kube-config.outputs.configured == 'true'
         id: health-check
         run: |
@@ -1384,15 +1366,6 @@ jobs:
               -- curl -sf http://$POD_IP:3000/api/trpc/health.live || exit 1
           done
           echo "All health checks passed"
-
-      - name: Switch traffic to new deployment
-        if: steps.kube-config.outputs.configured == 'true'
-        run: |
-          export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
-          export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
-          export NAMESPACE="ais-production"
-          envsubst < k8s/base/service.yaml | kubectl apply -f -
-          envsubst < k8s/overlays/production/ingress.yaml | kubectl apply -f -
 
       - name: Run smoke tests
         if: steps.kube-config.outputs.configured == 'true'
@@ -1414,21 +1387,9 @@ jobs:
           fi
 
       - name: Rollback on failure
-        if: failure() && steps.kube-config.outputs.configured == 'true' && (steps.smoke-tests.outcome == 'failure' || steps.health-check.outcome == 'failure' || steps.e2e-tests.outcome == 'failure')
+        if: failure() && steps.kube-config.outputs.configured == 'true' && steps.deploy-set.outputs.mutated == 'true'
         run: |
-          echo "Deployment verification failed, initiating rollback..."
-          if [ "${{ steps.save-current.outputs.current_image }}" != "none" ]; then
-            kubectl set image deployment/ais-api \
-              ais-api=${{ steps.save-current.outputs.current_image }} \
-              --namespace=ais-production
-            kubectl rollout status deployment/ais-api \
-              --namespace=ais-production \
-              --timeout=180s
-            echo "Rollback completed to: ${{ steps.save-current.outputs.current_image }}"
-          else
-            kubectl rollout undo deployment/ais-api --namespace=ais-production
-            kubectl rollout status deployment/ais-api --namespace=ais-production --timeout=180s
-          fi
+          python3 scripts/ci/k8s-release-set.py restore "$RUNNER_TEMP/ais-release-production/state.json"
           exit 1
 
       - name: Create deployment record

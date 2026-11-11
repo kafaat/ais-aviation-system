@@ -191,6 +191,15 @@ export async function queueWebhookRetry(opts: {
   eventId: string;
   delay?: number;
 }): Promise<void> {
+  if (
+    opts.delay !== undefined &&
+    (!Number.isFinite(opts.delay) || opts.delay < 0)
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Retry delay must be finite and nonnegative",
+    });
+  }
   await webhookRetryQueue.add(
     "retry-event",
     {
@@ -201,7 +210,7 @@ export async function queueWebhookRetry(opts: {
       // failed jobs are kept for a week; a fixed id made every later re-queue
       // of an exhausted event a silent no-op.
       jobId: `webhook-retry-${opts.eventId}-${randomUUID()}`,
-      delay: opts.delay || 60000, // Default 1 minute delay
+      delay: opts.delay ?? 60000, // Default 1 minute delay
     }
   );
   console.info(`[Queue] Queued webhook retry for event ${opts.eventId}`);
@@ -570,19 +579,39 @@ async function runReconciliation(_data: ReconciliationJobData): Promise<void> {
   // horizon); a 24-hour window silently dropped anything older.
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const unprocessedEvents = await db.query.stripeEvents.findMany({
-    where: (t, { and, eq, gt }) =>
-      and(eq(t.processed, false), gt(t.createdAt, sevenDaysAgo)),
-    limit: 100,
+  // Freeze a keyset upper bound: new arrivals belong to the next pass.
+  // Exhausted rows remain unprocessed for operator review, never crowding out
+  // retryable events. Pagination reaches every eligible row in this snapshot.
+  const [lastEvent] = await db.query.stripeEvents.findMany({
+    where: (t, { and, eq, gt, lt }) =>
+      and(
+        eq(t.processed, false),
+        gt(t.createdAt, sevenDaysAgo),
+        lt(t.retryCount, 5)
+      ),
+    orderBy: (t, { desc }) => [desc(t.id)],
+    limit: 1,
   });
-
-  console.info(
-    `[Reconciliation] Found ${unprocessedEvents.length} unprocessed events`
-  );
-
-  // Queue retries for each
-  for (const event of unprocessedEvents) {
-    await queueWebhookRetry({ eventId: event.id, delay: 0 });
+  if (!lastEvent) return;
+  let cursor: string | undefined;
+  while (true) {
+    const unprocessedEvents = await db.query.stripeEvents.findMany({
+      where: (t, { and, eq, gt, lt, lte }) =>
+        and(
+          eq(t.processed, false),
+          gt(t.createdAt, sevenDaysAgo),
+          lt(t.retryCount, 5),
+          lte(t.id, lastEvent.id),
+          cursor === undefined ? undefined : gt(t.id, cursor)
+        ),
+      orderBy: (t, { asc }) => [asc(t.id)],
+      limit: 100,
+    });
+    for (const event of unprocessedEvents) {
+      await queueWebhookRetry({ eventId: event.id, delay: 0 });
+    }
+    if (unprocessedEvents.length < 100) break;
+    cursor = unprocessedEvents[unprocessedEvents.length - 1].id;
   }
 
   console.info(`[Reconciliation] Completed`);

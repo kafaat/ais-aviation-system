@@ -37,13 +37,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function expectFailedLogs() {
+function expectFailedLogs(status = "failed") {
   expect(boundary.writes.map(write => write.table)).toEqual([
     "sms_logs",
     "notification_history",
   ]);
-  for (const { row } of boundary.writes) {
-    expect(row.status).toBe("failed");
+  for (const { table, row } of boundary.writes) {
+    expect(row.status).toBe(
+      status === "pending" && table === "notification_history"
+        ? "queued"
+        : status
+    );
     expect(row.sentAt).toBeUndefined();
     expect(row.providerMessageId).toBeUndefined();
     expect(row.errorMessage).toEqual(expect.any(String));
@@ -119,8 +123,11 @@ describe("SMS production boundary", () => {
   it("rejects an apparent provider success without a message ID", async () => {
     configureTwilio();
     request.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
-    await expect(send()).resolves.toMatchObject({ success: false });
-    expectFailedLogs();
+    await expect(send()).resolves.toMatchObject({
+      success: false,
+      deliveryUnknown: true,
+    });
+    expectFailedLogs("pending");
   });
 
   it("records provider rejection as failure", async () => {
@@ -139,8 +146,11 @@ describe("SMS production boundary", () => {
   it("records transport failure without switching to mock", async () => {
     configureTwilio();
     request.mockRejectedValue(new Error("Synthetic network failure"));
-    await expect(send()).resolves.toMatchObject({ success: false });
-    expectFailedLogs();
+    await expect(send()).resolves.toMatchObject({
+      success: false,
+      deliveryUnknown: true,
+    });
+    expectFailedLogs("pending");
   });
 
   it("retains mock delivery outside production", async () => {

@@ -568,18 +568,53 @@ async function recordReceipt(
     amount: payment.amount,
     currency: payment.currency.toUpperCase(),
   });
-  if (bookingId)
-    await tx.insert(payments).values({
-      bookingId,
-      amount: payment.amount,
-      currency: payment.currency.toUpperCase(),
-      method: "card",
-      provider: "stripe",
-      status: "completed",
-      transactionId: payment.paymentIntentId,
-      stripePaymentIntentId: payment.paymentIntentId,
-      idempotencyKey: `stripe:${payment.paymentIntentId}`,
-    });
+  if (bookingId) {
+    // The booking owner lock serializes canonical settlement writers. Discovery
+    // must not lock an absent intent's nonunique-index gap: two unrelated
+    // collections can otherwise deadlock when both insert their history rows.
+    const attempts = await tx
+      .select()
+      .from(payments)
+      .where(eq(payments.stripePaymentIntentId, payment.paymentIntentId));
+    if (attempts.length > 1)
+      throw new Error("Ambiguous payment history requires reconciliation");
+    const candidate = attempts[0];
+    if (candidate) {
+      // Lock only the existing primary-key record and revalidate its current
+      // identity/status before adopting it; discovery is only a hint.
+      const [attempt] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, candidate.id))
+        .for("update");
+      if (
+        !attempt ||
+        attempt.stripePaymentIntentId !== payment.paymentIntentId ||
+        attempt.bookingId !== bookingId ||
+        attempt.provider !== "stripe" ||
+        attempt.amount !== payment.amount ||
+        attempt.currency.toUpperCase() !== payment.currency.toUpperCase() ||
+        !["pending", "failed"].includes(attempt.status)
+      )
+        throw new Error("Payment attempt identity/amount/status mismatch");
+      await tx
+        .update(payments)
+        .set({ status: "completed", updatedAt: new Date() })
+        .where(eq(payments.id, attempt.id));
+    } else {
+      await tx.insert(payments).values({
+        bookingId,
+        amount: payment.amount,
+        currency: payment.currency.toUpperCase(),
+        method: "card",
+        provider: "stripe",
+        status: "completed",
+        transactionId: payment.paymentIntentId,
+        stripePaymentIntentId: payment.paymentIntentId,
+        idempotencyKey: `stripe:${payment.paymentIntentId}`,
+      });
+    }
+  }
   await tx.insert(financialLedger).values({
     bookingId,
     userId,

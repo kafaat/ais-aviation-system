@@ -973,7 +973,7 @@ export async function runReconciliation(input: RunReconciliationInput) {
           lte(bspRetFiles.reportingDate, periodEnd)
         )
       )
-  ).filter(f => f.status !== "rejected");
+  ).filter(f => f.status === "transmitted" || f.status === "accepted");
   const retLines = retFiles.length
     ? await db
         .select()
@@ -988,7 +988,9 @@ export async function runReconciliation(input: RunReconciliationInput) {
   // The latest RET line per document is what the BSP was told; the HOT is
   // compared against it. Documents never reported fall back to the ledger.
   const retByKey = new Map<string, (typeof retLines)[number]>();
-  for (const line of retLines.sort((a, b) => b.id - a.id)) {
+  for (const line of retLines
+    .filter(line => line.currency === spec.currency)
+    .sort((a, b) => b.id - a.id)) {
     const key = documentKey(line.documentNumber, line.transactionCode);
     if (!retByKey.has(key)) retByKey.set(key, line);
   }
@@ -1020,6 +1022,25 @@ export async function runReconciliation(input: RunReconciliationInput) {
           )
         )
     : [];
+  if (input.hotFileIds?.length) {
+    const found = new Set(hotFiles.map(f => f.id));
+    if (
+      input.hotFileIds.some(id => !found.has(id)) ||
+      hotFiles.some(f => {
+        const period = f.remittancePeriodEnd ?? f.processingDate;
+        return (
+          f.bspCountry !== input.bspCountry ||
+          !period ||
+          period < periodStart ||
+          period > periodEnd
+        );
+      }) ||
+      hotLines.some(line => line.currency !== spec.currency)
+    )
+      throw precondition(
+        "HOT source IDs are missing or outside the reconciliation country, currency or period scope"
+      );
+  }
   // (c) Bank remittances.
   const remittances = input.remittanceIds?.length
     ? await db
@@ -1037,6 +1058,22 @@ export async function runReconciliation(input: RunReconciliationInput) {
           r.valueDate <= periodEnd &&
           r.currency === spec.currency
       );
+  if (input.remittanceIds?.length) {
+    const found = new Set(remittances.map(r => r.id));
+    if (
+      input.remittanceIds.some(id => !found.has(id)) ||
+      remittances.some(
+        r =>
+          r.bspCountry !== input.bspCountry ||
+          r.currency !== spec.currency ||
+          r.valueDate < periodStart ||
+          r.valueDate > periodEnd
+      )
+    )
+      throw precondition(
+        "Remittance source IDs are missing or outside the reconciliation country, currency or period scope"
+      );
+  }
   const expectations: LedgerExpectation[] = expectation.documents.map(doc => {
     const reported = retByKey.get(
       documentKey(doc.documentNumber, doc.transactionCode)

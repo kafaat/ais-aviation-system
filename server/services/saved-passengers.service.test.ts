@@ -10,18 +10,27 @@ import {
 } from "./saved-passengers.service";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { savedPassengers } from "../../drizzle/schema";
+import { savedPassengers, users } from "../../drizzle/schema";
 import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
 const dbAvailable = await isDatabaseAvailable();
 
 describe.skipIf(!dbAvailable)("Saved Passengers Service", () => {
-  const testUserId = 888888; // Use a high ID to avoid conflicts
+  let testUserId: number;
+  let otherUserId: number;
 
   beforeAll(async () => {
     // Cleanup any existing test data before starting
     const db = await getDb();
     if (db) {
+      const [created] = await db
+        .insert(users)
+        .values({ openId: `saved-passengers-test-${crypto.randomUUID()}` });
+      testUserId = created.insertId;
+      const [other] = await db.insert(users).values({
+        openId: `saved-passengers-other-${crypto.randomUUID()}`,
+      });
+      otherUserId = other.insertId;
       await db
         .delete(savedPassengers)
         .where(eq(savedPassengers.userId, testUserId));
@@ -35,6 +44,8 @@ describe.skipIf(!dbAvailable)("Saved Passengers Service", () => {
       await db
         .delete(savedPassengers)
         .where(eq(savedPassengers.userId, testUserId));
+      await db.delete(users).where(eq(users.id, testUserId));
+      await db.delete(users).where(eq(users.id, otherUserId));
     }
   });
 
@@ -188,19 +199,25 @@ describe.skipIf(!dbAvailable)("Saved Passengers Service", () => {
     const passengers = await getUserPassengers(testUserId);
     const passengerId = passengers[0].id;
 
+    // Use a real second owner so the test reaches the ownership boundary.
+    const original = await getPassenger(passengerId, testUserId);
     // Try to get passenger with wrong user ID
-    const passenger = await getPassenger(passengerId, 999999);
+    const passenger = await getPassenger(passengerId, otherUserId);
     expect(passenger).toBeNull();
 
     // Try to update passenger with wrong user ID
     await expect(
-      updatePassenger(passengerId, 999999, { firstName: "Hacker" })
+      updatePassenger(passengerId, otherUserId, { firstName: "Hacker" })
     ).rejects.toThrow("Passenger not found");
 
     // Try to delete passenger with wrong user ID
-    await expect(deletePassenger(passengerId, 999999)).rejects.toThrow(
+    await expect(deletePassenger(passengerId, otherUserId)).rejects.toThrow(
       "Passenger not found"
     );
+    await expect(setDefaultPassenger(passengerId, otherUserId)).rejects.toThrow(
+      "Passenger not found"
+    );
+    expect(await getPassenger(passengerId, testUserId)).toEqual(original);
   });
 
   it("should set new default when deleting current default passenger", async () => {

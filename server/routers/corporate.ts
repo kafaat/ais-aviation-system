@@ -271,7 +271,7 @@ export const corporateRouter = router({
         contactEmail: z.string().email().optional(),
         contactPhone: z.string().optional(),
         creditLimit: z.number().min(0).optional(),
-        discountPercent: z.number().min(0).max(100).optional(),
+        discountPercent: z.number().min(0).max(99.99).optional(),
       })
     )
     .output(

@@ -79,3 +79,27 @@ describe("versioned domain event contracts", () => {
     ).toBe(1);
   });
 });
+
+it("requires a provider refund identity for ordinary completion events", () => {
+  const completion = {
+    ...event,
+    eventType: "booking.ordinary_refund_completed",
+    payload: {
+      bookingId: 12,
+      userId: 9,
+      actorId: 9,
+      amount: 5000,
+      refundId: "re_ok",
+      paymentIntentId: "pi_ok",
+    },
+  };
+  expect(fromCloudEvent(toCloudEvent(completion)).payload).toEqual(
+    completion.payload
+  );
+  expect(() =>
+    validateDomainEvent({
+      ...completion,
+      payload: { ...completion.payload, refundId: undefined },
+    })
+  ).toThrow();
+});

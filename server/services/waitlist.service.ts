@@ -27,26 +27,6 @@ import { eq, and, desc, asc, sql, inArray, isNull } from "drizzle-orm";
  */
 
 /**
- * Get the next priority number for a waitlist entry
- */
-async function getNextPriority(
-  flightId: number,
-  cabinClass: "economy" | "business"
-): Promise<number> {
-  const database = await getDb();
-  if (!database) throw new Error("Database not available");
-
-  const [result] = await database
-    .select({ maxPriority: sql<number>`MAX(${waitlist.priority})` })
-    .from(waitlist)
-    .where(
-      and(eq(waitlist.flightId, flightId), eq(waitlist.cabinClass, cabinClass))
-    );
-
-  return (result?.maxPriority ?? 0) + 1;
-}
-
-/**
  * Add user to waitlist for a flight
  */
 export async function addToWaitlist(
@@ -64,76 +44,90 @@ export async function addToWaitlist(
   const database = await getDb();
   if (!database) throw new Error("Database not available");
 
-  // Check if user is already on waitlist for this flight and class
-  const [existing] = await database
-    .select()
-    .from(waitlist)
-    .where(
-      and(
-        eq(waitlist.userId, userId),
-        eq(waitlist.flightId, flightId),
-        eq(waitlist.cabinClass, cabinClass),
-        eq(waitlist.status, "waiting")
+  return withInventoryTransaction(database, async tx => {
+    // Check if flight exists and get details
+    const [flight] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .for("update");
+
+    if (!flight) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Flight not found",
+      });
+    }
+
+    // Check if user is already on waitlist for this flight and class
+    const [existing] = await tx
+      .select()
+      .from(waitlist)
+      .where(
+        and(
+          eq(waitlist.userId, userId),
+          eq(waitlist.flightId, flightId),
+          eq(waitlist.cabinClass, cabinClass),
+          inArray(waitlist.status, ["waiting", "offered"])
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (existing) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "You are already on the waitlist for this flight",
+    if (existing) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "You are already on the waitlist for this flight",
+      });
+    }
+
+    // Check if flight is actually full
+    const availableSeats =
+      cabinClass === "economy"
+        ? flight.economyAvailable
+        : flight.businessAvailable;
+
+    if (availableSeats >= passengers) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Seats are still available. Please book directly.",
+      });
+    }
+
+    // Get next priority (queue position)
+    const [last] = await tx
+      .select({ priority: waitlist.priority })
+      .from(waitlist)
+      .where(
+        and(
+          eq(waitlist.flightId, flightId),
+          eq(waitlist.cabinClass, cabinClass)
+        )
+      )
+      .orderBy(desc(waitlist.priority))
+      .limit(1)
+      .for("update");
+    const priority = (last?.priority ?? 0) + 1;
+
+    // Add to waitlist
+    const [result] = await tx.insert(waitlist).values({
+      flightId,
+      userId,
+      cabinClass,
+      seats: passengers,
+      priority,
+      status: "waiting",
+      notifyByEmail,
+      notifyBySms,
     });
-  }
 
-  // Check if flight exists and get details
-  const [flight] = await database
-    .select()
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
+    const insertId = result.insertId;
 
-  if (!flight) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Flight not found",
-    });
-  }
-
-  // Check if flight is actually full
-  const availableSeats =
-    cabinClass === "economy"
-      ? flight.economyAvailable
-      : flight.businessAvailable;
-
-  if (availableSeats >= passengers) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Seats are still available. Please book directly.",
-    });
-  }
-
-  // Get next priority (queue position)
-  const priority = await getNextPriority(flightId, cabinClass);
-
-  // Add to waitlist
-  const [result] = await database.insert(waitlist).values({
-    flightId,
-    userId,
-    cabinClass,
-    seats: passengers,
-    priority,
-    status: "waiting",
-    notifyByEmail,
-    notifyBySms,
+    return {
+      id: insertId,
+      position: priority,
+      message: `Successfully added to waitlist at position ${priority}`,
+    };
   });
-
-  const insertId = result.insertId;
-
-  return {
-    id: insertId,
-    position: priority,
-    message: `Successfully added to waitlist at position ${priority}`,
-  };
 }
 
 /**

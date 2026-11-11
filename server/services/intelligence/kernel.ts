@@ -21,6 +21,8 @@
  * @module services/intelligence/kernel
  */
 
+import { createHash } from "node:crypto";
+import { TRPCError } from "@trpc/server";
 import { createServiceLogger } from "../../_core/logger";
 import { cacheService } from "../cache.service";
 import { economicsAgent } from "./economics.agent";
@@ -85,7 +87,7 @@ export class IntelligenceKernel {
   private isRunning = false;
 
   constructor(config?: Partial<IntelligenceConfig>) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = structuredClone({ ...DEFAULT_CONFIG, ...config });
   }
 
   /**
@@ -97,9 +99,25 @@ export class IntelligenceKernel {
   ): Promise<IntelligenceBriefing> {
     const startTime = Date.now();
 
-    // Check cache
-    const cached =
-      await cacheService.get<IntelligenceBriefing>(BRIEFING_CACHE_KEY);
+    const config = structuredClone(this.config);
+    const normalizedIds = (ids?: number[]) =>
+      [...new Set(ids ?? [])].sort((a, b) => a - b);
+    // Request IDs are tracing identities, not data scope. Principal and all
+    // supported filters/configuration must partition shared cached results.
+    const cacheKey = `${BRIEFING_CACHE_KEY}:${createHash("sha256")
+      .update(
+        JSON.stringify({
+          userId: context.userId ?? null,
+          timeHorizon: context.timeHorizon,
+          flightIds: normalizedIds(context.scope.flightIds),
+          routeIds: normalizedIds(context.scope.routeIds),
+          airlineIds: normalizedIds(context.scope.airlineIds),
+          dateRange: context.scope.dateRange ?? null,
+          config,
+        })
+      )
+      .digest("hex")}`;
+    const cached = await cacheService.get<IntelligenceBriefing>(cacheKey);
     if (cached) {
       log.info({ event: "briefing_cache_hit" }, "Returning cached briefing");
       return cached;
@@ -111,22 +129,43 @@ export class IntelligenceKernel {
       "Generating intelligence briefing"
     );
 
-    // Run all agents in parallel with timeouts
-    const [economicsResult, fraudResult, operationsResult] =
-      await Promise.allSettled([
-        this.runWithTimeout(
-          () => economicsAgent.analyze(context),
-          this.config.agents.economics.timeoutMs
-        ),
-        this.runWithTimeout(
-          () => fraudAgent.getOverview(context),
-          this.config.agents.fraud.timeoutMs
-        ),
-        this.runWithTimeout(
-          () => operationsAgent.getOperationalHealth(context),
-          this.config.agents.operations.timeoutMs
-        ),
-      ]);
+    // Disabled agents are never invoked. Bound parallel work by configuration.
+    const tasks: Array<() => Promise<AgentResult | null>> = [
+      () =>
+        config.agents.economics.enabled
+          ? this.runWithTimeout(
+              () => economicsAgent.analyze(context),
+              config.agents.economics.timeoutMs
+            )
+          : Promise.resolve(null),
+      () =>
+        config.agents.fraud.enabled
+          ? this.runWithTimeout(
+              () => fraudAgent.getOverview(context),
+              config.agents.fraud.timeoutMs
+            )
+          : Promise.resolve(null),
+      () =>
+        config.agents.operations.enabled
+          ? this.runWithTimeout(
+              () => operationsAgent.getOperationalHealth(context),
+              config.agents.operations.timeoutMs
+            )
+          : Promise.resolve(null),
+    ];
+    const settled: PromiseSettledResult<AgentResult | null>[] = [];
+    const concurrency = Math.max(
+      1,
+      Math.min(tasks.length, Math.floor(config.maxConcurrentAgents) || 1)
+    );
+    for (let offset = 0; offset < tasks.length; offset += concurrency) {
+      settled.push(
+        ...(await Promise.allSettled(
+          tasks.slice(offset, offset + concurrency).map(run => run())
+        ))
+      );
+    }
+    const [economicsResult, fraudResult, operationsResult] = settled;
 
     // Extract results with fallbacks
     const economics = this.extractResult(economicsResult, "economics");
@@ -214,17 +253,21 @@ export class IntelligenceKernel {
 
     const briefing: IntelligenceBriefing = {
       generatedAt: new Date(),
-      period: "Last 30 days",
+      period: context.scope.dateRange
+        ? `${context.scope.dateRange.start.toISOString()} – ${context.scope.dateRange.end.toISOString()}`
+        : `Analysis horizon: ${context.timeHorizon}`,
       executionTimeMs,
       overallHealth,
       healthScore,
       economics: {
-        summary:
-          profitMargin == null
+        summary: !config.agents.economics.enabled
+          ? "Economics agent disabled"
+          : profitMargin == null
             ? "Profitability is unavailable until operating costs are integrated."
             : `Net margin: ${profitMargin}%. ${economicsData?.unprofitableRoutes?.length || 0} routes below threshold.`,
-        summaryAr:
-          profitMargin == null
+        summaryAr: !config.agents.economics.enabled
+          ? "وكيل الاقتصاد معطل"
+          : profitMargin == null
             ? "الربحية غير متاحة حتى ربط تكاليف التشغيل الفعلية."
             : `هامش الربح الصافي: ${profitMargin}%. ${economicsData?.unprofitableRoutes?.length || 0} خطوط أقل من الحد الأدنى.`,
         profitMargin,
@@ -237,27 +280,41 @@ export class IntelligenceKernel {
         },
       },
       operations: {
-        summary:
-          otp === null
+        summary: !config.agents.operations.enabled
+          ? "Operations agent disabled"
+          : otp === null
             ? "Departure OTP unavailable: source observations are missing."
             : `OTP: ${otp}%. ${opsAlerts.length} active alerts.`,
-        summaryAr:
-          otp === null
+        summaryAr: !config.agents.operations.enabled
+          ? "وكيل العمليات معطل"
+          : otp === null
             ? "الأداء في الوقت المحدد غير متاح: بيانات الرصد مفقودة."
             : `الأداء في الوقت المحدد: ${otp}%. ${opsAlerts.length} تنبيهات نشطة.`,
         otp,
         alerts: opsAlerts,
       },
       fraud: {
-        summary: `${blockedTransactions} blocked transactions. SAR ${savedAmount.toFixed(2)} saved.`,
-        summaryAr: `${blockedTransactions} معاملة محظورة. وفورات ${savedAmount.toFixed(2)} ريال.`,
+        summary: !config.agents.fraud.enabled
+          ? "Fraud agent disabled"
+          : !fraud
+            ? "Fraud analysis unavailable"
+            : `${blockedTransactions} blocked transactions. SAR ${savedAmount.toFixed(2)} saved.`,
+        summaryAr: !config.agents.fraud.enabled
+          ? "وكيل الاحتيال معطل"
+          : !fraud
+            ? "تحليل الاحتيال غير متاح"
+            : `${blockedTransactions} معاملة محظورة. وفورات ${savedAmount.toFixed(2)} ريال.`,
         blockedTransactions,
         savedAmount,
         riskLevel: fraudRiskLevel,
       },
       pricing: {
-        summary: "AI pricing active with demand-based optimization",
-        summaryAr: "التسعير الذكي نشط مع تحسين مبني على الطلب",
+        summary: config.agents.pricing.enabled
+          ? "Pricing advisory only; no pricing agent executed in this briefing"
+          : "Pricing agent disabled",
+        summaryAr: config.agents.pricing.enabled
+          ? "التسعير استشاري فقط؛ لم يُنفذ وكيل تسعير في هذا الملخص"
+          : "وكيل التسعير معطل",
         revenueImpact: 0,
         activeOptimizations: 0,
       },
@@ -267,9 +324,9 @@ export class IntelligenceKernel {
 
     // Cache the briefing
     await cacheService.set(
-      BRIEFING_CACHE_KEY,
+      cacheKey,
       briefing,
-      this.config.briefingCacheTtlMs / 1000
+      config.briefingCacheTtlMs / 1000
     );
 
     this.isRunning = false;
@@ -297,6 +354,7 @@ export class IntelligenceKernel {
     userId: number,
     context: IntelligenceContext
   ) {
+    this.requireEnabled("fraud");
     return fraudAgent.assessBooking(bookingId, userId, context);
   }
 
@@ -304,6 +362,7 @@ export class IntelligenceKernel {
    * Predict delay for a specific flight
    */
   predictFlightDelay(flightId: number, context: IntelligenceContext) {
+    this.requireEnabled("operations");
     return operationsAgent.predictDelay(flightId, context);
   }
 
@@ -311,6 +370,7 @@ export class IntelligenceKernel {
    * Get disruption forecast
    */
   getDisruptionForecast(context: IntelligenceContext) {
+    this.requireEnabled("operations");
     return operationsAgent.forecastDisruptions(context);
   }
 
@@ -318,6 +378,7 @@ export class IntelligenceKernel {
    * Get economics analysis
    */
   getEconomicsAnalysis(context: IntelligenceContext) {
+    this.requireEnabled("economics");
     return economicsAgent.analyze(context);
   }
 
@@ -339,14 +400,14 @@ export class IntelligenceKernel {
    * Get current configuration
    */
   getConfig(): IntelligenceConfig {
-    return { ...this.config };
+    return structuredClone(this.config);
   }
 
   /**
    * Update configuration
    */
   updateConfig(updates: Partial<IntelligenceConfig>): void {
-    this.config = { ...this.config, ...updates };
+    this.config = structuredClone({ ...this.config, ...updates });
     log.info(
       { event: "config_updated" },
       "Intelligence kernel configuration updated"
@@ -372,23 +433,33 @@ export class IntelligenceKernel {
   // Private Helpers
   // ============================================================================
 
+  private requireEnabled(agent: keyof IntelligenceConfig["agents"]): void {
+    if (!this.config.agents[agent].enabled) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `${agent} agent is disabled`,
+      });
+    }
+  }
+
   private runWithTimeout<T>(
     fn: () => Promise<T>,
     timeoutMs: number
   ): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>;
     return Promise.race([
-      fn(),
-      new Promise<never>((_resolve, reject) =>
-        setTimeout(
+      Promise.resolve().then(fn),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
           () => reject(new Error(`Agent timed out after ${timeoutMs}ms`)),
           timeoutMs
-        )
-      ),
-    ]);
+        );
+      }),
+    ]).finally(() => clearTimeout(timer));
   }
 
   private extractResult<T>(
-    settledResult: PromiseSettledResult<AgentResult<T>>,
+    settledResult: PromiseSettledResult<AgentResult<T> | null>,
     agentName: string
   ): AgentResult<T> | null {
     if (settledResult.status === "fulfilled") {

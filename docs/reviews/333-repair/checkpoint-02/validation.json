@@ -1,0 +1,47 @@
+{
+  "source_commit": "0a9d9ede2e31537d5c3f047831b9b69d15ebe4b6",
+  "command": "./node_modules/.bin/vitest run --maxWorkers=2 --reporter=default --reporter=json",
+  "exit_code": 0,
+  "tests": {
+    "numTotalTests": 6579,
+    "numPassedTests": 5825,
+    "numFailedTests": 0,
+    "numPendingTests": 754,
+    "success": true
+  },
+  "file_summary": {
+    "passed": 416,
+    "skipped": 51,
+    "total": 467
+  },
+  "raw_report_sha256": "98ad38af19d78e8d21c0eae15c70dc0e366f1b02c6ca7145ae7cb8a4063f9d1d",
+  "typecheck": {
+    "command": "NODE_OPTIONS=--max-old-space-size=6144 ./node_modules/.bin/tsc --noEmit",
+    "exit_code": 0
+  },
+  "script_typecheck": {
+    "command": "NODE_OPTIONS=--max-old-space-size=6144 ./node_modules/.bin/tsc -p tsconfig.scripts.json --noEmit",
+    "exit_code": 0
+  },
+  "lint_changed_typescript": {
+    "exit_code": 0,
+    "max_warnings": 0
+  },
+  "python_ci": {
+    "passed": 58,
+    "skipped": 2,
+    "failed": 1,
+    "failure": "nginx executable unavailable; gate preserved"
+  },
+  "release_safety_tests": {
+    "passed": 10,
+    "real_cluster": false
+  },
+  "native_mysql": "NOT_RUN locally; tests wired into Production Gates",
+  "git_push": {
+    "status": "BLOCKED_AUTO_APPROVAL",
+    "reason": "Public repository; explicit publication approval required",
+    "remote_branch_exists": false
+  },
+  "negative_control_note": "Worker reports contain baseline failures; early whole-suite attempt overlapped the last reconciliation change and failed one new regression. Final immutable-commit run above supersedes it."
+}

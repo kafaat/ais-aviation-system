@@ -426,20 +426,60 @@ export async function blockIpAddress(
       message: "Database not available",
     });
 
-  let autoUnblockAt: Date | undefined;
-  if (autoUnblockMinutes) {
-    autoUnblockAt = new Date();
-    autoUnblockAt.setMinutes(autoUnblockAt.getMinutes() + autoUnblockMinutes);
+  if (
+    autoUnblockMinutes !== undefined &&
+    (!Number.isFinite(autoUnblockMinutes) || autoUnblockMinutes <= 0)
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Auto-unblock duration must be positive",
+    });
   }
-
+  const now = new Date();
+  const autoUnblockAt =
+    autoUnblockMinutes === undefined
+      ? null
+      : new Date(now.getTime() + autoUnblockMinutes * 60_000);
   const block: InsertIpBlacklist = {
     ipAddress,
     reason,
     blockedBy,
     autoUnblockAt,
+    isActive: true,
+    unblockedAt: null,
+    unblockedBy: null,
+    createdAt: now,
+    updatedAt: now,
   };
 
-  await db.insert(ipBlacklist).values(block);
+  await db.transaction(async tx => {
+    // The unique IP key serializes even concurrent first insertions. A no-op
+    // upsert acquires the row without weakening an existing block.
+    await tx
+      .insert(ipBlacklist)
+      .values(block)
+      .onDuplicateKeyUpdate({
+        set: { ipAddress: sql`${ipBlacklist.ipAddress}` },
+      });
+    const [current] = await tx
+      .select()
+      .from(ipBlacklist)
+      .where(eq(ipBlacklist.ipAddress, ipAddress))
+      .for("update");
+    if (!current) throw new Error("IP block row missing");
+    const replace =
+      !current.isActive ||
+      (current.autoUnblockAt !== null &&
+        (current.autoUnblockAt <= now ||
+          autoUnblockAt === null ||
+          current.autoUnblockAt < autoUnblockAt));
+    if (replace) {
+      await tx
+        .update(ipBlacklist)
+        .set(block)
+        .where(eq(ipBlacklist.id, current.id));
+    }
+  });
 
   logger.error(
     {
@@ -475,8 +515,8 @@ export async function isIpBlocked(ipAddress: string): Promise<boolean> {
 
   // Check if auto-unblock time has passed
   if (block.autoUnblockAt && block.autoUnblockAt <= now) {
-    // Auto-unblock the IP
-    await unblockIpAddress(ipAddress, "system");
+    // Expiry is a read predicate. Do not clear a row based on this stale
+    // snapshot: a concurrent administrator may already have extended it.
     return false;
   }
 

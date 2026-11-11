@@ -8,6 +8,9 @@ import {
   eventDeliveries,
   bookings,
   notifications,
+  auditLogs,
+  users,
+  ordinaryBookingRefunds,
   waitlist,
   groupBookings,
   flights,
@@ -372,6 +375,41 @@ async function notificationEffect(tx: SettlementTx, event: InboxEvent) {
     });
   }
 }
+async function ordinaryRefundDetails(tx: SettlementTx, event: InboxEvent) {
+  const data = z
+    .object({
+      bookingId: z.number().int().positive(),
+      userId: z.number().int().positive(),
+      amount: z.number().int().positive(),
+      refundId: z.string().min(1),
+    })
+    .parse(event.payload);
+  if (
+    event.aggregateType !== "booking" ||
+    event.aggregateId !== String(data.bookingId)
+  )
+    throw new Error("Refund event aggregate mismatch");
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, data.bookingId));
+  const [intent] = await tx
+    .select()
+    .from(ordinaryBookingRefunds)
+    .where(eq(ordinaryBookingRefunds.bookingId, data.bookingId));
+  if (
+    !booking ||
+    booking.tenantId !== event.tenantId ||
+    booking.userId !== data.userId ||
+    !intent ||
+    intent.refundId !== data.refundId ||
+    intent.amount !== data.amount ||
+    (intent.status !== "succeeded" && intent.providerStatus !== "succeeded")
+  )
+    throw new Error("Refund event ownership mismatch");
+  return { data, booking, intent };
+}
+
 /** Archive every envelope, but mark domain handling only for registered effects. */
 export async function consumeLocalEvent(event: InboxEvent) {
   const db = getDb();
@@ -416,6 +454,62 @@ export async function consumeLocalEvent(event: InboxEvent) {
           await syncBookingMiles(tx, id, b.userId);
         })
       );
+  }
+  if (event.eventType === "booking.ordinary_refund_completed") {
+    tasks.push(
+      localEffect(event, "ordinary-refund-notification", async tx => {
+        const { data, booking } = await ordinaryRefundDetails(tx, event);
+        await tx.insert(notifications).values({
+          userId: booking.userId,
+          type: "payment",
+          title: "Refund Processed",
+          message: `Refund of ${(data.amount / 100).toFixed(2)} SAR processed for ${booking.bookingReference}`,
+          data: JSON.stringify({
+            bookingId: booking.id,
+            refundId: data.refundId,
+            eventId: event.eventId,
+            link: "/my-bookings",
+          }),
+        });
+        await tx.insert(auditLogs).values({
+          eventId: `refund:${event.eventId}`,
+          eventType: "REFUND_COMPLETED",
+          eventCategory: "refund",
+          outcome: "success",
+          severity: "high",
+          actorType: "system",
+          resourceType: "refund",
+          resourceId: data.refundId,
+          newValue: JSON.stringify(data),
+          changeDescription: "Provider-verified ordinary refund completed",
+        });
+      })
+    );
+    tasks.push(
+      deliverExternalEffect(event, "ordinary-refund-email", async () => {
+        const { data, booking } = await ordinaryRefundDetails(db, event);
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, booking.userId));
+        const [flight] = await db
+          .select()
+          .from(flights)
+          .where(eq(flights.id, booking.flightId));
+        if (!user?.email) return;
+        const { sendRefundConfirmation } = await import("./email.service");
+        const delivered = await sendRefundConfirmation({
+          passengerName: user.name || "Passenger",
+          passengerEmail: user.email,
+          bookingReference: booking.bookingReference,
+          flightNumber: flight?.flightNumber || "",
+          refundAmount: data.amount,
+          processingDays: 5,
+          idempotencyKey: `ordinary-refund:${data.refundId}`,
+        });
+        if (!delivered) throw new Error("Refund confirmation not delivered");
+      })
+    );
   }
   const results = await Promise.allSettled(tasks);
   const failures = results.filter(r => r.status === "rejected");

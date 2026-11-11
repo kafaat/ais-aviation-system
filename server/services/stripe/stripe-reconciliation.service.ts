@@ -16,12 +16,11 @@ import type Stripe from "stripe";
 import { createStripeClient } from "./client-factory";
 import { eq, and, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "../../db";
-import { payments, bookings, financialLedger } from "../../../drizzle/schema";
+import { payments, bookings, paymentReceipts } from "../../../drizzle/schema";
 import {
-  assertNoCollectionReview,
-  confirmFundedBooking,
-} from "../booking-settlement.service";
-import { assertCollectedAmount } from "../payment-settlement.service";
+  assertCollectedAmount,
+  settleVerifiedPayment,
+} from "../payment-settlement.service";
 import { nanoid } from "nanoid";
 
 // ============================================================================
@@ -278,15 +277,16 @@ export async function runStripeReconciliation(
             payment.bookingTotal,
             pi.currency
           );
-          await handleSucceeded(
-            db,
-            payment,
-            pi,
-            dryRun,
-            correlationId,
-            details
-          );
-          if (!dryRun) {
+          if (
+            await handleSucceeded(
+              db,
+              payment,
+              pi,
+              dryRun,
+              correlationId,
+              details
+            )
+          ) {
             fixed++;
             totalAmountReconciled += Number(payment.paymentAmount);
           } else {
@@ -419,12 +419,7 @@ async function handleSucceeded(
   dryRun: boolean,
   correlationId: string,
   details: ReconciliationDetail[]
-): Promise<void> {
-  const chargeId =
-    typeof pi.latest_charge === "object"
-      ? pi.latest_charge?.id
-      : pi.latest_charge;
-
+): Promise<boolean> {
   if (dryRun) {
     log("info", "[DRY RUN] Would confirm payment", {
       correlationId,
@@ -440,10 +435,12 @@ async function handleSucceeded(
       currency: payment.paymentCurrency || "SAR",
       action: "[DRY RUN] WOULD_CONFIRM + LEDGER",
     });
-    return;
+    return false;
   }
 
-  await db.transaction(async tx => {
+  let observedStatus = payment.paymentStatus;
+  let action = "MANUAL_REVIEW_LEGACY_MISSING_RECEIPT";
+  const settled = await db.transaction(async tx => {
     // Serialize with webhook settlement before checking the ledger or the
     // payment snapshot. Both can change while Stripe is being contacted.
     const [booking] = await tx
@@ -454,90 +451,56 @@ async function handleSucceeded(
     if (!booking || booking.userId !== payment.bookingUserId)
       throw new Error("Booking identity changed during reconciliation");
     assertCollectedAmount(pi.amount_received, booking.totalAmount, pi.currency);
-    // 1) Check for existing ledger entry (uniqueness protection)
-    const existingLedger = await tx
-      .select({ id: financialLedger.id })
-      .from(financialLedger)
-      .where(
-        and(
-          eq(financialLedger.bookingId, payment.bookingId),
-          eq(financialLedger.type, "charge"),
-          eq(financialLedger.stripePaymentIntentId, pi.id)
-        )
-      )
-      .limit(1);
-
-    if (existingLedger.length > 0) {
-      log("warn", "Ledger entry already exists, skipping ledger creation", {
-        correlationId,
-        paymentId: payment.paymentId,
-      });
-    }
-
-    // 2) Update payment status
-    const [updated] = await tx
-      .update(payments)
-      .set({
-        status: "completed",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(payments.id, payment.paymentId),
-          eq(payments.bookingId, booking.id),
-          eq(payments.status, "pending"),
-          eq(payments.provider, "stripe"),
-          eq(payments.amount, pi.amount_received),
-          eq(payments.currency, pi.currency.toUpperCase()),
-          eq(payments.stripePaymentIntentId, pi.id)
-        )
-      );
-    if (updated.affectedRows !== 1)
-      throw new Error("Payment changed during reconciliation");
-
-    // 3) Confirm the booking through the settlement service, which reserves
-    //    the seats per segment and refuses a booking under collection
-    //    review; a raw status write confirmed without inventory.
-    if (booking.status === "pending") {
-      await assertNoCollectionReview(tx, booking.id);
-      await confirmFundedBooking(tx, booking, pi.id);
-    }
-
-    // 4) Create ledger entry if not exists
-    if (existingLedger.length === 0) {
-      // Get last balance
-      const lastEntry = await tx
-        .select({ balanceAfter: financialLedger.balanceAfter })
-        .from(financialLedger)
-        .where(eq(financialLedger.bookingId, payment.bookingId))
-        .orderBy(sql`${financialLedger.createdAt} DESC`)
+    if (
+      booking.paymentStatus === "paid" &&
+      booking.stripePaymentIntentId === pi.id
+    ) {
+      const [receipt] = await tx
+        .select()
+        .from(paymentReceipts)
+        .where(eq(paymentReceipts.paymentIntentId, pi.id))
         .limit(1);
-
-      const balanceBefore = lastEntry[0]?.balanceAfter ?? "0.00";
-      // ✅ التعامل الصحيح مع العملات - المبلغ بالفعل بالهللات
-      const amountInMajor = (Number(payment.paymentAmount) / 100).toFixed(2);
-      const balanceAfter = (
-        parseFloat(balanceBefore) + parseFloat(amountInMajor)
-      ).toFixed(2);
-
-      await tx.insert(financialLedger).values({
-        bookingId: payment.bookingId,
-        userId: payment.bookingUserId,
-        type: "charge",
-        amount: amountInMajor,
-        currency: (payment.paymentCurrency || "SAR").toUpperCase(),
-        stripePaymentIntentId: pi.id,
-        stripeChargeId: chargeId ?? null,
-        description: `Payment confirmed via reconciliation (${correlationId})`,
-        balanceBefore: balanceBefore,
-        balanceAfter: balanceAfter,
-        transactionDate: new Date(),
-        metadata: JSON.stringify({
-          reconciliationId: correlationId,
-          reconciledAt: new Date().toISOString(),
-        }),
-      });
+      // Legacy paid bookings have no verified refund baseline. Preserve their
+      // history for explicit repair; a settlement no-op is not a reconciliation.
+      if (!receipt) return false;
     }
+    // Provider observations enter the same transaction owner as webhooks.
+    // It records the receipt, payment history, ledger and confirmation together.
+    await settleVerifiedPayment(tx, {
+      paymentIntentId: pi.id,
+      amount: pi.amount_received,
+      currency: pi.currency,
+      metadata: {
+        ...pi.metadata,
+        type: "booking",
+        bookingId: String(booking.id),
+        userId: String(booking.userId),
+      },
+      eventId: `reconciliation:${pi.id}`,
+    });
+    // A matching receipt can short-circuit canonical settlement. Verify the
+    // selected history row with a current locking read before claiming repair.
+    const [history] = await tx
+      .select()
+      .from(payments)
+      .where(eq(payments.id, payment.paymentId))
+      .for("update");
+    if (
+      !history ||
+      history.bookingId !== booking.id ||
+      history.provider !== "stripe" ||
+      history.stripePaymentIntentId !== pi.id ||
+      history.amount !== pi.amount_received ||
+      history.currency.toUpperCase() !== pi.currency.toUpperCase()
+    )
+      throw new Error("Payment history identity changed during reconciliation");
+    observedStatus = history.status;
+    if (history.status !== "completed") {
+      action = "MANUAL_REVIEW_PAYMENT_HISTORY";
+      return false;
+    }
+    action = "SETTLE_VERIFIED_PAYMENT";
+    return true;
   });
 
   details.push({
@@ -545,11 +508,12 @@ async function handleSucceeded(
     bookingId: payment.bookingId,
     stripePaymentIntentId: payment.stripePaymentIntentId,
     previousStatus: payment.paymentStatus,
-    newStatus: "completed",
+    newStatus: observedStatus,
     amount: Number(payment.paymentAmount),
     currency: payment.paymentCurrency || "SAR",
-    action: "MARK_SUCCEEDED + LEDGER + CONFIRM_BOOKING",
+    action,
   });
+  return settled;
 }
 
 /**

@@ -28,3 +28,10 @@ regexes = [
   '''^13bacc1b352f6c25db5e63b5552657a881e1da77aab1c1e012a2d8f86945accc$''',
   '''^22fb6548cfa0b79f593e335da6c475a3d9228079d78eeb4f4e8e32e71be41b55$''',
 ]
+
+[[rules.allowlists]]
+description = "Verified APIS source SHA-256 in immutable review checkpoint (not a credential)"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/reviews/333-repair/checkpoint-01/source-hashes\.json$''']
+regexes = ['''^847556a490b881ce46d236be52c6a6176ace24ef85f329044bd643ffaeb3bdd4$''']

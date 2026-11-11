@@ -102,68 +102,70 @@ export async function updateBaggageStatus(data: {
   scannedBy?: number;
   notes?: string;
 }): Promise<{ success: boolean; baggage: BaggageItem }> {
-  const db = await getDb();
-  if (!db)
+  const database = await getDb();
+  if (!database)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
 
-  // Find baggage by tag number
-  const [baggage] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, data.tagNumber))
-    .limit(1);
+  return database.transaction(async db => {
+    // Find baggage by tag number
+    const [baggage] = await db
+      .select()
+      .from(baggageItems)
+      .where(eq(baggageItems.tagNumber, data.tagNumber))
+      .limit(1);
 
-  if (!baggage) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Baggage not found with tag number: " + data.tagNumber,
-    });
-  }
+    if (!baggage) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Baggage not found with tag number: " + data.tagNumber,
+      });
+    }
 
-  // Validate status transition
-  const currentStatus = baggage.status as BaggageStatus;
-  const validTransitions = VALID_STATUS_TRANSITIONS[currentStatus];
+    // Validate status transition
+    const currentStatus = baggage.status as BaggageStatus;
+    const validTransitions = VALID_STATUS_TRANSITIONS[currentStatus];
 
-  if (!validTransitions.includes(data.status)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Invalid status transition from '${currentStatus}' to '${data.status}'`,
-    });
-  }
+    if (!validTransitions.includes(data.status)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Invalid status transition from '${currentStatus}' to '${data.status}'`,
+      });
+    }
 
-  // Update baggage item
-  const [write] = await db
-    .update(baggageItems)
-    .set({
+    // Update baggage item
+    const [write] = await db
+      .update(baggageItems)
+      .set({
+        status: data.status,
+        lastLocation: data.location,
+        updatedAt: new Date(),
+      })
+      .where(heldBag(baggage));
+    requireBaggageUpdate(write.affectedRows);
+
+    // Create tracking record
+    const trackingData: InsertBaggageTracking = {
+      baggageId: baggage.id,
+      location: data.location,
       status: data.status,
-      lastLocation: data.location,
-      updatedAt: new Date(),
-    })
-    .where(heldBag(baggage));
-  requireBaggageUpdate(write.affectedRows);
+      scannedBy: data.scannedBy || null,
+      notes: data.notes || null,
+    };
 
-  // Create tracking record
-  const trackingData: InsertBaggageTracking = {
-    baggageId: baggage.id,
-    location: data.location,
-    status: data.status,
-    scannedBy: data.scannedBy || null,
-    notes: data.notes || null,
-  };
+    await db.insert(baggageTracking).values(trackingData);
 
-  await db.insert(baggageTracking).values(trackingData);
+    // Return updated baggage
+    const [updated] = await db
+      .select()
+      .from(baggageItems)
+      .where(eq(baggageItems.id, baggage.id))
+      .limit(1);
 
-  // Return updated baggage
-  const [updated] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.id, baggage.id))
-    .limit(1);
-
-  return { success: true, baggage: updated };
+    return { success: true, baggage: updated };
+  });
 }
 
 /**
@@ -299,80 +301,82 @@ export async function reportLostBaggage(data: {
   contactEmail?: string;
   contactPhone?: string;
 }): Promise<{ success: boolean; baggage: BaggageItem }> {
-  const db = await getDb();
-  if (!db)
+  const database = await getDb();
+  if (!database)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
 
-  // Find baggage by tag number
-  const [baggage] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, data.tagNumber))
-    .limit(1);
+  return database.transaction(async db => {
+    // Find baggage by tag number
+    const [baggage] = await db
+      .select()
+      .from(baggageItems)
+      .where(eq(baggageItems.tagNumber, data.tagNumber))
+      .limit(1);
 
-  if (!baggage) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Baggage not found with tag number: " + data.tagNumber,
-    });
-  }
+    if (!baggage) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Baggage not found with tag number: " + data.tagNumber,
+      });
+    }
 
-  // Cannot report if already claimed
-  if (baggage.status === "claimed") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot report lost baggage that has already been claimed",
-    });
-  }
+    // Cannot report if already claimed
+    if (baggage.status === "claimed") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Cannot report lost baggage that has already been claimed",
+      });
+    }
 
-  // Cannot report if already lost
-  if (baggage.status === "lost") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Baggage has already been reported as lost",
-    });
-  }
+    // Cannot report if already lost
+    if (baggage.status === "lost") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Baggage has already been reported as lost",
+      });
+    }
 
-  // Build lost description with contact info
-  let lostDescription = data.description;
-  if (data.contactEmail) {
-    lostDescription += `\nContact Email: ${data.contactEmail}`;
-  }
-  if (data.contactPhone) {
-    lostDescription += `\nContact Phone: ${data.contactPhone}`;
-  }
+    // Build lost description with contact info
+    let lostDescription = data.description;
+    if (data.contactEmail) {
+      lostDescription += `\nContact Email: ${data.contactEmail}`;
+    }
+    if (data.contactPhone) {
+      lostDescription += `\nContact Phone: ${data.contactPhone}`;
+    }
 
-  // Update baggage status to lost
-  const [write] = await db
-    .update(baggageItems)
-    .set({
+    // Update baggage status to lost
+    const [write] = await db
+      .update(baggageItems)
+      .set({
+        status: "lost",
+        lostReportedAt: new Date(),
+        lostDescription,
+        updatedAt: new Date(),
+      })
+      .where(heldBag(baggage));
+    requireBaggageUpdate(write.affectedRows);
+
+    // Create tracking record
+    await db.insert(baggageTracking).values({
+      baggageId: baggage.id,
+      location: baggage.lastLocation || "Unknown",
       status: "lost",
-      lostReportedAt: new Date(),
-      lostDescription,
-      updatedAt: new Date(),
-    })
-    .where(heldBag(baggage));
-  requireBaggageUpdate(write.affectedRows);
+      notes: `Lost baggage report: ${data.description}`,
+    });
 
-  // Create tracking record
-  await db.insert(baggageTracking).values({
-    baggageId: baggage.id,
-    location: baggage.lastLocation || "Unknown",
-    status: "lost",
-    notes: `Lost baggage report: ${data.description}`,
+    // Return updated baggage
+    const [updated] = await db
+      .select()
+      .from(baggageItems)
+      .where(eq(baggageItems.id, baggage.id))
+      .limit(1);
+
+    return { success: true, baggage: updated };
   });
-
-  // Return updated baggage
-  const [updated] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.id, baggage.id))
-    .limit(1);
-
-  return { success: true, baggage: updated };
 }
 
 /**
@@ -521,62 +525,64 @@ export async function markBaggageFound(data: {
   scannedBy?: number;
   notes?: string;
 }): Promise<{ success: boolean; baggage: BaggageItem }> {
-  const db = await getDb();
-  if (!db)
+  const database = await getDb();
+  if (!database)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
 
-  // Find baggage by tag number
-  const [baggage] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.tagNumber, data.tagNumber))
-    .limit(1);
+  return database.transaction(async db => {
+    // Find baggage by tag number
+    const [baggage] = await db
+      .select()
+      .from(baggageItems)
+      .where(eq(baggageItems.tagNumber, data.tagNumber))
+      .limit(1);
 
-  if (!baggage) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Baggage not found with tag number: " + data.tagNumber,
-    });
-  }
+    if (!baggage) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Baggage not found with tag number: " + data.tagNumber,
+      });
+    }
 
-  if (baggage.status !== "lost") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Only lost baggage can be marked as found",
-    });
-  }
+    if (baggage.status !== "lost") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Only lost baggage can be marked as found",
+      });
+    }
 
-  // Update baggage status
-  const [write] = await db
-    .update(baggageItems)
-    .set({
+    // Update baggage status
+    const [write] = await db
+      .update(baggageItems)
+      .set({
+        status: "found",
+        lastLocation: data.foundLocation,
+        updatedAt: new Date(),
+      })
+      .where(heldBag(baggage));
+    requireBaggageUpdate(write.affectedRows);
+
+    // Create tracking record
+    await db.insert(baggageTracking).values({
+      baggageId: baggage.id,
+      location: data.foundLocation,
       status: "found",
-      lastLocation: data.foundLocation,
-      updatedAt: new Date(),
-    })
-    .where(heldBag(baggage));
-  requireBaggageUpdate(write.affectedRows);
+      scannedBy: data.scannedBy || null,
+      notes: data.notes || "Baggage found and recovered",
+    });
 
-  // Create tracking record
-  await db.insert(baggageTracking).values({
-    baggageId: baggage.id,
-    location: data.foundLocation,
-    status: "found",
-    scannedBy: data.scannedBy || null,
-    notes: data.notes || "Baggage found and recovered",
+    // Return updated baggage
+    const [updated] = await db
+      .select()
+      .from(baggageItems)
+      .where(eq(baggageItems.id, baggage.id))
+      .limit(1);
+
+    return { success: true, baggage: updated };
   });
-
-  // Return updated baggage
-  const [updated] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.id, baggage.id))
-    .limit(1);
-
-  return { success: true, baggage: updated };
 }
 
 /**

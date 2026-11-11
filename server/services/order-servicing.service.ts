@@ -562,6 +562,7 @@ export async function quotePaidOrderService(
                     fareClassId,
                     ruleSegmentCount: targets.length,
                     passengerTypes: pax.map(p => p.type),
+                    remapPassengerTypes: true,
                   })
                 : null;
               const flight = heldFlights.get(target.flightId);

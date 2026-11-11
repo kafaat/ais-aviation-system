@@ -114,6 +114,9 @@ jobs:
           server/__tests__/standard-reports-available-mysql.test.ts
           server/__tests__/standard-report-schedules-mysql.test.ts
           server/__tests__/auth-session-mysql.test.ts
+          server/__tests__/identity-integrity-mysql.test.ts
+          server/__tests__/runtime-integrity-mysql.test.ts
+          server/__tests__/operations-review-mysql.test.ts
           server/__tests__/request-identity-oauth-mysql.test.ts
           server/__tests__/flight-consumers-mysql.test.ts
           server/__tests__/ordinary-refund-mysql.test.ts
@@ -125,6 +128,8 @@ jobs:
           server/__tests__/wallet-crossing-acceptance-mysql.test.ts
           server/__tests__/ticket-revalidation-acceptance-mysql.test.ts
           server/__tests__/stripe-paid-webhook-mysql.test.ts
+          server/__tests__/retail-offer-concurrency-mysql.test.ts
+          server/__tests__/stripe-reconciliation-race-mysql.test.ts
           server/__tests__/booking-confirmation-mysql.test.ts
           server/__tests__/fare-rules-acceptance-mysql.test.ts
           server/__tests__/apis-seats-acceptance-mysql.test.ts
@@ -228,15 +233,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PREVIOUS_TAG="$(git tag --merged HEAD --sort=-version:refname | head -n 1)"
-          if [ -z "$PREVIOUS_TAG" ]; then
-            echo "No previous release tag is reachable from this candidate" >&2
-            exit 1
-          fi
-          echo "tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
-          echo "Testing upgrade from $PREVIOUS_TAG to $GITHUB_SHA"
+          bash scripts/ci/previous-release.sh | tee previous-release-selection.txt >> "$GITHUB_OUTPUT"
+      - name: Preserve selected release identity
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: previous-release-selection
+          path: previous-release-selection.txt
       - name: Materialize previous release
-        run: git worktree add --detach /tmp/ais-previous-release "${{ steps.previous.outputs.tag }}"
+        run: git worktree add --detach /tmp/ais-previous-release "${{ steps.previous.outputs.sha }}"
       - name: Install previous-release dependencies
         working-directory: /tmp/ais-previous-release
         run: pnpm install --frozen-lockfile --ignore-scripts

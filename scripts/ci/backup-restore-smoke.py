@@ -100,12 +100,16 @@ def main():
     job = json.loads(run([sys.executable, str(ROOT / "scripts/k8s-backup-job.py")],
                          env=dict(env, BACKUP_PVC="ci-volume", BACKUP_CREDENTIAL_SECRET="ci-secret",
                                   BACKUP_RUN_ID=suffix)).stdout)
+    pod_security = job["spec"]["template"]["spec"]["securityContext"]
     spec = job["spec"]["template"]["spec"]["containers"][0]
     report["backupCommandSha256"] = hashlib.sha256(spec["command"][-1].encode()).hexdigest()
 
     def backup(name, db_name=database):
         return run(["docker", "run", "--rm", "--network", "container:" + source,
                     "--mount", f"type=volume,source={volume},target=/backup",
+                    "--user", f"{pod_security['runAsUser']}:{pod_security['runAsGroup']}",
+                    "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
+                    "--tmpfs", "/tmp:rw,nosuid,nodev",
                     "-e", "MYSQL_PWD", "-e", "MYSQL_HOST=127.0.0.1", "-e", "MYSQL_USER=root",
                     "-e", "MYSQL_DATABASE=" + db_name, "-e", "BACKUP_NAME=" + name,
                     "--entrypoint", spec["command"][0], spec["image"], *spec["command"][1:]],
@@ -137,6 +141,8 @@ def main():
         before = snapshot(source)
         report["databaseSnapshotSha256"] = hashlib.sha256(before).hexdigest()
         run(["docker", "volume", "create", volume])
+        volume_command(f"chown {pod_security['runAsUser']}:{pod_security['runAsGroup']} /backup")
+        report["backupWriterSecurity"] = {"nonRoot": True, "readOnlyRoot": True, "capabilitiesDropped": True, "pvcAcceptance": False}
         dumped = backup(backup_name)
         require(dumped.returncode == 0, dumped.stderr.decode(errors="replace"))
         check("generated deployment backup persists after its writer exits")

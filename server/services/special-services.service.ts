@@ -123,14 +123,169 @@ export function getAvailableServices() {
 /**
  * Request a special service for a passenger
  */
-export async function requestService(data: {
+type ServiceRequestData = {
   bookingId: number;
   passengerId: number;
   flightId?: number;
   serviceType: ServiceType;
   serviceCode: string;
   details?: Record<string, unknown>;
-}): Promise<SpecialService> {
+};
+
+type ServiceTransaction = Parameters<
+  Parameters<NonNullable<Awaited<ReturnType<typeof getDb>>>["transaction"]>[0]
+>[0];
+
+/** Shared creation/reactivation policy. The booking lock serializes all
+ * active requests for this itinerary, including bulk administrative changes. */
+async function requireEligibleServiceSector(
+  tx: ServiceTransaction,
+  data: ServiceRequestData,
+  excludeServiceId?: number,
+  expectedSegmentId?: number | null
+) {
+  // Validate booking exists
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, data.bookingId))
+    .for("update");
+
+  if (!booking) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  }
+
+  // Validate passenger belongs to booking
+  const [passenger] = await tx
+    .select()
+    .from(passengers)
+    .where(
+      and(
+        eq(passengers.id, data.passengerId),
+        eq(passengers.bookingId, data.bookingId)
+      )
+    )
+    .limit(1)
+    .for("update");
+
+  if (!passenger) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Passenger not found or does not belong to this booking",
+    });
+  }
+
+  if (data.serviceCode === "EXST" || data.serviceType === "extra_legroom")
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Extra seats cannot be reserved through special requests. Select an available seat in Manage Services for extra legroom.",
+    });
+
+  // Validate service code is valid for the service type
+  const validServices = AVAILABLE_SERVICES[data.serviceType];
+  const isValidCode = validServices?.some(s => s.code === data.serviceCode);
+
+  if (!isValidCode) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Invalid service code '${data.serviceCode}' for service type '${data.serviceType}'`,
+    });
+  }
+
+  if (!["pending", "confirmed"].includes(booking.status))
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "The booking is no longer open to service requests",
+    });
+  const legs = await tx
+    .select()
+    .from(bookingSegments)
+    .where(eq(bookingSegments.bookingId, data.bookingId))
+    .for("update");
+  // Old clients may omit a flight only on a single-leg itinerary. Never
+  // infer their intent from the one remaining active leg of a changed trip.
+  const itinerary = legs.length
+    ? legs
+    : [
+        {
+          id: null,
+          flightId: booking.flightId,
+          status: booking.status,
+        },
+      ];
+  const eligible = itinerary.filter(
+    leg =>
+      (leg.status === "pending" || leg.status === "confirmed") &&
+      (data.flightId === undefined
+        ? itinerary.length === 1
+        : leg.flightId === data.flightId)
+  );
+  if (eligible.length !== 1)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Select a unique active flight sector on this booking",
+    });
+  const sector = eligible[0];
+  if (expectedSegmentId != null && sector.id !== expectedSegmentId)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "The request no longer belongs to the selected flight sector",
+    });
+  const [flight] = await tx
+    .select()
+    .from(flights)
+    .where(eq(flights.id, sector.flightId))
+    .for("update");
+  if (
+    !flight ||
+    flight.tenantId !== booking.tenantId ||
+    !["scheduled", "delayed"].includes(flight.status) ||
+    flight.departureTime <= new Date()
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "The selected flight is no longer available for service requests",
+    });
+  const active = await tx
+    .select()
+    .from(specialServices)
+    .where(
+      and(
+        eq(specialServices.bookingId, data.bookingId),
+        eq(specialServices.passengerId, data.passengerId),
+        eq(specialServices.serviceType, data.serviceType),
+        inArray(specialServices.status, ["pending", "confirmed"])
+      )
+    )
+    .for("update");
+  const existing = active.filter(row => row.id !== excludeServiceId);
+  if (existing.some(row => row.flightId == null))
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "A previous request has no verified flight sector. Reconcile or cancel it first.",
+    });
+  if (
+    existing.some(
+      row =>
+        row.flightId === sector.flightId &&
+        (row.bookingSegmentId == null || row.bookingSegmentId === sector.id)
+    )
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "This service request already exists for this passenger and flight sector",
+    });
+
+  return sector;
+}
+
+export async function requestService(
+  data: ServiceRequestData
+): Promise<SpecialService> {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -139,134 +294,7 @@ export async function requestService(data: {
     });
 
   return db.transaction(async tx => {
-    // Validate booking exists
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, data.bookingId))
-      .for("update");
-
-    if (!booking) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-    }
-
-    // Validate passenger belongs to booking
-    const [passenger] = await tx
-      .select()
-      .from(passengers)
-      .where(
-        and(
-          eq(passengers.id, data.passengerId),
-          eq(passengers.bookingId, data.bookingId)
-        )
-      )
-      .limit(1);
-
-    if (!passenger) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Passenger not found or does not belong to this booking",
-      });
-    }
-
-    if (data.serviceCode === "EXST" || data.serviceType === "extra_legroom")
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          "Extra seats cannot be reserved through special requests. Select an available seat in Manage Services for extra legroom.",
-      });
-
-    // Validate service code is valid for the service type
-    const validServices = AVAILABLE_SERVICES[data.serviceType];
-    const isValidCode = validServices?.some(s => s.code === data.serviceCode);
-
-    if (!isValidCode) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Invalid service code '${data.serviceCode}' for service type '${data.serviceType}'`,
-      });
-    }
-
-    if (!["pending", "confirmed"].includes(booking.status))
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "The booking is no longer open to service requests",
-      });
-    const legs = await tx
-      .select()
-      .from(bookingSegments)
-      .where(eq(bookingSegments.bookingId, data.bookingId))
-      .for("update");
-    // Old clients may omit a flight only on a single-leg itinerary. Never
-    // infer their intent from the one remaining active leg of a changed trip.
-    const itinerary = legs.length
-      ? legs
-      : [
-          {
-            id: null,
-            flightId: booking.flightId,
-            status: booking.status,
-          },
-        ];
-    const eligible = itinerary.filter(
-      leg =>
-        (leg.status === "pending" || leg.status === "confirmed") &&
-        (data.flightId === undefined
-          ? itinerary.length === 1
-          : leg.flightId === data.flightId)
-    );
-    if (eligible.length !== 1)
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Select a unique active flight sector on this booking",
-      });
-    const sector = eligible[0];
-    const [flight] = await tx
-      .select()
-      .from(flights)
-      .where(eq(flights.id, sector.flightId))
-      .for("update");
-    if (
-      !flight ||
-      flight.tenantId !== booking.tenantId ||
-      !["scheduled", "delayed"].includes(flight.status) ||
-      flight.departureTime <= new Date()
-    )
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "The selected flight is no longer available for service requests",
-      });
-    const existing = await tx
-      .select()
-      .from(specialServices)
-      .where(
-        and(
-          eq(specialServices.bookingId, data.bookingId),
-          eq(specialServices.passengerId, data.passengerId),
-          eq(specialServices.serviceType, data.serviceType),
-          inArray(specialServices.status, ["pending", "confirmed"])
-        )
-      )
-      .for("update");
-    if (existing.some(row => row.flightId == null))
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "A previous request has no verified flight sector. Reconcile or cancel it first.",
-      });
-    if (
-      existing.some(
-        row =>
-          row.flightId === sector.flightId &&
-          (row.bookingSegmentId == null || row.bookingSegmentId === sector.id)
-      )
-    )
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          "This service request already exists for this passenger and flight sector",
-      });
+    const sector = await requireEligibleServiceSector(tx, data);
 
     // Create the service request
     const serviceData: InsertSpecialService = {
@@ -439,40 +467,7 @@ export async function updateServiceStatus(
   status: ServiceStatus,
   adminNotes?: string
 ): Promise<{ success: boolean }> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const service = await getServiceById(serviceId);
-  if (!service) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Special service request not found",
-    });
-  }
-
-  if (status === "confirmed" && service.serviceCode === "EXST")
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "A legacy EXST request cannot confirm a seat reservation",
-    });
-
-  const updateData: Partial<InsertSpecialService> = {
-    status,
-  };
-
-  if (adminNotes !== undefined) {
-    updateData.adminNotes = adminNotes;
-  }
-
-  await db
-    .update(specialServices)
-    .set({ ...updateData, updatedAt: new Date() })
-    .where(eq(specialServices.id, serviceId));
-
+  await changeServiceStatuses([serviceId], status, adminNotes, true);
   return { success: true };
 }
 
@@ -544,47 +539,88 @@ export async function bulkUpdateServiceStatus(
   status: ServiceStatus,
   adminNotes?: string
 ): Promise<{ success: boolean; updated: number }> {
+  const updated = await changeServiceStatuses(serviceIds, status, adminNotes);
+  return { success: true, updated };
+}
+
+async function changeServiceStatuses(
+  serviceIds: number[],
+  status: ServiceStatus,
+  adminNotes?: string,
+  requireExisting = false
+): Promise<number> {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
+  const ids = [...new Set(serviceIds)].sort((a, b) => a - b);
+  if (!ids.length) return 0;
 
-  if (serviceIds.length === 0) {
-    return { success: true, updated: 0 };
-  }
-
-  if (status === "confirmed") {
-    const [legacy] = await db
-      .select({ id: specialServices.id })
+  return db.transaction(async tx => {
+    const initial = await tx
+      .select()
       .from(specialServices)
-      .where(
-        and(
-          inArray(specialServices.id, serviceIds),
-          eq(specialServices.serviceCode, "EXST")
-        )
-      )
-      .limit(1);
-    if (legacy)
+      .where(inArray(specialServices.id, ids));
+    // Match requestService's lock order. Lock all bookings deterministically
+    // before service rows so overlapping batches cannot invert that order.
+    const bookingIds = [...new Set(initial.map(row => row.bookingId))].sort(
+      (a, b) => a - b
+    );
+    for (const bookingId of bookingIds) {
+      await tx
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, bookingId))
+        .for("update");
+    }
+    const current = await tx
+      .select()
+      .from(specialServices)
+      .where(inArray(specialServices.id, ids))
+      .orderBy(specialServices.id)
+      .for("update");
+    if (requireExisting && current.length !== ids.length)
       throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "A legacy EXST request cannot confirm a seat reservation",
+        code: "NOT_FOUND",
+        message: "Special service request not found",
       });
-  }
 
-  const updateData: Partial<InsertSpecialService> = {
-    status,
-  };
-
-  if (adminNotes !== undefined) {
-    updateData.adminNotes = adminNotes;
-  }
-
-  await db
-    .update(specialServices)
-    .set({ ...updateData, updatedAt: new Date() })
-    .where(inArray(specialServices.id, serviceIds));
-
-  return { success: true, updated: serviceIds.length };
+    let updated = 0;
+    for (const service of current) {
+      if (status === "pending" || status === "confirmed") {
+        if (
+          service.serviceCode === "EXST" ||
+          service.serviceType === "extra_legroom"
+        )
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A legacy EXST request cannot confirm a seat reservation",
+          });
+        if (service.flightId == null)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "A previous request has no verified flight sector. Reconcile or cancel it first.",
+          });
+        await requireEligibleServiceSector(
+          tx,
+          { ...service, flightId: service.flightId, details: undefined },
+          service.id,
+          service.bookingSegmentId
+        );
+      }
+      const [write] = await tx
+        .update(specialServices)
+        .set({
+          status,
+          ...(adminNotes !== undefined ? { adminNotes } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(specialServices.id, service.id));
+      updated += write.affectedRows;
+    }
+    return updated;
+  });
 }

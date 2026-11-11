@@ -566,9 +566,15 @@ export async function reverseMilesForBooking(
 export async function awardBonusMiles(
   userId: number,
   miles: number,
-  reason: string
+  reason: string,
+  tenantId?: number | null
 ): Promise<{ newBalance: number }> {
   requireMiles(miles);
+  if (!Number.isSafeInteger(userId) || userId <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid recipient ID",
+    });
   const database = await getDb();
   if (!database) {
     throw new TRPCError({
@@ -578,19 +584,34 @@ export async function awardBonusMiles(
   }
 
   try {
-    // Ensure account exists
-    await getOrCreateLoyaltyAccount(userId);
-
     // Use a transaction to prevent race conditions on balance updates
     return await database.transaction(async tx => {
-      const state = await lockMilesState(tx, userId);
-      await expireMilesLots(tx, state);
-      const account = state.account;
       const [owner] = await tx
         .select({ tenantId: users.tenantId })
         .from(users)
         .where(eq(users.id, userId))
-        .limit(1);
+        .for("update");
+      if (!owner || (tenantId != null && owner.tenantId !== tenantId))
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Recipient not found",
+        });
+      await tx
+        .insert(loyaltyAccounts)
+        .values({
+          userId,
+          totalMilesEarned: 0,
+          currentMilesBalance: 0,
+          milesRedeemed: 0,
+          tier: "bronze",
+          tierPoints: 0,
+        })
+        .onDuplicateKeyUpdate({
+          set: { userId: sql`${loyaltyAccounts.userId}` },
+        });
+      const state = await lockMilesState(tx, userId);
+      await expireMilesLots(tx, state);
+      const account = state.account;
       const now = new Date();
       const policy = await findApprovedLoyaltyPolicy(
         tx,
@@ -624,6 +645,7 @@ export async function awardBonusMiles(
       return { newBalance };
     });
   } catch (error) {
+    if (error instanceof TRPCError) throw error;
     console.error("Error awarding bonus miles:", error);
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",

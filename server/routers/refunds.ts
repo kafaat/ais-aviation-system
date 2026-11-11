@@ -205,13 +205,13 @@ export const refundsRouter = router({
         ctx.user
       );
 
-      // Audit log: Refund completed
+      // The command was submitted; verified completion has its own durable event.
       await auditRefund(
         input.bookingId,
         booking?.bookingReference || `booking-${input.bookingId}`,
         ctx.user.id,
         ctx.user.role,
-        "REFUND_COMPLETED",
+        "REFUND_INITIATED",
         result.amount || 0,
         result.refundId,
         input.reason,
@@ -268,13 +268,13 @@ export const refundsRouter = router({
 
       const result = await refundsService.createRefund(input, ctx.user);
 
-      // Audit log: Admin refund completed
+      // The command was submitted; verified completion has its own durable event.
       await auditRefund(
         input.bookingId,
         booking?.bookingReference || `booking-${input.bookingId}`,
         ctx.user.id,
         ctx.user.role,
-        "REFUND_COMPLETED",
+        "REFUND_INITIATED",
         result.amount || 0,
         result.refundId,
         input.reason,

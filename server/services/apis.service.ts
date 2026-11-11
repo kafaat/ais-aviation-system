@@ -399,11 +399,20 @@ export async function validateAPISData(passengerId: number) {
 
     const isValid = errors.length === 0;
 
-    // Update status if valid
+    // Persist the current validation result under the document row lock.
     if (isValid) {
       await db.execute(sql`
       UPDATE apis_data
       SET status = 'validated', validated_at = ${new Date()}, updated_at = ${new Date()}
+      WHERE passenger_id = ${passengerId}
+    `);
+    } else {
+      // A prior format validation is no longer current (for example after
+      // expiry). Keep submission timestamps/history as historical evidence;
+      // this local revalidation does not revoke an authority submission.
+      await db.execute(sql`
+      UPDATE apis_data
+      SET status = 'complete', validated_at = NULL, updated_at = ${new Date()}
       WHERE passenger_id = ${passengerId}
     `);
     }

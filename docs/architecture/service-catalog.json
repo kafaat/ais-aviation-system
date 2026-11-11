@@ -1078,7 +1078,6 @@
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/split-refund.service.ts",
-        "server/services/stripe/stripe-reconciliation.service.ts",
         "server/services/voucher.service.ts",
         "server/services/wallet.service.ts",
         "server/services/zero-refund-cancellation.service.ts"
@@ -2605,11 +2604,11 @@
       "consumers": [
         "server/jobs/check-in-reminder.job.ts",
         "server/queue/workers/email.worker.ts",
+        "server/services/event-inbox.service.ts",
         "server/services/flight-event-delivery.service.ts",
         "server/services/notification.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/queue.service.ts",
-        "server/services/refunds.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/standard-report-schedules.service.ts",
         "server/webhooks/stripe.ts"
@@ -2713,6 +2712,7 @@
         "drizzle/schema.ts",
         "server/contracts/domain-events.ts",
         "server/db.ts",
+        "server/services/email.service.ts",
         "server/services/flight-state.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/loyalty.service.ts"
@@ -2726,9 +2726,16 @@
           "flights",
           "gateAssignments",
           "groupBookings",
+          "ordinaryBookingRefunds",
+          "users",
           "waitlist"
         ],
-        "writes": ["eventDeliveries", "eventInbox", "notifications"]
+        "writes": [
+          "auditLogs",
+          "eventDeliveries",
+          "eventInbox",
+          "notifications"
+        ]
       },
       "replacement": null
     },
@@ -2835,12 +2842,14 @@
           "airlines",
           "airports",
           "favoriteFlights",
+          "favoritePriceObservations",
           "flights",
           "priceAlertHistory",
           "userFlightFavorites"
         ],
         "writes": [
           "favoriteFlights",
+          "favoritePriceObservations",
           "priceAlertHistory",
           "userFlightFavorites"
         ]
@@ -3029,10 +3038,34 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/routers/flight-tracking.router.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flight-tracking.validation.ts"
+      ],
       "tableExpressions": {
         "reads": ["airports", "flightTracking", "flights"],
         "writes": ["flightTracking"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/flight-tracking.validation.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/flight-tracking.validation.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/flight-tracking.router.ts",
+        "server/services/flight-tracking.service.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
       },
       "replacement": null
     },
@@ -4182,8 +4215,7 @@
         "server/routers/flights.ts",
         "server/services/bookings.service.ts",
         "server/services/multi-city.service.ts",
-        "server/services/payments.service.ts",
-        "server/services/refunds.service.ts"
+        "server/services/payments.service.ts"
       ],
       "dependencies": [],
       "tableExpressions": {
@@ -4587,7 +4619,6 @@
         "server/services/price-alerts.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/queue.service.ts",
-        "server/services/refunds.service.ts",
         "server/webhooks/stripe.ts"
       ],
       "dependencies": [
@@ -5186,7 +5217,13 @@
       ],
       "dependencies": ["drizzle/schema.ts", "server/db.ts"],
       "tableExpressions": {
-        "reads": ["airports", "bookings", "flights", "payments"],
+        "reads": [
+          "airports",
+          "bookings",
+          "financialLedger",
+          "flights",
+          "payments"
+        ],
         "writes": []
       },
       "replacement": null
@@ -5454,6 +5491,7 @@
           "ordinaryBookingRefunds",
           "paymentReceipts",
           "paymentSplits",
+          "payments",
           "walletTransactions",
           "wallets"
         ],
@@ -6295,6 +6333,8 @@
           "bookings",
           "financialLedger",
           "flights",
+          "ordinaryBookingRefunds",
+          "paymentReceipts",
           "users"
         ],
         "writes": []
@@ -6316,9 +6356,6 @@
         "server/db.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/cancellation-policy.service.ts",
-        "server/services/email.service.ts",
-        "server/services/metrics.service.ts",
-        "server/services/notification.service.ts",
         "server/services/order-refunds.service.ts",
         "server/services/ordinary-refund.service.ts",
         "server/services/rbac.service.ts",
@@ -6327,13 +6364,7 @@
         "server/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": [
-          "bookings",
-          "flights",
-          "paymentReceipts",
-          "paymentSplits",
-          "users"
-        ],
+        "reads": ["bookings", "flights", "paymentReceipts", "paymentSplits"],
         "writes": []
       },
       "replacement": null
@@ -6522,7 +6553,7 @@
       "consumers": ["server/routers/saved-passengers.ts"],
       "dependencies": ["drizzle/schema.ts", "server/db.ts"],
       "tableExpressions": {
-        "reads": ["savedPassengers"],
+        "reads": ["savedPassengers", "users"],
         "writes": ["savedPassengers"]
       },
       "replacement": null
@@ -6593,6 +6624,7 @@
         "reads": [
           "agentBookings",
           "bookingAncillaries",
+          "bookingSegments",
           "bookings",
           "passengers",
           "payments",
@@ -7237,13 +7269,12 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/booking-settlement.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/stripe/client-factory.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "financialLedger", "payments"],
-        "writes": ["financialLedger", "payments"]
+        "reads": ["bookings", "paymentReceipts", "payments"],
+        "writes": ["payments"]
       },
       "replacement": null
     },

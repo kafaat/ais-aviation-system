@@ -373,6 +373,14 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     requestId: z.string().uuid(),
     status: z.string().min(1),
   }),
+  "booking.ordinary_refund_completed": z.looseObject({
+    bookingId: id,
+    userId: id,
+    actorId: id,
+    amount: z.number().int().positive(),
+    refundId: z.string().min(1),
+    paymentIntentId: z.string().min(1),
+  }),
   "payment.refunded": z.looseObject({
     localCouponTransitions,
     providerEventId: z.string().min(1).optional(),

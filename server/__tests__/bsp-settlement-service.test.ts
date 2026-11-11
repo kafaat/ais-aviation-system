@@ -577,6 +577,8 @@ describe("inbound HOT, bank remittance and the reconciliation gate", () => {
       csv: "date,amount,reference\n2026-11-03,350.00,BSP SA 2026-11-03\n",
       actorId: ACTOR,
     });
+    for (const file of fixture.rows("bsp_ret_files"))
+      file.status = "transmitted";
     const report = await runReconciliation({
       bspCountry: "SA",
       periodStart: "2026-11-03",
@@ -764,6 +766,8 @@ describe("inbound HOT, bank remittance and the reconciliation gate", () => {
       csv: "date,amount,reference\n2026-11-03,955.00,BSP\n",
       actorId: ACTOR,
     });
+    for (const file of fixture.rows("bsp_ret_files"))
+      file.status = "transmitted";
     const report = await runReconciliation({
       bspCountry: "SA",
       periodStart: "2026-11-03",
@@ -884,6 +888,8 @@ describe("inbound HOT, bank remittance and the reconciliation gate", () => {
       content: records.join("\n"),
       actorId: ACTOR,
     });
+    for (const file of fixture.rows("bsp_ret_files"))
+      file.status = "transmitted";
     const report = await runReconciliation({
       bspCountry: "SA",
       periodStart: "2026-11-03",
@@ -903,4 +909,93 @@ describe("inbound HOT, bank remittance and the reconciliation gate", () => {
     });
     expect(report.gate.status).toBe("blocked");
   });
+});
+
+describe("reconciliation source scope", () => {
+  const input = {
+    bspCountry: "SA",
+    periodStart: "2026-11-03",
+    periodEnd: "2026-11-03",
+    actorId: ACTOR,
+  };
+  it("rejects explicit missing source IDs before writing a run", async () => {
+    await expect(
+      runReconciliation({ ...input, hotFileIds: [999] })
+    ).rejects.toThrow(/HOT.*scope/i);
+    await expect(
+      runReconciliation({ ...input, remittanceIds: [999] })
+    ).rejects.toThrow(/remittance.*scope/i);
+    expect(fixture.rows("bsp_reconciliation_runs")).toHaveLength(0);
+  });
+  it.each([
+    { bspCountry: "AE" },
+    { currency: "USD" },
+    { valueDate: "2026-11-04" },
+  ])("rejects out-of-scope explicit bank lines: %j", async change => {
+    await importBankStatement({
+      bspCountry: "SA",
+      currency: "SAR",
+      csv: "date,amount,reference\n2026-11-03,350.00,scope-test\n",
+      actorId: ACTOR,
+    });
+    const row = fixture.rows("bsp_bank_remittances")[0];
+    Object.assign(row, change);
+    await expect(
+      runReconciliation({ ...input, remittanceIds: [row.id] })
+    ).rejects.toThrow(/remittance.*scope/i);
+    expect(fixture.rows("bsp_reconciliation_runs")).toHaveLength(0);
+  });
+  it("does not treat a generated RET draft as reported evidence", async () => {
+    await generateRetFile({
+      bspCountry: "SA",
+      reportingDate: input.periodStart,
+      actorId: ACTOR,
+      fareComponents: componentsFor20,
+    });
+    const report = await runReconciliation(input);
+    expect(report.items.every(i => i.retLineId === null)).toBe(true);
+    expect(report.run.summary.expectedNet).toBe(95000);
+  });
+});
+
+it.each([{ bspCountry: "AE" }, { remittancePeriodEnd: "2026-11-04" }])(
+  "rejects explicit HOT files outside the selected scope: %j",
+  async change => {
+    await ingestHotFile({
+      bspCountry: "SA",
+      fileName: "scope.txt",
+      content: hotFixture(),
+      actorId: ACTOR,
+    });
+    const row = fixture.rows("bsp_hot_files")[0];
+    Object.assign(row, change);
+    await expect(
+      runReconciliation({
+        bspCountry: "SA",
+        periodStart: "2026-11-03",
+        periodEnd: "2026-11-03",
+        actorId: ACTOR,
+        hotFileIds: [row.id],
+      })
+    ).rejects.toThrow(/HOT.*scope/i);
+    expect(fixture.rows("bsp_reconciliation_runs")).toHaveLength(0);
+  }
+);
+it("rejects explicitly selected HOT evidence in a different currency", async () => {
+  await ingestHotFile({
+    bspCountry: "SA",
+    fileName: "scope.txt",
+    content: hotFixture(),
+    actorId: ACTOR,
+  });
+  fixture.rows("bsp_hot_lines")[0].currency = "USD";
+  await expect(
+    runReconciliation({
+      bspCountry: "SA",
+      periodStart: "2026-11-03",
+      periodEnd: "2026-11-03",
+      actorId: ACTOR,
+      hotFileIds: [fixture.rows("bsp_hot_files")[0].id],
+    })
+  ).rejects.toThrow(/HOT.*scope/i);
 });

@@ -102,6 +102,14 @@ describe("refund reporting money and failure boundaries", () => {
           reviewAmount: "3001",
         },
       ],
+      [
+        {
+          pending: "2",
+          pendingAmount: "8000",
+          review: "1",
+          reviewAmount: "3000",
+        },
+      ],
       [{ amount: "2500" }],
     ];
     const db: any = { select: vi.fn(() => queryRows(results.shift()!).query) };
@@ -114,10 +122,10 @@ describe("refund reporting money and failure boundaries", () => {
       refundedBookings: 1,
       totalRefundedAmount: 7501,
       refundRate: 25,
-      pendingRefunds: 3,
-      pendingRefundAmount: 9900,
-      reviewRequiredRefunds: 1,
-      reviewRequiredAmount: 3001,
+      pendingRefunds: 5,
+      pendingRefundAmount: 17900,
+      reviewRequiredRefunds: 2,
+      reviewRequiredAmount: 6001,
       retainedCancellationFees: 2500,
     });
     expect(db.transaction).toHaveBeenCalledWith(expect.any(Function), {

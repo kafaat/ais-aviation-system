@@ -1,7 +1,9 @@
 import { eq, and } from "drizzle-orm";
 import { getDb } from "../db";
+import type { SettlementTx } from "./booking-settlement.service";
 import {
   savedPassengers,
+  users,
   type SavedPassenger,
   type InsertSavedPassenger,
 } from "../../drizzle/schema";
@@ -64,144 +66,119 @@ export async function getDefaultPassenger(
   return result[0] || null;
 }
 
-/**
- * Add a new saved passenger
- */
-export async function addPassenger(
+// Every writer locks the stable owner row, including the first insertion when
+// no passenger row exists to lock. Keep ownership checks and readback in the
+// same transaction, so a failed switch preserves the previous default.
+async function withPassengerOwner<T>(
+  userId: number,
+  run: (tx: SettlementTx) => Promise<T>
+): Promise<T> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.transaction(async tx => {
+    const [owner] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for("update");
+    if (!owner) throw new Error("User not found");
+    return run(tx);
+  });
+}
+
+async function ownedPassenger(tx: SettlementTx, id: number, userId: number) {
+  const [passenger] = await tx
+    .select()
+    .from(savedPassengers)
+    .where(and(eq(savedPassengers.id, id), eq(savedPassengers.userId, userId)))
+    .for("update");
+  if (!passenger) throw new Error("Passenger not found");
+  return passenger;
+}
+
+async function ensureDefault(tx: SettlementTx, userId: number) {
+  const rows = await tx
+    .select()
+    .from(savedPassengers)
+    .where(eq(savedPassengers.userId, userId))
+    .orderBy(savedPassengers.id)
+    .for("update");
+  if (rows.length && !rows.some(row => row.isDefault)) {
+    await tx
+      .update(savedPassengers)
+      .set({ isDefault: true })
+      .where(
+        and(
+          eq(savedPassengers.id, rows[0].id),
+          eq(savedPassengers.userId, userId)
+        )
+      );
+  }
+}
+
+/** Add a saved passenger. A nonempty collection always has a default. */
+export function addPassenger(
   userId: number,
   data: Omit<InsertSavedPassenger, "userId" | "id" | "createdAt" | "updatedAt">
 ): Promise<SavedPassenger> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // If this is being set as default, unset any existing default
-  if (data.isDefault) {
-    await db
-      .update(savedPassengers)
-      .set({ isDefault: false })
-      .where(eq(savedPassengers.userId, userId));
-  }
-
-  // If this is the first passenger, make it default
-  const existingPassengers = await getUserPassengers(userId);
-  const shouldBeDefault = existingPassengers.length === 0 || data.isDefault;
-
-  const result = await db.insert(savedPassengers).values({
-    userId,
-    ...data,
-    isDefault: shouldBeDefault,
+  return withPassengerOwner(userId, async tx => {
+    if (data.isDefault) {
+      await tx
+        .update(savedPassengers)
+        .set({ isDefault: false })
+        .where(eq(savedPassengers.userId, userId));
+    }
+    const [result] = await tx.insert(savedPassengers).values({
+      ...data,
+      userId,
+      isDefault: Boolean(data.isDefault),
+    });
+    await ensureDefault(tx, userId);
+    return ownedPassenger(tx, Number(result.insertId), userId);
   });
-
-  const insertId = Number(result[0].insertId);
-  const created = await getPassenger(insertId, userId);
-  if (!created) throw new Error("Failed to create passenger");
-
-  return created;
 }
 
-/**
- * Update an existing saved passenger
- */
-export async function updatePassenger(
+export function updatePassenger(
   id: number,
   userId: number,
   data: Partial<
     Omit<InsertSavedPassenger, "userId" | "id" | "createdAt" | "updatedAt">
   >
 ): Promise<SavedPassenger> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Check if passenger exists and belongs to user
-  const existing = await getPassenger(id, userId);
-  if (!existing) {
-    throw new Error("Passenger not found");
-  }
-
-  // If this is being set as default, unset any existing default
-  if (data.isDefault) {
-    await db
-      .update(savedPassengers)
-      .set({ isDefault: false })
-      .where(eq(savedPassengers.userId, userId));
-  }
-
-  await db
-    .update(savedPassengers)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(savedPassengers.id, id), eq(savedPassengers.userId, userId)));
-
-  const updated = await getPassenger(id, userId);
-  if (!updated) throw new Error("Failed to update passenger");
-
-  return updated;
-}
-
-/**
- * Delete a saved passenger
- */
-export async function deletePassenger(
-  id: number,
-  userId: number
-): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Check if passenger exists and belongs to user
-  const existing = await getPassenger(id, userId);
-  if (!existing) {
-    throw new Error("Passenger not found");
-  }
-
-  await db
-    .delete(savedPassengers)
-    .where(and(eq(savedPassengers.id, id), eq(savedPassengers.userId, userId)));
-
-  // If we deleted the default passenger, set another one as default
-  if (existing.isDefault) {
-    const remaining = await getUserPassengers(userId);
-    if (remaining.length > 0) {
-      await db
+  return withPassengerOwner(userId, async tx => {
+    await ownedPassenger(tx, id, userId);
+    if (data.isDefault) {
+      await tx
         .update(savedPassengers)
-        .set({ isDefault: true })
-        .where(eq(savedPassengers.id, remaining[0].id));
+        .set({ isDefault: false })
+        .where(eq(savedPassengers.userId, userId));
     }
-  }
+    await tx
+      .update(savedPassengers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(
+        and(eq(savedPassengers.id, id), eq(savedPassengers.userId, userId))
+      );
+    await ensureDefault(tx, userId);
+    return ownedPassenger(tx, id, userId);
+  });
 }
 
-/**
- * Set a passenger as the default
- */
-export async function setDefaultPassenger(
+export function deletePassenger(id: number, userId: number): Promise<void> {
+  return withPassengerOwner(userId, async tx => {
+    await ownedPassenger(tx, id, userId);
+    await tx
+      .delete(savedPassengers)
+      .where(
+        and(eq(savedPassengers.id, id), eq(savedPassengers.userId, userId))
+      );
+    await ensureDefault(tx, userId);
+  });
+}
+
+export function setDefaultPassenger(
   id: number,
   userId: number
 ): Promise<SavedPassenger> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Check if passenger exists and belongs to user
-  const existing = await getPassenger(id, userId);
-  if (!existing) {
-    throw new Error("Passenger not found");
-  }
-
-  // Unset all defaults for this user
-  await db
-    .update(savedPassengers)
-    .set({ isDefault: false })
-    .where(eq(savedPassengers.userId, userId));
-
-  // Set the new default
-  await db
-    .update(savedPassengers)
-    .set({ isDefault: true, updatedAt: new Date() })
-    .where(and(eq(savedPassengers.id, id), eq(savedPassengers.userId, userId)));
-
-  const updated = await getPassenger(id, userId);
-  if (!updated) throw new Error("Failed to set default passenger");
-
-  return updated;
+  return updatePassenger(id, userId, { isDefault: true });
 }

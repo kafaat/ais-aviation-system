@@ -19,9 +19,14 @@ interface FilterOptions {
 interface AdvancedFiltersProps {
   onApply: (filters: FilterOptions) => void;
   onReset: () => void;
+  directOnly?: boolean;
 }
 
-export function AdvancedFilters({ onApply, onReset }: AdvancedFiltersProps) {
+export function AdvancedFilters({
+  onApply,
+  onReset,
+  directOnly = false,
+}: AdvancedFiltersProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -42,7 +47,7 @@ export function AdvancedFilters({ onApply, onReset }: AdvancedFiltersProps) {
     { id: "direct", label: t("filters.direct") },
     { id: "1-stop", label: t("filters.oneStop") },
     { id: "2-stops", label: t("filters.twoStops") },
-  ];
+  ].filter(stop => !directOnly || stop.id === "direct");
 
   const departureTimes = [
     { id: "morning", label: t("filters.morning"), time: "06:00 - 12:00" },

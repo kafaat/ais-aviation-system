@@ -139,68 +139,48 @@ describe("Waitlist Service", () => {
   });
 
   describe("addToWaitlist", () => {
-    it("should add user to waitlist for a full flight", async () => {
-      // Setup: No existing entry, flight with no economy seats, max priority 3
-      mockDb._setResults(
-        [], // Check existing entry - none found
-        [{ id: 1, economyAvailable: 0, businessAvailable: 5 }], // Get flight
-        [{ maxPriority: 3 }], // Get max priority
-        [{ insertId: 1 }] // Insert result
-      );
-
-      // Reset module cache to pick up mocks
-      vi.resetModules();
+    it("adds to a full flight after its retained priority history", async () => {
+      const fixture = transactionMemory({
+        flights: [{ id: 1, economyAvailable: 0, businessAvailable: 5 }],
+        waitlist: [
+          {
+            id: 1,
+            userId: 2,
+            flightId: 1,
+            cabinClass: "economy",
+            priority: 3,
+            status: "cancelled",
+          },
+        ],
+      });
+      vi.mocked(getDb).mockReturnValue(fixture.db);
       const { addToWaitlist } = await import("../../services/waitlist.service");
-
-      const result = await addToWaitlist(1, 1, 2, "economy");
-
-      expect(result).toBeDefined();
-      expect(result.position).toBe(4);
-      expect(result.message).toContain("Successfully added to waitlist");
+      expect(await addToWaitlist(1, 1, 2, "economy")).toMatchObject({
+        position: 4,
+      });
     });
-
-    it("should throw error if user is already on waitlist", async () => {
-      mockDb._setResults([
-        {
-          id: 1,
-          userId: 1,
-          flightId: 1,
-          cabinClass: "economy",
-          status: "waiting",
-        },
-      ]);
-
-      vi.resetModules();
+    it.each(["waiting", "offered"])(
+      "refuses duplicate %s entry",
+      async status => {
+        const fixture = allocation(status);
+        fixture.rows("flights")[0].economyAvailable = 0;
+        const { addToWaitlist } =
+          await import("../../services/waitlist.service");
+        await expect(addToWaitlist(1, 10, 2, "economy")).rejects.toThrow(
+          "already on the waitlist"
+        );
+      }
+    );
+    it("refuses a flight with available seats", async () => {
+      allocation("waiting", { missing: true });
       const { addToWaitlist } = await import("../../services/waitlist.service");
-
-      await expect(addToWaitlist(1, 1, 2, "economy")).rejects.toThrow(
-        "You are already on the waitlist for this flight"
-      );
-    });
-
-    it("should throw error if seats are still available", async () => {
-      mockDb._setResults(
-        [], // No existing entry
-        [{ id: 1, economyAvailable: 10, businessAvailable: 5 }] // Flight has seats
-      );
-
-      vi.resetModules();
-      const { addToWaitlist } = await import("../../services/waitlist.service");
-
-      await expect(addToWaitlist(1, 1, 2, "economy")).rejects.toThrow(
+      await expect(addToWaitlist(1, 10, 2, "economy")).rejects.toThrow(
         "Seats are still available"
       );
     });
-
-    it("should throw error if flight not found", async () => {
-      mockDb._setResults(
-        [], // No existing entry
-        [] // Flight not found
-      );
-
-      vi.resetModules();
+    it("refuses a missing flight", async () => {
+      allocation();
       const { addToWaitlist } = await import("../../services/waitlist.service");
-
       await expect(addToWaitlist(1, 999, 2, "economy")).rejects.toThrow(
         "Flight not found"
       );
