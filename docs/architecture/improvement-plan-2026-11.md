@@ -82,19 +82,19 @@ Ranked by how many stages and reports each unblocks. Each needs the usual
 AIS record: scope, owner role, acceptance matrix, native tests, then
 documentation. None is authorised for code by this plan.
 
-| Rank | Module                             | Unblocks                                                                                            | Shape                                                                                                                                                  |
-| ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1    | Season schedule to dated flights   | Stage 1; reports on flight groups and configuration; realistic inventory fixtures                   | Schedule (carrier, number, route, operating days, period, equipment, cabin config) → generated dated flights with RBD buckets; change propagation      |
-| 2    | Sales and issuing office entity    | About ten catalog reports (agent details, offices, remittances, sales by office, refunds by office) | Tenant-owned office with immutable attribution on sale and issue events; credit account optional later                                                 |
-| 3    | Gate boarding read                 | Stage 13                                                                                            | Scanned BCBP or QR read at a named gate feeding the boarding state machine; duplicate and wrong-gate refusal; two-reader race on one pass              |
-| 4    | Tenant exit export                 | Stage 17; evaluation gate "data ownership"                                                          | One authenticated job producing bookings, passengers, tickets and coupons, ledger, payments and audit with totals that reconcile to the ledger         |
-| 5    | Tax lines on exchange and refund   | Stage 7 and 8; revenue accounting correctness                                                       | Per-segment tax components on the quote, carried through reissue, with refundable and non-refundable classes                                           |
-| 6    | Executed reaccommodation           | Stage 9                                                                                             | From advisory to transaction: move passenger, seat, entitlement, coupon and compensation record; refuse or route extras explicitly instead of blocking |
-| 7    | Voucher and miles reversal         | Stage 10                                                                                            | Reversal rules on cancellation, partial refund and exchange; claw-back through the event inbox                                                         |
-| 8    | Mixed-funding refunds              | Stage 8                                                                                             | Positive path for card plus wallet or credit, per payer and per instrument                                                                             |
-| 9    | Ticketing time limits and queues   | Catalog reports 50 and 65                                                                           | Commercial time limit distinct from inventory hold expiry; reservation queue membership                                                                |
-| 10   | Alerting rules and durable SLA     | Stage 19                                                                                            | Persisted observations and alert state; rule set checked in; on-call delivery proven, not described                                                    |
-| 11   | Multi-currency (approved priority) | Decision D6; see [multi-currency-scope.md](multi-currency-scope.md)                                 | Waves 1 to 3 of that record; nothing here changes its gates                                                                                            |
+| Rank | Module                             | Unblocks                                                                                            | Shape                                                                                                                                                                                                                                                  |
+| ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | Season schedule to dated flights   | Stage 1; reports on flight groups and configuration; realistic inventory fixtures                   | Schedule (carrier, number, route, operating days, period, equipment, cabin config) → generated dated flights with RBD buckets; change propagation                                                                                                      |
+| 2    | Sales and issuing office entity    | About ten catalog reports (agent details, offices, remittances, sales by office, refunds by office) | Tenant-owned office with immutable attribution on sale and issue events; credit account optional later                                                                                                                                                 |
+| 3    | Gate boarding read                 | Stage 13                                                                                            | Scanned BCBP or QR read at a named gate feeding the boarding state machine; duplicate and wrong-gate refusal; two-reader race on one pass                                                                                                              |
+| 4    | Tenant exit export                 | Stage 17; evaluation gate "data ownership"                                                          | One authenticated job producing bookings, passengers, tickets and coupons, ledger, payments and audit with totals that reconcile to the ledger                                                                                                         |
+| 5    | Tax lines on exchange and refund   | Stage 7 and 8; revenue accounting correctness                                                       | Per-segment tax components on the quote, carried through reissue, with refundable and non-refundable classes                                                                                                                                           |
+| 6    | Executed reaccommodation           | Stage 9                                                                                             | Extend the bounded execution that already exists in `irops-recovery.service.ts` (approved, transactional, receipt `awaiting_ticket_reissue`): complete ticket reissue, carry entitlement and compensation, route extras explicitly instead of blocking |
+| 7    | Voucher and miles reversal         | Stage 10                                                                                            | Reversal rules on cancellation, partial refund and exchange; claw-back through the event inbox                                                                                                                                                         |
+| 8    | Mixed-funding refunds              | Stage 8                                                                                             | Positive path for card plus wallet or credit, per payer and per instrument                                                                                                                                                                             |
+| 9    | Ticketing time limits and queues   | Catalog reports 50 and 65                                                                           | Commercial time limit distinct from inventory hold expiry; reservation queue membership                                                                                                                                                                |
+| 10   | Alerting rules and durable SLA     | Stage 19                                                                                            | Persisted observations and alert state; rule set checked in; on-call delivery proven, not described                                                                                                                                                    |
+| 11   | Multi-currency (approved priority) | Decision D6; see [multi-currency-scope.md](multi-currency-scope.md)                                 | Waves 1 to 3 of that record; nothing here changes its gates                                                                                                                                                                                            |
 
 ## 4. Scenario backlog
 
@@ -102,34 +102,37 @@ Each scenario is a professional acceptance case to add to the native MySQL
 suites or acceptance scripts. "Internal" means it needs no external party and
 can be implemented now; "External" needs a provider, device or authority.
 
-| ID   | Scenario                                                                                     | Assertion                                                                                              | Kind     | Pri |
-| ---- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------- | --- |
-| S-01 | Two bookings consume the same retail offer concurrently on native MySQL                      | Exactly one durable receipt; the loser gets a refusal; inventory unchanged for the loser               | Internal | P0  |
-| S-02 | Offer expires between lock and payment                                                       | Payment refused or re-quoted; no collection against an expired quote                                   | Internal | P0  |
-| S-03 | Display quote equals purchasable offer for identical inputs                                  | `priceQuote.get` total equals `createOffer` total, taxes included                                      | Internal | P1  |
-| S-04 | Three or more contenders for the last seat, including a multi-segment itinerary              | One winner; the multi-segment loser holds nothing on either leg                                        | Internal | P1  |
-| S-05 | Hold expiry concurrent with a new buyer                                                      | Seat sold once; expired hold releases exactly once                                                     | Internal | P1  |
-| S-06 | Paid webhook races the reconciliation job on one payment intent                              | One settlement, one ledger entry, idempotent second writer                                             | Internal | P0  |
-| S-07 | Two concurrent first reads of a passenger's ticket                                           | One ticket number, one coupon set                                                                      | Internal | P0  |
-| S-08 | Refund or chargeback after issuance                                                          | Coupons voided or flagged; document state consistent with ledger                                       | Internal | P0  |
-| S-09 | Exchange with fare down and tax up, and the reverse                                          | Tax lines carried; refundable tax returned to the original payer; non-refundable retained and reported | Internal | P0  |
-| S-10 | Partial refund of one seat or bag keeping the flight                                         | Entitlement reduced; fee rules applied; one ledger delta                                               | Internal | P1  |
-| S-11 | Cancellation of a voucher-discounted booking                                                 | Voucher use reversed per policy; discount split on partial refund                                      | Internal | P1  |
-| S-12 | Miles claw-back after a cash refund through the inbox                                        | Liability ledger offsets once; replay is idempotent                                                    | Internal | P1  |
-| S-13 | Executed reaccommodation carrying seat, entitlement, coupon and compensation                 | New flight holds the passenger; old coupon exchanged; compensation record preserved                    | Internal | P1  |
-| S-14 | Check-in opens too early and closes on time                                                  | Both edges refused or accepted per policy on MySQL                                                     | Internal | P1  |
-| S-15 | Gate read: duplicate pass at two readers, wrong gate, revoked check-in                       | One boarding; refusals carry reasons; no state change on refusal                                       | Internal | P0  |
-| S-16 | Printer field check result recorded                                                          | `kiosk-printer.ts` writes a value-free receipt (asset ids, times, match result) attachable to #279     | Internal | P1  |
-| S-17 | Re-close of a closed month; late HOT correction                                              | Second close refused or produces an adjustment period; correction posts an adjustment, never a rewrite | Internal | P1  |
-| S-18 | Breakage posted to the liability ledger                                                      | Policy result becomes a ledger entry with period and reversal path                                     | Internal | P1  |
-| S-19 | Tenant exit export reconciles to the ledger                                                  | Exported totals equal ledger totals; other tenants absent; audit rows included                         | Internal | P1  |
-| S-20 | Router sweep: every procedure's protection level and tenant scope                            | Generated inventory compared to an approved allowlist; a new public procedure fails the test           | Internal | P0  |
-| S-21 | Every privileged mutation writes an audit log                                                | Sweep over admin and finance procedures on MySQL                                                       | Internal | P0  |
-| S-22 | Restore drill with measured RTO and RPO; migration down path                                 | Observed numbers recorded in the operations docs; no demo flag                                         | External | P1  |
-| S-23 | SLA breach reaches on-call                                                                   | Durable alert state; delivery receipt from the configured channel                                      | External | P2  |
-| S-24 | APIS acknowledgement and rejection from the authority                                        | Fixtures from the authority; transport accepted                                                        | External | P1  |
-| S-25 | Hosted Checkout completion, 3DS, signed webhook delivery, chargeback in the provider sandbox | Per [provider acceptance](../operations/provider-acceptance.md)                                        | External | P0  |
-| S-26 | Device registration and heartbeat; scale, printer and scanner acknowledgements               | Authenticated device events correlated to AIS requests                                                 | External | P1  |
+| ID   | Scenario                                                                                                                                                                                                                                      | Assertion                                                                                                                                            | Kind     | Pri |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --- |
+| S-01 | Two bookings consume the same retail offer concurrently on native MySQL                                                                                                                                                                       | Exactly one durable receipt; the loser gets a refusal; inventory unchanged for the loser                                                             | Internal | P0  |
+| S-02 | Offer expires between lock and payment                                                                                                                                                                                                        | Payment refused or re-quoted; no collection against an expired quote                                                                                 | Internal | P0  |
+| S-03 | Display quote equals purchasable offer for identical inputs                                                                                                                                                                                   | `priceQuote.get` total equals `createOffer` total, taxes included                                                                                    | Internal | P1  |
+| S-04 | Three or more contenders for the last seat, including a multi-segment itinerary                                                                                                                                                               | One winner; the multi-segment loser holds nothing on either leg                                                                                      | Internal | P1  |
+| S-05 | Hold expiry concurrent with a new buyer                                                                                                                                                                                                       | Seat sold once; expired hold releases exactly once                                                                                                   | Internal | P1  |
+| S-06 | Paid webhook races the reconciliation job on one payment intent                                                                                                                                                                               | One settlement, one ledger entry, idempotent second writer                                                                                           | Internal | P0  |
+| S-07 | Two concurrent first reads of a passenger's ticket                                                                                                                                                                                            | One ticket number, one coupon set                                                                                                                    | Internal | P0  |
+| S-08 | Refund or chargeback after issuance                                                                                                                                                                                                           | Coupons voided or flagged; document state consistent with ledger                                                                                     | Internal | P0  |
+| S-09 | Exchange with fare down and tax up, and the reverse                                                                                                                                                                                           | Tax lines carried; refundable tax returned to the original payer; non-refundable retained and reported                                               | Internal | P0  |
+| S-10 | Partial refund of one seat or bag keeping the flight                                                                                                                                                                                          | Entitlement reduced; fee rules applied; one ledger delta                                                                                             | Internal | P1  |
+| S-11 | Cancellation of a voucher-discounted booking                                                                                                                                                                                                  | Voucher use reversed per policy; discount split on partial refund                                                                                    | Internal | P1  |
+| S-12 | Miles claw-back after a cash refund through the inbox                                                                                                                                                                                         | Liability ledger offsets once; replay is idempotent                                                                                                  | Internal | P1  |
+| S-13 | Executed reaccommodation carrying seat, entitlement, coupon and compensation                                                                                                                                                                  | New flight holds the passenger; old coupon exchanged; compensation record preserved                                                                  | Internal | P1  |
+| S-14 | Check-in opens too early and closes on time                                                                                                                                                                                                   | Both edges refused or accepted per policy on MySQL                                                                                                   | Internal | P1  |
+| S-15 | Gate read: duplicate pass at two readers, wrong gate, revoked check-in                                                                                                                                                                        | One boarding; refusals carry reasons; no state change on refusal                                                                                     | Internal | P0  |
+| S-16 | Printer field check result recorded                                                                                                                                                                                                           | `kiosk-printer.ts` writes a value-free receipt (asset ids, times, match result) attachable to #279                                                   | Internal | P1  |
+| S-17 | Re-close of a closed month; late HOT correction                                                                                                                                                                                               | Second close refused or produces an adjustment period; correction posts an adjustment, never a rewrite                                               | Internal | P1  |
+| S-18 | Breakage posted to the liability ledger                                                                                                                                                                                                       | Policy result becomes a ledger entry with period and reversal path                                                                                   | Internal | P1  |
+| S-19 | Tenant exit export reconciles to the ledger                                                                                                                                                                                                   | Exported totals equal ledger totals; other tenants absent; audit rows included                                                                       | Internal | P1  |
+| S-20 | Router sweep: inventory of every procedure's public or authenticated mark against a committed allowlist (drift guard, not an authorization proof; see S-27 and S-28)                                                                          | Generated inventory compared to an approved allowlist; a new or silently public procedure fails the test                                             | Internal | P0  |
+| S-21 | Every privileged mutation writes an audit log                                                                                                                                                                                                 | Sweep over admin and finance procedures on MySQL                                                                                                     | Internal | P0  |
+| S-22 | Restore drill with measured RTO and RPO; migration down path                                                                                                                                                                                  | Observed numbers recorded in the operations docs; no demo flag                                                                                       | External | P1  |
+| S-23 | SLA breach reaches on-call                                                                                                                                                                                                                    | Durable alert state; delivery receipt from the configured channel                                                                                    | External | P2  |
+| S-24 | APIS acknowledgement and rejection from the authority                                                                                                                                                                                         | Fixtures from the authority; transport accepted                                                                                                      | External | P1  |
+| S-25 | Hosted Checkout completion, 3DS, signed webhook delivery, chargeback in the provider sandbox                                                                                                                                                  | Per [provider acceptance](../operations/provider-acceptance.md)                                                                                      | External | P0  |
+| S-26 | Device registration and heartbeat; scale, printer and scanner acknowledgements                                                                                                                                                                | Authenticated device events correlated to AIS requests                                                                                               | External | P1  |
+| S-27 | Behavioral control test per public-mutation family (agent API key, signed envelope, self-service capability token, provider signature, share token): no credential, invalid credential, valid credential with wrong scope, authorized success | Each family refuses the first three and admits the fourth, with no state change on refusal                                                           | Internal | P0  |
+| S-28 | Cross-tenant read and write: a user of tenant A against every tenant-scoped resource of tenant B                                                                                                                                              | NOT_FOUND or FORBIDDEN before any database write; foreign and missing rows indistinguishable                                                         | Internal | P0  |
+| S-29 | Offer consumption with the passenger-type order swapped (adult, child) → (child, adult)                                                                                                                                                       | Either refused, or each passenger receives its own fare line; per-passenger totals correct, not only the booking total (review finding PRC-01, #333) | Internal | P0  |
 
 ## 5. Closing paths for the open external gaps
 
@@ -171,6 +174,36 @@ adopted or amended in the same session.
 domains; `generate-service-catalog.ts --check` verifies the catalog, and the
 production rollout refuses to start without assignments.
 
+## 5a. Review errata and the defect backlog
+
+Three independent multi-agent reviews of `main@6889760` on 2026-11-10 (five
+agents each, exact-function probes with database and provider doubles, no
+native MySQL or provider run) produced thirty-two isolated-probe defects and a
+set of candidates. They are tracked for the fix agent in **#333**, grouped into
+fix packs with a test-first rule; this plan does not duplicate the list.
+Headline items by money and decision impact: refund dashboards and refund
+completion side effects (FIN-01 to FIN-03), fare lines bound by index after a
+reordered passenger list (PRC-01, scenario S-29), BSP remittance selection by
+id bypassing country, currency and period (BSP-01), multi-sector revenue
+attributed to the first flight only (SVC-01), briefing cache ignoring the
+requested scope (AI-01), non-atomic baggage status and history (DCS-01), and
+the IP block lifecycle (SEC-01).
+
+The reviews also corrected this plan:
+
+- Executed reaccommodation already exists in a bounded form
+  (`irops-recovery.service.ts`); module 6 extends it rather than building it.
+- Vouchers already lock quota transactionally and prevent stacking; miles
+  reversal after refund already converges through `syncBookingMiles`; price
+  locks and retail offers already serialize on row locks. The uncovered
+  scenarios in section 4 are uncovered, not evidence that these fail.
+- S-20 (#329) is an inventory and drift guard for the public surface. It does
+  not prove authorization or tenant isolation; S-27 and S-28 do, and remain
+  open.
+- `updateExchangeRates` reports `ratesUpdated` while its database write is
+  commented out, and `getHistoricalRates` returns an empty array; both belong
+  to Wave 1 of [multi-currency-scope.md](multi-currency-scope.md) under #319.
+
 ## 6. What to borrow from the references, and how
 
 From the November research comparison (Openfront Airline under MIT; Videcom,
@@ -198,6 +231,35 @@ Standards that gate claims: IATA NDC and ONE Order (a table named `orders` or
 an XML endpoint proves neither), IATA baggage tracking (four points, exchanged
 with partners), airport and DCS device specifications, APIS authority
 specifications, and the payment-gateway and bank contracts per currency.
+
+The full reference study, with its two addenda (R-01 to R-18, H-01 to H-56
+and the #103 scope correction), is [2026-11-hitit-reference-study.md](../research/2026-11-hitit-reference-study.md).
+
+**Three end-to-end case studies drawn from the Hitit Crane module map**
+(vendor documentation, not independent testing), each ending in a decisive
+acceptance test:
+
+1. **Season schedule to sold flight** (modules 1 and 2): design a season,
+   generate dated flights, assign aircraft and allotments, check conflicts,
+   approve publication, then change a time or aircraft after bookings exist.
+   Decisive test: the change leaves no inventory, seat or booking bound to the
+   old version without an explicit handling.
+2. **Partner allotment to settlement**: allotment contract, inventory
+   reservation, partial sale, release of the unsold share, invoice, matching.
+   Decisive test: contract and inventory stay consistent through release and
+   invoicing; the value is the consistency, not an allotment screen.
+3. **Sale to revenue attributed per flight** (ties to PRC-01, SVC-01 and
+   BSP-01 in #333): offer, ticket and coupons, delivered service, change or
+   refund, revenue allocation, matching and close. Decisive test: each sector
+   carries its own fare, tax and fee lines; flight economics sum to booking
+   totals without duplication; a remittance outside the country, currency or
+   period can never complete a reconciliation.
+
+Patterns to adopt from that map: planning with approved versions, exception
+management instead of silent completion, and evidence linked across sale,
+delivery and accounting. What cannot be judged from vendor pages, and stays a
+verification question rather than a claimed weakness: customisation, data
+export, rollback, performance limits and integration cost.
 
 ## 7. Evaluation gates
 
