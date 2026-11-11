@@ -1,5 +1,5 @@
 # Remote branches to delete after the 2026-11-11 consolidation.
-# Section A: content already on main through a merged pull request (historical classification only; exact archive required before deletion).
+# Section A: content already on main through a merged pull request; the script deletes one only while its tip is still the head commit of a merged PR (restorable from that PR page).
 # Section B: diverged or never-merged branches; each has a copy at archive/<name> on the remote before deletion.
 ## A
 audit/ui-service-connectivity
