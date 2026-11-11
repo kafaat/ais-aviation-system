@@ -569,18 +569,27 @@ async function recordReceipt(
     currency: payment.currency.toUpperCase(),
   });
   if (bookingId) {
-    // A Checkout attempt may already have a pending history row. The owner
-    // lock serializes this adoption with the webhook and reconciliation job.
+    // The booking owner lock serializes canonical settlement writers. Discovery
+    // must not lock an absent intent's nonunique-index gap: two unrelated
+    // collections can otherwise deadlock when both insert their history rows.
     const attempts = await tx
       .select()
       .from(payments)
-      .where(eq(payments.stripePaymentIntentId, payment.paymentIntentId))
-      .for("update");
+      .where(eq(payments.stripePaymentIntentId, payment.paymentIntentId));
     if (attempts.length > 1)
       throw new Error("Ambiguous payment history requires reconciliation");
-    const attempt = attempts[0];
-    if (attempt) {
+    const candidate = attempts[0];
+    if (candidate) {
+      // Lock only the existing primary-key record and revalidate its current
+      // identity/status before adopting it; discovery is only a hint.
+      const [attempt] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, candidate.id))
+        .for("update");
       if (
+        !attempt ||
+        attempt.stripePaymentIntentId !== payment.paymentIntentId ||
         attempt.bookingId !== bookingId ||
         attempt.provider !== "stripe" ||
         attempt.amount !== payment.amount ||

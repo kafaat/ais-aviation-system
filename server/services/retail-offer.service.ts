@@ -366,18 +366,16 @@ export function validateRetailOffer(
     offer.consumedBookingId !== null ||
     offer.expiresAt <= now ||
     offer.digest !== offerDigest(offer.payload) ||
-    (offer.channel === "ndc"
-      ? payload.passengerTypes.length !== input.passengerTypes.length
-      : JSON.stringify(
-          input.remapPassengerTypes
-            ? [...payload.passengerTypes].sort()
-            : payload.passengerTypes
-        ) !==
-        JSON.stringify(
-          input.remapPassengerTypes
-            ? [...input.passengerTypes].sort()
-            : input.passengerTypes
-        )) ||
+    JSON.stringify(
+      input.remapPassengerTypes
+        ? [...payload.passengerTypes].sort()
+        : payload.passengerTypes
+    ) !==
+      JSON.stringify(
+        input.remapPassengerTypes
+          ? [...input.passengerTypes].sort()
+          : input.passengerTypes
+      ) ||
     payload.baseAmount + payload.taxesAndFees !== offer.totalAmount ||
     payload.totalAmount !== offer.totalAmount
   )

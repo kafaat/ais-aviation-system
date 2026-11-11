@@ -95,6 +95,12 @@ beforeEach(() => {
 });
 
 describe("verified payment settlement", () => {
+  it("does not take an absent payment-history gap lock for a fresh collection", async () => {
+    await event("checkout.session.completed", payment());
+    expect(fixture.rows("payments")).toHaveLength(1);
+    expect(fixture.lockedTables).not.toContain("payments");
+  });
+
   it.each(["pending", "failed"])(
     "adopts the persisted %s Stripe attempt instead of duplicating payment history",
     async status => {
@@ -119,6 +125,9 @@ describe("verified payment settlement", () => {
       });
       expect(fixture.rows("payment_receipts")).toHaveLength(1);
       expect(fixture.rows("financial_ledger")).toHaveLength(1);
+      expect(
+        fixture.lockedTables.filter(name => name === "payments")
+      ).toHaveLength(1);
     }
   );
 

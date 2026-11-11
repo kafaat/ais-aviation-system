@@ -15,19 +15,22 @@ vi.mock("../db", () => ({
   }),
 }));
 vi.mock("../services/flights.service", () => ({
-  calculateFlightPrice: async () => ({
-    price: 17500,
-    fareLines: [
-      {
-        type: "adult",
-        baseFare: 8000,
-        tax: 1200,
-        bookingFee: 800,
-        total: 10000,
-      },
-      { type: "child", baseFare: 6000, tax: 900, bookingFee: 600, total: 7500 },
-    ],
-  }),
+  calculateFlightPrice: async (
+    _flight: unknown,
+    _cabin: unknown,
+    _count: number,
+    passengers: Array<{ type: string }>
+  ) => {
+    const fareLines = passengers.map(({ type }) =>
+      type === "child"
+        ? { type, baseFare: 6000, tax: 900, bookingFee: 600, total: 7500 }
+        : { type, baseFare: 8000, tax: 1200, bookingFee: 800, total: 10000 }
+    );
+    return {
+      price: fareLines.reduce((sum, line) => sum + line.total, 0),
+      fareLines,
+    };
+  },
 }));
 import {
   createRetailOffer,
@@ -147,6 +150,41 @@ describe("retail offer authority", () => {
     expect(
       validateRetailOffer(offer, { ...input, channel: "ndc" }).fareLines
     ).toHaveLength(2);
+  });
+  it.each(["child", "infant"] as const)(
+    "refuses a %s on an all-adult NDC quote without consuming it",
+    async type => {
+      const quoted = {
+        ...input,
+        channel: "ndc" as const,
+        passengerTypes: ["adult", "adult"] as Array<
+          "adult" | "child" | "infant"
+        >,
+      };
+      const offer = await createRetailOffer(quoted);
+      expect(validateRetailOffer(offer, quoted).passengerTypes).toEqual([
+        "adult",
+        "adult",
+      ]);
+      await expect(
+        lockRetailOffer(fixture.db, offer.id, {
+          ...quoted,
+          passengerTypes: ["adult", type],
+        })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+      expect(fixture.rows("retail_offers")[0].consumedBookingId).toBeNull();
+      expect(fixture.rows("outbox")).toEqual([]);
+    }
+  );
+  it("refuses positional passenger-type permutation on a typed NDC quote", async () => {
+    const quoted = { ...input, channel: "ndc" as const };
+    const offer = await createRetailOffer(quoted);
+    expect(() =>
+      validateRetailOffer(offer, {
+        ...quoted,
+        passengerTypes: ["child", "adult"],
+      })
+    ).toThrow(/expired, consumed or changed/);
   });
   it("makes channel taxes explicit and rejects unsafe amounts", () => {
     expect(

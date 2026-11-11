@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import * as schema from "../../drizzle/schema";
+import { closePool } from "../db";
 import {
   apiProcessWebhookSecret,
   startApiProcessFixture,
@@ -92,6 +93,8 @@ nativeDescribe.sequential(
     let fixture: PaidBookingNativeFixture;
     let api: Awaited<ReturnType<typeof startApiProcessFixture>> | undefined;
     let reconciliation: ReconciliationModule;
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    const originalStripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
     beforeAll(async () => {
       fixture = await createPaidBookingNativeFixture("ais_api_process");
@@ -118,7 +121,18 @@ nativeDescribe.sequential(
     }, 25000);
 
     afterAll(async () => {
-      await fixture?.close();
+      // Reconciliation owns the application's lazy pool in addition to the
+      // fixture pool. Close it before dropping the schema, even after failures.
+      try {
+        await closePool();
+      } finally {
+        if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+        else process.env.DATABASE_URL = originalDatabaseUrl;
+        if (originalStripeSecretKey === undefined)
+          delete process.env.STRIPE_SECRET_KEY;
+        else process.env.STRIPE_SECRET_KEY = originalStripeSecretKey;
+        await fixture?.close();
+      }
     });
 
     async function seedPendingPayment(intentId: string) {

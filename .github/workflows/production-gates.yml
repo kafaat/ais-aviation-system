@@ -116,6 +116,7 @@ jobs:
           server/__tests__/auth-session-mysql.test.ts
           server/__tests__/identity-integrity-mysql.test.ts
           server/__tests__/runtime-integrity-mysql.test.ts
+          server/__tests__/operations-review-mysql.test.ts
           server/__tests__/request-identity-oauth-mysql.test.ts
           server/__tests__/flight-consumers-mysql.test.ts
           server/__tests__/ordinary-refund-mysql.test.ts

@@ -953,6 +953,16 @@ export async function createOrder(
       code: "UNAUTHORIZED",
       message: "An authenticated booking owner is required",
     });
+  // AirShopping currently prices an adult-only profile from passengerCount.
+  // Legacy offers without a canonical snapshot cannot prove any other profile.
+  // Refuse before inventory, idempotency or invoice writes instead of silently
+  // assigning an adult quote to child/infant passengers.
+  if (params.passengers.some(passenger => passenger.type !== "adult"))
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Local NDC shopping currently quotes adults only; request a supported passenger profile",
+    });
   const userId = params.userId;
   return withTransactionalIdempotency({
     transactionConfig: inventoryTransactionConfig,
