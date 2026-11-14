@@ -85,6 +85,14 @@ export async function isTenantActive(id: number): Promise<boolean> {
   return !!tenant && tenant.status === "active";
 }
 
+/** Same code and message as before; typed so collected-payment settlement can
+ * route a suspension after checkout to review without catching other errors. */
+export class TenantNotOperationalError extends TRPCError {
+  constructor() {
+    super({ code: "FORBIDDEN", message: "Airline tenant is not active" });
+  }
+}
+
 /** A shared row lock keeps suspension and a new operational write ordered. */
 export async function assertTenantOperational(
   tx: SettlementTx,
@@ -98,10 +106,7 @@ export async function assertTenantOperational(
     .limit(1)
     .for("share");
   if (!tenant || tenant.status !== "active")
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Airline tenant is not active",
-    });
+    throw new TenantNotOperationalError();
 }
 
 export async function setTenantStatus(

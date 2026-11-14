@@ -10,6 +10,17 @@ import {
 import { getDb } from "../db";
 import type { SettlementTx } from "./booking-settlement.service";
 
+/** Same code and message as before; typed so collected-payment settlement can
+ * route a suspension after checkout to review without catching other errors. */
+export class CorporateAccountInactiveError extends TRPCError {
+  constructor() {
+    super({
+      code: "PRECONDITION_FAILED",
+      message: "Corporate account is not active",
+    });
+  }
+}
+
 export async function assertCorporatePaymentApproved(
   tx: SettlementTx,
   bookingId: number,
@@ -32,11 +43,7 @@ export async function assertCorporatePaymentApproved(
     .from(corporateAccounts)
     .where(eq(corporateAccounts.id, link.corporateAccountId))
     .for("update");
-  if (account?.status !== "active")
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Corporate account is not active",
-    });
+  if (account?.status !== "active") throw new CorporateAccountInactiveError();
 }
 
 /** Full-invoice corporate credit is a local tender. Booking, company exposure,
