@@ -422,11 +422,23 @@ export async function lockRetailOffer(
   }
   return offer;
 }
+/**
+ * Offer expiry gates booking creation only. Callers create holds, invoices and
+ * the booking row between lockRetailOffer and this call, so expiry is checked
+ * again here, before this function writes anything; the refusal rolls back the
+ * caller's writes in the same transaction. Once consumed, the booking's own
+ * payment deadline governs payment and the offer's expiry is not read again.
+ */
 export async function consumeRetailOffer(
   tx: SettlementTx,
   offer: RetailOffer,
   bookingId: number
 ) {
+  if (offer.expiresAt <= new Date())
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Offer expired, consumed or changed; request a new offer",
+    });
   await recordPremiumConversion(tx, offer, bookingId);
   await tx
     .update(retailOffers)

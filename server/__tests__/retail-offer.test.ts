@@ -176,6 +176,43 @@ describe("retail offer authority", () => {
       expect(fixture.rows("outbox")).toEqual([]);
     }
   );
+  it.each(["direct", "ndc"] as const)(
+    "refuses consumption at the exact expiry instant of a %s offer and writes nothing",
+    async channel => {
+      const quoted = { ...input, channel };
+      const offer = await createRetailOffer(quoted);
+      const outboxBefore = fixture.rows("outbox").length;
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await expect(
+          fixture.db.transaction(async (tx: any) => {
+            const held = await lockRetailOffer(tx, offer.id, quoted);
+            // The offer expires after the lock and before consumption.
+            vi.setSystemTime(held.expiresAt);
+            await consumeRetailOffer(tx, held, 7);
+          })
+        ).rejects.toThrow(/expired, consumed or changed/);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(fixture.rows("retail_offers")[0].consumedBookingId).toBeNull();
+      expect(fixture.rows("outbox")).toHaveLength(outboxBefore);
+    }
+  );
+  it("still consumes an offer one millisecond before its expiry (control)", async () => {
+    const offer = await createRetailOffer(input);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      await fixture.db.transaction(async (tx: any) => {
+        const held = await lockRetailOffer(tx, offer.id, input);
+        vi.setSystemTime(held.expiresAt.getTime() - 1);
+        await consumeRetailOffer(tx, held, 7);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(fixture.rows("retail_offers")[0].consumedBookingId).toBe(7);
+  });
   it("refuses positional passenger-type permutation on a typed NDC quote", async () => {
     const quoted = { ...input, channel: "ndc" as const };
     const offer = await createRetailOffer(quoted);

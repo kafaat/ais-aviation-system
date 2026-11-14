@@ -4,6 +4,10 @@ import superjson from "superjson";
 import type { OpenApiMeta } from "trpc-to-openapi";
 import type { TrpcContext } from "./context";
 import { isAdmin } from "../services/rbac.service";
+import {
+  recordPrivilegedMutation,
+  type PrivilegedScope,
+} from "./middleware/privileged-audit";
 import { enforceProcedureRateLimit } from "./middleware/procedure-rate-limit";
 
 /**
@@ -48,62 +52,101 @@ export const protectedProcedure = publicProcedure
   .meta({ restPublic: false })
   .use(requireUser);
 
-export const adminProcedure = protectedProcedure.use(
-  t.middleware(opts => {
-    const { ctx, next } = opts;
+type AuthenticatedContext = TrpcContext & {
+  user: NonNullable<TrpcContext["user"]>;
+};
 
-    if (!ctx.user || !isAdmin(ctx.user.role)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
-    }
+const notAdmin = () =>
+  new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+const noTenant = () =>
+  new TRPCError({
+    code: "FORBIDDEN",
+    message: "Valid tenant context required",
+  });
 
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
+/**
+ * Privileged builders share one middleware: the role check, then an audit row
+ * for every mutation call (refused, failed or succeeded; scenario S-21). The
+ * `privileged` meta mark lets the router sweep in
+ * server/__tests__/privileged-mutation-audit.test.ts enumerate the surface.
+ * Queries pass through the role check only.
+ */
+function privilegedProcedure(
+  scope: PrivilegedScope,
+  authorize: (ctx: AuthenticatedContext) => TRPCError | null
+) {
+  return protectedProcedure
+    .meta({ privileged: scope })
+    .use(async ({ ctx, path, type, next }) => {
+      const started = Date.now();
+      const refusal = authorize(ctx);
+      if (refusal) {
+        if (type === "mutation")
+          await recordPrivilegedMutation({
+            path,
+            scope,
+            outcome: "failure",
+            ctx,
+            durationMs: Date.now() - started,
+            error: refusal,
+          });
+        throw refusal;
+      }
+      const result = await next({ ctx });
+      if (type === "mutation")
+        await recordPrivilegedMutation({
+          path,
+          scope,
+          outcome: result.ok ? "success" : "error",
+          ctx,
+          durationMs: Date.now() - started,
+          error: result.ok ? null : result.error,
+        });
+      return result;
     });
-  })
+}
+
+export const adminProcedure = privilegedProcedure("admin", ctx =>
+  isAdmin(ctx.user.role) ? null : notAdmin()
 );
 
 /** Use only for operations whose queries and writes carry tenant predicates. */
-export const airlineAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (!isAdmin(ctx.user.role) && ctx.user.role !== "airline_admin") {
-    throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
-  }
-  if (
-    !isAdmin(ctx.user.role) &&
-    (ctx.user.tenantId == null || ctx.tenantId !== ctx.user.tenantId)
-  ) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Valid tenant context required",
-    });
-  }
-  return next({ ctx });
-});
-
-/** Scoped role builders are opt-in: apply only where the service carries a
- * tenant predicate through both reads and writes. */
-function scopedAirlineProcedure(roles: readonly string[]) {
-  return protectedProcedure.use(({ ctx, next }) => {
-    if (!isAdmin(ctx.user.role) && !roles.includes(ctx.user.role))
-      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+export const airlineAdminProcedure = privilegedProcedure(
+  "airline_admin",
+  ctx => {
+    if (!isAdmin(ctx.user.role) && ctx.user.role !== "airline_admin")
+      return notAdmin();
     if (
       !isAdmin(ctx.user.role) &&
       (ctx.user.tenantId == null || ctx.tenantId !== ctx.user.tenantId)
     )
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Valid tenant context required",
-      });
-    return next({ ctx });
+      return noTenant();
+    return null;
+  }
+);
+
+/** Scoped role builders are opt-in: apply only where the service carries a
+ * tenant predicate through both reads and writes. */
+function scopedAirlineProcedure(
+  scope: PrivilegedScope,
+  roles: readonly string[]
+) {
+  return privilegedProcedure(scope, ctx => {
+    if (!isAdmin(ctx.user.role) && !roles.includes(ctx.user.role))
+      return notAdmin();
+    if (
+      !isAdmin(ctx.user.role) &&
+      (ctx.user.tenantId == null || ctx.tenantId !== ctx.user.tenantId)
+    )
+      return noTenant();
+    return null;
   });
 }
-export const airlineOpsProcedure = scopedAirlineProcedure([
+export const airlineOpsProcedure = scopedAirlineProcedure("ops", [
   "airline_admin",
   "ops",
 ]);
-export const airlineFinanceProcedure = scopedAirlineProcedure([
+export const airlineFinanceProcedure = scopedAirlineProcedure("finance", [
   "airline_admin",
   "finance",
 ]);
