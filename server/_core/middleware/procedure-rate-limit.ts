@@ -11,6 +11,7 @@ export function sensitiveProcedureScope(
   if (/^auth\..*(?:reset|forgot)/i.test(path)) return "passwordReset";
   if (path === "kiosk.reprintRegisteredTag") return "kioskBagReceipt";
   if (path === "manageBooking.lookup") return "manageBookingLookup";
+  if (path === "kiosk.authenticate") return "kioskAuthenticate";
   if (
     /^auth\.(login|register|completeMfa)$/.test(path) ||
     /^mfa\.(setup|verify|disable|regenerateBackupCodes)$/.test(path) ||
@@ -39,6 +40,7 @@ export async function enforceProcedureRateLimit(
     scope === "auth" ||
     scope === "passwordReset" ||
     scope === "manageBookingLookup" ||
+    scope === "kioskAuthenticate" ||
     scope === "kioskBagReceipt" ||
     !ctx.user
       ? `ip:${ip}`
