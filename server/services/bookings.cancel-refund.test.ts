@@ -133,10 +133,10 @@ describe("bookings.cancel on a paid booking that is owed a refund", () => {
     );
     expect(quote.refundAmount).toBe(5000);
 
-    await expect(cancelBooking(7, 9, 3)).rejects.toMatchObject({
-      code: "PRECONDITION_FAILED",
-      message: expect.stringContaining("refunds.create"),
-    });
+    const refusal = await cancelBooking(7, 9, 3).catch(error => error);
+    expect(refusal).toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(refusal.message).toContain("refunds.create");
+    expect(refusal.message).toContain("refunds.cancelSplitBooking");
 
     expect(fixture.rows("bookings")[0]).toMatchObject({
       status: "confirmed",
@@ -167,6 +167,30 @@ describe("bookings.cancel on a paid booking that is owed a refund", () => {
     expect(fixture.rows("ordinary_booking_refunds")).toEqual([
       expect.objectContaining({ bookingId: 7, amount: 5000 }),
     ]);
+  });
+
+  it("refuses a paid booking whose status is still pending", async () => {
+    seed({ status: "pending" });
+    const quote = await quoteCancellationPolicy(
+      fixture.db,
+      fixture.rows("bookings")[0]
+    );
+    expect(quote.refundAmount).toBe(5000);
+
+    const refusal = await cancelBooking(7, 9, 3).catch(error => error);
+    expect(refusal).toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(refusal.message).toContain("refunds.create");
+    expect(refusal.message).toContain("refunds.cancelSplitBooking");
+
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      status: "pending",
+      paymentStatus: "paid",
+      seatsReserved: true,
+    });
+    expect(fixture.rows("flights")[0].economyAvailable).toBe(4);
+    expect(fixture.rows("ticket_coupons")[0].status).toBe("O");
+    expect(boundary.refundCreate).not.toHaveBeenCalled();
+    expect(boundary.trackBookingCancelled).not.toHaveBeenCalled();
   });
 
   it("still cancels an unpaid booking directly", async () => {
