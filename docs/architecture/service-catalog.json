@@ -6091,6 +6091,7 @@
         "server/_core/middleware/user-rate-limit.middleware.ts",
         "server/_core/oauth.ts",
         "server/_core/rateLimiter.ts",
+        "server/routers/kiosk.ts",
         "server/routers/manage-booking.ts",
         "server/routers/rate-limit.ts"
       ],
