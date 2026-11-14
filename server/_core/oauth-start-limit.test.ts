@@ -54,7 +54,9 @@ registerOAuthRoutes({
   },
 } as unknown as Express);
 
-async function start(ip: string) {
+/** req.ip is what Express derived from the socket and its trusted proxies;
+ * headers are whatever the client sent, readable as Express exposes them. */
+async function start(ip: string, headers: Record<string, string> = {}) {
   const res = {
     headers: {} as Record<string, string>,
     setHeader: vi.fn((key: string, value: string) => {
@@ -65,12 +67,29 @@ async function start(ip: string) {
     status: vi.fn().mockReturnThis(),
     json: vi.fn(),
   };
-  const req = { ip, query: { returnTo: "/" }, headers: {}, socket: {} };
+  const header = (name: string) => headers[name.toLowerCase()];
+  const req = {
+    ip,
+    query: { returnTo: "/" },
+    headers,
+    get: header,
+    header,
+    socket: {},
+  };
   await handler(req as unknown as Request, res as unknown as Response);
   return res;
 }
 
 const storedRows = () => fixture.rows(oauthLoginStates).length;
+// Rows consumeOAuthLogin could still accept (expiresAt > now).
+const liveRows = () =>
+  (fixture.rows(oauthLoginStates) as Array<{ expiresAt: string }>).filter(
+    row => new Date(`${row.expiresAt}Z`).getTime() > Date.now()
+  ).length;
+const forged = (address: string) => ({
+  "x-forwarded-for": address,
+  "x-real-ip": address,
+});
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -132,5 +151,52 @@ describe("anonymous OAuth start quota", () => {
       redirectUri: "https://ais.test/api/oauth/callback",
       returnTo: "/",
     });
+  });
+
+  it("refuses an IP for exactly the state lifetime, bounding its live rows below two quotas", async () => {
+    const quota = OAUTH_START_RATE_LIMIT.requestsPerWindow;
+    const opened = Date.now();
+    expect((await start(ips[0])).redirect).toHaveBeenCalledOnce();
+    // The rest of the quota at the window's last millisecond: still one window.
+    vi.setSystemTime(opened + OAUTH_STATE_MAX_AGE_MS - 1);
+    for (let index = 1; index < quota; index++)
+      expect((await start(ips[0])).redirect).toHaveBeenCalledOnce();
+    expect((await start(ips[0])).status).toHaveBeenCalledWith(429);
+    expect(liveRows()).toBe(quota);
+
+    // The window reopens exactly when its first row dies, never earlier.
+    vi.setSystemTime(opened + OAUTH_STATE_MAX_AGE_MS);
+    for (let index = 0; index < quota; index++)
+      expect((await start(ips[0])).redirect).toHaveBeenCalledOnce();
+    expect((await start(ips[0])).status).toHaveBeenCalledWith(429);
+    // Fixed windows: the worst case is one window's late rows plus a full next
+    // window, and the IP stays refused while all of those rows are live.
+    expect(liveRows()).toBe(2 * quota - 1);
+    vi.setSystemTime(opened + 2 * OAUTH_STATE_MAX_AGE_MS - 2);
+    expect((await start(ips[0])).status).toHaveBeenCalledWith(429);
+    expect(liveRows()).toBe(2 * quota - 1);
+  });
+
+  it("keys the quota on req.ip, not on a forwarded address the client chose", async () => {
+    const quota = OAUTH_START_RATE_LIMIT.requestsPerWindow;
+    // Behind the trusted proxy, the client forges a new first hop every time.
+    for (let index = 0; index < quota; index++) {
+      const res = await start(ips[0], forged(`203.0.113.${index}, ${ips[0]}`));
+      expect(res.redirect).toHaveBeenCalledOnce();
+    }
+    const refused = await start(ips[0], forged(`203.0.113.${quota}`));
+    expect(refused.status).toHaveBeenCalledWith(429);
+    expect(storedRows()).toBe(quota);
+  });
+
+  it("does not let a forwarded address spend another client's quota", async () => {
+    const quota = OAUTH_START_RATE_LIMIT.requestsPerWindow;
+    for (let index = 0; index <= quota; index++)
+      await start(ips[0], forged(ips[1]));
+    expect(storedRows()).toBe(quota);
+
+    const victim = await start(ips[1]);
+    expect(victim.redirect).toHaveBeenCalledOnce();
+    expect(storedRows()).toBe(quota + 1);
   });
 });

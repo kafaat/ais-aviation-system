@@ -21,7 +21,9 @@ import { ENV } from "./env";
 
 /**
  * Each anonymous start stores a row, so it is quota-bound per client IP. The
- * window matches the state lifetime: one IP holds at most this many live rows.
+ * window matches the state lifetime and is fixed, not sliding: it reopens when
+ * its first row expires, so one IP holds fewer than twice this many live rows
+ * (one window's late rows plus a full next window).
  */
 export const OAUTH_START_RATE_LIMIT: RateLimitTier = {
   name: "oauthStart",
