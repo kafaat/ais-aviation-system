@@ -54,6 +54,35 @@ function providerRefund(
   };
 }
 
+/** The receipt recording booking 7's collection on pi_original. */
+function bookingReceipt(overrides: Record<string, any> = {}) {
+  return {
+    paymentIntentId: "pi_original",
+    bookingId: 7,
+    targetId: 7,
+    userId: 9,
+    kind: "booking",
+    amount: 0,
+    refundedAmount: 0,
+    currency: "SAR",
+    settlementStatus: "applied",
+    ...overrides,
+  };
+}
+
+/** Another booking's collection, on its own intent. */
+const otherBookingReceipt = {
+  paymentIntentId: "pi_other_booking",
+  bookingId: 8,
+  targetId: 8,
+  userId: 11,
+  kind: "booking",
+  amount: 5000,
+  refundedAmount: 0,
+  currency: "SAR",
+  settlementStatus: "applied",
+};
+
 /**
  * collected: captured on pi_original (the booking receipt).
  * totalAmount: the invoice after servicing.
@@ -116,17 +145,10 @@ function seed(options: {
       options.receipt === false
         ? []
         : [
-            {
-              paymentIntentId: "pi_original",
-              bookingId: 7,
-              targetId: 7,
-              userId: 9,
-              kind: "booking",
+            bookingReceipt({
               amount: options.collected,
               refundedAmount: exchangeRefund + otherRefund,
-              currency: "SAR",
-              settlementStatus: "applied",
-            },
+            }),
           ],
     order_service_refunds: exchangeRefund
       ? [
@@ -302,6 +324,33 @@ describe("cancellation refund cap after a downgrade exchange", () => {
     });
   });
 
+  it("reads the held balance from this intent's receipt when another booking's receipt is stored first", async () => {
+    seed({
+      collected: 1000,
+      totalAmount: 400,
+      exchangeRefund: 600,
+      extra: {
+        payment_receipts: [
+          otherBookingReceipt,
+          bookingReceipt({ amount: 1000, refundedAmount: 600 }),
+        ],
+      },
+    });
+
+    expect(await isBookingRefundable(7)).toEqual({ refundable: true });
+    await expect(cancel()).resolves.toMatchObject({
+      success: true,
+      amount: 400,
+      remainingRefundableAmount: 0,
+    });
+    expect(fixture.rows("ordinary_booking_refunds")[0]).toMatchObject({
+      paymentIntentId: "pi_original",
+      amount: 400,
+      collectedAmount: 1000,
+      baseRefundedAmount: 600,
+    });
+  });
+
   it("reports the held balance, not the invoice balance, after a partial cancellation of a downgraded booking", async () => {
     seed({ collected: 1000, totalAmount: 800, exchangeRefund: 200 });
     // Five days before departure: the 75% tier refunds 600 of the 800 fare.
@@ -417,6 +466,51 @@ describe("controls: caps that do not depend on the exchange refund", () => {
     expectNoMoneyMoved();
   });
 
+  it.each([
+    ["was recorded for another kind of payment", { kind: "modification" }],
+    ["belongs to another booking", { bookingId: 8, targetId: 8 }],
+  ])(
+    "control: a receipt on the intent that %s does not raise the cap",
+    async (_label, receipt) => {
+      // Only booking 7's own collection receipt may stand in for the invoice.
+      seed({
+        collected: 1000,
+        totalAmount: 400,
+        exchangeRefund: 600,
+        extra: {
+          payment_receipts: [
+            bookingReceipt({ amount: 1000, refundedAmount: 600, ...receipt }),
+          ],
+        },
+      });
+
+      expect(await isBookingRefundable(7)).toEqual({
+        refundable: false,
+        reason: "Booking is already fully refunded",
+      });
+      await expect(cancel()).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Booking payment has already been fully refunded",
+      });
+      expectNoMoneyMoved();
+    }
+  );
+
+  it("control: a booking whose intent has no receipt is refused as not reconciled while other receipts exist", async () => {
+    seed({
+      collected: 10000,
+      totalAmount: 10000,
+      extra: { payment_receipts: [otherBookingReceipt] },
+    });
+
+    await expect(cancel()).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Payment collection is not reconciled yet; the refund can be issued once the receipt is recorded",
+    });
+    expectNoMoneyMoved();
+  });
+
   it("control: an upgrade collected on a second intent keeps today's behavior", async () => {
     // 800 collected on pi_original, 200 on the modification intent; the full
     // tier quotes 1000 against the invoice and pi_original cannot return it.
@@ -425,17 +519,7 @@ describe("controls: caps that do not depend on the exchange refund", () => {
       totalAmount: 1000,
       extra: {
         payment_receipts: [
-          {
-            paymentIntentId: "pi_original",
-            bookingId: 7,
-            targetId: 7,
-            userId: 9,
-            kind: "booking",
-            amount: 800,
-            refundedAmount: 0,
-            currency: "SAR",
-            settlementStatus: "applied",
-          },
+          bookingReceipt({ amount: 800 }),
           {
             paymentIntentId: "pi_upgrade",
             bookingId: 7,
