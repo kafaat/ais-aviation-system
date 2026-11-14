@@ -12,8 +12,22 @@ import {
   OAuthStateUnavailableError,
   OAUTH_STATE_MAX_AGE_MS,
 } from "../services/oauth-login-state.service";
+import {
+  rateLimitService,
+  type RateLimitTier,
+} from "../services/rate-limit.service";
 import { getOAuthConfiguration } from "./oauth-config";
 import { ENV } from "./env";
+
+/**
+ * Each anonymous start stores a row, so it is quota-bound per client IP. The
+ * window matches the state lifetime: one IP holds at most this many live rows.
+ */
+export const OAUTH_START_RATE_LIMIT: RateLimitTier = {
+  name: "oauthStart",
+  requestsPerWindow: 20,
+  windowMs: OAUTH_STATE_MAX_AGE_MS,
+};
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -24,6 +38,21 @@ export function registerOAuthRoutes(app: Express) {
   app.get("/api/oauth/start", async (req: Request, res: Response) => {
     res.setHeader("Cache-Control", "no-store");
     try {
+      // Express applies only explicitly trusted proxy hops to req.ip.
+      const ip = req.ip || req.socket?.remoteAddress || "unknown";
+      const limit = await rateLimitService.checkRateLimit(
+        `ip:${ip}`,
+        OAUTH_START_RATE_LIMIT,
+        `strict:${OAUTH_START_RATE_LIMIT.name}`
+      );
+      for (const [key, value] of Object.entries(
+        rateLimitService.getRateLimitHeaders(limit)
+      ))
+        res.setHeader(key, value);
+      if (!limit.allowed) {
+        res.status(429).json({ error: "Too many login attempts" });
+        return;
+      }
       const configuration = getOAuthConfiguration();
       const { state, browserNonce } = await beginOAuthLogin(
         configuration.redirectUri,
