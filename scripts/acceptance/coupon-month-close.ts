@@ -7,6 +7,7 @@ import type { SettlementTx } from "../../server/services/booking-settlement.serv
 import { settleVerifiedPayment } from "../../server/services/payment-settlement.service";
 import { readTicketDocument } from "../../server/services/ticket-documents.service";
 import { bookingsRouter } from "../../server/routers/bookings";
+import { cancelPaidBookingThroughRefund } from "./paid-cancellation";
 import { ndcRouter } from "../../server/routers/ndc";
 import { aviationIntegrationsRouter } from "../../server/routers/aviation-integrations";
 import { revenueAccountingRouter } from "../../server/routers/revenue-accounting";
@@ -343,10 +344,18 @@ export async function verifyCouponMonthClose(
       bookingId: unused.bookingId,
     });
     await readTicketDocument(unused.bookingId, unusedPax.id, ctx.user.id);
-    assert.equal(
-      (await sale.cancel({ bookingId: unused.bookingId })).success,
-      true
-    );
+    // A paid booking that is owed a refund cancels through the refund flow,
+    // which cancels and refunds together; bookings.cancel refuses it.
+    await assert.rejects(sale.cancel({ bookingId: unused.bookingId }), {
+      code: "PRECONDITION_FAILED",
+      message: /refunds\.create/,
+    });
+    await cancelPaidBookingThroughRefund(ctx, unused.bookingId);
+    const [cancelledControl] = await db
+      .select({ status: s.bookings.status })
+      .from(s.bookings)
+      .where(eq(s.bookings.id, unused.bookingId));
+    assert.equal(cancelledControl.status, "cancelled");
     const [voided] = await db
       .select({ status: s.ticketCoupons.status })
       .from(s.ticketCoupons)
