@@ -193,6 +193,20 @@ describe("bookings.cancel on a paid booking that is owed a refund", () => {
     expect(boundary.trackBookingCancelled).not.toHaveBeenCalled();
   });
 
+  it("reports final DCS closure before the refund refusal", async () => {
+    fixture.rows("flights")[0].dcsClosedAt = new Date("2030-11-06T11:00:00Z");
+
+    const refusal = await cancelBooking(7, 9, 3).catch(error => error);
+    expect(refusal).toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(refusal.message).toMatch(/^Final DCS closure/);
+    expect(refusal.message).not.toContain("refunds.create");
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      status: "confirmed",
+      seatsReserved: true,
+    });
+    expect(boundary.refundCreate).not.toHaveBeenCalled();
+  });
+
   it("still cancels an unpaid booking directly", async () => {
     seed({ paymentStatus: "pending", stripePaymentIntentId: null });
     fixture.rows("payment_receipts").splice(0);

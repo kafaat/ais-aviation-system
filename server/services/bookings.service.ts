@@ -33,6 +33,7 @@ import {
 import { createInventoryLock } from "./inventory-lock.service";
 import { trackBookingStarted, trackBookingCancelled } from "./metrics.service";
 import {
+  assertBookingDepartureReleasable,
   cancelBookingResources,
   type SettlementTx,
 } from "./booking-settlement.service";
@@ -669,6 +670,9 @@ export async function cancelBooking(
       // quoted refund unreachable, because the refund flow only starts from a
       // confirmed booking and cancels it together with the refund.
       if (current.paymentStatus === "paid") {
+        // Departure closure blocks any release first, with its own reason, as
+        // in the refund flow itself; the refund refusal only applies before it.
+        await assertBookingDepartureReleasable(tx, current);
         const quote = await quoteCancellationPolicy(tx, current);
         if (quote.refundAmount === 0)
           throw new TRPCError({
