@@ -72,6 +72,28 @@
       "replacement": null
     },
     {
+      "file": "server/services/admin-booking-status.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/admin-booking-status.service.ts",
+      "domain": "commercial",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/routers/admin.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/audit.service.ts",
+        "server/services/booking-settlement.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["bookingSegments", "bookings", "flights"],
+        "writes": ["bookings"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/agency-credit.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/agency-credit.service.ts",
@@ -426,6 +448,7 @@
         "server/routers/bookings.ts",
         "server/routers/payments.ts",
         "server/routers/refunds.ts",
+        "server/services/admin-booking-status.service.ts",
         "server/services/booking-modification.service.ts",
         "server/services/gdpr.service.ts",
         "server/services/order-exchange-context.service.ts",
@@ -1060,6 +1083,7 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/routers/payments.ts",
+        "server/services/admin-booking-status.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/bookings.service.ts",
         "server/services/corporate-settlement.service.ts",
