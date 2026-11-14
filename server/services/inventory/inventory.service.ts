@@ -27,7 +27,7 @@ import {
   overbookingConfig as overbookingConfigTable,
   deniedBoardingRecords,
 } from "../../../drizzle/schema";
-import { eq, and, gte, sql, lt, desc } from "drizzle-orm";
+import { eq, and, gte, gt, sql, lt, desc, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -115,6 +115,145 @@ const THRESHOLDS = {
   closed: 1.0,
 };
 
+/**
+ * Most passengers one booking may carry; also the router's seat-count input
+ * bound. One user's active holds on a flight never exceed it, so repeated
+ * allocations cannot hoard a cabin that no single booking could use.
+ */
+export const MAX_SEATS_PER_BOOKING = 9;
+
+// ============================================================================
+// Write-boundary guards
+// ============================================================================
+
+/** Another tenant's flight reads as absent, as in bookings.service createBooking. */
+function assertFlightVisible<T extends { tenantId: number | null }>(
+  flight: T | undefined,
+  tenantId: number | null | undefined
+): T {
+  if (!flight || (tenantId != null && flight.tenantId !== tenantId)) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+  }
+  return flight;
+}
+
+/** Writers serialize on the flight row before counting or creating holds. */
+async function lockFlight(
+  tx: SettlementTx,
+  flightId: number,
+  tenantId?: number | null
+) {
+  const [flight] = await tx
+    .select({
+      tenantId: flights.tenantId,
+      status: flights.status,
+      departureTime: flights.departureTime,
+      economyAvailable: flights.economyAvailable,
+      businessAvailable: flights.businessAvailable,
+    })
+    .from(flights)
+    .where(eq(flights.id, flightId))
+    .for("update")
+    .limit(1);
+  return assertFlightVisible(flight, tenantId);
+}
+
+/**
+ * Seats one user currently holds on a flight, across cabins: canonical
+ * inventory locks (seat holds, checkout locks, waitlist offers) plus legacy
+ * seat holds that have no canonical lock. Call with the flight row locked.
+ */
+async function countUserHeldSeats(
+  tx: SettlementTx,
+  flightId: number,
+  userId: number
+): Promise<number> {
+  const now = new Date();
+  const rows = [
+    ...(await tx
+      .select({ seats: inventoryLocks.numberOfSeats })
+      .from(inventoryLocks)
+      .where(
+        and(
+          eq(inventoryLocks.flightId, flightId),
+          eq(inventoryLocks.userId, userId),
+          eq(inventoryLocks.status, "active"),
+          gt(inventoryLocks.expiresAt, now)
+        )
+      )),
+    ...(await tx
+      .select({ seats: seatHolds.seats })
+      .from(seatHolds)
+      .where(
+        and(
+          eq(seatHolds.flightId, flightId),
+          eq(seatHolds.userId, userId),
+          eq(seatHolds.status, "active"),
+          gt(seatHolds.expiresAt, now),
+          isNull(seatHolds.inventoryLockId)
+        )
+      )),
+  ];
+  return rows.reduce((sum, row) => sum + Number(row.seats), 0);
+}
+
+/**
+ * The checks waitlist.service addToWaitlist applies, plus flight status:
+ * the flight is locked and visible to the tenant, still sells (same rule as
+ * processWaitlist), the user has no waiting or offered entry for this cabin,
+ * and the request cannot be met from seats not already held.
+ */
+async function assertCanJoinWaitlist(
+  tx: SettlementTx,
+  flightId: number,
+  cabinClass: "economy" | "business",
+  seats: number,
+  userId: number,
+  tenantId?: number | null
+): Promise<void> {
+  const flight = await lockFlight(tx, flightId, tenantId);
+  if (
+    !["scheduled", "delayed"].includes(flight.status) ||
+    flight.departureTime <= new Date()
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This flight is not accepting waitlist requests",
+    });
+  }
+
+  const [existing] = await tx
+    .select({ id: waitlist.id })
+    .from(waitlist)
+    .where(
+      and(
+        eq(waitlist.userId, userId),
+        eq(waitlist.flightId, flightId),
+        eq(waitlist.cabinClass, cabinClass),
+        inArray(waitlist.status, ["waiting", "offered"])
+      )
+    )
+    .limit(1);
+  if (existing) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "You are already on the waitlist for this flight",
+    });
+  }
+
+  const available =
+    (cabinClass === "economy"
+      ? flight.economyAvailable
+      : flight.businessAvailable) -
+    (await countActiveHolds(tx, flightId, cabinClass));
+  if (available >= seats) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Seats are still available. Please book directly.",
+    });
+  }
+}
+
 // ============================================================================
 // Main Inventory Service
 // ============================================================================
@@ -192,15 +331,28 @@ export async function getInventoryStatus(
 }
 
 /**
- * Attempt to allocate seats (with hold)
+ * Attempt to allocate seats (with hold). With a tenant, another tenant's
+ * flight is refused before anything is read or written.
  */
 export async function allocateSeats(
   flightId: number,
   cabinClass: "economy" | "business",
   seats: number,
   userId: number,
-  sessionId: string
+  sessionId: string,
+  tenantId?: number | null
 ): Promise<SeatAllocationResult> {
+  if (tenantId != null) {
+    const database = await getDb();
+    if (!database) throw new Error("Database connection not available");
+    const [flight] = await database
+      .select({ tenantId: flights.tenantId })
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .limit(1);
+    assertFlightVisible(flight, tenantId);
+  }
+
   const inventory = await getInventoryStatus(flightId, cabinClass);
 
   if (inventory.effectiveAvailable >= seats) {
@@ -238,6 +390,14 @@ export async function allocateSeats(
         tx
       );
       const remainingSeats = seats - availableSeats;
+      await assertCanJoinWaitlist(
+        tx,
+        flightId,
+        cabinClass,
+        remainingSeats,
+        userId,
+        tenantId
+      );
       const waitlistEntry = await addToWaitlist(
         flightId,
         cabinClass,
@@ -259,11 +419,12 @@ export async function allocateSeats(
   }
 
   if (inventory.status !== "closed") {
-    const waitlistEntry = await addToWaitlist(
+    const waitlistEntry = await joinWaitlist(
       flightId,
       cabinClass,
       seats,
-      userId
+      userId,
+      tenantId
     );
 
     return {
@@ -298,6 +459,14 @@ async function createSeatHold(
   }
 
   const create = async (tx: SettlementTx) => {
+    await lockFlight(tx, flightId);
+    const alreadyHeld = await countUserHeldSeats(tx, flightId, userId);
+    if (alreadyHeld + seats > MAX_SEATS_PER_BOOKING) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `A passenger may hold at most ${MAX_SEATS_PER_BOOKING} seats on a flight; ${alreadyHeld} already held`,
+      });
+    }
     const { lockId, expiresAt } = await createInventoryLock(
       flightId,
       seats,
@@ -438,7 +607,37 @@ async function getActiveHoldsCount(
 // ============================================================================
 
 /**
- * Add user to waitlist
+ * Join the waitlist for an authenticated user: eligibility is checked and the
+ * entry written in one transaction under the flight lock.
+ */
+export async function joinWaitlist(
+  flightId: number,
+  cabinClass: "economy" | "business",
+  seats: number,
+  userId: number,
+  tenantId?: number | null
+): Promise<WaitlistEntry> {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  return withInventoryTransaction(database, async tx => {
+    await assertCanJoinWaitlist(
+      tx,
+      flightId,
+      cabinClass,
+      seats,
+      userId,
+      tenantId
+    );
+    return addToWaitlist(flightId, cabinClass, seats, userId, tx);
+  });
+}
+
+/**
+ * Queue writer: assigns the next priority and inserts the entry. It checks no
+ * eligibility; request paths go through joinWaitlist, or run
+ * assertCanJoinWaitlist in the same transaction first.
  */
 export async function addToWaitlist(
   flightId: number,
@@ -1070,7 +1269,7 @@ export const InventoryService = {
   getInventoryStatus,
   allocateSeats,
   releaseSeatHold,
-  addToWaitlist,
+  joinWaitlist,
   processWaitlist,
   removeFromWaitlist,
   calculateRecommendedOverbooking,
