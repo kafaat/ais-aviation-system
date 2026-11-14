@@ -143,6 +143,7 @@ jobs:
           server/services/redis-cache-native.test.ts
           server/__tests__/booking-purge-mysql.test.ts
           server/__tests__/compensation-purge-mysql.test.ts
+          server/__tests__/expired-hold-sweeper-lock-order-mysql.test.ts
           --reporter=default
           --reporter=json
           --reporter=junit

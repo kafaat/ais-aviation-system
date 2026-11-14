@@ -1827,6 +1827,7 @@
         "server/routers/corporate.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-settlement.service.ts",
+        "server/services/payment-settlement.service.ts",
         "server/services/split-payment.service.ts"
       ],
       "dependencies": [
@@ -3763,7 +3764,7 @@
         "server/services/rbd-inventory.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "flights", "inventoryLocks"],
+        "reads": ["bookingSegments", "bookings", "flights", "inventoryLocks"],
         "writes": ["inventoryLocks", "passengers", "seatInventory"]
       },
       "replacement": null
@@ -5478,8 +5479,10 @@
         "server/services/baggage-custody.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-settlement.service.ts",
+        "server/services/corporate-settlement.service.ts",
         "server/services/order-servicing.service.ts",
         "server/services/outbox.service.ts",
+        "server/services/tenant.service.ts",
         "server/services/wallet-funding.service.ts"
       ],
       "tableExpressions": {
@@ -7354,6 +7357,7 @@
         "server/services/ndc.service.ts",
         "server/services/operational-events.service.ts",
         "server/services/order-servicing.service.ts",
+        "server/services/payment-settlement.service.ts",
         "server/services/pricing-approval.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",

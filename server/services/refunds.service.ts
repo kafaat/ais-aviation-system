@@ -87,6 +87,50 @@ function sumRefundAmounts(refunds: Stripe.Refund[]): number {
   return refunds.reduce((total, refund) => total + refund.amount, 0);
 }
 
+type CollectionReceipt = {
+  kind: string;
+  bookingId: number | null;
+  amount: number;
+};
+
+/** What the booking's payment intent can still return. An order-servicing
+ * downgrade sets totalAmount to the new fare and refunds the difference on
+ * this same intent, so totalAmount less the intent's refunds counts that
+ * exchange refund twice. The collected receipt amount less those refunds is
+ * what is still held. The receipt is used only when it is this booking's own
+ * collection and records more than the invoice; otherwise (a legacy row with
+ * no receipt, or an upgrade collected on a second intent) the invoice formula
+ * stays, and the reservation still refuses anything this intent cannot return. */
+function refundableBalance(
+  booking: { id: number; totalAmount: number },
+  receipt: CollectionReceipt | undefined,
+  refundedAmount: number
+): number {
+  const collected =
+    receipt?.kind === "booking" &&
+    receipt.bookingId === booking.id &&
+    Number.isSafeInteger(receipt.amount) &&
+    receipt.amount > booking.totalAmount
+      ? receipt.amount
+      : booking.totalAmount;
+  return collected - refundedAmount;
+}
+
+function collectionReceipt(
+  database: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  paymentIntentId: string
+) {
+  return database
+    .select({
+      kind: paymentReceipts.kind,
+      bookingId: paymentReceipts.bookingId,
+      amount: paymentReceipts.amount,
+    })
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, paymentIntentId))
+    .limit(1);
+}
+
 const splitRefundReason =
   "Split-funded bookings require refunds to each original payer; single-payment refund is unavailable";
 async function hasSplitFunding(
@@ -243,11 +287,10 @@ export async function createRefund(
     // Legacy paid rows without one used to get the provider refund and then
     // fail locally forever (and every charge.refunded delivery with them),
     // so refuse before any money moves.
-    const [receipt] = await database
-      .select({ paymentIntentId: paymentReceipts.paymentIntentId })
-      .from(paymentReceipts)
-      .where(eq(paymentReceipts.paymentIntentId, booking.stripePaymentIntentId))
-      .limit(1);
+    const [receipt] = await collectionReceipt(
+      database,
+      booking.stripePaymentIntentId
+    );
     if (!receipt)
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
@@ -258,8 +301,11 @@ export async function createRefund(
       booking.stripePaymentIntentId
     );
     const alreadyRefundedAmount = sumRefundAmounts(existingRefunds);
-    const remainingRefundableAmount =
-      booking.totalAmount - alreadyRefundedAmount;
+    const remainingRefundableAmount = refundableBalance(
+      booking,
+      receipt,
+      alreadyRefundedAmount
+    );
 
     // A customer cancels a given collection once. Keying that operation by its
     // recalculated fee would issue another refund after a cancellation tier changes.
@@ -400,7 +446,7 @@ export async function createRefund(
       cumulativeRefundedAmount,
       remainingRefundableAmount: Math.max(
         0,
-        booking.totalAmount - cumulativeRefundedAmount
+        refundableBalance(booking, receipt, cumulativeRefundedAmount)
       ),
     };
   } catch (error) {
@@ -542,10 +588,16 @@ export async function isBookingRefundable(bookingId: number): Promise<{
           "This fare can be cancelled only after confirming that no money will be refunded",
       };
     }
+    const [receipt] = await collectionReceipt(
+      database,
+      booking.stripePaymentIntentId
+    );
     const activeRefunds = await listActiveRefunds(
       booking.stripePaymentIntentId
     );
-    if (sumRefundAmounts(activeRefunds) >= booking.totalAmount) {
+    if (
+      refundableBalance(booking, receipt, sumRefundAmounts(activeRefunds)) <= 0
+    ) {
       return { refundable: false, reason: "Booking is already fully refunded" };
     }
 

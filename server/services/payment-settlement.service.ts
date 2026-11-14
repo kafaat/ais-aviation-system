@@ -30,6 +30,8 @@ import {
   type SettlementTx,
 } from "./booking-settlement.service";
 import { recordEvent } from "./outbox.service";
+import { CorporateAccountInactiveError } from "./corporate-settlement.service";
+import { TenantNotOperationalError } from "./tenant.service";
 import { isActiveSplitPayment } from "./booking-checkout.service";
 import { reconcileWalletFunding } from "./wallet-funding.service";
 
@@ -287,10 +289,13 @@ export async function settleVerifiedPayment(
           .set({ stripePaymentIntentId: paymentIntentId })
           .where(eq(bookingModifications.id, change.id));
       } catch (error) {
+        // The money is already collected: a tenant suspended during checkout
+        // keeps the receipt for review instead of rolling the webhook back.
         if (!(
           error instanceof OrderServicingUnavailable ||
           error instanceof BaggageCustodyConflict ||
-          error instanceof InventoryUnavailableError
+          error instanceof InventoryUnavailableError ||
+          error instanceof TenantNotOperationalError
         ))
           throw error;
         await requireCollectionReview(tx, payment, booking, error.message);
@@ -504,11 +509,13 @@ async function confirmCollectedBooking(
         : undefined
     );
   } catch (error) {
-    // These errors occur before inventory is changed. Other failures must roll
-    // back the whole transaction and remain retryable (never acknowledge them).
+    // These errors occur before inventory is changed (a corporate account
+    // suspended after checkout included). Other failures must roll back the
+    // whole transaction and remain retryable (never acknowledge them).
     if (!(
       error instanceof InventoryUnavailableError ||
-      error instanceof BookingNotPendingError
+      error instanceof BookingNotPendingError ||
+      error instanceof CorporateAccountInactiveError
     ))
       throw error;
     await requireCollectionReview(tx, payment, booking, error.message, true);
