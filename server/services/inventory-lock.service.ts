@@ -1,5 +1,6 @@
 import {
   countActiveHolds,
+  inventoryTransactionConfig,
   withInventoryTransaction,
 } from "./inventory-capacity.service";
 import { TRPCError } from "@trpc/server";
@@ -8,6 +9,7 @@ import {
   inventoryLocks,
   flights,
   bookings,
+  bookingSegments,
   seatInventory,
   passengers,
 } from "../../drizzle/schema";
@@ -225,15 +227,39 @@ export async function releaseExpiredLocks(): Promise<number> {
     .limit(500);
   let released = 0;
   for (const candidate of candidates) {
+    // Keeps the canonical booking -> flight -> hold order. createBooking
+    // locks the flight and then inserts a booking, so this transaction must
+    // not hold gap locks on bookings: a locking OR/EXISTS scan of PRIMARY
+    // under REPEATABLE READ locked every gap and the supremum, deadlocking
+    // with that insert and stalling inserts for all flights. Unlocked lookups
+    // find the linked ids; the primary-key locking read re-checks the link
+    // and, at READ COMMITTED, locks only those booking records.
     released += await db.transaction(async tx => {
-      const linked = await tx
-        .select()
-        .from(bookings)
-        .where(
-          sql`(${bookings.inventoryLockId} = ${candidate.id} OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.inventoryLockId = ${candidate.id}))`
-        )
-        .orderBy(bookings.id)
-        .for("update");
+      const linkedToHold = sql`(${bookings.inventoryLockId} = ${candidate.id} OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.inventoryLockId = ${candidate.id}))`;
+      const ids = [
+        ...new Set([
+          ...(
+            await tx
+              .select({ id: bookings.id })
+              .from(bookings)
+              .where(eq(bookings.inventoryLockId, candidate.id))
+          ).map(row => row.id),
+          ...(
+            await tx
+              .select({ id: bookingSegments.bookingId })
+              .from(bookingSegments)
+              .where(eq(bookingSegments.inventoryLockId, candidate.id))
+          ).map(row => row.id),
+        ]),
+      ];
+      const linked = ids.length
+        ? await tx
+            .select()
+            .from(bookings)
+            .where(and(inArray(bookings.id, ids), linkedToHold))
+            .orderBy(bookings.id)
+            .for("update")
+        : [];
       await tx
         .select()
         .from(flights)
@@ -282,7 +308,7 @@ export async function releaseExpiredLocks(): Promise<number> {
         .set({ status: "expired", releasedAt: now })
         .where(eq(inventoryLocks.id, hold.id));
       return 1;
-    });
+    }, inventoryTransactionConfig);
   }
   return released;
 }
