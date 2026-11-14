@@ -37,6 +37,7 @@ vi.mock("../services/mfa.service", () => ({
 }));
 vi.mock("../services/account-lock.service", () => ({
   recordLoginAttempt: boundary.recordAttempt,
+  isAccountLocked: async () => false,
 }));
 vi.mock("../_core/middleware/procedure-rate-limit", () => ({
   enforceProcedureRateLimit: vi.fn(),
