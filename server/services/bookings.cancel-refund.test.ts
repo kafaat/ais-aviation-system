@@ -207,6 +207,22 @@ describe("bookings.cancel on a paid booking that is owed a refund", () => {
     expect(boundary.refundCreate).not.toHaveBeenCalled();
   });
 
+  it("decides on the locked booking row, not the earlier unlocked read", async () => {
+    // Payment can settle between the first read and the row lock.
+    const settled = fixture.rows("bookings")[0];
+    boundary.bookings = () => [{ ...settled, paymentStatus: "pending" }];
+
+    const refusal = await cancelBooking(7, 9, 3).catch(error => error);
+    expect(refusal).toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(refusal.message).toContain("refunds.create");
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      status: "confirmed",
+      paymentStatus: "paid",
+      seatsReserved: true,
+    });
+    expect(boundary.refundCreate).not.toHaveBeenCalled();
+  });
+
   it("still cancels an unpaid booking directly", async () => {
     seed({ paymentStatus: "pending", stripePaymentIntentId: null });
     fixture.rows("payment_receipts").splice(0);
