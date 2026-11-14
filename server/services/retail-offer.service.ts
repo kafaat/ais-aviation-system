@@ -425,9 +425,9 @@ export async function lockRetailOffer(
 /**
  * Offer expiry gates booking creation only. Callers create holds, invoices and
  * the booking row between lockRetailOffer and this call, so expiry is checked
- * again here, before any write; the refusal rolls the caller's transaction
- * back. Once consumed, the booking's own payment deadline governs payment and
- * the offer's expiry is not read again.
+ * again here, before this function writes anything; the refusal rolls back the
+ * caller's writes in the same transaction. Once consumed, the booking's own
+ * payment deadline governs payment and the offer's expiry is not read again.
  */
 export async function consumeRetailOffer(
   tx: SettlementTx,
