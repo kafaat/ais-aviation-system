@@ -1,0 +1,914 @@
+{
+  "schema_version": 1,
+  "kind": "product_scope_classification_draft",
+  "state": "draft_for_owner_review",
+  "prepared_on": "2026-11-14",
+  "catalog": "docs/audits/reporting-completion-20261104/catalog.json",
+  "catalog_changed": false,
+  "issue": "https://github.com/kafaat/ais-aviation-system/issues/280",
+  "decision_basis": [
+    "docs/decisions/2026-11-10-gap-closure-decisions.md section 3 (scope values; scope never changes availability)",
+    "docs/architecture/improvement-plan-2026-11.md sections 3 and 5 (modules 1, 2, 5 and 9; report sources)",
+    "docs/remediation/20261104-report-source-acceptance-ledger.md (missing source per partial or blocked report)",
+    "Owner decisions of 2026-11-14: UI-07 deferred out of current scope; multi-currency (#319) goes ahead; product today is SAR-only staging for booking, DCS, payments, refunds, loyalty and reporting"
+  ],
+  "scope_meaning": {
+    "required": "launch or compliance: needed by the current booking, DCS, payments, refunds, loyalty or reporting flows, or by the approved multi-currency work",
+    "planned": "a later release: depends on a module or integration the improvement plan or decision record already names",
+    "optional": "deferrable improvement: a variant or overlap of another report, a convenience lookup, or a refinement with no control function",
+    "out_of_scope": "proposed exclusion: needs a capability the product does not offer and no plan names; becomes effective only by documented owner decision"
+  },
+  "entries": [
+    {
+      "id": 1,
+      "title": "Agent Details",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Staff users and role capabilities support access review across every module, and decision 3 names this report's sales-office source as the first to secure.",
+      "blocking_source": "Authoritative, dated sales-office assignment per user (office entity, improvement-plan module 2; Sales operations owner).",
+      "confidence": "medium"
+    },
+    {
+      "id": 2,
+      "title": "APIS Data",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Passenger document completeness per flight is a compliance input for international departures.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 3,
+      "title": "Confirmed Passengers",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Confirmed sector membership per flight is a basic booking and DCS control.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 4,
+      "title": "Currencies",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Multi-currency goes ahead (#319, D6), so the configured currency catalog and exchange-rate provenance are needed from its first wave.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 5,
+      "title": "Daily Flight Load",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Booked, checked-in, boarded, offloaded and no-show counts per departure day are core DCS operations.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 6,
+      "title": "Eticket Status",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Coupon state lookup by ticket number underpins servicing, refunds and exchange.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 7,
+      "title": "ETL Processing",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Handler ETL receipts matter once a third-party ground handler feeds uplift, and no such contract exists today.",
+      "blocking_source": "Production ground-handler ETL acceptance and a daily accepted/rejected receipt register with coupon links (ground handler or station DCS provider; Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 8,
+      "title": "Eticket Values",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Ticket document values per period are a finance control over the ticketing and refund flows the product runs today.",
+      "blocking_source": "Accepted external issuance receipts and complete coupon-level allocation of fare components (ticketing provider; Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 9,
+      "title": "Eticket Value (PNR)",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Document and monetary lines for one PNR are needed to service refunds and disputes on that booking.",
+      "blocking_source": "Reconciliation of booking-level components to documents, passengers, sectors and currencies, with external issuance evidence (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 10,
+      "title": "Expired Tickets",
+      "status": "blocked",
+      "proposed_scope": "required",
+      "rationale": "Document expiry drives unused-ticket liability and breakage, and decision 3 names its source second after report 1.",
+      "blocking_source": "Recorded document-validity deadline and an approved operator expiry policy (Finance/Revenue Accounting with Product).",
+      "confidence": "medium"
+    },
+    {
+      "id": 11,
+      "title": "Fares Departing City",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "The report already works as a fare-rule configuration view, while a filed final fare belongs to a pricing model the product does not use.",
+      "blocking_source": "Authoritative filed final fare source with validity, currency and application terms (Pricing/Revenue Management).",
+      "confidence": "medium"
+    },
+    {
+      "id": 12,
+      "title": "Fares City Pair",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "Same configuration view per directional airport pair; promotion needs a filed-fare source that relative fare-class pricing does not have.",
+      "blocking_source": "Authoritative filed final fare per direction and period (Pricing/Revenue Management).",
+      "confidence": "medium"
+    },
+    {
+      "id": 13,
+      "title": "FAX Information",
+      "status": "blocked",
+      "proposed_scope": "out_of_scope",
+      "rationale": "An airport FAX directory is a legacy channel with no role in the current booking or DCS flows.",
+      "blocking_source": "Authoritative airport FAX directory with source and verification date per address (no owner identified).",
+      "confidence": "high"
+    },
+    {
+      "id": 14,
+      "title": "Flown Load",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Boarded counts for departed flights are the operational basis of post-flight reporting.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 15,
+      "title": "Flight Availability 1 Day",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "One-day availability net of unexpired holds is core inventory control.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 16,
+      "title": "Flight Availability 1 Week",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "The seven-day availability view is routine inventory control on the same reader as report 15.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 17,
+      "title": "Flight Manifest",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "The flight manifest is the canonical passenger, coupon, seat and baggage list for a departure.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 18,
+      "title": "Flight List",
+      "status": "available",
+      "proposed_scope": "optional",
+      "rationale": "An alternative passenger list that overlaps Flight Manifest (17) and Passengers (53).",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 19,
+      "title": "Flight Count",
+      "status": "available",
+      "proposed_scope": "optional",
+      "rationale": "Passenger counts for one flight duplicate what Passenger Summary (54) gives across flights.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 20,
+      "title": "Flight Count",
+      "status": "available",
+      "proposed_scope": "optional",
+      "rationale": "Passenger detail with booking reference and PNR overlaps Passengers (53) and Flight Manifest (17).",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 21,
+      "title": "Flight Group",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Operational flight groups need the season schedule model (improvement-plan module 1), planned for wave C.",
+      "blocking_source": "Authoritative operational flight-group identity with dated membership (season schedule, improvement-plan module 1; Network planning/Flight operations).",
+      "confidence": "medium"
+    },
+    {
+      "id": 22,
+      "title": "Flight ID",
+      "status": "available",
+      "proposed_scope": "optional",
+      "rationale": "A lookup by database identifier is a convenience already covered by flight administration and Flight Times (26).",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 23,
+      "title": "Flight Complete List",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Separating unallocated holds from named reservations is needed to reconcile inventory per flight.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 24,
+      "title": "Flight Passengers By Office",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Passengers by booking office depend on the sales and issuing office entity (improvement-plan module 2).",
+      "blocking_source": "Booking-origin sales office recorded at sale time (office entity, improvement-plan module 2; Sales operations owner).",
+      "confidence": "high"
+    },
+    {
+      "id": 25,
+      "title": "Flight Passenger Table",
+      "status": "available",
+      "proposed_scope": "optional",
+      "rationale": "Another per-flight passenger list that overlaps Passengers (53).",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 26,
+      "title": "Flight Times",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Departure and arrival times by origin and period are basic schedule information for operations.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 27,
+      "title": "Flight Counts",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Distinct versus ticketed passenger counts per flight are a ticketing control on the booking flow.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 28,
+      "title": "Form Of Payments",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Payments by method are a core finance view of the payment flow, and the report stays partial until office and settlement links exist.",
+      "blocking_source": "Office attribution (office entity, improvement-plan module 2) and a link from each payment attempt to its settled ledger movement (Finance; Sales operations owner).",
+      "confidence": "medium"
+    },
+    {
+      "id": 29,
+      "title": "Frequent Flyer Activity",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Loyalty is in the current product, and miles transactions per period are its basic audit trail.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 30,
+      "title": "Frequent Flyer Membership",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "New loyalty memberships per period are a basic loyalty report.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 31,
+      "title": "Frequent Flyer Transactions",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Member-level transaction history supports loyalty servicing and disputes.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 32,
+      "title": "GDS Bookings",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Decision 3 names GDS receipts as a first source to secure, but no GDS provider is contracted and the product sells direct today, so a later release fits unless GDS is a launch channel.",
+      "blocking_source": "Accepted GDS provider booking receipts with explicit AIS booking, ticket and sector links (contracted GDS provider; integration approver).",
+      "confidence": "low"
+    },
+    {
+      "id": 33,
+      "title": "GDS Etickets",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Same GDS decision as report 32: needed only once a contracted GDS issues tickets against AIS bookings.",
+      "blocking_source": "Accepted GDS issuance receipts matched to AIS ticket, coupon and sector (contracted GDS provider; integration approver).",
+      "confidence": "low"
+    },
+    {
+      "id": 34,
+      "title": "GDS ID",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Same GDS decision as report 32: a provider record identifier exists only on an accepted GDS booking.",
+      "blocking_source": "Documented provider record identifier on accepted GDS bookings (contracted GDS provider; integration approver).",
+      "confidence": "low"
+    },
+    {
+      "id": 35,
+      "title": "GDS PNR Quantity",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Follows the GDS decision on reports 32 to 34 and uses the same receipts.",
+      "blocking_source": "Accepted GDS PNR receipts with event status and time (contracted GDS provider).",
+      "confidence": "medium"
+    },
+    {
+      "id": 36,
+      "title": "GDS Segments",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Follows the GDS decision on reports 32 to 34 and uses the same receipts.",
+      "blocking_source": "Accepted GDS segments linked to AIS sectors (contracted GDS provider).",
+      "confidence": "medium"
+    },
+    {
+      "id": 37,
+      "title": "GDS Travel Agent ID",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Follows the GDS decision on reports 32 to 34; a local agency identifier cannot substitute.",
+      "blocking_source": "Provider agency identifier taken from accepted GDS receipts (contracted GDS provider).",
+      "confidence": "medium"
+    },
+    {
+      "id": 38,
+      "title": "Interline Etickets",
+      "status": "blocked",
+      "proposed_scope": "out_of_scope",
+      "rationale": "No interline partner agreement or IET integration exists or is planned, so exclusion fits until an agreement is signed.",
+      "blocking_source": "Accepted interline issuance receipts and coupon mappings (interline partner; no agreement exists).",
+      "confidence": "low"
+    },
+    {
+      "id": 39,
+      "title": "Interline IDEC Files",
+      "status": "blocked",
+      "proposed_scope": "out_of_scope",
+      "rationale": "IDEC files exist only under an interline agreement, which the product does not have.",
+      "blocking_source": "Accepted IDEC specification, importer and partner file receipt (interline partner; no agreement exists).",
+      "confidence": "low"
+    },
+    {
+      "id": 40,
+      "title": "Interline Values",
+      "status": "blocked",
+      "proposed_scope": "out_of_scope",
+      "rationale": "Interline settlement shares exist only under an interline agreement, which the product does not have.",
+      "blocking_source": "Accepted interline coupon settlement statements (interline partner; Revenue Accounting).",
+      "confidence": "low"
+    },
+    {
+      "id": 41,
+      "title": "Issues Offices",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Issuing offices are part of the sales and issuing office entity (improvement-plan module 2).",
+      "blocking_source": "Issuing-office entity with immutable attribution on issue events (office entity, improvement-plan module 2; Sales operations owner).",
+      "confidence": "high"
+    },
+    {
+      "id": 42,
+      "title": "Last Record Locator",
+      "status": "available",
+      "proposed_scope": "optional",
+      "rationale": "A newest-booking lookup is a convenience with no control function.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 43,
+      "title": "Lifted Tickets",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Coupon uplift proof is the basis of flown revenue and of the coupon month close the product already runs.",
+      "blocking_source": "Production acceptance of the coupon uplift source, one receipt matching passenger, booking, sector and time (Revenue Accounting with the station DCS or ground handler).",
+      "confidence": "medium"
+    },
+    {
+      "id": 44,
+      "title": "Load Factors",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Load factor per flight is a core commercial and operational measure.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 45,
+      "title": "Load Overbookings",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Oversell is a reject gate in the improvement plan, so flights at or above physical capacity must be visible.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 46,
+      "title": "Message Table",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "A configuration listing of message routes and templates is useful but deferrable.",
+      "blocking_source": "Persisted email template registry with versions and state (messaging owner).",
+      "confidence": "medium"
+    },
+    {
+      "id": 47,
+      "title": "Migration Report",
+      "status": "blocked",
+      "proposed_scope": "out_of_scope",
+      "rationale": "No booking-import workflow exists or is planned; it becomes planned only if go-live includes a cutover of live bookings from a legacy system.",
+      "blocking_source": "Booking-import batch, source-row and error register (Product; a migration owner if a cutover is planned).",
+      "confidence": "low"
+    },
+    {
+      "id": 48,
+      "title": "No Seat Plan",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "A flight without a valid allocated seat map blocks seat selection and check-in, so this exception is an operational control.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 49,
+      "title": "No Tickets",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Reservations holding inventory without a ticket are a money and inventory control.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 50,
+      "title": "No Ticket or Time Limit",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Commercial ticketing time limits are improvement-plan module 9, which names this report.",
+      "blocking_source": "Commercial ticketing time limit stored on the booking, distinct from inventory hold expiry (improvement-plan module 9; Product).",
+      "confidence": "high"
+    },
+    {
+      "id": 51,
+      "title": "Sales Offices",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "The internal sales-office directory is the core of improvement-plan module 2.",
+      "blocking_source": "Tenant-owned sales-office entity (office entity, improvement-plan module 2; Sales operations owner).",
+      "confidence": "high"
+    },
+    {
+      "id": 52,
+      "title": "Sales Office Credit Limits",
+      "status": "blocked",
+      "proposed_scope": "optional",
+      "rationale": "Improvement-plan module 2 treats office credit accounts as an optional later extension.",
+      "blocking_source": "Sales-office credit account with approved limits, exposure and movements (module 2 extension; Finance).",
+      "confidence": "medium"
+    },
+    {
+      "id": 53,
+      "title": "Passengers",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "The basic per-flight passenger list with cabin, type and PNR is the operational list kept among the overlapping variants.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 54,
+      "title": "Passenger Summary",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Passenger counts by flight, route, cabin and passenger type are a core operational summary.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 55,
+      "title": "Payments",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Payment records by period are a core finance report for the payment flow.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 56,
+      "title": "PNL (Passenger Name List)",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Stations whose departure control runs outside AIS need a PNL, but if every go-live station uses AIS DCS this can move to planned.",
+      "blocking_source": "Carrier or handler acceptance of the Type-B transmission path with configured addresses (Station operations or DCS provider).",
+      "confidence": "low"
+    },
+    {
+      "id": 57,
+      "title": "PNL Status",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Tracks whether each flight's PNL was generated, sent and acknowledged, and follows the decision on report 56.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 58,
+      "title": "PNR 50",
+      "status": "available",
+      "proposed_scope": "optional",
+      "rationale": "A latest-50-bookings list is a convenience with no control function.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 59,
+      "title": "PNR Full (Passenger Name Record)",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "The unified booking snapshot is the main servicing and audit view of a booking.",
+      "blocking_source": "Recorded business events and external issuance evidence for history the system does not yet capture (Product with the data owners).",
+      "confidence": "medium"
+    },
+    {
+      "id": 60,
+      "title": "PNR History",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "A booking timeline is needed for servicing and audit within an approved retention policy.",
+      "blocking_source": "Approved complete booking event log and retention policy (Security/Compliance with Product).",
+      "confidence": "medium"
+    },
+    {
+      "id": 61,
+      "title": "PNR from Credit Card Authorization",
+      "status": "blocked",
+      "proposed_scope": "optional",
+      "rationale": "Lookup by issuer authorization code helps chargeback handling, but payment-intent references already cover the current Stripe flow.",
+      "blocking_source": "Card issuer authorization code recorded from the payment provider and linked to payment and booking (Payments; payment provider).",
+      "confidence": "medium"
+    },
+    {
+      "id": 62,
+      "title": "PNR Table",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "A per-flight bulk form of PNR Full (59) that adds no separate control.",
+      "blocking_source": "Same missing event and issuance sources as PNR Full (59) (Product with the data owners).",
+      "confidence": "medium"
+    },
+    {
+      "id": 63,
+      "title": "Product Sales",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Ancillary sales are part of the booking flow, and sale-currency snapshots become necessary as multi-currency (#319) proceeds.",
+      "blocking_source": "Sale-currency snapshot and product-level cash and refund allocation (Finance with Pricing).",
+      "confidence": "medium"
+    },
+    {
+      "id": 64,
+      "title": "Passport Data",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Protected travel-document details by departure are a compliance input.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 65,
+      "title": "PNR's on Queues",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Reservation queues are improvement-plan module 9, which names this report.",
+      "blocking_source": "Reservation queue model with dated queue membership (improvement-plan module 9; Product).",
+      "confidence": "high"
+    },
+    {
+      "id": 66,
+      "title": "Remittances",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Office remittances depend on the office entity, and improvement-plan module 2 lists remittances among the reports it unblocks.",
+      "blocking_source": "Sales-office remittance register with receipts (office entity, improvement-plan module 2; Finance).",
+      "confidence": "medium"
+    },
+    {
+      "id": 67,
+      "title": "Revenue Post Departure",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Post-departure revenue is the finance view of flown coupons that the product already closes monthly.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting), plus office attribution (office entity, improvement-plan module 2).",
+      "confidence": "medium"
+    },
+    {
+      "id": 68,
+      "title": "Refunds",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Refunds are in the current product, and posted refund movements by date are their core finance report.",
+      "blocking_source": "Office of the original transaction for each refund movement (office entity, improvement-plan module 2; Sales operations owner).",
+      "confidence": "high"
+    },
+    {
+      "id": 69,
+      "title": "Reported Sales By Office",
+      "status": "partial",
+      "proposed_scope": "planned",
+      "rationale": "Office is the report's defining dimension, so it waits for the office entity (improvement-plan module 2).",
+      "blocking_source": "Sales or issuing office recorded at the transaction and linked to the document (office entity, improvement-plan module 2).",
+      "confidence": "high"
+    },
+    {
+      "id": 70,
+      "title": "Reported Sales System Wide",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "The system-wide ledger movement register is a core finance control over payments and refunds.",
+      "blocking_source": "Link from each settlement movement to its sale or issue event (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 71,
+      "title": "Reported Excess Baggage Sales",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "Baggage ancillary sales are already visible in Product Sales (63), and airport excess-weight classification is a later refinement.",
+      "blocking_source": "Excess-weight classification in the product catalogue, item refund allocation and office attribution (Pricing with Station operations; office entity, improvement-plan module 2).",
+      "confidence": "medium"
+    },
+    {
+      "id": 72,
+      "title": "Reservations By Flight Date",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Reservations by departure date are a routine booking control.",
+      "blocking_source": null,
+      "confidence": "medium"
+    },
+    {
+      "id": 73,
+      "title": "Reservations Without Tickets",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Inventory-holding reservations with missing coupons are a money and inventory exception report.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 74,
+      "title": "Restricted Flights",
+      "status": "blocked",
+      "proposed_scope": "optional",
+      "rationale": "A history of flight-wide sale restrictions helps revenue management, but no current flow or plan records it.",
+      "blocking_source": "Authoritative flight-wide commercial restriction history with type, reason and effective period (Revenue Management).",
+      "confidence": "medium"
+    },
+    {
+      "id": 75,
+      "title": "Revenue System Wide",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "System-wide revenue values by week are the top-level finance revenue view.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 76,
+      "title": "Revenue Daily Flight",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "The same values as Revenue System Wide (75), grouped by day instead of week.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 77,
+      "title": "Revenue By Route",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Revenue by route is a core commercial measure.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 78,
+      "title": "Revenue By Flight",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Revenue per dated flight is a core commercial measure.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 79,
+      "title": "Revenue By Passenger",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "Passenger-level revenue lines support audit but sit one level below the route and flight reports.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 80,
+      "title": "Revenue Flight Number",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "Overlaps Revenue By Flight (78), adding only a flight-number and departure filter.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 81,
+      "title": "Revenue By Route",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Uplift-based route revenue is the flown-revenue basis for recognition.",
+      "blocking_source": "Production acceptance of the coupon uplift source, one receipt matching passenger, booking, sector and time (Revenue Accounting with the station DCS or ground handler), and an approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 82,
+      "title": "Revenue Tickets",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "Ticket-level component values overlap Eticket Values (8) and Ticket Calculation (89), and the office column waits for module 2.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting), plus dated office attribution (office entity, improvement-plan module 2).",
+      "confidence": "medium"
+    },
+    {
+      "id": 83,
+      "title": "Revenue By Route And Month",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Monthly route revenue matches the accounting period of the existing month close.",
+      "blocking_source": "Approved revenue recognition policy reconciling funding, tax, loyalty allocation and accepted uplift (Finance/Revenue Accounting), plus office attribution (office entity, improvement-plan module 2).",
+      "confidence": "medium"
+    },
+    {
+      "id": 84,
+      "title": "RO Reports",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Cabin and RBD inventory by flight is core revenue-management inventory control.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 85,
+      "title": "Sales",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Document sales with agency attribution support agent settlement in the current booking flow.",
+      "blocking_source": "External sale or issue receipts with an authoritative sale date (ticketing provider; Finance).",
+      "confidence": "medium"
+    },
+    {
+      "id": 86,
+      "title": "Sales All",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "The complete local sales register by date is a core finance report.",
+      "blocking_source": "Original sale timestamps and exchange/reversal-to-document monetary mapping (Finance/Revenue Accounting).",
+      "confidence": "medium"
+    },
+    {
+      "id": 87,
+      "title": "Sales by City",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Point-of-sale city needs an office or channel attribution (module 2) and also informs the markets of multi-currency (#319).",
+      "blocking_source": "Point-of-sale city recorded at sale time from a documented office or channel (office entity, improvement-plan module 2; Sales operations owner).",
+      "confidence": "medium"
+    },
+    {
+      "id": 88,
+      "title": "Tax Codes",
+      "status": "blocked",
+      "proposed_scope": "required",
+      "rationale": "Approved tax codes are a compliance prerequisite for ticket taxes and per-currency tax handling, but the tax-line work (module 5) sits in a later wave, so planned is the alternative.",
+      "blocking_source": "Operator-approved, dated tax-code registry and policy (Tax/Compliance with Finance).",
+      "confidence": "low"
+    },
+    {
+      "id": 89,
+      "title": "Ticket Calculation",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Coupon-level price calculation is the audit trail behind ticket amounts and refunds.",
+      "blocking_source": "Complete component allocation and approved tax rules (Finance/Revenue Accounting; Tax/Compliance).",
+      "confidence": "medium"
+    },
+    {
+      "id": 90,
+      "title": "Ticket Coupons",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Single-coupon detail with its uplift receipt is a servicing and finance lookup.",
+      "blocking_source": "Immutable coupon state-transition history (Product with Finance).",
+      "confidence": "medium"
+    },
+    {
+      "id": 91,
+      "title": "Ticket Go Shows",
+      "status": "blocked",
+      "proposed_scope": "optional",
+      "rationale": "Go-show analysis is useful but deferrable, and no flow records the original ticket-flight linkage.",
+      "blocking_source": "Original ticket-flight attribution with accepted go-show linkage (DCS/Station operations).",
+      "confidence": "medium"
+    },
+    {
+      "id": 92,
+      "title": "Ticket No Shows",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "No-shows after DCS close drive no-show fees and revenue handling.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 93,
+      "title": "Tickets without bookings",
+      "status": "available",
+      "proposed_scope": "required",
+      "rationale": "Open coupons without a valid booking sector are a money-integrity exception.",
+      "blocking_source": null,
+      "confidence": "high"
+    },
+    {
+      "id": 94,
+      "title": "Ticket Status",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Coupon status by period is a ticketing control, and status at a past cutoff needs a transition log.",
+      "blocking_source": "Dated coupon transition log that allows status at a cutoff (Product with Finance).",
+      "confidence": "medium"
+    },
+    {
+      "id": 95,
+      "title": "Ticket Used",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Used coupons with uplift proof feed flown revenue and the month close.",
+      "blocking_source": "Production acceptance of the coupon uplift source, one receipt matching passenger, booking, sector and time (Revenue Accounting with the station DCS or ground handler).",
+      "confidence": "medium"
+    },
+    {
+      "id": 96,
+      "title": "Tickets Voided",
+      "status": "partial",
+      "proposed_scope": "required",
+      "rationale": "Void events are a finance control on issued documents.",
+      "blocking_source": "Durable void register with an approved retention policy beyond the transactional outbox (Finance with Security/Compliance).",
+      "confidence": "medium"
+    },
+    {
+      "id": 97,
+      "title": "VRS Messages",
+      "status": "partial",
+      "proposed_scope": "optional",
+      "rationale": "Type-B transmission metadata is already visible, and a combined email history is a deferrable addition.",
+      "blocking_source": "Complete generated-email ledger with provider receipts (messaging owner).",
+      "confidence": "medium"
+    },
+    {
+      "id": 98,
+      "title": "Web Bookings without Credit Card Authorizations",
+      "status": "blocked",
+      "proposed_scope": "optional",
+      "rationale": "Payment exceptions in the current Stripe flow are handled by reconciliation, which does not use issuer authorization codes.",
+      "blocking_source": "Trusted IBE channel attribution and a card authorization register (Payments; payment provider).",
+      "confidence": "medium"
+    },
+    {
+      "id": 99,
+      "title": "Web Bookings On TTL",
+      "status": "blocked",
+      "proposed_scope": "planned",
+      "rationale": "Depends on commercial ticketing time limits (improvement-plan module 9) plus a recorded IBE channel.",
+      "blocking_source": "Recorded IBE channel and commercial ticketing deadline (improvement-plan module 9; Product).",
+      "confidence": "medium"
+    }
+  ]
+}
