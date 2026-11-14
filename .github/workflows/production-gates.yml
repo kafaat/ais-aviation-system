@@ -129,6 +129,7 @@ jobs:
           server/__tests__/ticket-revalidation-acceptance-mysql.test.ts
           server/__tests__/stripe-paid-webhook-mysql.test.ts
           server/__tests__/retail-offer-concurrency-mysql.test.ts
+          server/__tests__/offer-expiry-booking-deadline-mysql.test.ts
           server/__tests__/stripe-reconciliation-race-mysql.test.ts
           server/__tests__/booking-confirmation-mysql.test.ts
           server/__tests__/fare-rules-acceptance-mysql.test.ts
