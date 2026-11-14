@@ -1,5 +1,32 @@
 # Changelog
 
+## What's Changed in v1.39.5
+
+<!-- ais-release-source: 1d8c87c4e4d3804a699c2ac25cebc0ab11fb9584 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(bookings): refuse paid cancellation that owes a refund (#341) (1f83d5b4)
+- fix(auth): check the account lock before answering a password login (#343) (83aa5268)
+- fix(inventory): enforce tenant, waitlist and per-user hold guards (#342) (a6a68ba8)
+- fix(auth): rate-limit anonymous OAuth starts and purge expired login states (#344) (38e63a1c)
+- fix: sweeper lock order, suspension review and refund cap after a downgrade (#346) (1d8c87c4)
+
+### Maintenance
+
+- chore(ops): require archive copies for section B only in the branch prune script (#340) (38c49cbe)
+
+### Other Changes
+
+- test: strengthen native offer identity and passenger ordering evidence (#339) (189bbe20)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.39.4...v1.39.5
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.39.4
 
 <!-- ais-release-source: 933db8e48edbb6bcc6a9b27f9a5b31fa517f1758 -->
