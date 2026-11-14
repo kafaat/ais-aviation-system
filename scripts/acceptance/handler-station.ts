@@ -7,6 +7,7 @@ import { operationalMessageRoutes } from "../../drizzle/operations-schema";
 import type { TrpcContext } from "../../server/_core/context";
 import { aviationIntegrationsRouter } from "../../server/routers/aviation-integrations";
 import { bookingsRouter } from "../../server/routers/bookings";
+import { cancelPaidBookingThroughRefund } from "./paid-cancellation";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
 import { reviewCouponMonth } from "../../server/services/coupon-month-review";
 import { calculateRequestHash } from "../../server/services/idempotency-v2.service";
@@ -264,9 +265,15 @@ export async function verifyHandlerStation(
       kept.booking.bookingId,
       kept.pax.id
     );
-    assert(
-      (await sale.cancel({ bookingId: removed.booking.bookingId })).success
+    // A paid booking that is owed a refund cancels through the refund flow.
+    await assert.rejects(
+      sale.cancel({ bookingId: removed.booking.bookingId }),
+      {
+        code: "PRECONDITION_FAILED",
+        message: /refunds\.create/,
+      }
     );
+    await cancelPaidBookingThroughRefund(ctx, removed.booking.bookingId);
     const adl = await deliver("ADL", {
       ...common,
       changes: [
