@@ -10,8 +10,9 @@ import { closePool } from "../db";
 /**
  * Native service-boundary coverage for S-01 and S-29 in the improvement plan.
  * The expiry case covers rejection before locking only: S-02 expiry between
- * lock and payment remains a separate journey. These tests do not execute
- * booking creation, inventory reservation or payment collection.
+ * lock and consumption, and payment after offer expiry, are covered through
+ * createBooking in offer-expiry-booking-deadline-mysql.test.ts. These tests do
+ * not execute booking creation, inventory reservation or payment collection.
  *
  * A retail offer is a purchasable quote. The booking command locks its row
  * FOR UPDATE, validates it (owner, flight, cabin, passenger types, expiry,
