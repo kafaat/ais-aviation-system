@@ -1,5 +1,6 @@
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
+import { assertNoWithdrawnDispute } from "./payment-dispute.service";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, lte, desc, lt } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -211,6 +212,8 @@ async function quoteFor(tx: SettlementTx, booking: Booking) {
       "Self-service cancellation is unavailable after departure"
     );
   if (fee.refundAmount === 0) await assertZeroCancellationAllowed(tx, booking);
+  // A split cancellation without refunds stays available; it voids the coupons.
+  else await assertNoWithdrawnDispute(tx, booking.id);
   const allocated =
     fee.refundAmount === 0
       ? active.map(s => ({ splitId: s.id, amount: s.amount, refundAmount: 0 }))

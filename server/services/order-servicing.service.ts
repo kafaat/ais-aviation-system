@@ -10,7 +10,10 @@ import {
   checkTicketRevalidation,
   revalidationEvidence,
 } from "./ticket-revalidation.service";
-import { exchangeLocalCoupons } from "./ticket-coupons.service";
+import {
+  assertNoCouponHold,
+  exchangeLocalCoupons,
+} from "./ticket-coupons.service";
 import { assertBaggageNotInCustody } from "./baggage-custody.service";
 import { calculateModificationFee } from "./modification-fee";
 import { allocateProportional } from "./seat-economics.service";
@@ -406,6 +409,9 @@ export async function quotePaidOrderService(
             throw unavailable(
               "A paid, confirmed booking before check-in is required"
             );
+          // Voluntary exchange and revalidation, including sector additions.
+          if (input.offerIds)
+            await assertNoCouponHold(tx, booking.id, "exchange");
           const [pending] = await tx
             .select()
             .from(bookingModifications)
@@ -898,6 +904,9 @@ export async function validatePaidServiceQuote(
     plan.segments.length ? "exchange" : "addAncillary"
   );
   if (plan.segments.length) {
+    // Repeated at checkout, after collection and at no-charge confirmation:
+    // a dispute can withdraw the funds after the exchange was quoted.
+    await assertNoCouponHold(tx, booking.id, "exchange");
     await assertBaggageNotInCustody(tx, booking.id);
     const cabin = plan.segments[0].cabinClass;
     const instances: (typeof flights.$inferSelect)[] = [];

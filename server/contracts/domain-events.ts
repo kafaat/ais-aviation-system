@@ -8,8 +8,23 @@ const localCouponTransitions = z
       passengerId: id,
       flightId: id,
       couponNumber: id,
-      previousStatus: z.enum(["O", "C", "V"]),
+      previousStatus: z.enum(["O", "C", "V", "S"]),
       status: z.enum(["R", "V"]),
+    })
+  )
+  .min(1)
+  .optional();
+/** S-08: suspension on withdrawn funds, void on a lost dispute and
+ * restoration to the stored prior status on a won one. */
+const disputeCouponTransitions = z
+  .array(
+    z.strictObject({
+      couponId: id,
+      passengerId: id,
+      flightId: id,
+      couponNumber: id,
+      previousStatus: z.enum(["O", "C", "S"]),
+      status: z.enum(["S", "V", "O", "C"]),
     })
   )
   .min(1)
@@ -285,6 +300,17 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     choices: recoveryChoices,
     unassignedPassengers: z.number().int().nonnegative(),
     fulfillment: z.literal("awaiting_ticket_reissue"),
+    // Chosen bookings left in place because a payment dispute holds their coupons.
+    skippedBookings: z
+      .array(
+        z.strictObject({
+          bookingId: id,
+          reason: z.enum(["coupons_suspended", "coupons_void"]),
+          disputeIds: z.array(z.string().min(1)),
+        })
+      )
+      .min(1)
+      .optional(),
   }),
   "booking.created": z.looseObject({
     bookingId: id,
@@ -407,6 +433,7 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     userId: id,
     bookingId: id.nullable(),
     amount: z.number().int(),
+    localCouponTransitions: disputeCouponTransitions,
   }),
   "order.refund_planned": z.looseObject({
     modificationId: id.nullable(),

@@ -890,6 +890,7 @@
         "server/services/dcs-state.service.ts",
         "server/services/departure-control.service.ts",
         "server/services/idempotency-v2.service.ts",
+        "server/services/ticket-coupons.service.ts",
         "server/services/travel-clearance.service.ts"
       ],
       "tableExpressions": {
@@ -5015,6 +5016,7 @@
         "server/services/cancellation-policy.service.ts",
         "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
+        "server/services/payment-dispute.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/rbac.service.ts",
         "server/services/ticket-coupons.service.ts",
@@ -5184,10 +5186,16 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/webhooks/stripe.ts"],
+      "consumers": [
+        "server/services/ordinary-refund.service.ts",
+        "server/services/split-refund.service.ts",
+        "server/services/ticket-coupons.service.ts",
+        "server/webhooks/stripe.ts"
+      ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/services/outbox.service.ts",
+        "server/services/ticket-coupons.service.ts",
         "server/services/wallet-funding.service.ts"
       ],
       "tableExpressions": {
@@ -6991,6 +6999,7 @@
         "server/services/idempotency-v2.service.ts",
         "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
+        "server/services/payment-dispute.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/rbac.service.ts",
         "server/services/ticket-coupons.service.ts",
@@ -7387,6 +7396,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/services/boarding-pass.service.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/bookings.service.ts",
         "server/services/dcs-operations.service.ts",
@@ -7395,13 +7405,17 @@
         "server/services/ndc.service.ts",
         "server/services/order-servicing.service.ts",
         "server/services/ordinary-refund.service.ts",
+        "server/services/payment-dispute.service.ts",
         "server/services/refunds.service.ts",
         "server/services/seat-map.service.ts",
         "server/services/split-refund.service.ts",
         "server/services/ticket-documents.service.ts",
         "server/services/zero-refund-cancellation.service.ts"
       ],
-      "dependencies": ["drizzle/schema.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/payment-dispute.service.ts"
+      ],
       "tableExpressions": {
         "reads": ["flights", "passengers", "seatInventory", "ticketCoupons"],
         "writes": ["ticketCoupons"]

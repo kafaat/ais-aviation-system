@@ -30,6 +30,7 @@ import {
   documentContext,
 } from "./travel-clearance.service";
 import type { SettlementTx } from "./booking-settlement.service";
+import { assertCouponTravelable } from "./ticket-coupons.service";
 import { assertDcsPassengerCanBoard } from "./dcs-state.service";
 import {
   appendBcbpSecurityData,
@@ -182,6 +183,16 @@ async function activePayload(
       code: "PRECONDITION_FAILED",
       message: "Passenger must have a current checked-in seat on this flight",
     });
+  // Pass issue, gate scan and desk boarding all admit through this payload.
+  await assertCouponTravelable(
+    tx,
+    {
+      bookingId: input.bookingId,
+      passengerId: input.passengerId,
+      flightId: c.flight.id,
+    },
+    "boarding"
+  );
   const payload: BoardingPassPayload = {
     bookingId: input.bookingId,
     bookingReference: c.booking.bookingReference,

@@ -5073,6 +5073,30 @@
                 "fulfillment": {
                   "type": "string",
                   "const": "awaiting_ticket_reissue"
+                },
+                "skippedBookings": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "bookingId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": ["coupons_suspended", "coupons_void"]
+                      },
+                      "disputeIds": {
+                        "type": "array",
+                        "items": { "type": "string", "minLength": 1 }
+                      }
+                    },
+                    "required": ["bookingId", "reason", "disputeIds"],
+                    "additionalProperties": false
+                  }
                 }
               },
               "required": [
@@ -5261,7 +5285,7 @@
                       },
                       "previousStatus": {
                         "type": "string",
-                        "enum": ["O", "C", "V"]
+                        "enum": ["O", "C", "V", "S"]
                       },
                       "status": { "type": "string", "enum": ["R", "V"] }
                     },
@@ -6915,7 +6939,7 @@
                       },
                       "previousStatus": {
                         "type": "string",
-                        "enum": ["O", "C", "V"]
+                        "enum": ["O", "C", "V", "S"]
                       },
                       "status": { "type": "string", "enum": ["R", "V"] }
                     },
@@ -7227,6 +7251,52 @@
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
+                },
+                "localCouponTransitions": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "couponId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "passengerId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "flightId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "couponNumber": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "previousStatus": {
+                        "type": "string",
+                        "enum": ["O", "C", "S"]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["S", "V", "O", "C"]
+                      }
+                    },
+                    "required": [
+                      "couponId",
+                      "passengerId",
+                      "flightId",
+                      "couponNumber",
+                      "previousStatus",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
                 }
               },
               "required": ["userId", "bookingId", "amount"],

@@ -16,6 +16,7 @@ import {
 } from "./booking-settlement.service";
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
+import { assertNoWithdrawnDispute } from "./payment-dispute.service";
 import { settleVerifiedRefund } from "./payment-settlement.service";
 import { recordEvent } from "./outbox.service";
 import { isAdmin } from "./rbac.service";
@@ -167,6 +168,7 @@ export async function reserveOrdinaryRefundCancellation(
           );
       }
       await assertNoCollectionReview(tx, booking.id);
+      await assertNoWithdrawnDispute(tx, booking.id);
       await assertBookingDepartureReleasable(tx, booking);
       await assertNoFlownCouponForCancellation(tx, booking.id);
     }

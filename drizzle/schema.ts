@@ -7259,6 +7259,8 @@ export const ticketCoupons = mysqlTable(
     flightId: int("flightId").notNull(),
     ticketNumber: varchar("ticketNumber", { length: 13 }).notNull(),
     couponNumber: int("couponNumber").notNull(),
+    // S (suspended) is local: a payment dispute has withdrawn the booking's
+    // funds. It is appended so existing ordinals stay unchanged.
     status: mysqlEnum("status", [
       "O",
       "C",
@@ -7267,7 +7269,11 @@ export const ticketCoupons = mysqlTable(
       "E",
       "V",
       "unverified",
+      "S",
     ]).notNull(),
+    // The status an S coupon returns to when the dispute resolves in the
+    // merchant's favour. Written and cleared with S under the booking lock.
+    suspendedFromStatus: mysqlEnum("suspendedFromStatus", ["O", "C"]),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
