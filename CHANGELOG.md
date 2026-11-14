@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.40.1
+
+<!-- ais-release-source: 7a4c28e31af057860a4e1eb61b7799ae2798dfe0 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(security): answer foreign and missing rows alike with NOT_FOUND (S-28 decision) (#354) (7a4c28e3)
+
+### Other Changes
+
+- test(security): behavioral control matrix for every public mutation family (S-27) (#352) (999c4b2a)
+- test(security): cross-tenant isolation sweep on native MySQL (S-28) (#353) (48b54ee6)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.40.0...v1.40.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.40.0
 
 <!-- ais-release-source: c031245db33410970d07d4a8692fca8d605d66ca -->
