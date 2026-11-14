@@ -31,8 +31,8 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
 
     if (booking.userId !== input.userId) {
       throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Access denied",
+        code: "NOT_FOUND",
+        message: "Booking not found",
       });
     }
 

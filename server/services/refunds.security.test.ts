@@ -224,7 +224,7 @@ describe("refund service authorization", () => {
     "rejects a non-owner %s impersonating the declared booking owner",
     async role => {
       await expect(createRefund(input, { id: 99, role })).rejects.toMatchObject(
-        { code: "FORBIDDEN" }
+        { code: "NOT_FOUND" }
       );
 
       expect(mocks.getDb).not.toHaveBeenCalled();
@@ -243,7 +243,7 @@ describe("refund service authorization", () => {
   it("fails closed when a caller omits the trusted actor", async () => {
     await expect(
       createRefund(input, undefined as unknown as RefundActor)
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     expect(mocks.getDb).not.toHaveBeenCalled();
     expectNoFinancialWrites();
@@ -255,7 +255,7 @@ describe("refund service authorization", () => {
       mocks.limit.mockReset().mockResolvedValue([{ ...booking, userId: 99 }]);
 
       await expect(createRefund(input, actor)).rejects.toMatchObject({
-        code: "FORBIDDEN",
+        code: "NOT_FOUND",
       });
 
       expectNoFinancialWrites();

@@ -243,8 +243,8 @@ describe("DCS denial and seat selection", () => {
     await expect(
       foreign.selectSeat({ ...key, seatNumber: "1A" })
     ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      message: "You do not own this booking",
+      code: "NOT_FOUND",
+      message: "Booking 3 not found",
     });
     expect(snapshot()).toEqual(before);
   });

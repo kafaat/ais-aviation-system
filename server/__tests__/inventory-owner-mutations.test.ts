@@ -136,7 +136,7 @@ function beforeEntryLock(mutate: () => void) {
 describe("inventory owner mutations through the real router and service", () => {
   it("rejects releasing another user's hold without modifying inventory", async () => {
     await expect(caller.releaseHold({ holdId: 2 })).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "NOT_FOUND",
     });
     expect(fixture.rows("seat_holds")[1].status).toBe("active");
     expect(

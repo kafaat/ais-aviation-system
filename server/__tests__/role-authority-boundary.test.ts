@@ -143,11 +143,11 @@ describe("intended booking administrator bypass", () => {
     async role => {
       const caller = bookingsRouter.createCaller(context(role));
       await expect(caller.getByPNR({ pnr: "AUDIT1" })).rejects.toMatchObject({
-        code: "FORBIDDEN",
+        code: "NOT_FOUND",
       });
       await expect(
         caller.getPassengers({ bookingId: 5 })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
   );
   it("retains owner access and the existing explicit tenant restriction", async () => {

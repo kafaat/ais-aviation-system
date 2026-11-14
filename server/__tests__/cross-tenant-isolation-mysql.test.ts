@@ -25,10 +25,9 @@ import {
  * any database write; the proof of "before any write" is a CHECKSUM TABLE of
  * every table in the disposable schema, compared before and after each call.
  *
- * The suite also records, per procedure, whether a foreign row and a missing
- * row are told apart (FORBIDDEN versus NOT_FOUND). The plan's target is that
- * they are indistinguishable; the committed expectation below documents the
- * current answer for each procedure so a change in either direction is seen.
+ * The suite also checks, per procedure, that a foreign row and a missing row
+ * are answered alike (NOT_FOUND for both), as the owner decided on
+ * 2026-11-14 (#327): a caller cannot learn that another tenant's row exists.
  */
 vi.mock("../_core/middleware/procedure-rate-limit", () => ({
   enforceProcedureRateLimit: vi.fn(),
@@ -103,7 +102,7 @@ const probes: Probe[] = [
     path: "refunds.checkRefundable",
     kind: "query",
     call: (c, ids) => c.refunds.checkRefundable({ bookingId: ids.bookingId }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
@@ -114,14 +113,14 @@ const probes: Probe[] = [
         bookingId: ids.bookingId,
         reason: "cross-tenant probe",
       }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
     path: "splitPayments.getStatus",
     kind: "query",
     call: (c, ids) => c.splitPayments.getStatus({ bookingId: ids.bookingId }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
@@ -142,7 +141,7 @@ const probes: Probe[] = [
         bookingId: ids.bookingId,
         passengerId: ids.passengerId,
       }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
@@ -150,14 +149,14 @@ const probes: Probe[] = [
     kind: "query",
     call: (c, ids) =>
       c.specialServices.getBookingServices({ bookingId: ids.bookingId }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
     path: "baggage.getBookingBaggage",
     kind: "query",
     call: (c, ids) => c.baggage.getBookingBaggage({ bookingId: ids.bookingId }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
@@ -195,7 +194,7 @@ const probes: Probe[] = [
     path: "emd.getByBooking",
     kind: "query",
     call: (c, ids) => c.emd.getByBooking({ bookingId: ids.bookingId }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
@@ -214,21 +213,21 @@ const probes: Probe[] = [
         givenNames: "Alpha",
         surname: "Native",
       }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
     path: "rebooking.getRebookData",
     kind: "query",
     call: (c, ids) => c.rebooking.getRebookData({ bookingId: ids.bookingId }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
     path: "softDelete.deleteBooking",
     kind: "mutation",
     call: (c, ids) => c.softDelete.deleteBooking({ bookingId: ids.bookingId }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
@@ -266,7 +265,7 @@ const probes: Probe[] = [
     path: "multiCity.getSegments",
     kind: "query",
     call: (c, ids) => c.multiCity.getSegments({ bookingId: ids.bookingId }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
   {
@@ -277,7 +276,7 @@ const probes: Probe[] = [
         bookingId: ids.bookingId,
         passengerId: ids.passengerId,
       }),
-    foreign: "FORBIDDEN",
+    foreign: "NOT_FOUND",
     missing: "NOT_FOUND",
   },
 ];
@@ -427,32 +426,11 @@ nativeDescribe.sequential(
       // `distinguishable` list; closing it is a product change (FORBIDDEN to
       // NOT_FOUND on foreign rows) that needs the owner's decision. Until then
       // the two lists are pinned so a change in either direction is reviewed.
-      expect(distinguishable).toEqual([
-        "apis.submitInfo",
-        "baggage.getBookingBaggage",
-        "boardingPass.issue",
-        "emd.getByBooking",
-        "multiCity.getSegments",
-        "rebooking.getRebookData",
-        "refunds.checkRefundable",
-        "refunds.create",
-        "seatMap.selectSeat",
-        "softDelete.deleteBooking",
-        "specialServices.getBookingServices",
-        "splitPayments.getStatus",
-      ]);
-      expect(indistinguishable).toEqual([
-        "ancillary.addToBooking",
-        "ancillary.getBookingAncillaries",
-        "bookings.cancel",
-        "bookings.getByPNR",
-        "bookings.getPassengers",
-        "compensation.fileClaim",
-        "eticket.generateETicket",
-        "modifications.requestChangeDate",
-        "payments.createCheckoutSession",
-        "travelScenarios.getShareableItinerary",
-      ]);
+      // Owner decision of 2026-11-14 (#327): foreign and missing rows are
+      // answered alike. Every covered procedure must stay in this list; a path
+      // that reappears under `distinguishable` is a regression.
+      expect(distinguishable).toEqual([]);
+      expect(indistinguishable).toEqual(probes.map(probe => probe.path).sort());
     });
 
     it("still serves the owner of tenant A the same resources", async () => {

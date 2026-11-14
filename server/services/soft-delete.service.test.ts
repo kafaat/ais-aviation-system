@@ -164,7 +164,7 @@ describe("booking deletion authority over executing relational SQL", () => {
 
   it("checks ownership and cancellation while holding the booking lock", async () => {
     await expect(softDeleteBooking(2, 7, false)).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "NOT_FOUND",
     });
     fixture.sqlite.exec(
       "UPDATE bookings SET status = 'confirmed' WHERE id = 2"

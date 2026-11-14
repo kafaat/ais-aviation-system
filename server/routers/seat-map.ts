@@ -64,8 +64,8 @@ async function verifyBookingOwnership(
 
   if (booking.userId !== userId) {
     throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You do not own this booking",
+      code: "NOT_FOUND",
+      message: `Booking ${bookingId} not found`,
     });
   }
 }

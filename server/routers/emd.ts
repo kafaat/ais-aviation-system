@@ -299,8 +299,8 @@ export const emdRouter = router({
         ctx.user.role !== "super_admin"
       ) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
+          code: "NOT_FOUND",
+          message: "Booking not found",
         });
       }
 
