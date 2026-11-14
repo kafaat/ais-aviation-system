@@ -257,6 +257,36 @@ describe("a locked account gives no password oracle", () => {
     expect(mocks.login).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { account: "locked", setUp: lockAccount },
+    {
+      account: "whose lock cannot be read",
+      setUp: () =>
+        mocks.isAccountLocked.mockRejectedValue(new Error("Connection lost")),
+    },
+  ])(
+    "reads no MFA settings for an account $account, so their failure is no oracle",
+    async ({ setUp }) => {
+      setUp();
+      // Any step after the password check that a locked account still
+      // reaches can fail in a way only the correct password exposes.
+      mocks.getMfaSettings.mockRejectedValue(
+        new Error("MFA settings unavailable")
+      );
+
+      const wrong = await loginFailure(wrongPassword);
+      const right = await loginFailure(rightPassword);
+
+      expect(right).toEqual(wrong);
+      expect(right).toEqual({
+        code: "UNAUTHORIZED",
+        message: "Invalid email or password",
+      });
+      expect(mocks.getMfaSettings).not.toHaveBeenCalled();
+      expect(mocks.createMfaChallenge).not.toHaveBeenCalled();
+    }
+  );
+
   it("denies with the wrong-password answer when the lock cannot be read", async () => {
     mocks.isAccountLocked.mockRejectedValue(new Error("Connection lost"));
 
