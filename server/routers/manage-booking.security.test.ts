@@ -386,7 +386,7 @@ describe("public booking capability and tenant boundaries", () => {
     ).resolves.toBeDefined();
     await expect(
       foreignOwner.bookings.getByPNR({ pnr: "PNR001" })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("sanitizes storage failures instead of returning SQL/personal details", async () => {

@@ -419,7 +419,8 @@ test("check-in PNR and legacy reference links resolve only the native booking ow
         results[names(deniedResponse.request()).indexOf("bookings.getByPNR")];
       expect(result?.error?.json ?? result?.error).toMatchObject({
         data: {
-          code: actor.id === fixture.otherOwner.id ? "FORBIDDEN" : "NOT_FOUND",
+          // Another owner and another tenant are answered alike (S-28 decision).
+          code: "NOT_FOUND",
         },
       });
       await expect(page.getByRole("alert")).toContainText(

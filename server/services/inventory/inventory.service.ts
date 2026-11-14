@@ -532,7 +532,10 @@ export async function releaseSeatHold(
     }
 
     if (hold.userId !== userId) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Seat hold not found",
+      });
     }
 
     if (hold.status === "released") return hold;

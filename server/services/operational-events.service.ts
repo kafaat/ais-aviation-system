@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { and, eq, gte, lte, desc, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db";
@@ -35,8 +36,13 @@ export async function ingestOperationalEvent(
       .from(flights)
       .where(eq(flights.id, e.flightId as number))
       .for("update");
+    // A verified source writing outside its tenant is a scope refusal, not a
+    // server fault (scenario S-27): FORBIDDEN, nothing written.
     if (!flight || flight.tenantId !== source.tenantId)
-      throw new Error("Source cannot write this flight instance");
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Source cannot write this flight instance",
+      });
     await assertTenantOperational(tx, flight.tenantId);
     const time = Date.parse(timePayload.parse(e.payload).time);
     if (

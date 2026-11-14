@@ -394,10 +394,10 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
           ...travelDocument(),
           documentNumber: "FOREIGN123",
         })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       await expect(
         foreign.getMyAPISStatus({ passengerId: 81 })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(await storedDocument()).toEqual(before);
     }
   );
@@ -973,12 +973,12 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
     const otherOwner = seatMapRouter.createCaller(context(10));
     await expect(
       otherOwner.getBoardingPass({ flightId: 41, passengerId: 81 })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       boardingPassRouter
         .createCaller(context(10))
         .issue({ bookingId: 71, passengerId: 81, flightId: 41 })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       seats().getBoardingPass({ flightId: 42, passengerId: 81 })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -1215,7 +1215,7 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
       expect(nativeWait).toBe(true);
       expect(settled).toBe(false);
       await transfer.commit();
-      await expect(releasing).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(releasing).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(await db.select().from(schema.seatInventory)).toEqual(beforeSeats);
       expect(await db.select().from(schema.passengers)).toEqual(
         beforePassengers
@@ -1254,7 +1254,7 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
         flightId: 41,
         seatNumber: "1A",
       })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(await db.select().from(schema.seatInventory)).toEqual(beforeSeats);
     expect(await db.select().from(schema.passengers)).toEqual(beforePassengers);
   });
@@ -1277,7 +1277,7 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
                 passengerId: 81,
                 flightId: 41,
               });
-      await expect(request).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(request).rejects.toMatchObject({ code: "NOT_FOUND" });
       const [seat] = await db
         .select()
         .from(schema.seatInventory)
@@ -1334,7 +1334,7 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
             passengerId: 81,
             flightId: 41,
           })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
       expect(await assignedSeat()).toEqual(before);
       const [passenger] = await db
@@ -1363,10 +1363,10 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
       }
       await expect(
         passes().issue({ bookingId: 71, passengerId: 81, flightId: 41 })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       await expect(
         seats().getBoardingPass({ passengerId: 81, flightId: 41 })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect((await assignedSeat()).boardingPassIssued).toBe(false);
     }
   );
@@ -1377,7 +1377,7 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
       boardingPassRouter
         .createCaller(context(9, null))
         .issue({ bookingId: 71, passengerId: 81, flightId: 41 })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect((await assignedSeat()).boardingPassIssued).toBe(false);
   });
 });

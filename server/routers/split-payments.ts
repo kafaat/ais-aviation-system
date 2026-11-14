@@ -80,8 +80,8 @@ export const splitPaymentsRouter = router({
       // Validate booking belongs to the initiating user
       if (booking.userId !== ctx.user.id) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You can only initiate split payments for your own bookings",
+          code: "NOT_FOUND",
+          message: "Booking not found",
         });
       }
 

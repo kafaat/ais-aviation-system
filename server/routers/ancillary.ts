@@ -133,8 +133,8 @@ export const ancillaryRouter = router({
 
       if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
+          code: "NOT_FOUND",
+          message: "Booking not found",
         });
       }
 
@@ -177,8 +177,8 @@ export const ancillaryRouter = router({
 
       if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
+          code: "NOT_FOUND",
+          message: "Booking not found",
         });
       }
 
@@ -224,8 +224,8 @@ export const ancillaryRouter = router({
         (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
       ) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
+          code: "NOT_FOUND",
+          message: "Booking ancillary not found",
         });
       }
 
@@ -271,8 +271,8 @@ export const ancillaryRouter = router({
 
       if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
+          code: "NOT_FOUND",
+          message: "Booking not found",
         });
       }
 

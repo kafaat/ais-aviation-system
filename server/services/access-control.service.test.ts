@@ -40,10 +40,10 @@ describe("access-control.service — tenant isolation", () => {
       await expect(assertBookingOwnership(1, 42)).resolves.toBe(42);
     });
 
-    it("rejects a different user with FORBIDDEN", async () => {
+    it("answers a different user with NOT_FOUND, like a missing booking", async () => {
       vi.mocked(db.getDb).mockResolvedValue(mockDb([{ userId: 99 }]));
       await expect(assertBookingOwnership(1, 42)).rejects.toMatchObject({
-        code: "FORBIDDEN",
+        code: "NOT_FOUND",
       });
     });
 
@@ -99,7 +99,7 @@ describe("access-control.service — tenant isolation", () => {
         mockDb([{ bookingId: 3, ownerId: 1 }])
       );
       await expect(assertPassengerOwnership(8, 42)).rejects.toMatchObject({
-        code: "FORBIDDEN",
+        code: "NOT_FOUND",
       });
     });
   });
@@ -113,7 +113,7 @@ describe("access-control.service — tenant isolation", () => {
     it("rejects a non-owner", async () => {
       vi.mocked(db.getDb).mockResolvedValue(mockDb([{ userId: 5 }]));
       await expect(assertModificationOwnership(2, 42)).rejects.toMatchObject({
-        code: "FORBIDDEN",
+        code: "NOT_FOUND",
       });
     });
   });
