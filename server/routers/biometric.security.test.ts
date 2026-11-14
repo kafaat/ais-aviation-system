@@ -99,7 +99,7 @@ describe.each([
       const eventsBefore = biometric.getBiometricEvents({ passengerId }).total;
       await expect(
         operations(context(userId, tenantId, role))[operation]()
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(biometric.getBiometricEvents({ passengerId }).total).toBe(
         eventsBefore
       );
@@ -118,8 +118,15 @@ it.each([
 ])("rejects inconsistent or unassigned tenant records: %j", async tenants => {
   if (!row) throw new Error("Missing passenger fixture");
   Object.assign(row, tenants);
+  // An unassigned tenant is a configuration fault and stays FORBIDDEN; a
+  // mismatch between passenger and booking tenants is answered like a missing
+  // row (owner decision of 2026-11-14, S-28).
+  const code =
+    tenants.passengerTenantId == null || tenants.bookingTenantId == null
+      ? "FORBIDDEN"
+      : "NOT_FOUND";
   for (const operation of Object.values(operations(context()))) {
-    await expect(operation()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(operation()).rejects.toMatchObject({ code });
   }
 });
 
@@ -168,7 +175,7 @@ it("checks ownership on direct service calls as well as router calls", async () 
     () => biometric.revokeEnrollment(passengerId, actor),
   ];
   for (const call of calls) {
-    await expect(call()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(call()).rejects.toMatchObject({ code: "NOT_FOUND" });
   }
 });
 
