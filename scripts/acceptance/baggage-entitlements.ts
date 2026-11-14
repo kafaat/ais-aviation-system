@@ -284,7 +284,8 @@ export async function verifyBaggageEntitlements(
           ...actor,
           id: ownerId + 1,
         }),
-        { code: "FORBIDDEN" }
+        // Another owner is answered like a missing booking (S-28 decision).
+        { code: "NOT_FOUND" }
       );
       await assert.rejects(
         listOwnedBaggageEntitlements(db, bookingId, {
