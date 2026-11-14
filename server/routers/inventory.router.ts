@@ -14,7 +14,10 @@ import {
   protectedProcedure,
   adminProcedure,
 } from "../_core/trpc";
-import { InventoryService } from "../services/inventory/inventory.service";
+import {
+  InventoryService,
+  MAX_SEATS_PER_BOOKING,
+} from "../services/inventory/inventory.service";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -29,7 +32,7 @@ const getInventoryStatusInput = z.object({
 const allocateSeatsInput = z.object({
   flightId: z.number().int().positive(),
   cabinClass: z.enum(["economy", "business"]),
-  seats: z.number().int().min(1).max(9),
+  seats: z.number().int().min(1).max(MAX_SEATS_PER_BOOKING),
   sessionId: z.string().min(1),
 });
 
@@ -40,7 +43,7 @@ const releaseHoldInput = z.object({
 const addToWaitlistInput = z.object({
   flightId: z.number().int().positive(),
   cabinClass: z.enum(["economy", "business"]),
-  seats: z.number().int().min(1).max(9),
+  seats: z.number().int().min(1).max(MAX_SEATS_PER_BOOKING),
 });
 
 const removeFromWaitlistInput = z.object({
@@ -104,7 +107,8 @@ export const inventoryRouter = router({
           input.cabinClass,
           input.seats,
           ctx.user.id,
-          input.sessionId
+          input.sessionId,
+          ctx.tenantId
         );
 
         return {
@@ -112,6 +116,7 @@ export const inventoryRouter = router({
           data: result,
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:
@@ -152,11 +157,12 @@ export const inventoryRouter = router({
     .output(responseContracts["addToWaitlist"])
     .mutation(async ({ input, ctx }) => {
       try {
-        const entry = await InventoryService.addToWaitlist(
+        const entry = await InventoryService.joinWaitlist(
           input.flightId,
           input.cabinClass,
           input.seats,
-          ctx.user.id
+          ctx.user.id,
+          ctx.tenantId
         );
 
         return {
@@ -168,6 +174,7 @@ export const inventoryRouter = router({
           },
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:

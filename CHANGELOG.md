@@ -2,13 +2,14 @@
 
 ## What's Changed in v1.39.5
 
-<!-- ais-release-source: 83aa5268f51c3a616af4575f872def6823d464f2 -->
+<!-- ais-release-source: a6a68ba86e00979c922eef98b437e69df79e29ca -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
 
 - fix(bookings): refuse paid cancellation that owes a refund (#341) (1f83d5b4)
 - fix(auth): check the account lock before answering a password login (#343) (83aa5268)
+- fix(inventory): enforce tenant, waitlist and per-user hold guards (#342) (a6a68ba8)
 
 ### Maintenance
 
