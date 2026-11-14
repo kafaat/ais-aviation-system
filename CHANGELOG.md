@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.40.0
+
+<!-- ais-release-source: 4feaae1075157cd17963c0136785f02a766a80d3 -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(audit): record every privileged mutation from the procedure builders (S-21) (#348) (4feaae10)
+
+### Other Changes
+
+- test(ticketing): observe the booking lock between concurrent first ticket reads (S-07) (#347) (41c95cc6)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.39.5...v1.40.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.39.5
 
 <!-- ais-release-source: 1d8c87c4e4d3804a699c2ac25cebc0ab11fb9584 -->
