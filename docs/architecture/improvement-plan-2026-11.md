@@ -168,7 +168,9 @@ acceptance passes.
 single decision session with the finance officer and product owner that
 records approve or amend per row, names the people for the roles in that
 record's section 4, and states the YER reference-rate policy. ADR 0002 is
-adopted or amended in the same session.
+adopted or amended in the same session. **Update 2026-11-14:** the owner
+accepted ADR 0002 and adopted G3 and G4 as working defaults (#327, decision
+4); G1, the named roles and the YER reference source remain for that session.
 
 **Ownership.** Fill `docs/architecture/service-ownership.json` for the five
 domains; `generate-service-catalog.ts --check` verifies the catalog, and the

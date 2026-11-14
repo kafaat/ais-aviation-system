@@ -1,11 +1,11 @@
 # ADR 0002: AIS as a multi-tenant platform with three operating modes
 
-- **Status:** Proposed. Recorded on 10 November 2026 from the recommendation
-  forwarded by the repository owner with the multi-currency planning; the
-  owner adopts it by stating so on #319. Nothing in this document is
-  implemented by its acceptance; it fixes the target shape so that currency,
-  permission and accounting work in #319 is not redesigned when the first
-  external airline is onboarded.
+- **Status:** Accepted on 14 November 2026 by the repository owner
+  ([#327, decision 4](https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729)). Recorded as Proposed on 10 November 2026 from the
+  recommendation forwarded by the repository owner with the multi-currency
+  planning. Nothing in this document is implemented by its acceptance; it
+  fixes the target shape so that currency, permission and accounting work in
+  #319 is not redesigned when the first external airline is onboarded.
 - **Date:** 10 November 2026, written against `main@b9addba`.
 - **Deciders:** repository owner. Domain ownership remains unassigned in
   `docs/architecture/service-ownership.json`; this ADR does not invent owners.

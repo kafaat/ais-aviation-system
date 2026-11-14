@@ -163,6 +163,14 @@ and the tenant, negative and concurrency tests are accepted. Still open under
 G1: the allowed choices, markets, first transaction currencies and named
 owners.
 
+**Owner decision, 2026-11-14 ([#327, decision 4](https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729)).** #319 proceeds.
+ADR 0002 is accepted, and the G3 rate-fixing and G4 rounding proposals in
+section 6 of the scope record are adopted as working defaults: the rate is
+fixed when a binding quote is created, and amounts round to each currency's
+minor unit. The YER reference rate is an official published rate; which
+source is still for the owner to name. The deployed product stays SAR, and
+the G1 currency list and named owners remain open.
+
 ## 7. S-28 — foreign and missing rows are answered alike (decided 2026-11-14)
 
 **Decision (owner, 14 November 2026, #327).** When an authenticated caller
