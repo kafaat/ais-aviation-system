@@ -612,6 +612,12 @@ async function resumeOrdinaryRefund(
         requestOperationId(request) !== intent.operationId
       )
         throw unavailable("Saved cancellation request is invalid");
+      // Known window (S-08): the dispute gate ran in the transaction that
+      // committed requestedAt above. A funds_withdrawn committed after that
+      // commit but before this call is not seen, and the refund is still sent
+      // once. No database lock can be held across the provider call, so this
+      // window cannot be closed here (pinned in
+      // dispute-chargeback-settlement-mysql.test.ts, "known limits").
       refund = await stripe.refunds.create(request, {
         idempotencyKey: intent.operationId,
       });
