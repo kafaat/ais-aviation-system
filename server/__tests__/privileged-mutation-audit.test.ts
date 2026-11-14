@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { TRPCError } from "@trpc/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "../_core/context";
 import inventoryFixture from "./fixtures/privileged-mutations.json";
 
@@ -78,6 +78,12 @@ const PRIVILEGED_ONLY_PREFIXES = [
 ];
 
 describe("privileged mutation audit (S-21 router sweep)", () => {
+  // The first import of the whole application router can take longer than
+  // the per-test budget when the suite runs under load; warm it here.
+  beforeAll(async () => {
+    await inventory();
+  }, 60000);
+
   it("marks every privileged procedure with one of the four scopes and nothing else", async () => {
     const rows = await inventory();
     expect(rows.length).toBeGreaterThan(800);
