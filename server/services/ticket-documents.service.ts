@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { localDocumentCoupons } from "./ticket-coupons.service";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db";
@@ -45,8 +46,10 @@ export async function readTicketDocument(
       .from(bookings)
       .where(eq(bookings.id, bookingId))
       .for("update");
+    // A missing booking and another user's booking answer alike (S-28):
+    // NOT_FOUND, never a server fault.
     if (!booking || (userId !== undefined && booking.userId !== userId))
-      throw new Error("Booking not found");
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
     if (
       !["confirmed", "completed"].includes(booking.status) ||
       booking.paymentStatus !== "paid"
