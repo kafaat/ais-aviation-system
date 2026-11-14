@@ -665,6 +665,9 @@ export async function cancelBooking(
         throw new Error("Booking cannot be cancelled");
       if (current.status === "cancelled") return;
       await assertNoFlownCouponForCancellation(tx, current.id);
+      // A paid booking is never cancelled here: cancelling first would leave the
+      // quoted refund unreachable, because the refund flow only starts from a
+      // confirmed booking and cancels it together with the refund.
       if (current.paymentStatus === "paid") {
         const quote = await quoteCancellationPolicy(tx, current);
         if (quote.refundAmount === 0)
@@ -673,6 +676,10 @@ export async function cancelBooking(
             message:
               "Use the cancellation quote and explicitly confirm that no refund is due",
           });
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `A refund of ${quote.refundAmount} cents is due on this paid booking; cancel it through the refund flow (refunds.create, or refunds.cancelSplitBooking for split payments), which cancels and refunds together`,
+        });
       }
       await cancelBookingResources(tx, current, "Owner cancellation", userId);
     });
