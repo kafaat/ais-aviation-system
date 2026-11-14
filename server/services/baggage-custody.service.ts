@@ -196,7 +196,11 @@ export async function ingestBaggageCustody(
     !source.deviceIds?.includes(scan.deviceId) ||
     !source.airportIds?.includes(scan.airportId)
   )
-    throw new Error("Source device or airport is not authorized");
+    // Verified source, wrong device or airport: a scope refusal (S-27).
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Source device or airport is not authorized",
+    });
   const db = await getDb();
   if (!db) throw new Error("Baggage storage unavailable");
   const [hint] = await db
@@ -217,7 +221,10 @@ export async function ingestBaggageCustody(
       .where(eq(baggageItems.id, hint.id))
       .for("update");
     if (!booking || !bag || booking.tenantId !== source.tenantId)
-      throw new Error("Source cannot handle this booking");
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Source cannot handle this booking",
+      });
     await assertTenantOperational(tx, booking.tenantId);
     const [replay] = await tx
       .select()
