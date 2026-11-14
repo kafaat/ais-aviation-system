@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import type mysql from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as schema from "../../drizzle/schema";
@@ -18,9 +18,12 @@ import {
  * the sweeper's gap lock and InnoDB has to break the cycle, while inserts for
  * every other flight wait as long as the sweeper transaction stays open.
  *
- * Each case keeps one sweeper transaction open deterministically: another
- * transaction holds the flight row, and the cases act only after the sweeper
- * is observed waiting on InnoDB for it.
+ * The sweeper must still release what it released before, including a
+ * booking that createBooking commits while the sweep waits on its flight.
+ *
+ * Cases that need a sweeper transaction open keep it open deterministically:
+ * another transaction holds the flight or booking row, and the case acts only
+ * after the sweeper is observed waiting on InnoDB for it.
  */
 const nativeDescribe =
   process.env.AIS_DISPOSABLE_DATABASE === "true" &&
@@ -112,6 +115,260 @@ nativeDescribe.sequential(
         .where(eq(schema.inventoryLocks.id, id));
       return row?.status;
     }
+
+    function hold(id: number, flightId: number, expiresAt: Date) {
+      return {
+        id,
+        flightId,
+        numberOfSeats: 1,
+        cabinClass: "economy" as const,
+        userId: 9,
+        sessionId: `sweeper-${id}`,
+        status: "active" as const,
+        expiresAt,
+      };
+    }
+
+    function seat(id: number, flightId: number, seatNumber: string) {
+      return {
+        id,
+        flightId,
+        seatMapId: 1,
+        seatNumber,
+        row: Number.parseInt(seatNumber, 10),
+        column: seatNumber.slice(-1),
+        cabinClass: "economy" as const,
+        seatType: "window" as const,
+        status: "available" as const,
+      };
+    }
+
+    /** Who holds a seat, and the seat number its passenger carries. */
+    async function seatState(seatId: number, passengerId: number) {
+      const [held] = await fixture.db
+        .select({
+          status: schema.seatInventory.status,
+          bookingId: schema.seatInventory.bookingId,
+          passengerId: schema.seatInventory.passengerId,
+        })
+        .from(schema.seatInventory)
+        .where(eq(schema.seatInventory.id, seatId));
+      const [passenger] = await fixture.db
+        .select({ seatNumber: schema.passengers.seatNumber })
+        .from(schema.passengers)
+        .where(eq(schema.passengers.id, passengerId));
+      return { ...held, passengerSeat: passenger?.seatNumber };
+    }
+
+    /** "settled" if work ends before any transaction in the owned schema
+     * waits on an InnoDB lock, "waited" otherwise. */
+    async function settlesWithoutLockWait(work: Promise<unknown>) {
+      let settled = false;
+      void work.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        }
+      );
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+        if (settled) return "settled";
+        const [rows] = await fixture.admin.query<mysql.RowDataPacket[]>(
+          "SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits w JOIN performance_schema.data_locks l ON l.ENGINE=w.ENGINE AND l.ENGINE_LOCK_ID=w.REQUESTING_ENGINE_LOCK_ID WHERE l.OBJECT_SCHEMA=?",
+          [fixture.databaseName]
+        );
+        if (Number(rows[0]?.waiting) > 0) return "waited";
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      return "timed out";
+    }
+
+    it("releases the seats of a booking createBooking commits for the hold while the sweeper waits on its flight", async () => {
+      // Only hold 510 is due. It is live when createBooking locks it and
+      // expires before that transaction commits.
+      await fixture.db
+        .update(schema.inventoryLocks)
+        .set({ expiresAt: future() })
+        .where(eq(schema.inventoryLocks.id, 501));
+      const expiresAt = new Date(Math.ceil(Date.now() / 1000) * 1000 + 1000);
+      await fixture.db
+        .insert(schema.inventoryLocks)
+        .values(hold(510, 42, expiresAt));
+      await fixture.db.insert(schema.seatInventory).values(seat(610, 42, "1A"));
+      let inserted: () => void = () => undefined;
+      const ready = new Promise<void>(resolve => {
+        inserted = resolve;
+      });
+      let commit: () => void = () => undefined;
+      const committed = new Promise<void>(resolve => {
+        commit = resolve;
+      });
+      // createBooking's order and isolation: flight, live hold, then the
+      // booking, its passenger's seat, the held seat and the segment.
+      const booking = fixture.db.transaction(async tx => {
+        await tx
+          .select({ id: schema.flights.id })
+          .from(schema.flights)
+          .where(eq(schema.flights.id, 42))
+          .for("update");
+        const [live] = await tx
+          .select({ id: schema.inventoryLocks.id })
+          .from(schema.inventoryLocks)
+          .where(
+            and(
+              eq(schema.inventoryLocks.id, 510),
+              eq(schema.inventoryLocks.status, "active"),
+              gt(schema.inventoryLocks.expiresAt, new Date())
+            )
+          )
+          .for("update");
+        if (!live) throw new Error("Hold expired before createBooking");
+        await tx
+          .insert(schema.bookings)
+          .values({ ...newBooking(72, 42), inventoryLockId: 510 });
+        await tx.insert(schema.passengers).values({
+          id: 87,
+          bookingId: 72,
+          tenantId: 3,
+          firstName: "Gamma",
+          lastName: "Native",
+          type: "adult",
+          seatNumber: "1A",
+        });
+        await tx
+          .update(schema.seatInventory)
+          .set({
+            status: "held",
+            bookingId: 72,
+            passengerId: 87,
+            assignedAt: new Date(),
+          })
+          .where(eq(schema.seatInventory.id, 610));
+        await tx.insert(schema.bookingSegments).values({
+          bookingId: 72,
+          segmentOrder: 1,
+          flightId: 42,
+          inventoryLockId: 510,
+          departureDate: new Date("2030-06-11T12:00:00Z"),
+        });
+        inserted();
+        await committed;
+        return "committed" as const;
+      }, inventoryTransactionConfig);
+      await Promise.race([ready, booking]);
+      await new Promise(resolve =>
+        setTimeout(resolve, expiresAt.getTime() + 100 - Date.now())
+      );
+      const sweep = locks.releaseExpiredLocks();
+      try {
+        // The sweep for hold 510 waits for flight 42.
+        await fixture.waitForBlockedTransactions(1);
+      } finally {
+        commit();
+      }
+
+      const [created, swept] = await Promise.allSettled([booking, sweep]);
+      expect({ created, swept }).toEqual({
+        created: { status: "fulfilled", value: "committed" },
+        swept: { status: "fulfilled", value: 1 },
+      });
+      expect(await holdStatus(510)).toBe("expired");
+      expect(await seatState(610, 87)).toEqual({
+        status: "available",
+        bookingId: null,
+        passengerId: null,
+        passengerSeat: null,
+      });
+      expect(await locks.releaseExpiredLocks()).toBe(0);
+    });
+
+    it("does not wait on another booking's row while it locks the hold's bookings", async () => {
+      let inserted: () => void = () => undefined;
+      const ready = new Promise<void>(resolve => {
+        inserted = resolve;
+      });
+      let finish: () => void = () => undefined;
+      const finished = new Promise<void>(resolve => {
+        finish = resolve;
+      });
+      // An open booking transaction for flight 42 holds its new row.
+      const other = fixture.db.transaction(async tx => {
+        await tx.insert(schema.bookings).values(newBooking(73, 42));
+        inserted();
+        await finished;
+      }, inventoryTransactionConfig);
+      await Promise.race([ready, other]);
+      const sweep = locks.releaseExpiredLocks();
+      const outcome = await settlesWithoutLockWait(sweep);
+      finish();
+
+      const [, swept] = await Promise.allSettled([other, sweep]);
+      expect({ outcome, swept }).toEqual({
+        outcome: "settled",
+        swept: { status: "fulfilled", value: 1 },
+      });
+      expect(await holdStatus(501)).toBe("expired");
+    });
+
+    it("keeps the seats of a booking moved to another hold while the sweeper waited for its row", async () => {
+      // Booking 71 is linked to hold 501 directly only, and holds seat 1A.
+      await fixture.db
+        .delete(schema.bookingSegments)
+        .where(eq(schema.bookingSegments.bookingId, 71));
+      await fixture.db
+        .insert(schema.inventoryLocks)
+        .values(hold(512, 41, future()));
+      await fixture.db.insert(schema.seatInventory).values({
+        ...seat(611, 41, "1A"),
+        status: "held",
+        bookingId: 71,
+        passengerId: 81,
+        assignedAt: new Date(),
+      });
+      await fixture.db
+        .update(schema.passengers)
+        .set({ seatNumber: "1A" })
+        .where(eq(schema.passengers.id, 81));
+      let moved: () => void = () => undefined;
+      const ready = new Promise<void>(resolve => {
+        moved = resolve;
+      });
+      let commit: () => void = () => undefined;
+      const committed = new Promise<void>(resolve => {
+        commit = resolve;
+      });
+      const move = fixture.db.transaction(async tx => {
+        await tx
+          .update(schema.bookings)
+          .set({ inventoryLockId: 512 })
+          .where(eq(schema.bookings.id, 71));
+        moved();
+        await committed;
+      }, inventoryTransactionConfig);
+      await Promise.race([ready, move]);
+      const sweep = locks.releaseExpiredLocks();
+      try {
+        // The sweep found booking 71 on hold 501 and waits for its row.
+        await fixture.waitForBlockedTransactions(1);
+      } finally {
+        commit();
+      }
+
+      const [, swept] = await Promise.allSettled([move, sweep]);
+      expect(swept).toEqual({ status: "fulfilled", value: 1 });
+      expect([await holdStatus(501), await holdStatus(512)]).toEqual([
+        "expired",
+        "active",
+      ]);
+      expect(await seatState(611, 81)).toEqual({
+        status: "held",
+        bookingId: 71,
+        passengerId: 81,
+        passengerSeat: "1A",
+      });
+    });
 
     it("lets createBooking's flight-then-insert order finish while a sweeper waits on that flight", async () => {
       let flightLocked: () => void = () => undefined;

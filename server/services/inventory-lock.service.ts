@@ -208,6 +208,22 @@ export async function convertLockToBooking(lockId: number): Promise<void> {
   }
 }
 
+/** Bookings linked to a hold directly or through a segment. Plain reads: at
+ * READ COMMITTED they lock nothing and see the latest committed links. */
+async function bookingIdsLinkedToHold(tx: SettlementTx, holdId: number) {
+  const direct = await tx
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(eq(bookings.inventoryLockId, holdId));
+  const viaSegment = await tx
+    .select({ id: bookingSegments.bookingId })
+    .from(bookingSegments)
+    .where(eq(bookingSegments.inventoryLockId, holdId));
+  return [...new Set([...direct, ...viaSegment].map(row => row.id))];
+}
+
+const EXPIRY_ATTEMPTS = 3;
+
 /**
  * Release all expired locks
  */
@@ -233,82 +249,80 @@ export async function releaseExpiredLocks(): Promise<number> {
     // under REPEATABLE READ locked every gap and the supremum, deadlocking
     // with that insert and stalling inserts for all flights. Unlocked lookups
     // find the linked ids; the primary-key locking read re-checks the link
-    // and, at READ COMMITTED, locks only those booking records.
-    released += await db.transaction(async tx => {
-      const linkedToHold = sql`(${bookings.inventoryLockId} = ${candidate.id} OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.inventoryLockId = ${candidate.id}))`;
-      const ids = [
-        ...new Set([
-          ...(
-            await tx
-              .select({ id: bookings.id })
+    // and, at READ COMMITTED, locks only those booking records. A hold that
+    // keeps gaining bookings stays active for the next sweep.
+    for (let attempt = 1; attempt <= EXPIRY_ATTEMPTS; attempt++) {
+      const outcome = await db.transaction(async tx => {
+        const linkedToHold = sql`(${bookings.inventoryLockId} = ${candidate.id} OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.inventoryLockId = ${candidate.id}))`;
+        const ids = await bookingIdsLinkedToHold(tx, candidate.id);
+        const linked = ids.length
+          ? await tx
+              .select()
               .from(bookings)
-              .where(eq(bookings.inventoryLockId, candidate.id))
-          ).map(row => row.id),
-          ...(
-            await tx
-              .select({ id: bookingSegments.bookingId })
-              .from(bookingSegments)
-              .where(eq(bookingSegments.inventoryLockId, candidate.id))
-          ).map(row => row.id),
-        ]),
-      ];
-      const linked = ids.length
-        ? await tx
-            .select()
-            .from(bookings)
-            .where(and(inArray(bookings.id, ids), linkedToHold))
-            .orderBy(bookings.id)
-            .for("update")
-        : [];
-      await tx
-        .select()
-        .from(flights)
-        .where(eq(flights.id, candidate.flightId))
-        .for("update");
-      const [hold] = await tx
-        .select()
-        .from(inventoryLocks)
-        .where(eq(inventoryLocks.id, candidate.id))
-        .for("update");
-      if (!hold || hold.status !== "active" || hold.expiresAt > now) return 0;
-      for (const booking of linked.filter(
-        b =>
-          b.status === "pending" &&
-          b.paymentStatus === "pending" &&
-          !b.seatsReserved
-      )) {
+              .where(and(inArray(bookings.id, ids), linkedToHold))
+              .orderBy(bookings.id)
+              .for("update")
+          : [];
         await tx
-          .update(seatInventory)
-          .set({
-            status: "available",
-            bookingId: null,
-            passengerId: null,
-            assignedAt: null,
-            checkedInAt: null,
-            checkInNonce: null,
-            boardingPassIssued: false,
-            boardingGroup: null,
-            boardingSequence: null,
-          })
-          .where(
-            and(
-              eq(seatInventory.bookingId, booking.id),
-              eq(seatInventory.flightId, hold.flightId),
-              inArray(seatInventory.status, ["held", "occupied"])
-            )
-          );
-        if (booking.flightId === hold.flightId)
+          .select()
+          .from(flights)
+          .where(eq(flights.id, candidate.flightId))
+          .for("update");
+        const [hold] = await tx
+          .select()
+          .from(inventoryLocks)
+          .where(eq(inventoryLocks.id, candidate.id))
+          .for("update");
+        if (!hold || hold.status !== "active" || hold.expiresAt > now) return 0;
+        // createBooking links a booking to a hold only while it holds this
+        // flight and hold, so the links are final now. One it committed after
+        // the unlocked lookup is not locked: start over so that booking is
+        // locked before the flight, and its seats are released with the hold.
+        const lockedIds = new Set(linked.map(booking => booking.id));
+        const current = await bookingIdsLinkedToHold(tx, hold.id);
+        if (current.some(id => !lockedIds.has(id))) return "relock" as const;
+        for (const booking of linked.filter(
+          b =>
+            b.status === "pending" &&
+            b.paymentStatus === "pending" &&
+            !b.seatsReserved
+        )) {
           await tx
-            .update(passengers)
-            .set({ seatNumber: null })
-            .where(eq(passengers.bookingId, booking.id));
-      }
-      await tx
-        .update(inventoryLocks)
-        .set({ status: "expired", releasedAt: now })
-        .where(eq(inventoryLocks.id, hold.id));
-      return 1;
-    }, inventoryTransactionConfig);
+            .update(seatInventory)
+            .set({
+              status: "available",
+              bookingId: null,
+              passengerId: null,
+              assignedAt: null,
+              checkedInAt: null,
+              checkInNonce: null,
+              boardingPassIssued: false,
+              boardingGroup: null,
+              boardingSequence: null,
+            })
+            .where(
+              and(
+                eq(seatInventory.bookingId, booking.id),
+                eq(seatInventory.flightId, hold.flightId),
+                inArray(seatInventory.status, ["held", "occupied"])
+              )
+            );
+          if (booking.flightId === hold.flightId)
+            await tx
+              .update(passengers)
+              .set({ seatNumber: null })
+              .where(eq(passengers.bookingId, booking.id));
+        }
+        await tx
+          .update(inventoryLocks)
+          .set({ status: "expired", releasedAt: now })
+          .where(eq(inventoryLocks.id, hold.id));
+        return 1;
+      }, inventoryTransactionConfig);
+      if (outcome === "relock") continue;
+      released += outcome;
+      break;
+    }
   }
   return released;
 }
