@@ -70,6 +70,8 @@ barcode, a match of the encoded data against the bag and flight record, and
 the printer model, driver and settings used. Browser printing or a PDF does
 not substitute for any of these.
 
+Deferred out of the current scope on 2026-11-14; see section 8.
+
 ## 3. CAP-01 and #280 — product scope before promotion
 
 The catalog keeps its 99 definitions and its honest availability flags
@@ -197,6 +199,24 @@ compensation, inventory holds, baggage entitlement, EMD, ancillary, special
 services, split payments, seat map, rebooking and soft delete.
 `server/__tests__/cross-tenant-isolation-mysql.test.ts` pins that every
 covered procedure answers both cases with `NOT_FOUND` and writes nothing.
+
+## 8. UI-07 — deferred out of the current scope (decided 2026-11-14)
+
+**Decision (owner, 14 November 2026,
+[#327](https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729),
+decision 2).** UI-07, the physical bag-tag printer and scanner acceptance, is
+deferred out of the current scope.
+
+**Ledger effect.** `docs/remediation/coverage-closure-ledger.json` records
+UI-07 with status `deferred` and a `decision_reference` (date, decision comment
+and summary). A deferral is not acceptance: `accepted_sha` and
+`acceptance_run` stay null, and the row keeps the hardware receipt listed in
+section 2. The 38-finding count is unchanged. `scripts/ci/check_gap_closure_ledger.py`
+admits `deferred` only with that reference, with no acceptance evidence, and
+with `remaining_acceptance` still present.
+
+**Returning to scope.** A later owner decision moves UI-07 back to `partial`.
+It becomes `verified` only with the section 2 receipt on the accepted source.
 
 ## Execution order
 
