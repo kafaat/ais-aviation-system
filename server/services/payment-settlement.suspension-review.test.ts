@@ -19,6 +19,8 @@ import { processStripeEvent } from "../webhooks/stripe";
 import { createRetailOffer } from "./retail-offer.service";
 import { quotePaidOrderService } from "./order-servicing.service";
 import { createOrderServiceCheckout } from "./order-service-checkout.service";
+import { initiateSplitPayment } from "./split-payment.service";
+import { TRPCError } from "@trpc/server";
 
 /**
  * Money collected by a verified webhook must keep its receipt when a business
@@ -216,6 +218,23 @@ describe("split booking collected while the corporate account is suspended", () 
     ).toEqual(["pi_1"]);
     expect(fixture.rows("payment_splits")[1].status).toBe("pending");
     expect(reviewEvents()).toHaveLength(0);
+  });
+
+  it("control: a checkout caller still sees the same TRPCError for a suspended account", async () => {
+    fixture.rows("corporate_accounts")[0].status = "suspended";
+    const refused = initiateSplitPayment({
+      bookingId: 7,
+      userId: 9,
+      splits: [
+        { email: "a@example.com", name: "A", amount: 40000 },
+        { email: "b@example.com", name: "B", amount: 60000 },
+      ],
+    });
+    await expect(refused).rejects.toBeInstanceOf(TRPCError);
+    await expect(refused).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "Corporate account is not active",
+    });
   });
 
   it("control: an unrelated plain Error still rolls back the final collection", async () => {
@@ -507,5 +526,19 @@ describe("order-service checkout collected while the airline tenant is suspended
     expect(modReceipt()).toBeUndefined();
     expect(reviewEvents()).toHaveLength(0);
     expect(fixture.rows("booking_ancillaries")).toHaveLength(0);
+  });
+
+  it("control: another TRPCError on the servicing path still rolls back the collected order payment", async () => {
+    const collect = await checkout("ancillary");
+    // Corrupt stored catalog data is a defect to retry, not a suspension.
+    fixture.rows("ancillary_services")[0].applicableCabinClasses = "{broken";
+    await expect(collect()).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "Stored invoice data requires reconciliation",
+    });
+    expect(modReceipt()).toBeUndefined();
+    expect(reviewEvents()).toHaveLength(0);
+    expect(fixture.rows("booking_ancillaries")).toHaveLength(0);
+    expect(fixture.rows("booking_modifications")[0].status).toBe("pending");
   });
 });
