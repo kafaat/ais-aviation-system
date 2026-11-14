@@ -59,7 +59,7 @@ export async function assertRefundBookingOwnership(
     !isAdmin(actor.role) &&
     (booking.userId !== actor.id || booking.tenantId !== actor.tenantId)
   )
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
 }
 
 function isActiveRefund(refund: Stripe.Refund): boolean {
@@ -160,7 +160,7 @@ export async function createRefund(
 ) {
   try {
     if (!actor || (!isAdmin(actor.role) && actor.id !== input.userId)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
     }
 
     if (input.amount !== undefined) {
@@ -202,8 +202,8 @@ export async function createRefund(
         actor.tenantId !== booking.tenantId)
     ) {
       throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Access denied",
+        code: "NOT_FOUND",
+        message: "Booking not found",
       });
     }
 

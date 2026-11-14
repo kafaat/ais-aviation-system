@@ -182,7 +182,10 @@ export const bookingsRouter = router({
       assertTenantMatch(booking.tenantId, ctx.tenantId);
 
       if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       return booking;
@@ -214,7 +217,10 @@ export const bookingsRouter = router({
       assertTenantMatch(booking.tenantId, ctx.tenantId);
 
       if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       const passengerRows = await db.getPassengersByBookingId(input.bookingId);
@@ -514,7 +520,10 @@ export const bookingsRouter = router({
       assertTenantMatch(booking.tenantId, ctx.tenantId);
 
       if (booking.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       if (booking.paymentStatus !== "paid") {

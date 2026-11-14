@@ -40,8 +40,9 @@ async function getDbOrThrow() {
 
 /**
  * Assert that the booking exists and is owned by the given user (or the caller
- * is an admin). Throws NOT_FOUND if the booking does not exist and FORBIDDEN if
- * it belongs to a different user.
+ * is an admin). A booking that does not exist and a booking that belongs to a
+ * different user or tenant are answered alike with NOT_FOUND (owner decision of
+ * 2026-11-14, scenario S-28), so a caller cannot probe for other people's rows.
  *
  * @returns the booking's owner userId (useful for downstream logic)
  */
@@ -64,7 +65,7 @@ export async function assertBookingOwnership(
   }
 
   if (booking.userId !== userId && !(userRole && isAdmin(userRole))) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
 
   if (scope) assertTenant(booking.tenantId, scope.tenantId, userRole);
@@ -100,7 +101,10 @@ export async function assertSplitOwnership(
   }
 
   if (row.ownerId !== userId && !(userRole && isAdmin(userRole))) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Payment split not found",
+    });
   }
 
   return row.bookingId;
@@ -139,7 +143,7 @@ export async function assertPassengerOwnership(
   }
 
   if (row.ownerId !== userId && !(userRole && isAdmin(userRole))) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+    throw new TRPCError({ code: "NOT_FOUND", message: "Passenger not found" });
   }
 
   if (scope) {
@@ -175,7 +179,10 @@ export async function assertModificationOwnership(
   }
 
   if (modification.userId !== userId && !(userRole && isAdmin(userRole))) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Modification request not found",
+    });
   }
 }
 
@@ -205,8 +212,8 @@ export function assertTenant(
   }
   if (ctxTenantId == null || ctxTenantId !== resourceTenantId) {
     throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Cross-tenant access denied",
+      code: "NOT_FOUND",
+      message: "Resource not found",
     });
   }
 }

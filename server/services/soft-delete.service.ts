@@ -202,7 +202,7 @@ export async function softDeleteBooking(
     }
 
     if (!isAdmin && booking.userId !== userId) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
     }
 
     // Check the current owner and status under the same lock as the mutation.

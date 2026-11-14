@@ -640,8 +640,8 @@ export async function getClaimsByBooking(
 
     if (booking.userId !== userId) {
       throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Access denied",
+        code: "NOT_FOUND",
+        message: "Booking not found",
       });
     }
   }
@@ -715,7 +715,10 @@ export async function getClaimById(
       .limit(1);
 
     if (!booking || booking.userId !== userId) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Compensation claim not found",
+      });
     }
   }
 

@@ -33,7 +33,7 @@ export async function listOwnedBaggageEntitlements(
   )
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   if (booking.userId !== actor.id && !isAdmin(actor.role))
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   if (booking.status === "cancelled") return [];
   const people = await tx
     .select()
