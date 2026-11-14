@@ -2,12 +2,16 @@
 
 ## What's Changed in v1.40.0
 
-<!-- ais-release-source: 4feaae1075157cd17963c0136785f02a766a80d3 -->
+<!-- ais-release-source: c031245db33410970d07d4a8692fca8d605d66ca -->
 <!-- ais-release-notes:start -->
 
 ### Features
 
 - feat(audit): record every privileged mutation from the procedure builders (S-21) (#348) (4feaae10)
+
+### Bug Fixes
+
+- fix(offers): refuse an offer that expires between lock and consumption (S-02) (#350) (c031245d)
 
 ### Other Changes
 
