@@ -16,7 +16,13 @@ import {
 } from "./booking-settlement.service";
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
-import { assertNoWithdrawnDispute } from "./payment-dispute.service";
+import {
+  assertNoWithdrawnDispute,
+  DISPUTE_HOLD_ERROR,
+  DISPUTE_HOLD_RETRY_MS,
+  withdrawnDisputeError,
+  withdrawnDisputeIds,
+} from "./payment-dispute.service";
 import { settleVerifiedRefund } from "./payment-settlement.service";
 import { recordEvent } from "./outbox.service";
 import { isAdmin } from "./rbac.service";
@@ -168,7 +174,7 @@ export async function reserveOrdinaryRefundCancellation(
           );
       }
       await assertNoCollectionReview(tx, booking.id);
-      await assertNoWithdrawnDispute(tx, booking.id);
+      await assertNoWithdrawnDispute(tx, booking.id, [paymentIntentId]);
       await assertBookingDepartureReleasable(tx, booking);
       await assertNoFlownCouponForCancellation(tx, booking.id);
     }
@@ -397,6 +403,7 @@ export async function processOrdinaryRefundCancellation(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Refund storage unavailable");
+  let held: string[] = [];
   const intent = await db.transaction(async tx => {
     const saved = await lockIntent(tx, bookingId);
     if (saved.amount === 0 || saved.providerStatus === "not_required")
@@ -408,6 +415,23 @@ export async function processOrdinaryRefundCancellation(
       saved.errorCode !== "unknown_provider_outcome"
     )
       throw unavailable("Cancellation refund requires reconciliation");
+    // A command saved before a dispute withdrew the funds must not reach the
+    // provider while the dispute holds them. It stays queued and retryable;
+    // an authenticated provider refund that already exists still reconciles.
+    if (!observedRefund && !saved.refundId) {
+      held = await withdrawnDisputeIds(tx, bookingId, [saved.paymentIntentId]);
+      if (held.length) {
+        if (["queued", "requesting", "pending"].includes(saved.status))
+          await tx
+            .update(ordinaryBookingRefunds)
+            .set({
+              errorCode: DISPUTE_HOLD_ERROR,
+              nextAttemptAt: new Date(Date.now() + DISPUTE_HOLD_RETRY_MS),
+            })
+            .where(eq(ordinaryBookingRefunds.bookingId, bookingId));
+        return null;
+      }
+    }
     const requestedAt = saved.requestedAt ?? new Date();
     await tx
       .update(ordinaryBookingRefunds)
@@ -419,6 +443,7 @@ export async function processOrdinaryRefundCancellation(
       .where(eq(ordinaryBookingRefunds.bookingId, bookingId));
     return { ...saved, requestedAt };
   });
+  if (!intent) throw withdrawnDisputeError(held);
   try {
     let refund = observedRefund;
     if (!refund && intent.refundId)

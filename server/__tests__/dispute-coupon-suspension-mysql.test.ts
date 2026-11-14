@@ -25,12 +25,16 @@ import {
  * tables. Provider responses and recovery feasibility evidence are synthetic.
  *
  * "fix:" cases fail on the code before S-08. "control:" cases pass on both
- * and show that the refusal or transition is caused by the dispute.
+ * and show that the refusal or transition is caused by the dispute. Refund
+ * commands saved before the dispute, flight-cancellation and settlement-review
+ * refunds, and disputes on a duplicate collection held for review are covered
+ * after the first review of S-08.
  */
 const provider = vi.hoisted(() => ({
   db: null as any,
   refund: null as any,
   create: null as any,
+  checkout: null as any,
 }));
 vi.mock("../db", () => ({ getDb: () => provider.db }));
 vi.mock("../stripe", () => ({
@@ -38,11 +42,17 @@ vi.mock("../stripe", () => ({
     refunds: {
       create: (...args: unknown[]) => provider.create(...args),
       retrieve: async () => provider.refund,
-      list: () => ({
+      list: (params: { payment_intent?: string }) => ({
         async *[Symbol.asyncIterator]() {
-          if (provider.refund) yield provider.refund;
+          if (provider.refund?.payment_intent === params.payment_intent)
+            yield provider.refund;
         },
       }),
+    },
+    checkout: {
+      sessions: {
+        create: (...args: unknown[]) => provider.checkout(...args),
+      },
     },
   },
 }));
@@ -64,6 +74,7 @@ import {
 } from "../services/refunds.service";
 import {
   getSplitRefundCancellation,
+  processPendingSplitRefunds,
   reserveSplitRefundCancellation,
 } from "../services/split-refund.service";
 import { cancelBookingWithoutRefund } from "../services/zero-refund-cancellation.service";
@@ -72,7 +83,10 @@ import {
   executeRecovery,
   proposeRecovery,
 } from "../services/irops-recovery.service";
-import { quotePaidOrderService } from "../services/order-servicing.service";
+import {
+  quotePaidOrderService,
+  servicingQuoteVersion,
+} from "../services/order-servicing.service";
 import { exchangeLocalCoupons } from "../services/ticket-coupons.service";
 import { checkInPassengers } from "../services/departure-control.service";
 import { transitionDcsPassenger } from "../services/dcs-operations.service";
@@ -82,6 +96,15 @@ import {
 } from "../services/boarding-pass.service";
 import { undoCheckIn } from "../services/seat-map.service";
 import { readTicketDocument } from "../services/ticket-documents.service";
+import { processPendingOrdinaryRefunds } from "../services/ordinary-refund.service";
+import {
+  processFlightCancellations,
+  requestFlightCancellation,
+} from "../services/flight-cancellation.service";
+import { requestSettlementReviewRefund } from "../services/settlement-review.service";
+import { createOrderServiceCheckout } from "../services/order-service-checkout.service";
+import { calculateRequestHash } from "../services/idempotency-v2.service";
+import { withdrawnDisputeIds } from "../services/payment-dispute.service";
 
 const nativeDescribe =
   process.env.AIS_DISPOSABLE_DATABASE === "true" &&
@@ -99,6 +122,21 @@ const operator = { userId: 20, tenantId: 3, role: "ops" };
 const customer = { id: 9, role: "user", tenantId: 3 };
 const ticket = (passengerId: number) => `06500000000${passengerId}`;
 const suspendedMessage = /suspended while payment dispute dp_native_s08/;
+const refused = {
+  code: "PRECONDITION_FAILED",
+  message: expect.stringMatching(
+    /Payment dispute dp_native_s08 has withdrawn this booking's funds/
+  ),
+};
+const admin = { id: 20, role: "admin" };
+const later = (minutes: number) =>
+  vi.setSystemTime(new Date(now.getTime() + minutes * 60_000));
+// A second collection for the same booking, held for review as a duplicate.
+const duplicate = {
+  id: "dp_native_s08_dup",
+  payment_intent: "pi_native_s08_dup",
+  charge: "ch_native_s08_dup",
+};
 
 nativeDescribe.sequential(
   "S-08 dispute coupon suspension on native MySQL",
@@ -175,6 +213,48 @@ nativeDescribe.sequential(
       idempotencyKey: `native-s08-${++sequence}`,
       reason: "Native S-08 departure command",
     });
+    async function ordinaryCommand() {
+      const [saved] = await fixture.db
+        .select()
+        .from(schema.ordinaryBookingRefunds);
+      return saved;
+    }
+    async function duplicateCollection() {
+      await fixture.db.insert(schema.paymentReceipts).values({
+        paymentIntentId: duplicate.payment_intent,
+        bookingId: 71,
+        targetId: 71,
+        userId: 9,
+        kind: "booking",
+        amount: 20000,
+        refundedAmount: 0,
+        currency: "SAR",
+        settlementStatus: "review_required",
+        settlementError: "Booking already funded by another payment",
+      });
+    }
+    async function nonrefundableFare() {
+      await fixture.db.insert(schema.fareClasses).values({
+        id: 31,
+        airlineId: 3,
+        code: "N",
+        name: "Nonrefundable native fare",
+        cabinClass: "economy",
+        refundable: false,
+        createdAt: new Date("2025-01-01T00:00:00Z"),
+        updatedAt: new Date("2025-01-01T00:00:00Z"),
+      });
+      await fixture.db
+        .update(schema.bookings)
+        .set({ fareClassId: 31 })
+        .where(eq(schema.bookings.id, 71));
+      await fixture.db.insert(schema.flightFareClassInventory).values({
+        flightId: 41,
+        fareClassId: 31,
+        capacity: 8,
+        availableSeats: 6,
+      });
+    }
 
     beforeAll(async () => {
       fixture = await createPaidBookingNativeFixture("ais_dispute_coupons");
@@ -200,6 +280,10 @@ nativeDescribe.sequential(
         };
         return provider.refund;
       });
+      provider.checkout = vi.fn(async () => ({
+        id: "cs_native_s08",
+        url: "https://checkout.example.test/s08",
+      }));
       await fixture.db.insert(schema.users).values({
         id: 20,
         openId: "native-s08-operator",
@@ -501,17 +585,145 @@ nativeDescribe.sequential(
           { passengerId: 82, status: "O", suspendedFromStatus: null },
         ]);
       });
+
+      it("fix: a ticket document first read after a lost dispute issues void coupons", async () => {
+        await fixture.db
+          .delete(schema.ticketCoupons)
+          .where(eq(schema.ticketCoupons.passengerId, 82));
+        await withdraw();
+        await deliver("charge.dispute.closed", { status: "lost" });
+        const document = await readTicketDocument(71, 82, 9);
+        expect(document.legs.map(leg => leg.localCoupon)).toEqual([
+          { number: 1, status: "V" },
+        ]);
+        expect(await coupons()).toMatchObject([
+          { passengerId: 81, status: "V", suspendedFromStatus: null },
+          { passengerId: 82, status: "V", suspendedFromStatus: null },
+        ]);
+      });
+
+      it("fix: a won close without a reinstated event lets another payer's reinstatement restore split coupons", async () => {
+        await fixture.db.insert(schema.paymentReceipts).values(
+          ["a", "b"].map((payer, index) => ({
+            paymentIntentId: `${intent}_${payer}`,
+            bookingId: 71,
+            targetId: 501 + index,
+            userId: 9,
+            kind: "split_payment" as const,
+            amount: 10000,
+            refundedAmount: 0,
+            currency: "SAR",
+            settlementStatus: "applied" as const,
+          }))
+        );
+        const payer = (name: string) => ({
+          id: `dp_native_s08_${name}`,
+          payment_intent: `${intent}_${name}`,
+          charge: `ch_native_s08_${name}`,
+          amount: 10000,
+        });
+        await withdraw(payer("a"));
+        await withdraw(payer("b"));
+        await deliver("charge.dispute.closed", {
+          ...payer("a"),
+          status: "won",
+        });
+        expect((await coupons()).map(c => c.status)).toEqual(["S", "S"]);
+        await deliver("charge.dispute.funds_reinstated", payer("b"));
+        expect(await coupons()).toMatchObject([
+          { status: "O", suspendedFromStatus: null },
+          { status: "O", suspendedFromStatus: null },
+        ]);
+      });
+    });
+
+    describe("dispute on a duplicate collection held for review", () => {
+      it("fix: withdrawn and lost funds on the duplicate leave the coupons, check-in and lazy issue alone", async () => {
+        await duplicateCollection();
+        await fixture.db
+          .delete(schema.ticketCoupons)
+          .where(eq(schema.ticketCoupons.passengerId, 82));
+        await withdraw(duplicate);
+        expect(await coupons()).toMatchObject([
+          { passengerId: 81, status: "O", suspendedFromStatus: null },
+        ]);
+        await deliver("charge.dispute.closed", {
+          ...duplicate,
+          status: "lost",
+        });
+        expect(await coupons()).toMatchObject([
+          { passengerId: 81, status: "O", suspendedFromStatus: null },
+        ]);
+        for (const { payload } of await disputedEvents())
+          expect(payload).not.toHaveProperty("localCouponTransitions");
+        const document = await readTicketDocument(71, 82, 9);
+        expect(document.legs.map(leg => leg.localCoupon)).toEqual([
+          { number: 1, status: "O" },
+        ]);
+        await checkInPassengers({
+          bookingId: 71,
+          flightId: 41,
+          assignments: [{ passengerId: 81, seatNumber: "12A" }],
+          owner,
+        });
+        expect((await coupons()).map(c => [c.passengerId, c.status])).toEqual([
+          [81, "C"],
+          [82, "O"],
+        ]);
+      });
+
+      it("fix: the duplicate's own dispute refuses only the refund of that duplicate", async () => {
+        await duplicateCollection();
+        await withdraw(duplicate);
+        await expect(
+          requestSettlementReviewRefund(duplicate.payment_intent, 20)
+        ).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: expect.stringMatching(
+            /Payment dispute dp_native_s08_dup has withdrawn/
+          ),
+        });
+        expect(provider.create).not.toHaveBeenCalled();
+        // The booking's funding collection is not held by the duplicate's dispute.
+        await expect(
+          fixture.db.transaction(async tx => {
+            await tx
+              .select()
+              .from(schema.bookings)
+              .where(eq(schema.bookings.id, 71))
+              .for("update");
+            return {
+              funding: await withdrawnDisputeIds(tx, 71, [intent]),
+              duplicate: await withdrawnDisputeIds(tx, 71, [
+                duplicate.payment_intent,
+              ]),
+            };
+          })
+        ).resolves.toEqual({ funding: [], duplicate: ["dp_native_s08_dup"] });
+        await deliver("charge.dispute.funds_reinstated", duplicate);
+        await expect(
+          requestSettlementReviewRefund(duplicate.payment_intent, 20)
+        ).resolves.toMatchObject({ state: "awaiting_webhook" });
+        expect(provider.create).toHaveBeenCalledTimes(1);
+        expect(provider.create).toHaveBeenCalledWith(
+          expect.objectContaining({ payment_intent: duplicate.payment_intent }),
+          { idempotencyKey: `ais-review-refund:${duplicate.payment_intent}` }
+        );
+      });
+
+      it("fix: a dispute on the funding collection also refuses the duplicate's settlement-review refund", async () => {
+        await duplicateCollection();
+        await withdraw();
+        await expect(
+          requestSettlementReviewRefund(duplicate.payment_intent, 20)
+        ).rejects.toMatchObject(refused);
+        expect(provider.create).not.toHaveBeenCalled();
+      });
     });
 
     describe("refunds and cancellation", () => {
       it("fix: ordinary and admin refunds are refused while dispute funds are withdrawn, including after a lost close", async () => {
         await withdraw();
-        const refused = {
-          code: "PRECONDITION_FAILED",
-          message: expect.stringMatching(
-            /Payment dispute dp_native_s08 has withdrawn this booking's funds/
-          ),
-        };
         await expect(
           createRefund({ bookingId: 71, userId: 9 }, customer)
         ).rejects.toMatchObject(refused);
@@ -540,6 +752,182 @@ nativeDescribe.sequential(
         ).resolves.toMatchObject({ refundId: "re_native_s08" });
         expect(provider.create).toHaveBeenCalledTimes(1);
       });
+
+      it("control: a won close without a reinstated event releases the refund command", async () => {
+        await withdraw();
+        await deliver("charge.dispute.closed", { status: "won" });
+        await expect(
+          createRefund({ bookingId: 71, userId: 9 }, customer)
+        ).resolves.toMatchObject({ refundId: "re_native_s08" });
+        expect(provider.create).toHaveBeenCalledTimes(1);
+      });
+
+      it("fix: a lost close delivered before its withdrawal refuses refunds", async () => {
+        await deliver("charge.dispute.closed", { status: "lost" });
+        await expect(
+          createRefund({ bookingId: 71, userId: 9 }, customer)
+        ).rejects.toMatchObject(refused);
+        await expect(
+          createRefund({ bookingId: 71, userId: 9, amount: 5000 }, admin)
+        ).rejects.toMatchObject(refused);
+        expect(provider.create).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        {
+          after: "reinstated funds",
+          type: "charge.dispute.funds_reinstated",
+          overrides: {},
+          calls: 1,
+        },
+        {
+          after: "a won close",
+          type: "charge.dispute.closed",
+          overrides: { status: "won" },
+          calls: 1,
+        },
+        {
+          after: "a lost close",
+          type: "charge.dispute.closed",
+          overrides: { status: "lost" },
+          calls: 0,
+        },
+      ])(
+        "fix: a cancellation refund saved before the dispute is held while the funds are withdrawn; after $after it reaches the provider $calls time(s)",
+        async ({ type, overrides, calls }) => {
+          const sent = provider.create;
+          provider.create = vi.fn(async () => {
+            throw new Error("Synthetic provider outage");
+          });
+          await expect(
+            createRefund({ bookingId: 71, userId: 9, amount: 5000 }, admin)
+          ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+          expect(await ordinaryCommand()).toMatchObject({
+            amount: 5000,
+            status: "requesting",
+            errorCode: "provider_unavailable",
+            refundId: null,
+          });
+          provider.create = sent;
+          await withdraw();
+          later(2);
+          // The worker retry and a repeated command both stop before the provider.
+          await expect(processPendingOrdinaryRefunds()).resolves.toEqual({
+            scanned: 1,
+            failed: 1,
+          });
+          await expect(
+            createRefund({ bookingId: 71, userId: 9, amount: 5000 }, admin)
+          ).rejects.toMatchObject(refused);
+          expect(provider.create).not.toHaveBeenCalled();
+          expect(await ordinaryCommand()).toMatchObject({
+            status: "requesting",
+            errorCode: "dispute_funds_withdrawn",
+            refundId: null,
+          });
+          await deliver(type, overrides);
+          later(180);
+          await processPendingOrdinaryRefunds();
+          expect(provider.create).toHaveBeenCalledTimes(calls);
+          if (calls) {
+            const saved = await ordinaryCommand();
+            expect(provider.create).toHaveBeenCalledWith(
+              expect.objectContaining({ payment_intent: intent, amount: 5000 }),
+              { idempotencyKey: saved.operationId }
+            );
+            expect(saved).toMatchObject({
+              status: "pending",
+              refundId: "re_native_s08",
+            });
+          } else {
+            expect(await ordinaryCommand()).toMatchObject({
+              status: "requesting",
+              errorCode: "dispute_funds_withdrawn",
+              refundId: null,
+            });
+            await expect(
+              createRefund({ bookingId: 71, userId: 9, amount: 5000 }, admin)
+            ).rejects.toMatchObject(refused);
+            expect(provider.create).not.toHaveBeenCalled();
+          }
+        }
+      );
+
+      it.each([
+        {
+          after: "reinstated funds",
+          type: "charge.dispute.funds_reinstated",
+          overrides: {},
+          calls: 1,
+        },
+        {
+          after: "a lost close",
+          type: "charge.dispute.closed",
+          overrides: { status: "lost" },
+          calls: 0,
+        },
+      ])(
+        "fix: a flight cancellation proceeds while dispute funds are withdrawn and holds its refund; after $after the refund reaches the provider $calls time(s)",
+        async ({ type, overrides, calls }) => {
+          await withdraw();
+          await requestFlightCancellation({
+            flightId: 41,
+            reason: "Native S-08 flight cancellation",
+            actorId: 20,
+            tenantId: 3,
+          });
+          await processFlightCancellations();
+          expect(provider.create).not.toHaveBeenCalled();
+          const [booking] = (await commercialState()).bookings;
+          expect(booking).toMatchObject({ status: "cancelled" });
+          expect((await coupons()).map(c => c.status)).toEqual(["V", "V"]);
+          const held = () =>
+            fixture.db
+              .select({
+                status: schema.orderServiceRefunds.status,
+                amount: schema.orderServiceRefunds.amount,
+                errorCode: schema.orderServiceRefunds.errorCode,
+                requestedAt: schema.orderServiceRefunds.requestedAt,
+                refundId: schema.orderServiceRefunds.refundId,
+              })
+              .from(schema.orderServiceRefunds);
+          expect(await held()).toEqual([
+            {
+              status: "queued",
+              amount: 20000,
+              errorCode: "dispute_funds_withdrawn",
+              requestedAt: null,
+              refundId: null,
+            },
+          ]);
+          const jobs = () =>
+            fixture.db
+              .select({ status: schema.flightCancellationJobs.status })
+              .from(schema.flightCancellationJobs);
+          expect(await jobs()).toEqual([{ status: "planned" }]);
+          await deliver(type, overrides);
+          later(180);
+          await processFlightCancellations();
+          expect(provider.create).toHaveBeenCalledTimes(calls);
+          if (calls) {
+            expect(provider.create).toHaveBeenCalledWith(
+              expect.objectContaining({
+                payment_intent: intent,
+                amount: 20000,
+              }),
+              expect.anything()
+            );
+            expect(await held()).toMatchObject([
+              { status: "pending", refundId: "re_native_s08" },
+            ]);
+          } else {
+            expect(await held()).toMatchObject([
+              { status: "queued", errorCode: "dispute_funds_withdrawn" },
+            ]);
+            expect(await jobs()).toEqual([{ status: "planned" }]);
+          }
+        }
+      );
 
       async function splitFunding() {
         await fixture.db
@@ -611,27 +999,80 @@ nativeDescribe.sequential(
         expect((await coupons()).map(c => c.status)).toEqual(["S", "S"]);
       });
 
+      it("fix: payer refunds reserved before the dispute are held while one payer's dispute holds funds", async () => {
+        await splitFunding();
+        const available = await getSplitRefundCancellation(71, customer);
+        await reserveSplitRefundCancellation(
+          {
+            bookingId: 71,
+            quoteHash: available.quote!.quoteHash,
+            reason: "requested_by_customer",
+          },
+          customer
+        );
+        await withdraw({
+          id: "dp_native_s08_a",
+          payment_intent: `${intent}_a`,
+          amount: 10000,
+        });
+        await processPendingSplitRefunds();
+        expect(provider.create).not.toHaveBeenCalled();
+        const items = () =>
+          fixture.db
+            .select({
+              status: schema.bookingRefundItems.status,
+              errorCode: schema.bookingRefundItems.errorCode,
+              requestedAt: schema.bookingRefundItems.requestedAt,
+            })
+            .from(schema.bookingRefundItems)
+            .orderBy(schema.bookingRefundItems.splitId);
+        expect(await items()).toEqual(
+          [1, 2].map(() => ({
+            status: "queued",
+            errorCode: "dispute_funds_withdrawn",
+            requestedAt: null,
+          }))
+        );
+        await deliver("charge.dispute.funds_reinstated", {
+          id: "dp_native_s08_a",
+          payment_intent: `${intent}_a`,
+          amount: 10000,
+        });
+        later(180);
+        await processPendingSplitRefunds();
+        expect(provider.create).toHaveBeenCalledTimes(2);
+      });
+
+      it("fix: a split cancellation without refunds stays available while one payer's dispute holds funds", async () => {
+        await splitFunding();
+        await nonrefundableFare();
+        await withdraw({
+          id: "dp_native_s08_a",
+          payment_intent: `${intent}_a`,
+          amount: 10000,
+        });
+        const preview = await getSplitRefundCancellation(71, customer);
+        expect(preview.quote?.refundAmount).toBe(0);
+        await expect(
+          reserveSplitRefundCancellation(
+            {
+              bookingId: 71,
+              quoteHash: preview.quote!.quoteHash,
+              reason: "requested_by_customer",
+              confirmNoRefund: true,
+            },
+            customer
+          )
+        ).resolves.toMatchObject({ plan: { status: "completed" } });
+        expect((await commercialState()).bookings[0]).toMatchObject({
+          status: "cancelled",
+        });
+        expect((await coupons()).map(c => c.status)).toEqual(["V", "V"]);
+        expect(provider.create).not.toHaveBeenCalled();
+      });
+
       it("fix: a cancellation that issues no refund turns suspended coupons into V", async () => {
-        await fixture.db.insert(schema.fareClasses).values({
-          id: 31,
-          airlineId: 3,
-          code: "N",
-          name: "Nonrefundable native fare",
-          cabinClass: "economy",
-          refundable: false,
-          createdAt: new Date("2025-01-01T00:00:00Z"),
-          updatedAt: new Date("2025-01-01T00:00:00Z"),
-        });
-        await fixture.db
-          .update(schema.bookings)
-          .set({ fareClassId: 31 })
-          .where(eq(schema.bookings.id, 71));
-        await fixture.db.insert(schema.flightFareClassInventory).values({
-          flightId: 41,
-          fareClassId: 31,
-          capacity: 8,
-          availableSeats: 6,
-        });
+        await nonrefundableFare();
         await withdraw();
         expect((await coupons()).map(c => c.status)).toEqual(["S", "S"]);
         const quote = await getCancellationQuote(71);
@@ -796,6 +1237,29 @@ nativeDescribe.sequential(
         ).resolves.toEqual({ receiptId: result.receiptId });
       });
 
+      it("fix: IROPS execution reports a booking whose coupons a lost dispute voided as void, not suspended", async () => {
+        const proposal = await disruption();
+        await withdraw();
+        await deliver("charge.dispute.closed", { status: "lost" });
+        const result = await executeRecovery(
+          proposal.id,
+          proposal.digest,
+          20,
+          3
+        );
+        expect(result.skippedBookings).toEqual([
+          {
+            bookingId: 71,
+            reason: "coupons_void",
+            disputeIds: ["dp_native_s08"],
+          },
+        ]);
+        expect(await coupons(71)).toMatchObject([
+          { flightId: 41, status: "V" },
+          { flightId: 41, status: "V" },
+        ]);
+      });
+
       it("control: without a dispute the same plan moves both bookings", async () => {
         const proposal = await disruption();
         await executeRecovery(proposal.id, proposal.digest, 20, 3);
@@ -848,6 +1312,84 @@ nativeDescribe.sequential(
         expect(
           await fixture.db.select().from(schema.bookingModifications)
         ).toEqual([]);
+      });
+
+      it("fix: exchange checkout is refused before the provider when the funds are withdrawn after the quote", async () => {
+        // A saved exchange quote to flight 42, as quotePaidOrderService stores it.
+        const plan = {
+          version: 1,
+          fingerprint: calculateRequestHash({
+            flightId: 41,
+            cabinClass: "economy",
+            totalAmount: 20000,
+            checkedIn: false,
+            status: "confirmed",
+            legs: [
+              {
+                flightId: 41,
+                amount: 20000,
+                reserved: true,
+                status: "confirmed",
+              },
+            ],
+          }),
+          expiresAt: "2030-06-10T06:10:00.000Z",
+          segments: [
+            {
+              flightId: 42,
+              cabinClass: "economy",
+              amount: 24000,
+              holdId: null,
+              departureTime: "2030-06-11T12:00:00.000Z",
+              arrivalTime: "2030-06-11T14:00:00.000Z",
+              offerId: null,
+              ndc: {},
+            },
+          ],
+          ancillaries: [],
+        };
+        const change = {
+          id: 61,
+          bookingId: 71,
+          userId: 9,
+          modificationType: "change_flight" as const,
+          originalFlightId: 41,
+          newFlightId: 42,
+          originalAmount: 20000,
+          newAmount: 24000,
+          priceDifference: 4000,
+          modificationFee: 0,
+          totalCost: 4000,
+          status: "pending" as const,
+          servicingPayload: plan,
+        };
+        await fixture.db.insert(schema.bookingModifications).values(change);
+        const consent = {
+          quoteVersion: servicingQuoteVersion(change),
+          totalCost: 4000,
+          currency: "SAR" as const,
+        };
+        const checkout = () =>
+          createOrderServiceCheckout(61, 9, "https://example.test", 3, consent);
+        await withdraw();
+        await expect(checkout()).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: expect.stringMatching(suspendedMessage),
+        });
+        expect(provider.checkout).not.toHaveBeenCalled();
+        const [refused] = await fixture.db
+          .select()
+          .from(schema.bookingModifications);
+        expect(refused).toMatchObject({
+          status: "pending",
+          checkoutRequestId: null,
+        });
+        // Once the funds are reinstated the same quote reaches checkout.
+        await deliver("charge.dispute.funds_reinstated");
+        await expect(checkout()).resolves.toMatchObject({
+          sessionId: "cs_native_s08",
+        });
+        expect(provider.checkout).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -941,6 +1483,39 @@ nativeDescribe.sequential(
         }
       );
 
+      it("fix: a passenger without a coupon row is refused at check-in while dispute funds are withdrawn", async () => {
+        await fixture.db
+          .delete(schema.ticketCoupons)
+          .where(eq(schema.ticketCoupons.passengerId, 81));
+        await withdraw();
+        await expect(checkInPassengers(admission)).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: expect.stringMatching(suspendedMessage),
+        });
+        await deliver("charge.dispute.funds_reinstated");
+        await expect(checkInPassengers(admission)).resolves.toBeDefined();
+      });
+
+      it("fix: a coupon void for another reason is refused at check-in without blaming a dispute", async () => {
+        await fixture.db
+          .update(schema.ticketCoupons)
+          .set({ status: "V" })
+          .where(eq(schema.ticketCoupons.passengerId, 81));
+        const voided = {
+          code: "PRECONDITION_FAILED",
+          message: "Ticket coupon is void; check-in requires servicing review",
+        };
+        await expect(checkInPassengers(admission)).rejects.toMatchObject(
+          voided
+        );
+        // Still the coupon's own void while another coupon is suspended.
+        await withdraw();
+        expect((await coupons()).map(c => c.status)).toEqual(["V", "S"]);
+        await expect(checkInPassengers(admission)).rejects.toMatchObject(
+          voided
+        );
+      });
+
       it("fix: a lost close keeps check-in refused for the void coupon", async () => {
         await withdraw();
         await deliver("charge.dispute.closed", { status: "lost" });
@@ -950,6 +1525,56 @@ nativeDescribe.sequential(
             /voided after payment dispute dp_native_s08 was lost/
           ),
         });
+      });
+    });
+
+    describe("locking", () => {
+      it("fix: the refund guard sees a withdrawal committed while it waited for the booking lock", async () => {
+        let processed!: () => void;
+        let release!: () => void;
+        const ready = new Promise<void>(resolve => (processed = resolve));
+        const gate = new Promise<void>(resolve => (release = resolve));
+        const webhook = fixture.db.transaction(async tx => {
+          await processStripeEvent(
+            tx as never,
+            {
+              id: "evt_native_s08_race",
+              type: "charge.dispute.funds_withdrawn",
+              data: {
+                object: {
+                  id: "dp_native_s08",
+                  object: "dispute",
+                  charge: "ch_native_s08",
+                  payment_intent: intent,
+                  amount: 20000,
+                  currency: "sar",
+                  status: "under_review",
+                  reason: "fraudulent",
+                },
+              },
+            } as never
+          );
+          processed();
+          await gate;
+        });
+        await ready;
+        const guard = fixture.db.transaction(async tx => {
+          // A consistent read fixes this transaction's snapshot before the
+          // withdrawal commits; only a current read can see it afterwards.
+          await tx
+            .select({ id: schema.financialLedger.id })
+            .from(schema.financialLedger);
+          await tx
+            .select()
+            .from(schema.bookings)
+            .where(eq(schema.bookings.id, 71))
+            .for("update");
+          return withdrawnDisputeIds(tx, 71, [intent]);
+        });
+        await fixture.waitForBlockedTransactions(1);
+        release();
+        await webhook;
+        await expect(guard).resolves.toEqual(["dp_native_s08"]);
       });
     });
   }

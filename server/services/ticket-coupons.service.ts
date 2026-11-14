@@ -93,14 +93,21 @@ export async function assertCouponTravelable(
   const blocked = coupons.find(c => c.status === "S" || c.status === "V");
   if (coupons.length && !blocked) return;
   const hold = await bookingDisputeHold(tx, key.bookingId);
-  if (blocked)
+  if (blocked?.status === "S")
     throw couponHoldError(
       {
-        outcome: blocked.status === "V" ? "void" : "suspended",
-        disputeIds: hold?.disputeIds ?? [],
+        outcome: "suspended",
+        disputeIds: hold?.outcome === "suspended" ? hold.disputeIds : [],
       },
       action
     );
+  // A coupon is also void after a cancellation or another servicing change;
+  // only a lost dispute's void names the dispute.
+  if (blocked && hold?.outcome !== "void")
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Ticket coupon is void; ${action} requires servicing review`,
+    });
   if (hold) throw couponHoldError(hold, action);
 }
 

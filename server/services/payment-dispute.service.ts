@@ -16,9 +16,13 @@
  * - closed lost: the coupons become void (V);
  * - closed won or funds reinstated: suspended coupons return to their prior
  *   status, once no other dispute on the booking still holds withdrawn funds.
- * Refunds are refused while any dispute holds the booking's funds, so the
- * customer is never repaid twice. Each dispute's outcome is derived from the
- * set of its recorded events, so reordered and replayed deliveries converge.
+ * Only a dispute on a collection that funded the travel (an applied receipt,
+ * or the booking's own recorded payment) affects coupons. A dispute on a
+ * duplicate collection held for review blocks only the refund of that
+ * duplicate. Every refund of the booking is refused, and every saved refund
+ * command held, while a funding dispute holds the funds, so the customer is
+ * never repaid twice. Each dispute's outcome is derived from the set of its
+ * recorded events, so reordered and replayed deliveries converge.
  *
  * Wallet top-ups are different: verified withdrawn funds must immediately stop
  * being available for new spending, even after prior spend has left the wallet
@@ -124,6 +128,7 @@ const disputeEvidence = z.object({
   status: z.string(),
 });
 type DisputeState = {
+  paymentIntentId: string;
   withdrawn: boolean;
   reinstated: boolean;
   won: boolean;
@@ -138,6 +143,7 @@ async function bookingDisputes(tx: SettlementTx, bookingId: number) {
     .select({
       description: financialLedger.description,
       metadata: financialLedger.metadata,
+      paymentIntentId: financialLedger.stripePaymentIntentId,
     })
     .from(financialLedger)
     .where(
@@ -159,15 +165,18 @@ async function bookingDisputes(tx: SettlementTx, bookingId: number) {
       parsed = undefined;
     }
     const evidence = disputeEvidence.safeParse(parsed);
-    if (!evidence.success)
+    if (!evidence.success || !row.paymentIntentId)
       throw new Error("Booking dispute evidence requires reconciliation");
     const { disputeId, eventType, status } = evidence.data;
     const state = disputes.get(disputeId) ?? {
+      paymentIntentId: row.paymentIntentId,
       withdrawn: false,
       reinstated: false,
       won: false,
       lost: false,
     };
+    if (state.paymentIntentId !== row.paymentIntentId)
+      throw new Error("Booking dispute evidence requires reconciliation");
     if (eventType === "charge.dispute.funds_withdrawn") state.withdrawn = true;
     if (eventType === "charge.dispute.funds_reinstated")
       state.reinstated = true;
@@ -178,6 +187,48 @@ async function bookingDisputes(tx: SettlementTx, bookingId: number) {
     disputes.set(disputeId, state);
   }
   return disputes;
+}
+
+/** The collections that funded the booking's travel: its applied receipts, and
+ * its own recorded payment even while a refund review holds that receipt. A
+ * duplicate or conflicting collection held for review never funded travel.
+ * Current reads under the booking lock, like the dispute evidence. */
+async function fundingCollections(tx: SettlementTx, bookingId: number) {
+  const [booking] = await tx
+    .select({ paymentIntentId: bookings.stripePaymentIntentId })
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
+    .for("share");
+  const receipts = await tx
+    .select({
+      paymentIntentId: paymentReceipts.paymentIntentId,
+      kind: paymentReceipts.kind,
+      settlementStatus: paymentReceipts.settlementStatus,
+    })
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.bookingId, bookingId))
+    .orderBy(paymentReceipts.paymentIntentId)
+    .for("share");
+  return new Set(
+    receipts
+      .filter(
+        r =>
+          r.kind !== "wallet_topup" &&
+          (r.settlementStatus === "applied" ||
+            r.paymentIntentId === booking?.paymentIntentId)
+      )
+      .map(r => r.paymentIntentId)
+  );
+}
+
+/** Disputes on the collections that funded the booking's travel. */
+async function fundingDisputes(tx: SettlementTx, bookingId: number) {
+  const disputes = await bookingDisputes(tx, bookingId);
+  if (!disputes.size) return disputes;
+  const funding = await fundingCollections(tx, bookingId);
+  return new Map(
+    [...disputes].filter(([, state]) => funding.has(state.paymentIntentId))
+  );
 }
 
 /** A lost dispute keeps the funds withdrawn for good. */
@@ -196,13 +247,13 @@ export type BookingDisputeHold = {
   disputeIds: string[];
 };
 
-/** The state a dispute imposes on the booking's open coupons, or null. A lost
- * dispute has voided them; an unresolved withdrawal has suspended them. */
+/** The state a funding dispute imposes on the booking's open coupons, or null.
+ * A lost dispute has voided them; an unresolved withdrawal has suspended them. */
 export async function bookingDisputeHold(
   tx: SettlementTx,
   bookingId: number
 ): Promise<BookingDisputeHold | null> {
-  const disputes = [...(await bookingDisputes(tx, bookingId))];
+  const disputes = [...(await fundingDisputes(tx, bookingId))];
   const lost = disputes.filter(([, s]) => couponOutcome(s) === "void");
   if (lost.length)
     return { outcome: "void", disputeIds: lost.map(([id]) => id) };
@@ -212,21 +263,51 @@ export async function bookingDisputeHold(
     : null;
 }
 
-/** Ordinary, split and admin refund commands call this under the booking lock
- * before any money can move. */
+/** Disputes whose withdrawn funds forbid refunding any of these payment
+ * intents now: every funding dispute of the booking, and a dispute on one of
+ * the intents themselves (a duplicate collection's own dispute). The caller
+ * holds the booking lock. */
+export async function withdrawnDisputeIds(
+  tx: SettlementTx,
+  bookingId: number,
+  paymentIntentIds: readonly string[] = []
+) {
+  const disputes = await bookingDisputes(tx, bookingId);
+  const held = [...disputes].filter(([, state]) => holdsFunds(state));
+  if (!held.length) return [];
+  const funding = await fundingCollections(tx, bookingId);
+  return held
+    .filter(
+      ([, state]) =>
+        funding.has(state.paymentIntentId) ||
+        paymentIntentIds.includes(state.paymentIntentId)
+    )
+    .map(([id]) => id);
+}
+
+export function withdrawnDisputeError(disputeIds: readonly string[]) {
+  return new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message: `Payment dispute ${disputeIds.join(", ")} has withdrawn this booking's funds; no refund can be issued until the dispute is resolved`,
+  });
+}
+
+/** Every refund command calls this under the booking lock before any money
+ * can move. */
 export async function assertNoWithdrawnDispute(
   tx: SettlementTx,
-  bookingId: number
+  bookingId: number,
+  paymentIntentIds: readonly string[] = []
 ) {
-  const open = [...(await bookingDisputes(tx, bookingId))]
-    .filter(([, state]) => holdsFunds(state))
-    .map(([id]) => id);
-  if (open.length)
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: `Payment dispute ${open.join(", ")} has withdrawn this booking's funds; no refund can be issued until the dispute is resolved`,
-    });
+  const open = await withdrawnDisputeIds(tx, bookingId, paymentIntentIds);
+  if (open.length) throw withdrawnDisputeError(open);
 }
+
+/** A saved refund command that is due waits, queued and retryable, while a
+ * dispute holds the funds. It proceeds once the dispute is won or the funds
+ * are reinstated, and never after a lost dispute. */
+export const DISPUTE_HOLD_ERROR = "dispute_funds_withdrawn";
+export const DISPUTE_HOLD_RETRY_MS = 60 * 60_000;
 
 const couponEvents = new Set<DisputeEventType>([
   "charge.dispute.funds_withdrawn",
@@ -234,13 +315,14 @@ const couponEvents = new Set<DisputeEventType>([
   "charge.dispute.closed",
 ]);
 
-/** Called after this event's ledger row is written, under the booking lock. */
+/** Called after this event's ledger row is written, under the booking lock.
+ * A dispute on a collection that did not fund the travel leaves coupons alone. */
 async function applyDisputeToCoupons(
   tx: SettlementTx,
   bookingId: number,
   disputeId: string
 ): Promise<CouponTransition[]> {
-  const disputes = await bookingDisputes(tx, bookingId);
+  const disputes = await fundingDisputes(tx, bookingId);
   const state = disputes.get(disputeId);
   const outcome = state ? couponOutcome(state) : null;
   if (outcome === "suspend") return suspendBookingCoupons(tx, bookingId);

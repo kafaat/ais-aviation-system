@@ -1,6 +1,11 @@
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
-import { assertNoWithdrawnDispute } from "./payment-dispute.service";
+import {
+  assertNoWithdrawnDispute,
+  DISPUTE_HOLD_ERROR,
+  DISPUTE_HOLD_RETRY_MS,
+  withdrawnDisputeIds,
+} from "./payment-dispute.service";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, lte, desc, lt } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -679,6 +684,23 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
         item.errorCode !== "unknown_provider_outcome")
     )
       return null;
+    // A share reserved before a dispute withdrew the funds waits, queued and
+    // retryable, while the dispute holds them. An existing provider refund
+    // still reconciles.
+    if (
+      !item.refundId &&
+      (await withdrawnDisputeIds(tx, bookingId, [item.paymentIntentId])).length
+    ) {
+      if (["queued", "requesting", "pending"].includes(item.status))
+        await tx
+          .update(bookingRefundItems)
+          .set({
+            errorCode: DISPUTE_HOLD_ERROR,
+            nextAttemptAt: new Date(Date.now() + DISPUTE_HOLD_RETRY_MS),
+          })
+          .where(eq(bookingRefundItems.id, item.id));
+      return null;
+    }
     const requestedAt = item.requestedAt ?? new Date();
     await tx
       .update(bookingRefundItems)

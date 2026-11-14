@@ -17,6 +17,11 @@ import type { SettlementTx } from "./booking-settlement.service";
 import { allocateSplitRefund } from "./split-refund.service";
 import { settleVerifiedRefund } from "./payment-settlement.service";
 import { recordEvent } from "./outbox.service";
+import {
+  DISPUTE_HOLD_ERROR,
+  DISPUTE_HOLD_RETRY_MS,
+  withdrawnDisputeIds,
+} from "./payment-dispute.service";
 
 export async function assertNoOrderRefundPending(
   tx: SettlementTx,
@@ -242,6 +247,24 @@ async function processOrderRefund(id: string) {
       r.nextAttemptAt > new Date()
     )
       return null;
+    // Flight-cancellation and exchange refunds wait, queued and retryable,
+    // while a dispute holds the booking's funds. The cancellation or exchange
+    // itself has already been applied. An existing provider refund still
+    // reconciles.
+    if (
+      !r.refundId &&
+      (await withdrawnDisputeIds(tx, hint.bookingId, [r.paymentIntentId]))
+        .length
+    ) {
+      await tx
+        .update(orderServiceRefunds)
+        .set({
+          errorCode: DISPUTE_HOLD_ERROR,
+          nextAttemptAt: new Date(Date.now() + DISPUTE_HOLD_RETRY_MS),
+        })
+        .where(eq(orderServiceRefunds.id, id));
+      return null;
+    }
     const requestedAt = r.requestedAt ?? new Date();
     await tx
       .update(orderServiceRefunds)

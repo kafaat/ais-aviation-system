@@ -4877,6 +4877,7 @@
         "server/_core/logger.ts",
         "server/db.ts",
         "server/services/outbox.service.ts",
+        "server/services/payment-dispute.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/split-refund.service.ts",
         "server/stripe.ts"
@@ -5188,7 +5189,9 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/services/order-refunds.service.ts",
         "server/services/ordinary-refund.service.ts",
+        "server/services/settlement-review.service.ts",
         "server/services/split-refund.service.ts",
         "server/services/ticket-coupons.service.ts",
         "server/webhooks/stripe.ts"
@@ -6801,10 +6804,11 @@
         "server/_core/logger.ts",
         "server/db.ts",
         "server/services/booking-settlement.service.ts",
+        "server/services/payment-dispute.service.ts",
         "server/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": ["paymentReceipts"],
+        "reads": ["bookings", "paymentReceipts"],
         "writes": []
       },
       "replacement": null
