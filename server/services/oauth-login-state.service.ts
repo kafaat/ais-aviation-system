@@ -1,10 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lte } from "drizzle-orm";
 import { safeReturnTo } from "../../shared/return-to";
 import { oauthLoginStates } from "../../drizzle/schema";
 import { getDb } from "../db";
 
 export const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+/** Rows one start may purge, so cleanup cost stays bounded per request. */
+export const OAUTH_STATE_PURGE_BATCH = 100;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -16,12 +18,46 @@ export class OAuthStateUnavailableError extends Error {
   }
 }
 
+type Database = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+/**
+ * Delete up to OAUTH_STATE_PURGE_BATCH states that can no longer be consumed
+ * (consumeOAuthLogin requires expiresAt > now). Each start removes up to this
+ * many expired rows while adding one, so expired rows cannot accumulate
+ * without a scheduled job. Selecting keys first keeps the bound portable and
+ * makes the delete lock primary-key rows rather than an expiresAt range.
+ */
+async function purgeExpiredOAuthLogins(database: Database, now: Date) {
+  const expired = await database
+    .select({ stateHash: oauthLoginStates.stateHash })
+    .from(oauthLoginStates)
+    .where(lte(oauthLoginStates.expiresAt, now))
+    .orderBy(asc(oauthLoginStates.expiresAt))
+    .limit(OAUTH_STATE_PURGE_BATCH);
+  if (expired.length === 0) return;
+  await database.delete(oauthLoginStates).where(
+    and(
+      inArray(
+        oauthLoginStates.stateHash,
+        expired.map(row => row.stateHash)
+      ),
+      lte(oauthLoginStates.expiresAt, now)
+    )
+  );
+}
+
 export async function beginOAuthLogin(redirectUri: string, returnTo: unknown) {
   const state = randomBytes(32).toString("base64url");
   const browserNonce = randomBytes(32).toString("base64url");
   try {
     const database = await getDb();
     if (!database) throw new OAuthStateUnavailableError();
+    try {
+      await purgeExpiredOAuthLogins(database, new Date());
+    } catch {
+      // Housekeeping is opportunistic: a lock timeout must not deny a login.
+      console.warn("[OAuth] Expired login-state purge failed");
+    }
     await database.insert(oauthLoginStates).values({
       stateHash: hash(state),
       browserNonceHash: hash(browserNonce),

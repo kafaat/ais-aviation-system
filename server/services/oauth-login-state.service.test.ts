@@ -6,6 +6,7 @@ import {
   beginOAuthLogin,
   consumeOAuthLogin,
   OAUTH_STATE_MAX_AGE_MS,
+  OAUTH_STATE_PURGE_BATCH,
   OAuthStateUnavailableError,
 } from "./oauth-login-state.service";
 
@@ -157,4 +158,113 @@ describe("OAuth one-use browser binding through production SQL predicates", () =
       consumeOAuthLogin({ ...login, redirectUri })
     ).rejects.toBeInstanceOf(OAuthStateUnavailableError);
   });
+});
+
+describe("expired OAuth login-state purge on the start path", () => {
+  const seed = (stateHash: string, expiresAt: string, consumedAt?: string) =>
+    fixture.insert(oauthLoginStates, {
+      stateHash,
+      browserNonceHash: hash(`${stateHash}-nonce`),
+      redirectUri,
+      returnTo: "/",
+      expiresAt,
+      consumedAt: consumedAt ?? null,
+    });
+  const storedHashes = () =>
+    (fixture.rows(oauthLoginStates) as Array<{ stateHash: string }>)
+      .map(row => row.stateHash)
+      .sort();
+
+  it("deletes unconsumable states and keeps every consumable one", async () => {
+    const pending = await beginOAuthLogin(redirectUri, "/checkout/700");
+    seed("expired-long-ago", "2026-11-05 11:00:00");
+    seed("expired-consumed", "2026-11-05 11:59:59", "2026-11-05 11:55:00");
+    // consumeOAuthLogin rejects expiresAt <= now, so the boundary row is dead.
+    seed("expires-at-now", "2026-11-05 12:00:00");
+    seed("expires-in-a-second", "2026-11-05 12:00:01");
+
+    const next = await beginOAuthLogin(redirectUri, "/");
+
+    expect(storedHashes()).toEqual(
+      [hash(pending.state), hash(next.state), "expires-in-a-second"].sort()
+    );
+    expect(await consumeOAuthLogin({ ...pending, redirectUri })).toEqual({
+      redirectUri,
+      returnTo: "/checkout/700",
+    });
+    expect(await consumeOAuthLogin({ ...next, redirectUri })).toEqual({
+      redirectUri,
+      returnTo: "/",
+    });
+  });
+
+  it("bounds the rows one start deletes and drains a backlog over later starts", async () => {
+    const backlog = OAUTH_STATE_PURGE_BATCH + 5;
+    for (let index = 0; index < backlog; index++)
+      seed(`expired-${String(index).padStart(4, "0")}`, "2026-11-05 11:00:00");
+    const expiredCount = () =>
+      storedHashes().filter(stateHash => stateHash.startsWith("expired-"))
+        .length;
+
+    await beginOAuthLogin(redirectUri, "/");
+    expect(expiredCount()).toBe(5);
+    const deletes = fixture.queries.filter(query =>
+      /^delete from `oauth_login_states`/i.test(query.sql)
+    );
+    expect(deletes).toHaveLength(1);
+
+    const login = await beginOAuthLogin(redirectUri, "/");
+    expect(expiredCount()).toBe(0);
+    expect(fixture.rows(oauthLoginStates)).toHaveLength(2);
+    expect(await consumeOAuthLogin({ ...login, redirectUri })).not.toBeNull();
+  });
+
+  it.each([
+    [
+      "key SELECT",
+      () =>
+        mocks.getDb.mockReturnValue(
+          new Proxy(fixture.db, {
+            get: (target, key, receiver) =>
+              key === "select"
+                ? () => {
+                    throw new Error("Connection lost during purge read");
+                  }
+                : Reflect.get(target, key, receiver),
+          })
+        ),
+    ],
+    [
+      "DELETE",
+      () =>
+        fixture.sqlite.exec(
+          `CREATE TRIGGER purge_lock BEFORE DELETE ON oauth_login_states
+           BEGIN SELECT RAISE(ABORT, 'Lock wait timeout exceeded'); END`
+        ),
+    ],
+  ])(
+    "still issues a consumable login when the purge %s fails",
+    async (_stage, breakPurge) => {
+      seed("expired-long-ago", "2026-11-05 11:00:00");
+      breakPurge();
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const login = await beginOAuthLogin(redirectUri, "/checkout/700");
+        expect(warn).toHaveBeenCalledWith(
+          "[OAuth] Expired login-state purge failed"
+        );
+        // The purge really failed: the expired row stays beside the new one.
+        expect(storedHashes()).toEqual(
+          [hash(login.state), "expired-long-ago"].sort()
+        );
+        mocks.getDb.mockReturnValue(fixture.db);
+        expect(await consumeOAuthLogin({ ...login, redirectUri })).toEqual({
+          redirectUri,
+          returnTo: "/checkout/700",
+        });
+      } finally {
+        warn.mockRestore();
+      }
+    }
+  );
 });

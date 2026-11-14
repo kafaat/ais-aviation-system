@@ -6061,6 +6061,7 @@
       "consumers": [
         "server/_core/middleware/procedure-rate-limit.ts",
         "server/_core/middleware/user-rate-limit.middleware.ts",
+        "server/_core/oauth.ts",
         "server/_core/rateLimiter.ts",
         "server/routers/manage-booking.ts",
         "server/routers/rate-limit.ts"
