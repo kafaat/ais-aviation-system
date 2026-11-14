@@ -918,7 +918,8 @@ export async function cancelAfterPartialRefund(
   tx: SettlementTx,
   booking: typeof bookings.$inferSelect,
   paymentIntentId: string,
-  actorId: number
+  actorId: number,
+  reason = "Cancelled by customer with cancellation-fee refund"
 ) {
   const [receipt] = await tx
     .select({ reason: paymentReceipts.settlementError })
@@ -928,12 +929,7 @@ export async function cancelAfterPartialRefund(
   if (DepartureReleaseError.isReason(receipt?.reason)) return false;
   try {
     await tx.transaction(inner =>
-      cancelBookingResources(
-        inner,
-        booking,
-        "Cancelled by customer with cancellation-fee refund",
-        actorId
-      )
+      cancelBookingResources(inner, booking, reason, actorId)
     );
     return true;
   } catch (error) {

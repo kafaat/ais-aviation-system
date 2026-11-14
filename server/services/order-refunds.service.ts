@@ -18,9 +18,12 @@ import { allocateSplitRefund } from "./split-refund.service";
 import { settleVerifiedRefund } from "./payment-settlement.service";
 import { recordEvent } from "./outbox.service";
 import {
+  CHARGEBACK_PARTIAL_COVER,
+  CHARGEBACK_SETTLED,
   DISPUTE_HOLD_ERROR,
   DISPUTE_HOLD_RETRY_MS,
-  withdrawnDisputeIds,
+  lostDisputeCover,
+  savedRefundDisputeGate,
 } from "./payment-dispute.service";
 
 export async function assertNoOrderRefundPending(
@@ -250,12 +253,23 @@ async function processOrderRefund(id: string) {
     // Flight-cancellation and exchange refunds wait, queued and retryable,
     // while a dispute holds the booking's funds. The cancellation or exchange
     // itself has already been applied. An existing provider refund still
-    // reconciles.
-    if (
-      !r.refundId &&
-      (await withdrawnDisputeIds(tx, hint.bookingId, [r.paymentIntentId]))
-        .length
-    ) {
+    // reconciles. After a lost dispute on this collection the bank has
+    // returned the money: a refund it covers is closed with no provider
+    // refund; refunds of the booking's other collections proceed.
+    let noNewRefund = false;
+    let gate = r.refundId
+      ? null
+      : await savedRefundDisputeGate(tx, hint.bookingId, r.paymentIntentId);
+    let cover: number | null = null;
+    if (gate?.state === "lost" && !r.requestedAt) {
+      cover = await lostDisputeCover(tx, hint.bookingId, r.paymentIntentId, {
+        source: "order",
+        id: r.id,
+      });
+      // A lost close delivered before its withdrawal waits for the amount.
+      if (cover === null) gate = { ...gate, state: "held" };
+    }
+    if (gate?.state === "held") {
       await tx
         .update(orderServiceRefunds)
         .set({
@@ -264,6 +278,36 @@ async function processOrderRefund(id: string) {
         })
         .where(eq(orderServiceRefunds.id, id));
       return null;
+    }
+    if (gate?.state === "lost") {
+      // A request that may already have reached the provider is never
+      // reissued: it is reconciled from provider history or reviewed.
+      if (r.requestedAt) noNewRefund = true;
+      else if (cover !== null) {
+        if (cover >= r.amount) {
+          await tx
+            .update(orderServiceRefunds)
+            .set({
+              status: "succeeded",
+              errorCode: CHARGEBACK_SETTLED,
+              completedAt: new Date(),
+            })
+            .where(eq(orderServiceRefunds.id, id));
+          return null;
+        }
+        // The request's amount is its planned payer liability; a remainder
+        // needs its own request, so a partly covered refund is reviewed.
+        if (cover > 0) {
+          await tx
+            .update(orderServiceRefunds)
+            .set({
+              status: "review_required",
+              errorCode: CHARGEBACK_PARTIAL_COVER,
+            })
+            .where(eq(orderServiceRefunds.id, id));
+          return null;
+        }
+      }
     }
     const requestedAt = r.requestedAt ?? new Date();
     await tx
@@ -274,7 +318,7 @@ async function processOrderRefund(id: string) {
         nextAttemptAt: new Date(Date.now() + 60000),
       })
       .where(eq(orderServiceRefunds.id, id));
-    return { ...r, requestedAt };
+    return { ...r, requestedAt, noNewRefund };
   });
   if (!item) return;
   try {
@@ -297,7 +341,10 @@ async function processOrderRefund(id: string) {
       if (otherAmount !== item.baseRefundedAmount)
         throw new Error("provider_refund_balance_conflict");
       if (!refund) {
-        if (Date.now() - item.requestedAt.getTime() >= 23 * 3600000)
+        if (
+          item.noNewRefund ||
+          Date.now() - item.requestedAt.getTime() >= 23 * 3600000
+        )
           throw new Error("unknown_provider_outcome");
         refund = await stripe.refunds.create(
           {

@@ -5204,8 +5204,11 @@
       ],
       "tableExpressions": {
         "reads": [
+          "bookingRefundItems",
           "bookings",
           "financialLedger",
+          "orderServiceRefunds",
+          "ordinaryBookingRefunds",
           "paymentReceipts",
           "payments",
           "users",

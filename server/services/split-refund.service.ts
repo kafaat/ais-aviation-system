@@ -2,9 +2,12 @@ import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
 import {
   assertNoWithdrawnDispute,
+  CHARGEBACK_PARTIAL_COVER,
+  CHARGEBACK_SETTLED,
   DISPUTE_HOLD_ERROR,
   DISPUTE_HOLD_RETRY_MS,
-  withdrawnDisputeIds,
+  lostDisputeCover,
+  savedRefundDisputeGate,
 } from "./payment-dispute.service";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, lte, desc, lt } from "drizzle-orm";
@@ -218,7 +221,15 @@ async function quoteFor(tx: SettlementTx, booking: Booking) {
     );
   if (fee.refundAmount === 0) await assertZeroCancellationAllowed(tx, booking);
   // A split cancellation without refunds stays available; it voids the coupons.
-  else await assertNoWithdrawnDispute(tx, booking.id);
+  // A payer whose dispute was lost cannot be refunded again.
+  else
+    await assertNoWithdrawnDispute(
+      tx,
+      booking.id,
+      active.flatMap(s =>
+        s.stripePaymentIntentId ? [s.stripePaymentIntentId] : []
+      )
+    );
   const allocated =
     fee.refundAmount === 0
       ? active.map(s => ({ splitId: s.id, amount: s.amount, refundAmount: 0 }))
@@ -652,8 +663,11 @@ export async function recordVerifiedSplitRefund(
  * than 23h is quarantined; listing may still recover it without issuing money. */
 async function processItem(bookingId: number, splitId: number, actor?: Actor) {
   const db = dbOrThrow();
+  // A share that may already have reached the provider is never reissued after
+  // a lost dispute: it is reconciled from provider history or reviewed.
+  let noNewRefund = false;
   const item = await db.transaction(async tx => {
-    await lockBooking(tx, bookingId, actor);
+    const booking = await lockBooking(tx, bookingId, actor);
     if (!(await lockPlan(tx, bookingId)))
       throw unavailable("Cancellation plan not found");
     const item = (await lockItems(tx, bookingId)).find(
@@ -673,7 +687,6 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
     try {
       requestForItem(item);
     } catch {
-      const booking = await lockBooking(tx, bookingId, actor);
       await requireReview(tx, booking, item, "invalid_refund_request");
       return null;
     }
@@ -686,11 +699,22 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
       return null;
     // A share reserved before a dispute withdrew the funds waits, queued and
     // retryable, while the dispute holds them. An existing provider refund
-    // still reconciles.
-    if (
-      !item.refundId &&
-      (await withdrawnDisputeIds(tx, bookingId, [item.paymentIntentId])).length
-    ) {
+    // still reconciles. After a lost dispute on this payer's collection the
+    // bank has returned the money: a share it covers is closed with no
+    // provider refund; the other payers' shares proceed.
+    let gate = item.refundId
+      ? null
+      : await savedRefundDisputeGate(tx, bookingId, item.paymentIntentId);
+    let cover: number | null = null;
+    if (gate?.state === "lost" && !item.requestedAt) {
+      cover = await lostDisputeCover(tx, bookingId, item.paymentIntentId, {
+        source: "split",
+        id: item.id,
+      });
+      // A lost close delivered before its withdrawal waits for the amount.
+      if (cover === null) gate = { ...gate, state: "held" };
+    }
+    if (gate?.state === "held") {
       if (["queued", "requesting", "pending"].includes(item.status))
         await tx
           .update(bookingRefundItems)
@@ -700,6 +724,25 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
           })
           .where(eq(bookingRefundItems.id, item.id));
       return null;
+    }
+    if (gate?.state === "lost") {
+      if (item.requestedAt) noNewRefund = true;
+      else if (cover !== null) {
+        if (cover >= item.refundAmount) {
+          await tx
+            .update(bookingRefundItems)
+            .set({ status: "succeeded", errorCode: CHARGEBACK_SETTLED })
+            .where(eq(bookingRefundItems.id, item.id));
+          await updatePlanStatus(tx, booking);
+          return null;
+        }
+        // A share only partly covered keeps its planned amount; the plan's
+        // payer allocation cannot carry a remainder, so it is reviewed.
+        if (cover > 0) {
+          await requireReview(tx, booking, item, CHARGEBACK_PARTIAL_COVER);
+          return null;
+        }
+      }
     }
     const requestedAt = item.requestedAt ?? new Date();
     await tx
@@ -756,7 +799,10 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
         return;
       }
       if (!refund) {
-        if (Date.now() - item.requestedAt.getTime() >= 23 * 3600_000) {
+        if (
+          noNewRefund ||
+          Date.now() - item.requestedAt.getTime() >= 23 * 3600_000
+        ) {
           await db.transaction(async tx => {
             const booking = await lockBooking(tx, bookingId);
             const current = await lockCurrent(tx);
