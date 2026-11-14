@@ -12,7 +12,10 @@
  */
 
 import { z } from "zod";
-import { recordLoginAttempt } from "../services/account-lock.service";
+import {
+  isAccountLocked,
+  recordLoginAttempt,
+} from "../services/account-lock.service";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
@@ -153,6 +156,25 @@ async function authenticateWithPassword(
   }
 
   return null;
+}
+
+/**
+ * Whether a verified password may still not sign in because the account is
+ * locked. Answering a locked account differently from a wrong password, or
+ * issuing it an MFA challenge, turns the lockout into a password oracle. A
+ * lock that cannot be read denies the login in the same way: an error that
+ * only a correct password can reach would be the same oracle.
+ */
+async function isLockedForPasswordLogin(userId: number): Promise<boolean> {
+  try {
+    return await isAccountLocked(userId);
+  } catch (error: unknown) {
+    logger.error(
+      { userId, error: error instanceof Error ? error.message : String(error) },
+      "Account lock check failed; denying password login"
+    );
+    return true;
+  }
 }
 
 // ============================================================================
@@ -306,6 +328,12 @@ export const authRouter = router({
         ctx.req.ip || ctx.req.socket?.remoteAddress || "unknown";
       const userAgent = ctx.req.headers["user-agent"];
       const user = await authenticateWithPassword(input.email, input.password);
+      // The lock is read before the password result shapes the answer, so a
+      // locked account gets the wrong-password response either way.
+      const locked = user ? await isLockedForPasswordLogin(user.id) : false;
+      let failureReason: string | undefined;
+      if (!user) failureReason = "invalid_credentials";
+      else if (locked) failureReason = "account_locked";
       // The attempt log feeds the automatic lockout; a logging failure must
       // not turn a valid credential into an outage, so it is best effort.
       try {
@@ -313,18 +341,19 @@ export const authRouter = router({
           email: input.email,
           ipAddress,
           userAgent,
-          success: Boolean(user),
-          failureReason: user ? undefined : "invalid_credentials",
+          success: !failureReason,
+          failureReason,
         });
       } catch {
         /* attempt logging is best effort */
       }
-      if (!user)
+      if (!user || locked)
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Invalid email or password",
         });
-      // Locks are enforced when the session is issued (assertAccountAccessible).
+      // Issuing the session, here or after completeMfa, re-checks locks and
+      // deletion in its transaction (assertAccountAccessible).
       const mfa = await getMfaSettings(user.id);
       if (mfa?.isEnabled) {
         return {
