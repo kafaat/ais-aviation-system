@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import type mysql from "mysql2/promise";
 import {
   afterAll,
   beforeAll,
@@ -22,7 +23,10 @@ import {
  * ETicketIssued, all inside one transaction that first locks the booking row.
  * passengers.ticketNumber carries only a non-unique index, so the lock is the
  * sole guard against two first readers each allocating a number. These cases
- * exercise that guard on native MySQL rather than on a fixture.
+ * exercise that guard on native MySQL rather than on a fixture. Overlap by
+ * Promise.all alone does not prove contention, so one case holds the first
+ * reader inside its transaction and observes the second waiting on the
+ * booking lock in performance_schema before letting both finish.
  */
 const provider = vi.hoisted(() => ({ db: null as unknown }));
 vi.mock("../db", () => ({ getDb: () => provider.db }));
@@ -103,6 +107,83 @@ nativeDescribe.sequential("ticket issuance on native MySQL", () => {
     expect(coupons).toHaveLength(first.legs.length);
     expect(new Set(coupons.map(c => c.ticketNumber))).toEqual(
       new Set([first.data.ticketNumber])
+    );
+    expect(await issuedEvents(81)).toHaveLength(1);
+  });
+
+  /** Lock waits in the fixture schema, keyed by the table each waiting
+   * transaction is trying to lock. */
+  async function lockWaitsByTable() {
+    const [rows] = await fixture.admin.query<mysql.RowDataPacket[]>(
+      "SELECT l.OBJECT_NAME AS tableName, COUNT(*) AS waiting FROM performance_schema.data_lock_waits w JOIN performance_schema.data_locks l ON l.ENGINE=w.ENGINE AND l.ENGINE_LOCK_ID=w.REQUESTING_ENGINE_LOCK_ID WHERE l.OBJECT_SCHEMA=? GROUP BY l.OBJECT_NAME",
+      [fixture.databaseName]
+    );
+    return Object.fromEntries(
+      rows.map(row => [String(row.tableName), Number(row.waiting)])
+    ) as Record<string, number>;
+  }
+
+  async function waitForLockWaits(expected: Record<string, number>) {
+    const deadline = Date.now() + 8000;
+    let seen: Record<string, number> = {};
+    while (Date.now() < deadline) {
+      seen = await lockWaitsByTable();
+      if (
+        Object.entries(expected).every(
+          ([table, count]) => (seen[table] ?? 0) === count
+        )
+      )
+        return seen;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error(
+      `Expected lock waits ${JSON.stringify(expected)}, saw ${JSON.stringify(seen)}`
+    );
+  }
+
+  it("makes the second first read wait on the booking lock the first one holds", async () => {
+    // A separate transaction holds passenger 81, the last row the first
+    // reader locks. The first reader then holds the booking, segment and
+    // flight locks while it waits there, so the second reader's wait is on
+    // the first reader's booking lock: the guard itself, not just overlap.
+    const holder = await fixture.pool.getConnection();
+    let first: ReturnType<typeof readTicketDocument> | undefined;
+    let second: ReturnType<typeof readTicketDocument> | undefined;
+    try {
+      await holder.query("START TRANSACTION");
+      await holder.query("SELECT id FROM passengers WHERE id = 81 FOR UPDATE");
+
+      first = readTicketDocument(71, 81, 9);
+      await waitForLockWaits({ passengers: 1 });
+      second = readTicketDocument(71, 81, 9);
+      expect(await waitForLockWaits({ passengers: 1, bookings: 1 })).toEqual({
+        passengers: 1,
+        bookings: 1,
+      });
+
+      // Neither reader has allocated anything while they wait.
+      const [pending] = await fixture.db
+        .select({ ticketNumber: schema.passengers.ticketNumber })
+        .from(schema.passengers)
+        .where(eq(schema.passengers.id, 81));
+      expect(pending?.ticketNumber).toBeNull();
+      expect(await couponsFor(81)).toHaveLength(0);
+      expect(await issuedEvents(81)).toHaveLength(0);
+
+      await holder.query("COMMIT");
+    } finally {
+      await holder.query("ROLLBACK").catch(() => undefined);
+      holder.release();
+    }
+
+    const [one, two] = await Promise.all([first!, second!]);
+    expect(one.data.ticketNumber).toMatch(/^\d{13}$/);
+    expect(two.data.ticketNumber).toBe(one.data.ticketNumber);
+    expect(two.data.issueDate.getTime()).toBe(one.data.issueDate.getTime());
+    const coupons = await couponsFor(81);
+    expect(coupons).toHaveLength(one.legs.length);
+    expect(new Set(coupons.map(c => c.ticketNumber))).toEqual(
+      new Set([one.data.ticketNumber])
     );
     expect(await issuedEvents(81)).toHaveLength(1);
   });
