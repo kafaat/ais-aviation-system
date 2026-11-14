@@ -180,6 +180,32 @@ describe("waitlist eligibility", () => {
     ).resolves.toMatchObject({ data: { priority: 1, seats: 1 } });
   });
 
+  it("refuses a request for exactly the unheld seats, accepts one more", async () => {
+    // Two unheld seats: three in the cabin, one held by another user.
+    fixture.rows("flights")[0].economyAvailable = 3;
+    fixture
+      .rows("inventory_locks")
+      .push(lock({ id: 1, userId: 202, numberOfSeats: 1 }));
+    await expect(
+      caller.addToWaitlist({
+        flightId: OWN_FLIGHT,
+        cabinClass: "economy",
+        seats: 2,
+      })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("still available"),
+    });
+    expect(fixture.rows("waitlist")).toEqual([]);
+    await expect(
+      caller.addToWaitlist({
+        flightId: OWN_FLIGHT,
+        cabinClass: "economy",
+        seats: 3,
+      })
+    ).resolves.toMatchObject({ data: { priority: 1, seats: 3 } });
+  });
+
   it.each(["waiting", "offered"])(
     "refuses a second entry while one is %s",
     async status => {
@@ -209,6 +235,41 @@ describe("waitlist eligibility", () => {
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(fixture.rows("waitlist")).toHaveLength(1);
+  });
+
+  it("refuses a duplicate queued by a partial hold, keeping no hold", async () => {
+    // Three free seats for a request of five: hold three, queue two.
+    fixture.rows("flights")[0].economyAvailable = 3;
+    fixture
+      .rows("waitlist")
+      .push(entry({ id: 1, userId: 101, cabinClass: "economy" }));
+    const partial = (sessionId: string) =>
+      caller.allocateSeats({
+        flightId: OWN_FLIGHT,
+        cabinClass: "economy",
+        seats: 5,
+        sessionId,
+      });
+    await expect(partial("partial-duplicate")).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("already on the waitlist"),
+    });
+    nothingWritten();
+    expect(fixture.rows("waitlist")).toHaveLength(1);
+
+    // Once the earlier entry ends, the same request takes the partial path.
+    fixture.rows("waitlist")[0].status = "cancelled";
+    await expect(partial("partial-fresh")).resolves.toMatchObject({
+      success: true,
+      data: { seatsAllocated: 3, waitlistPosition: 2 },
+    });
+    expect(fixture.rows("seat_holds")).toHaveLength(1);
+    expect(fixture.rows("waitlist")[1]).toMatchObject({
+      userId: 101,
+      cabinClass: "economy",
+      seats: 2,
+      status: "waiting",
+    });
   });
 
   it("allows rejoining after an earlier entry ended", async () => {
@@ -289,6 +350,25 @@ describe("per-user hold ceiling", () => {
       message: expect.stringContaining(`at most ${MAX_SEATS}`),
     });
     expect(fixture.rows("inventory_locks")).toHaveLength(6);
+  });
+
+  it("counts each hold once, not again through its linked seat-hold row", async () => {
+    await expect(hold(5, "first-part")).resolves.toMatchObject({
+      success: true,
+    });
+    await expect(hold(MAX_SEATS - 5, "fills-ceiling")).resolves.toMatchObject({
+      success: true,
+      data: { seatsAllocated: MAX_SEATS - 5 },
+    });
+    // Both holds wrote a canonical lock and a seat-hold row linked to it.
+    expect(fixture.rows("inventory_locks")).toHaveLength(2);
+    expect(fixture.rows("seat_holds").map(row => row.inventoryLockId)).toEqual(
+      fixture.rows("inventory_locks").map(row => row.id)
+    );
+    await expect(hold(1, "over-ceiling")).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining(`${MAX_SEATS} already held`),
+    });
   });
 
   it("frees the ceiling when the user releases a hold", async () => {
