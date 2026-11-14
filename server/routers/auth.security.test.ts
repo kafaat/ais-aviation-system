@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "../_core/context";
 import { authRouter } from "./auth";
@@ -7,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   login: vi.fn(),
   getDb: vi.fn(),
   recordLoginAttempt: vi.fn(),
+  isAccountLocked: vi.fn(),
   findFirst: vi.fn(),
   createSessionToken: vi.fn(),
   cookie: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock("../_core/middleware/procedure-rate-limit", () => ({
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
 vi.mock("../services/account-lock.service", () => ({
   recordLoginAttempt: mocks.recordLoginAttempt,
+  isAccountLocked: mocks.isAccountLocked,
 }));
 vi.mock("../_core/sdk", () => ({
   sdk: { createSessionToken: mocks.createSessionToken },
@@ -79,6 +82,7 @@ beforeEach(() => {
     query: { users: { findFirst: mocks.findFirst } },
   });
   mocks.getMfaSettings.mockResolvedValue(null);
+  mocks.isAccountLocked.mockResolvedValue(false);
   mocks.login.mockResolvedValue(tokens);
   mocks.createSessionToken.mockResolvedValue("test-cookie-token");
 });
@@ -193,4 +197,148 @@ it("issues only a challenge after a valid password for an MFA account", async ()
   expect(mocks.login).not.toHaveBeenCalled();
   expect(mocks.createSessionToken).not.toHaveBeenCalled();
   expect(mocks.cookie).not.toHaveBeenCalled();
+});
+
+describe("a locked account gives no password oracle", () => {
+  const wrongPassword = { success: false, message: "Invalid credentials" };
+  const rightPassword = { success: true, user };
+
+  /** The code and message a login answers with, for a given verification. */
+  async function loginFailure(verification: unknown) {
+    mocks.verifyPassword.mockResolvedValue(verification);
+    const error = await authRouter
+      .createCaller(anonymousContext())
+      .login(credentials)
+      .then(
+        () => {
+          throw new Error("login unexpectedly succeeded");
+        },
+        (rejection: unknown) => rejection
+      );
+    expect(error).toBeInstanceOf(TRPCError);
+    const { code, message } = error as TRPCError;
+    return { code, message };
+  }
+
+  function lockAccount() {
+    mocks.isAccountLocked.mockResolvedValue(true);
+    // The real session gate (assertAccountAccessible) refuses a locked
+    // account with its own message; the router must not let it surface.
+    mocks.login.mockRejectedValue(
+      new TRPCError({ code: "UNAUTHORIZED", message: "Account is locked" })
+    );
+  }
+
+  it("answers a locked account's correct password exactly like a wrong one", async () => {
+    lockAccount();
+    const wrong = await loginFailure(wrongPassword);
+    const right = await loginFailure(rightPassword);
+
+    expect(wrong).toEqual({
+      code: "UNAUTHORIZED",
+      message: "Invalid email or password",
+    });
+    expect(right).toEqual(wrong);
+    expect(mocks.isAccountLocked).toHaveBeenCalledWith(user.id);
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(mocks.createSessionToken).not.toHaveBeenCalled();
+    expect(mocks.cookie).not.toHaveBeenCalled();
+  });
+
+  it("issues no MFA challenge to a locked MFA account with the correct password", async () => {
+    lockAccount();
+    mocks.getMfaSettings.mockResolvedValue({ isEnabled: true });
+    mocks.createMfaChallenge.mockResolvedValue("a".repeat(64));
+
+    const right = await loginFailure(rightPassword);
+
+    expect(right).toEqual(await loginFailure(wrongPassword));
+    expect(mocks.createMfaChallenge).not.toHaveBeenCalled();
+    expect(mocks.login).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { account: "locked", setUp: lockAccount },
+    {
+      account: "whose lock cannot be read",
+      setUp: () =>
+        mocks.isAccountLocked.mockRejectedValue(new Error("Connection lost")),
+    },
+  ])(
+    "reads no MFA settings for an account $account, so their failure is no oracle",
+    async ({ setUp }) => {
+      setUp();
+      // Any step after the password check that a locked account still
+      // reaches can fail in a way only the correct password exposes.
+      mocks.getMfaSettings.mockRejectedValue(
+        new Error("MFA settings unavailable")
+      );
+
+      const wrong = await loginFailure(wrongPassword);
+      const right = await loginFailure(rightPassword);
+
+      expect(right).toEqual(wrong);
+      expect(right).toEqual({
+        code: "UNAUTHORIZED",
+        message: "Invalid email or password",
+      });
+      expect(mocks.getMfaSettings).not.toHaveBeenCalled();
+      expect(mocks.createMfaChallenge).not.toHaveBeenCalled();
+    }
+  );
+
+  it("denies with the wrong-password answer when the lock cannot be read", async () => {
+    mocks.isAccountLocked.mockRejectedValue(new Error("Connection lost"));
+
+    expect(await loginFailure(rightPassword)).toEqual({
+      code: "UNAUTHORIZED",
+      message: "Invalid email or password",
+    });
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(mocks.createMfaChallenge).not.toHaveBeenCalled();
+  });
+
+  it("still signs in an unlocked account, after consulting its lock", async () => {
+    mocks.verifyPassword.mockResolvedValue(rightPassword);
+
+    const result = await authRouter
+      .createCaller(anonymousContext())
+      .login(credentials);
+
+    expect(result).toMatchObject({ ...tokens, user: { id: user.id } });
+    expect(mocks.isAccountLocked).toHaveBeenCalledWith(user.id);
+    expect(mocks.isAccountLocked.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.login.mock.invocationCallOrder[0]
+    );
+    expect(mocks.recordLoginAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({ email: user.email, success: true })
+    );
+  });
+
+  it("still counts failed attempts, including a locked account's correct password", async () => {
+    await loginFailure(wrongPassword);
+    lockAccount();
+    await loginFailure(wrongPassword);
+    await loginFailure(rightPassword);
+
+    expect(
+      mocks.recordLoginAttempt.mock.calls.map(([attempt]) => ({
+        email: attempt.email,
+        success: attempt.success,
+        failureReason: attempt.failureReason,
+      }))
+    ).toEqual([
+      {
+        email: user.email,
+        success: false,
+        failureReason: "invalid_credentials",
+      },
+      {
+        email: user.email,
+        success: false,
+        failureReason: "invalid_credentials",
+      },
+      { email: user.email, success: false, failureReason: "account_locked" },
+    ]);
+  });
 });
