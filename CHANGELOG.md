@@ -2,7 +2,7 @@
 
 ## What's Changed in v1.39.5
 
-<!-- ais-release-source: 38e63a1cd43062444690dcabece018d2d8b9f09b -->
+<!-- ais-release-source: 1d8c87c4e4d3804a699c2ac25cebc0ab11fb9584 -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
@@ -11,6 +11,7 @@
 - fix(auth): check the account lock before answering a password login (#343) (83aa5268)
 - fix(inventory): enforce tenant, waitlist and per-user hold guards (#342) (a6a68ba8)
 - fix(auth): rate-limit anonymous OAuth starts and purge expired login states (#344) (38e63a1c)
+- fix: sweeper lock order, suspension review and refund cap after a downgrade (#346) (1d8c87c4)
 
 ### Maintenance
 
