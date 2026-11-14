@@ -10,6 +10,7 @@ vi.mock("../_core/sdk", () => ({ sdk: { authenticateRequest: state.cookie } }));
 vi.mock("../services/mobile-auth-v2.service", () => ({
   mobileAuthServiceV2: { authenticateAccessToken: state.bearer },
 }));
+import { auditLogs } from "../../drizzle/schema";
 import { createContext } from "../_core/context";
 import { setTenantStatus, assignUserTenant } from "../services/tenant.service";
 let fixture: ReturnType<typeof transactionMemory>;
@@ -90,5 +91,11 @@ it.each([
     tenantsRouter.createCaller(ctx).create(input)
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   expect(select).not.toHaveBeenCalled();
-  expect(insert).not.toHaveBeenCalled();
+  // The privileged builder records the refused attempt in audit_logs (S-21);
+  // no tenant storage may be touched before validation.
+  const storageInserts = insert.mock.calls.filter(
+    ([table]) => table !== auditLogs
+  );
+  expect(storageInserts).toEqual([]);
+  expect(insert).toHaveBeenCalledTimes(1);
 });

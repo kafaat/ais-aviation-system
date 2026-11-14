@@ -146,6 +146,7 @@ jobs:
           server/__tests__/compensation-purge-mysql.test.ts
           server/__tests__/expired-hold-sweeper-lock-order-mysql.test.ts
           server/__tests__/ticket-issuance-concurrency-mysql.test.ts
+          server/__tests__/privileged-mutation-audit-mysql.test.ts
           --reporter=default
           --reporter=json
           --reporter=junit

@@ -421,6 +421,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/_core/middleware/privileged-audit.ts",
         "server/routers/admin.ts",
         "server/routers/bookings.ts",
         "server/routers/payments.ts",
@@ -6091,6 +6092,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/_core/middleware/privileged-audit.ts",
         "server/_core/request-identity.ts",
         "server/_core/trpc.ts",
         "server/routers/admin.ts",
