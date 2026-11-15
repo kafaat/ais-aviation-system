@@ -77,15 +77,20 @@ its accountable role has a named person. One person may hold several roles
 provided approval of a sensitive financial change stays separate from its
 implementation and from its independent acceptance.
 
-| Role in #319                  | Usual functional position                                                      | Responsibility                                                               | Assignee   |
-| ----------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ---------- |
-| Product owner                 | Head of Product, or head of digital commerce and reservations                  | Currencies, markets and use cases per wave; go/no-go per wave; approves G1   | unassigned |
-| Finance / Revenue Accounting  | CFO, delegating detail to the revenue-accounting manager or treasury           | Functional currency, FX source, rate fixing, rounding, settlement; G3 and G4 | unassigned |
-| Payments engineering          | Payments engineering lead                                                      | Collection, refund, settlement and provider integration changes              | unassigned |
-| Pricing / Booking engineering | Reservations and pricing engineering lead, with the revenue-management manager | Quote fixing, invoice currency, fare components, taxes and fees              | unassigned |
-| Tax / Compliance              | Head of compliance, or legal and tax                                           | Per-currency tax, fee, contractual and regulatory requirements               | unassigned |
-| QA                            | QA manager or independent test lead                                            | Native MySQL acceptance, browser journeys, negative and concurrency suites   | unassigned |
-| Provider relationship         | Financial-partnerships or payment-gateway relationship manager                 | Stripe, bank and provider agreements; proof of support per currency          | unassigned |
+| Role in #319                  | Usual functional position                                                      | Responsibility                                                               | Assignee        |
+| ----------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | --------------- |
+| Product owner                 | Head of Product, or head of digital commerce and reservations                  | Currencies, markets and use cases per wave; go/no-go per wave; approves G1   | owner (interim) |
+| Finance / Revenue Accounting  | CFO, delegating detail to the revenue-accounting manager or treasury           | Functional currency, FX source, rate fixing, rounding, settlement; G3 and G4 | owner (interim) |
+| Payments engineering          | Payments engineering lead                                                      | Collection, refund, settlement and provider integration changes              | owner (interim) |
+| Pricing / Booking engineering | Reservations and pricing engineering lead, with the revenue-management manager | Quote fixing, invoice currency, fare components, taxes and fees              | owner (interim) |
+| Tax / Compliance              | Head of compliance, or legal and tax                                           | Per-currency tax, fee, contractual and regulatory requirements               | owner (interim) |
+| QA                            | QA manager or independent test lead                                            | Native MySQL acceptance, browser journeys, negative and concurrency suites   | owner (interim) |
+| Provider relationship         | Financial-partnerships or payment-gateway relationship manager                 | Stripe, bank and provider agreements; proof of support per currency          | owner (interim) |
+
+**Interim assignment (owner decision, 2026-11-15, [#319](https://github.com/kafaat/ais-aviation-system/issues/319#issuecomment-6898362414)).** The
+repository owner holds every role above and approves G1 to G10 until named
+persons are assigned. Implementation stays with the engineering sessions and
+independent acceptance with the lab, so approval stays separate from both.
 
 Smaller initial structure, acceptable while no external airline is onboarded:
 product owner or project manager (product and scope), authorised finance
@@ -141,11 +146,11 @@ ship. "Existing" names evidence already on main; everything else is open.
 
 These were prepared for the approvers named in section 4. On 14 November 2026
 the repository owner adopted ADR 0002 and the G3 and G4 policy below as
-working defaults ([#327, decision 4](https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729)); the G1 first-wave table remains a
-proposal. Finance may amend the defaults once its role in section 4 is
+working defaults ([#327, decision 4](https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729)); on 15 November 2026 the
+owner chose the G1 first wave below ([#319](https://github.com/kafaat/ais-aviation-system/issues/319#issuecomment-6898362414)). Finance may amend the defaults once its role in section 4 is
 named, and until then later waves build to them.
 
-**G1, first-wave scope (for the product owner).** Start with a subset rather
+**G1, first-wave scope. Decided 2026-11-15: USD, EUR and AED are the first transaction currencies, as below.** Start with a subset rather
 than all ten listed currencies.
 
 | Currency      | Proposed first-wave scope                                                                                                                                                                                                 |
@@ -188,17 +193,18 @@ or amends the G3 and G4 proposals; decide the YER FX reference policy. Exit:
 
 Status on 14 November 2026:
 
-| Wave 0 item                       | State                                                                                                                                                                                                                     |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ADR 0002                          | Accepted by the owner                                                                                                                                                                                                     |
-| G3 rate fixing, G4 rounding       | Adopted as working defaults (section 6 table); Finance may amend once named                                                                                                                                               |
-| YER FX reference policy (G2)      | **Decided 2026-11-15:** the official rate of the Central Bank of Yemen in Sanaa ([#319](https://github.com/kafaat/ais-aviation-system/issues/319#issuecomment-6898269941)); feed, format, cadence and staleness rule open |
-| G1 first-wave currencies, markets | Open; the section 6 table is still a proposal                                                                                                                                                                             |
-| Named persons for section 4 roles | Open; every assignee stays `unassigned`                                                                                                                                                                                   |
+| Wave 0 item                       | State                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ADR 0002                          | Accepted by the owner                                                                                                                                                                                                                                                                                                    |
+| G3 rate fixing, G4 rounding       | Adopted as working defaults (section 6 table); Finance may amend once named                                                                                                                                                                                                                                              |
+| YER FX reference policy (G2)      | **Decided 2026-11-15:** the official rate of the Central Bank of Yemen in Sanaa, entered manually by an authorised operator with an audit record (actor, time, source, rate, validity) ([#319](https://github.com/kafaat/ais-aviation-system/issues/319#issuecomment-6898362414)); staleness rule and contract test open |
+| G1 first-wave currencies, markets | **Decided 2026-11-15:** USD, EUR and AED first; SAR stays; YER is the display base, and selling in YER waits for a provider that settles it (G7)                                                                                                                                                                         |
+| Named persons for section 4 roles | **Decided 2026-11-15:** the repository owner holds every role in the interim                                                                                                                                                                                                                                             |
 
-Engineering may prepare Wave 1 and 2 groundwork that does not depend on the
-open items (no FX source binding, no selectable currency). The deployed
-product stays SAR for pricing, collection and refund.
+**Wave 0 is closed** (15 November 2026). Wave 1 starts after #365 merges, as
+the owner chose: operator-entered rates with provenance, a staleness alarm,
+and fallback constants kept out of any amount a user can act on. The
+deployed product stays SAR for pricing, collection and refund.
 
 **Wave 1, trustworthy display currency.** Replace the stubbed
 `updateExchangeRates` with the G2 ingestion, record provenance on every row,

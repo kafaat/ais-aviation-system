@@ -179,6 +179,12 @@ rate is obtained (publication, format, cadence, who enters or ingests it), its
 staleness rule and its contract test stay open under G2. The deployed product
 stays SAR, and YER is not enabled.
 
+**Owner decisions closing Wave 0, 2026-11-15 ([#319](https://github.com/kafaat/ais-aviation-system/issues/319#issuecomment-6898362414)).** The Sanaa rate
+is entered manually by an authorised operator with an audit record. USD, EUR
+and AED are the first transaction currencies (G1); SAR stays and YER is the
+display base. The repository owner holds every role in the interim. Wave 1
+starts after #365 merges.
+
 ## 7. S-28 — foreign and missing rows are answered alike (decided 2026-11-14)
 
 **Decision (owner, 14 November 2026, #327).** When an authenticated caller
