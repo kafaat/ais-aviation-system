@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed integrity check for the AIS gap and report closure ledgers."""
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -11,13 +12,27 @@ rows = ledger["findings"]
 assert len(rows) == 38, "Expected 38 original findings"
 assert len({row["id"] for row in rows}) == 38, "Duplicate finding ID"
 assert Counter(row["priority"] for row in rows) == {"P1": 33, "P2": 5}
-allowed = {"needs_current_sha_verification", "verified", "partial", "blocked"}
+allowed = {"needs_current_sha_verification", "verified", "partial", "blocked", "deferred"}
 for row in rows:
     assert row["status"] in allowed, f"Unknown status: {row['id']}"
     if row["status"] == "verified":
         assert row.get("accepted_sha") and len(row["accepted_sha"]) == 40, row["id"]
         assert str(row.get("acceptance_run") or "").startswith("https://github.com/"), row["id"]
         assert row["accepted_sha"] == ledger["source_revision"], row["id"]
+    if row["status"] == "deferred":
+        # A deferral is an owner scope decision, not acceptance: it must cite the
+        # decision, carry no acceptance evidence, and keep the acceptance that
+        # would promote the finding if it returns to scope.
+        ref = row.get("decision_reference")
+        assert isinstance(ref, dict), f"Deferred without decision_reference: {row['id']}"
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(ref.get("date") or "")), f"Deferral date: {row['id']}"
+        assert re.fullmatch(
+            r"https://github\.com/kafaat/ais-aviation-system/(issues|pull)/\d+#issuecomment-\d+",
+            str(ref.get("source") or ""),
+        ), f"Deferral source must be the decision comment: {row['id']}"
+        assert str(ref.get("summary") or "").strip(), f"Deferral summary: {row['id']}"
+        assert row.get("accepted_sha") is None and row.get("acceptance_run") is None, f"Deferred with acceptance: {row['id']}"
+        assert row.get("remaining_acceptance"), f"Deferred without remaining_acceptance: {row['id']}"
 report_rows = catalog["rows"]
 assert len(report_rows) == 99
 assert len({row["id"] for row in report_rows}) == 99

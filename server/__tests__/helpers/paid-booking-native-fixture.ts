@@ -7,7 +7,7 @@ import * as schema from "../../../drizzle/schema";
 /** Owned native tables preserve migrated types and uniqueness. CREATE TABLE
  * LIKE omits foreign keys; migration replay verifies those separately. */
 export async function createPaidBookingNativeFixture(
-  prefix: "ais_api_process" | "ais_confirmation"
+  prefix: "ais_api_process" | "ais_confirmation" | "ais_dispute_coupons"
 ) {
   const source = new URL(process.env.DATABASE_URL ?? "");
   const sourceDatabase = source.pathname.slice(1);

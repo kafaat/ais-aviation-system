@@ -27,7 +27,7 @@ beforeEach(() => read.mockClear());
 it("rejects a different booking owner or a different tenant before reading passenger/sector labels", async () => {
   await expect(
     caller(34, 7).getBookingAncillaries({ bookingId: 5 })
-  ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
   await expect(
     caller(33, 8).getBookingAncillaries({ bookingId: 5 })
   ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -51,11 +51,11 @@ it.each(["admin", "super_admin"] as const)(
 );
 
 it.each(["user", "finance", "airline_admin", "ops", "support"] as const)(
-  "keeps another owner's extras forbidden to %s",
+  "keeps another owner's extras hidden from %s",
   async role => {
     await expect(
       caller(34, 7, role).getBookingAncillaries({ bookingId: 5 })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(read).not.toHaveBeenCalled();
   }
 );

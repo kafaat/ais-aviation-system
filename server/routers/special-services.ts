@@ -145,8 +145,8 @@ export const specialServicesRouter = router({
 
       if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
+          code: "NOT_FOUND",
+          message: "Booking not found",
         });
       }
 
@@ -236,8 +236,8 @@ export const specialServicesRouter = router({
         (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role))
       ) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
+          code: "NOT_FOUND",
+          message: "Special service not found",
         });
       }
 
@@ -288,8 +288,8 @@ export const specialServicesRouter = router({
         (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role))
       ) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
+          code: "NOT_FOUND",
+          message: "Passenger not found",
         });
       }
 

@@ -149,10 +149,10 @@ describe("refund preview ownership and nullable tenant scope", () => {
       });
       await expect(
         caller.checkRefundable({ bookingId: 10 })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       await expect(
         caller.calculateCancellationFee({ bookingId: 10 })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(mocks.refundable).not.toHaveBeenCalled();
       expect(mocks.quote).not.toHaveBeenCalled();
     }

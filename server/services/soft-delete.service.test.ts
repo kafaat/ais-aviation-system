@@ -164,7 +164,7 @@ describe("booking deletion authority over executing relational SQL", () => {
 
   it("checks ownership and cancellation while holding the booking lock", async () => {
     await expect(softDeleteBooking(2, 7, false)).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "NOT_FOUND",
     });
     fixture.sqlite.exec(
       "UPDATE bookings SET status = 'confirmed' WHERE id = 2"
@@ -188,9 +188,17 @@ describe("booking deletion authority over executing relational SQL", () => {
     ).toBe(true);
   });
 
-  it("keeps the administrative override and holds a booking lock for restoration", async () => {
+  it("lets an administrator delete another owner's cancelled booking but never a live one, and holds a booking lock for restoration", async () => {
     fixture.sqlite.exec(
       "UPDATE bookings SET status = 'confirmed' WHERE id = 2"
+    );
+    // Administrators bypass ownership, not state (review finding R3).
+    await expect(softDeleteBooking(2, 7, true)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(fixture.rows(bookings)[1].deletedAt).toBeNull();
+    fixture.sqlite.exec(
+      "UPDATE bookings SET status = 'cancelled' WHERE id = 2"
     );
     expect(await softDeleteBooking(2, 7, true)).toEqual({
       success: true,

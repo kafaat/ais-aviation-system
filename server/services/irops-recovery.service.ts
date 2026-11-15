@@ -1,5 +1,8 @@
 import { extraNeedsRecoveryReview } from "./recovery-extra-scope";
-import { exchangeLocalCoupons } from "./ticket-coupons.service";
+import {
+  bookingCouponHold,
+  exchangeLocalCoupons,
+} from "./ticket-coupons.service";
 import { readRecoveryFeasibility } from "./recovery-feasibility.service";
 import { requireValue } from "./required-value";
 import { TRPCError } from "@trpc/server";
@@ -414,11 +417,30 @@ export async function executeRecovery(
         "Booking, schedule or operational evidence changed; propose a new recovery plan"
       );
     validateRecoverySolution(state.problem, saved.choices);
+    // A booking whose coupons a payment dispute holds cannot be reissued onto
+    // another flight. It keeps its reservation and its open rebook action; the
+    // operator sees it here and in the execution receipt. The rest of the
+    // approved plan still executes.
+    const skippedBookings: {
+      bookingId: number;
+      reason: "coupons_suspended" | "coupons_void";
+      disputeIds: string[];
+    }[] = [];
     for (const choice of saved.choices) {
       if (choice.key === null) continue;
       const r = requireValue(
         state.records.find(r => r.booking.id === choice.bookingId)
       );
+      const hold = await bookingCouponHold(tx, r.booking.id);
+      if (hold) {
+        skippedBookings.push({
+          bookingId: r.booking.id,
+          reason:
+            hold.outcome === "void" ? "coupons_void" : "coupons_suspended",
+          disputeIds: hold.disputeIds,
+        });
+        continue;
+      }
       const newId = Number(choice.key.split(":")[0]),
         target = requireValue(state.locked.find(f => f.id === newId));
       await reserveSeats(
@@ -570,13 +592,14 @@ export async function executeRecovery(
         choices: saved.choices,
         unassignedPassengers: saved.unassignedPassengers,
         fulfillment: "awaiting_ticket_reissue",
+        ...(skippedBookings.length ? { skippedBookings } : {}),
       },
     });
     await tx
       .update(iropsRecoveryPlans)
       .set({ status: "executed", executionEventId: receiptId })
       .where(eq(iropsRecoveryPlans.id, id));
-    return { receiptId };
+    return { receiptId, skippedBookings };
   });
 }
 

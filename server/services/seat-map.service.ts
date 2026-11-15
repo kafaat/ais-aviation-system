@@ -965,8 +965,8 @@ export async function releaseSeat(
       (booking.tenantId != null && booking.tenantId !== actor.tenantId)
     )
       throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "You do not own this booking",
+        code: "NOT_FOUND",
+        message: "Booking not found",
       });
 
     const [flight] = await db

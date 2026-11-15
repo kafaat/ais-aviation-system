@@ -137,10 +137,13 @@ ship. "Existing" names evidence already on main; everything else is open.
 | G9  | Regulatory and merchant-agreement confirmation for each non-SAR settlement currency                                                                                                  | Written confirmation held by Compliance; referenced, not committed                                                | none                                                                 | Wave 3    |
 | G10 | Tenant base-currency setting: tenant-scoped, permission-checked, audited (actor, time, version, effective-from), validated against the approved list; never retroactive; YER default | Schema and service design review; native tests for cross-tenant rejection, audit event and unchanged history      | `tenants` isolation and `audit_logs` table; no currency setting yet  | Wave 2    |
 
-## 6. Proposals awaiting approval
+## 6. Proposals and adopted defaults
 
-These are proposals prepared for the approvers named in section 4. They are
-not owner decisions until linked from #319 as approved.
+These were prepared for the approvers named in section 4. On 14 November 2026
+the repository owner adopted ADR 0002 and the G3 and G4 policy below as
+working defaults ([#327, decision 4](https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729)); the G1 first-wave table remains a
+proposal. Finance may amend the defaults once its role in section 4 is
+named, and until then later waves build to them.
 
 **G1, first-wave scope (for the product owner).** Start with a subset rather
 than all ten listed currencies.
@@ -156,7 +159,7 @@ than all ten listed currencies.
 This is a product proposal, not evidence that any provider accepts these
 currencies. All actual sales stay SAR until G2 to G9 pass for each currency.
 
-**G3 and G4, financial policy (for Finance).**
+**G3 and G4, financial policy. Adopted as working defaults on 2026-11-14.**
 
 | Decision                         | Proposed policy                                                                                                    |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -182,6 +185,20 @@ converted in place without a migration plan and financial tests.
 first transaction currencies); name the owners in section 4; Finance approves
 or amends the G3 and G4 proposals; decide the YER FX reference policy. Exit:
 #319 links the signed decisions and this file is updated.
+
+Status on 14 November 2026:
+
+| Wave 0 item                       | State                                                                                                                  |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| ADR 0002                          | Accepted by the owner                                                                                                  |
+| G3 rate fixing, G4 rounding       | Adopted as working defaults (section 6 table); Finance may amend once named                                            |
+| YER FX reference policy (G2)      | An official published reference rate; **which source is open** (the two central bank branches publish different rates) |
+| G1 first-wave currencies, markets | Open; the section 6 table is still a proposal                                                                          |
+| Named persons for section 4 roles | Open; every assignee stays `unassigned`                                                                                |
+
+Engineering may prepare Wave 1 and 2 groundwork that does not depend on the
+open items (no FX source binding, no selectable currency). The deployed
+product stays SAR for pricing, collection and refund.
 
 **Wave 1, trustworthy display currency.** Replace the stubbed
 `updateExchangeRates` with the G2 ingestion, record provenance on every row,

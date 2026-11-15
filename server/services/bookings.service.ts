@@ -610,7 +610,7 @@ export async function getBookingById(
     assertTenantMatch(booking.tenantId, tenantId);
 
     if (booking.userId !== userId) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
     }
 
     return booking;

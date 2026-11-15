@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { asc, eq } from "drizzle-orm";
-import { paymentReceipts } from "../../drizzle/schema";
+import { bookings, paymentReceipts } from "../../drizzle/schema";
 import { DepartureReleaseError } from "./booking-settlement.service";
+import { assertNoWithdrawnDispute } from "./payment-dispute.service";
 import { getDb } from "../db";
 import { stripe } from "../stripe";
 import { createServiceLogger } from "../_core/logger";
@@ -63,6 +64,19 @@ export async function requestSettlementReviewRefund(
   }
   if (DepartureReleaseError.isReason(receipt.settlementError))
     throw new DepartureReleaseError(receipt.settlementError);
+  // A booking collection is never refunded while its own dispute, or a dispute
+  // on the booking's funding collection, holds the funds. Wallet top-ups have
+  // their own dispute funding rules.
+  const bookingId = receipt.bookingId;
+  if (bookingId !== null)
+    await db.transaction(async tx => {
+      await tx
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId))
+        .for("update");
+      await assertNoWithdrawnDispute(tx, bookingId, [paymentIntentId]);
+    });
   // Omitting amount refunds the provider's actual remaining balance. The stable
   // key makes operator/network retries identical, including partial refunds.
   log.info({ paymentIntentId, actorId }, "Settlement review refund requested");

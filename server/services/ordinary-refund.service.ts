@@ -16,7 +16,19 @@ import {
 } from "./booking-settlement.service";
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
-import { settleVerifiedRefund } from "./payment-settlement.service";
+import {
+  assertNoWithdrawnDispute,
+  CHARGEBACK_SETTLED,
+  DISPUTE_HOLD_ERROR,
+  DISPUTE_HOLD_RETRY_MS,
+  lostDisputeCover,
+  savedRefundDisputeGate,
+  withdrawnDisputeError,
+} from "./payment-dispute.service";
+import {
+  cancelAfterPartialRefund,
+  settleVerifiedRefund,
+} from "./payment-settlement.service";
 import { recordEvent } from "./outbox.service";
 import { isAdmin } from "./rbac.service";
 import { quoteCancellationPolicy } from "./cancellation-policy.service";
@@ -167,6 +179,7 @@ export async function reserveOrdinaryRefundCancellation(
           );
       }
       await assertNoCollectionReview(tx, booking.id);
+      await assertNoWithdrawnDispute(tx, booking.id, [paymentIntentId]);
       await assertBookingDepartureReleasable(tx, booking);
       await assertNoFlownCouponForCancellation(tx, booking.id);
     }
@@ -387,16 +400,71 @@ export async function recordVerifiedOrdinaryRefund(
   return true;
 }
 
+/** Marks the command that carries the part of a cancellation refund a lost
+ * dispute did not cover. Its own operation id is its own idempotency key. */
+const CHARGEBACK_REMAINDER = ":chargeback-remainder";
+
+/** A lost dispute returned the whole refund through the bank: close the command
+ * with no provider refund and complete the cancellation. The amount sent to the
+ * provider is recorded as 0 (the saved request keeps the original amount), so
+ * the receipt's refunded amount and the ledger are unchanged. */
+async function settleOrdinaryByChargeback(tx: SettlementTx, saved: Intent) {
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, saved.bookingId))
+    .for("update");
+  const [receipt] = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, saved.paymentIntentId))
+    .for("update");
+  if (!booking || !receipt)
+    throw new Error("Cancellation settlement owner missing");
+  let completed = booking.status === "cancelled";
+  if (!completed && receipt.settlementStatus === "applied")
+    completed = await cancelAfterPartialRefund(
+      tx,
+      booking,
+      saved.paymentIntentId,
+      saved.actorId,
+      "Cancelled by customer; refund settled by the lost payment dispute"
+    );
+  await tx
+    .update(ordinaryBookingRefunds)
+    .set(
+      completed
+        ? {
+            status: "succeeded",
+            amount: 0,
+            providerStatus: CHARGEBACK_SETTLED,
+            errorCode: CHARGEBACK_SETTLED,
+            completedAt: new Date(),
+          }
+        : {
+            status: "review_required",
+            errorCode: "cancellation_reconciliation_required",
+          }
+    )
+    .where(eq(ordinaryBookingRefunds.bookingId, saved.bookingId));
+}
+
 /** Resume one immutable command. Listing recovers a lost create response; a
- * missing outcome beyond Stripe's safe idempotency window is never reissued. */
-export async function processOrdinaryRefundCancellation(
+ * missing outcome beyond Stripe's safe idempotency window is never reissued.
+ * Resolves null when a lost dispute settled the whole refund. */
+async function resumeOrdinaryRefund(
   bookingId: number,
   observedRefund?: Stripe.Refund
-) {
+): Promise<Stripe.Refund | null> {
   const db = await getDb();
   if (!db) throw new Error("Refund storage unavailable");
+  let held: string[] = [];
+  let settled = false;
+  // A command that may already have reached the provider is never reissued
+  // after a lost dispute: it is reconciled from provider history or reviewed.
+  let noNewRefund = false;
   const intent = await db.transaction(async tx => {
-    const saved = await lockIntent(tx, bookingId);
+    let saved = await lockIntent(tx, bookingId);
     if (saved.amount === 0 || saved.providerStatus === "not_required")
       throw unavailable(
         "This is a completed cancellation without a provider refund"
@@ -406,6 +474,77 @@ export async function processOrdinaryRefundCancellation(
       saved.errorCode !== "unknown_provider_outcome"
     )
       throw unavailable("Cancellation refund requires reconciliation");
+    // A command saved before a dispute withdrew the funds must not reach the
+    // provider while the dispute holds them. It stays queued and retryable;
+    // an authenticated provider refund that already exists still reconciles.
+    if (!observedRefund && !saved.refundId) {
+      let gate = await savedRefundDisputeGate(
+        tx,
+        bookingId,
+        saved.paymentIntentId
+      );
+      const remainder = saved.operationId.endsWith(CHARGEBACK_REMAINDER);
+      let cover: number | null = null;
+      if (gate.state === "lost" && !remainder && !saved.requestedAt) {
+        cover = await lostDisputeCover(tx, bookingId, saved.paymentIntentId, {
+          source: "ordinary",
+          id: String(bookingId),
+        });
+        // A lost close delivered before its withdrawal waits for the amount.
+        if (cover === null) gate = { ...gate, state: "held" };
+      }
+      if (gate.state === "held") {
+        held = gate.disputeIds;
+        if (["queued", "requesting", "pending"].includes(saved.status))
+          await tx
+            .update(ordinaryBookingRefunds)
+            .set({
+              errorCode: DISPUTE_HOLD_ERROR,
+              nextAttemptAt: new Date(Date.now() + DISPUTE_HOLD_RETRY_MS),
+            })
+            .where(eq(ordinaryBookingRefunds.bookingId, bookingId));
+        return null;
+      }
+      if (gate.state === "lost" && !remainder) {
+        if (saved.requestedAt) noNewRefund = true;
+        else if (cover !== null) {
+          if (cover >= saved.amount) {
+            await settleOrdinaryByChargeback(tx, saved);
+            settled = true;
+            return null;
+          }
+          if (cover > 0) {
+            // Only the part the chargeback did not return goes to the provider,
+            // under its own operation id and idempotency key.
+            const request = JSON.parse(
+              saved.requestPayload
+            ) as Stripe.RefundCreateParams;
+            const operationId = `${saved.operationId}${CHARGEBACK_REMAINDER}`;
+            const amount = saved.amount - cover;
+            const requestPayload = JSON.stringify({
+              ...request,
+              amount,
+              metadata: {
+                ...(request.metadata as Record<string, string>),
+                refundOperationId: operationId,
+                chargebackSettledAmount: String(cover),
+              },
+            });
+            await tx
+              .update(ordinaryBookingRefunds)
+              .set({ amount, operationId, requestPayload, errorCode: null })
+              .where(eq(ordinaryBookingRefunds.bookingId, bookingId));
+            saved = {
+              ...saved,
+              amount,
+              operationId,
+              requestPayload,
+              errorCode: null,
+            };
+          }
+        }
+      }
+    }
     const requestedAt = saved.requestedAt ?? new Date();
     await tx
       .update(ordinaryBookingRefunds)
@@ -417,6 +556,11 @@ export async function processOrdinaryRefundCancellation(
       .where(eq(ordinaryBookingRefunds.bookingId, bookingId));
     return { ...saved, requestedAt };
   });
+  if (!intent) {
+    if (settled) return null;
+    if (held.length) throw withdrawnDisputeError(held);
+    throw unavailable("Cancellation refund requires reconciliation");
+  }
   try {
     let refund = observedRefund;
     if (!refund && intent.refundId)
@@ -440,6 +584,7 @@ export async function processOrdinaryRefundCancellation(
     }
     if (!refund) {
       if (
+        noNewRefund ||
         ["succeeded", "failed", "pending"].includes(intent.status) ||
         Date.now() - intent.requestedAt.getTime() >= 23 * 3600_000
       ) {
@@ -467,6 +612,12 @@ export async function processOrdinaryRefundCancellation(
         requestOperationId(request) !== intent.operationId
       )
         throw unavailable("Saved cancellation request is invalid");
+      // Known window (S-08): the dispute gate ran in the transaction that
+      // committed requestedAt above. A funds_withdrawn committed after that
+      // commit but before this call is not seen, and the refund is still sent
+      // once. No database lock can be held across the provider call, so this
+      // window cannot be closed here (pinned in
+      // dispute-chargeback-settlement-mysql.test.ts, "known limits").
       refund = await stripe.refunds.create(request, {
         idempotencyKey: intent.operationId,
       });
@@ -513,6 +664,18 @@ export async function processOrdinaryRefundCancellation(
   }
 }
 
+export async function processOrdinaryRefundCancellation(
+  bookingId: number,
+  observedRefund?: Stripe.Refund
+) {
+  const refund = await resumeOrdinaryRefund(bookingId, observedRefund);
+  if (!refund)
+    throw unavailable(
+      "The lost payment dispute returned this cancellation refund; no provider refund is due"
+    );
+  return refund;
+}
+
 export async function processPendingOrdinaryRefunds() {
   const db = await getDb();
   if (!db) throw new Error("Refund storage unavailable");
@@ -537,7 +700,7 @@ export async function processPendingOrdinaryRefunds() {
   let failed = 0;
   for (const intent of due) {
     try {
-      await processOrdinaryRefundCancellation(intent.bookingId);
+      await resumeOrdinaryRefund(intent.bookingId);
     } catch {
       failed++;
     }

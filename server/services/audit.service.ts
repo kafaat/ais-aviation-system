@@ -28,7 +28,8 @@ export type AuditEventType =
   | "PRICE_UPDATED"
   | "ADMIN_ACCESS"
   | "DATA_EXPORT"
-  | "SENSITIVE_DATA_ACCESS";
+  | "SENSITIVE_DATA_ACCESS"
+  | "PRIVILEGED_MUTATION";
 
 export type AuditEventCategory =
   | "auth"

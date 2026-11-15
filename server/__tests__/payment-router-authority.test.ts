@@ -272,10 +272,10 @@ describe("split-payment API ownership before disclosure or side effects", () => 
     async role => {
       const client = caller(202, role);
       await expect(client.splitPayments.initiate(input)).rejects.toMatchObject({
-        code: "FORBIDDEN",
+        code: "NOT_FOUND",
       });
       for (const request of protectedCalls(client))
-        await expect(request()).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(request()).rejects.toMatchObject({ code: "NOT_FOUND" });
       for (const service of Object.values(state.split))
         expect(service).not.toHaveBeenCalled();
     }

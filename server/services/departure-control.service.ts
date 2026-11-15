@@ -1,4 +1,7 @@
-import { setCouponCheckIn } from "./ticket-coupons.service";
+import {
+  assertCouponTravelable,
+  setCouponCheckIn,
+} from "./ticket-coupons.service";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -313,6 +316,9 @@ export async function checkInPassengersTx(
         )
       )
       .for("update");
+    // Also refuses re-confirming an earlier check-in whose coupon a dispute
+    // has since suspended. setCouponCheckIn alone would skip it silently.
+    await assertCouponTravelable(tx, key, "check-in");
     const checked = previous.find(s => s.status === "checked_in");
     if (checked) {
       if (

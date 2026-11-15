@@ -122,7 +122,7 @@ describe("baggage entitlement authority", () => {
           role,
           tenantId: 3,
         })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
   );
   it.each([

@@ -93,8 +93,8 @@ export async function getRebookData(
 
   if (booking.userId !== userId) {
     throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Access denied",
+      code: "NOT_FOUND",
+      message: "Booking not found",
     });
   }
 

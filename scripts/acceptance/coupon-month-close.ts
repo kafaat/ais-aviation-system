@@ -224,7 +224,13 @@ export async function verifyCouponMonthClose(
     assert.equal(legacy.transportDeferredMinor, null);
     // This is a paid booking with evidence that one passenger has already
     // flown. A later sector is still reserved, so the booking stays confirmed.
-    const later = new Date(now.getTime() + 72 * 3600_000);
+    // The control below is cancelled through a refund quote, and 72 hours is
+    // a fee-tier boundary. Departures are stored at SQL second precision, so
+    // keep this one at or before the boundary instead of rounding into the
+    // next tier between the quote and its confirmation.
+    const later = new Date(
+      Math.floor((now.getTime() + 72 * 3600_000) / 1000) * 1000
+    );
     const [{ id: returnFlightId }] = await db
       .insert(s.flights)
       .values({

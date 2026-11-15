@@ -70,6 +70,8 @@ barcode, a match of the encoded data against the bag and flight record, and
 the printer model, driver and settings used. Browser printing or a PDF does
 not substitute for any of these.
 
+Deferred out of the current scope on 2026-11-14; see section 8.
+
 ## 3. CAP-01 and #280 — product scope before promotion
 
 The catalog keeps its 99 definitions and its honest availability flags
@@ -162,6 +164,59 @@ may be selectable before migrations, financial policy, provider integration
 and the tenant, negative and concurrency tests are accepted. Still open under
 G1: the allowed choices, markets, first transaction currencies and named
 owners.
+
+**Owner decision, 2026-11-14 ([#327, decision 4](https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729)).** #319 proceeds.
+ADR 0002 is accepted, and the G3 rate-fixing and G4 rounding proposals in
+section 6 of the scope record are adopted as working defaults: the rate is
+fixed when a binding quote is created, and amounts round to each currency's
+minor unit. The YER reference rate is an official published rate; which
+source is still for the owner to name. The deployed product stays SAR, and
+the G1 currency list and named owners remain open.
+
+## 7. S-28 — foreign and missing rows are answered alike (decided 2026-11-14)
+
+**Decision (owner, 14 November 2026, #327).** When an authenticated caller
+names a resource that exists but belongs to another user or another tenant,
+the API answers exactly as it does for a resource that does not exist:
+`NOT_FOUND` with the resource's "not found" message. `FORBIDDEN` is reserved
+for role and tenant-context refusals that carry no resource identity (a user
+calling an administrator procedure, a tenant-scoped role without a tenant).
+Platform administrators keep their cross-tenant read access.
+
+**Why.** The S-28 sweep (#353) showed that 12 of 22 covered procedures told a
+foreign row apart from a missing one (`FORBIDDEN "Access denied"` versus
+`NOT_FOUND`). The split leaks the existence of other tenants' bookings,
+passengers, splits and claims to anyone who can enumerate ids, even though
+their content was never returned. One answer for both closes that channel.
+
+**Client-visible effect.** A client that branched on HTTP 403 for "not yours"
+now receives 404 for the same request. No successful path changes.
+
+**Where it is enforced.** The shared ownership helpers in
+`server/services/access-control.service.ts` (booking, passenger, split,
+modification, tenant) and the local checks in bookings, refunds, payments,
+compensation, inventory holds, baggage entitlement, EMD, ancillary, special
+services, split payments, seat map, rebooking and soft delete.
+`server/__tests__/cross-tenant-isolation-mysql.test.ts` pins that every
+covered procedure answers both cases with `NOT_FOUND` and writes nothing.
+
+## 8. UI-07 — deferred out of the current scope (decided 2026-11-14)
+
+**Decision (owner, 14 November 2026,
+[#327](https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729),
+decision 2).** UI-07, the physical bag-tag printer and scanner acceptance, is
+deferred out of the current scope.
+
+**Ledger effect.** `docs/remediation/coverage-closure-ledger.json` records
+UI-07 with status `deferred` and a `decision_reference` (date, decision comment
+and summary). A deferral is not acceptance: `accepted_sha` and
+`acceptance_run` stay null, and the row keeps the hardware receipt listed in
+section 2. The 38-finding count is unchanged. `scripts/ci/check_gap_closure_ledger.py`
+admits `deferred` only with that reference, with no acceptance evidence, and
+with `remaining_acceptance` still present.
+
+**Returning to scope.** A later owner decision moves UI-07 back to `partial`.
+It becomes `verified` only with the section 2 receipt on the accepted source.
 
 ## Execution order
 

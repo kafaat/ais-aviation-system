@@ -129,6 +129,7 @@ jobs:
           server/__tests__/ticket-revalidation-acceptance-mysql.test.ts
           server/__tests__/stripe-paid-webhook-mysql.test.ts
           server/__tests__/retail-offer-concurrency-mysql.test.ts
+          server/__tests__/offer-expiry-booking-deadline-mysql.test.ts
           server/__tests__/stripe-reconciliation-race-mysql.test.ts
           server/__tests__/booking-confirmation-mysql.test.ts
           server/__tests__/fare-rules-acceptance-mysql.test.ts
@@ -145,6 +146,11 @@ jobs:
           server/__tests__/compensation-purge-mysql.test.ts
           server/__tests__/expired-hold-sweeper-lock-order-mysql.test.ts
           server/__tests__/ticket-issuance-concurrency-mysql.test.ts
+          server/__tests__/privileged-mutation-audit-mysql.test.ts
+          server/__tests__/cross-tenant-isolation-mysql.test.ts
+          server/__tests__/admin-booking-status-mysql.test.ts
+          server/__tests__/dispute-coupon-suspension-mysql.test.ts
+          server/__tests__/dispute-chargeback-settlement-mysql.test.ts
           --reporter=default
           --reporter=json
           --reporter=junit

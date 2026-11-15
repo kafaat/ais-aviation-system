@@ -105,7 +105,7 @@ describe("transaction-bound seat release authorization", () => {
           ...authorization,
           actor: { userId, tenantId },
         })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(snapshot()).toEqual(before);
     }
   );
@@ -162,7 +162,7 @@ describe("transaction-bound seat release authorization", () => {
       );
       await expect(
         caller().releaseSeat({ flightId: 11, seatNumber: "1A" })
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(snapshot()).toEqual(transferred);
     }
   );

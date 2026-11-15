@@ -23,7 +23,7 @@
     "consent.recordConsent": "Anonymous consent record keyed by the visitor's consent identity; no account data",
     "corporate.createAccount": "Self-service request that creates a pending account awaiting admin approval",
     "kiosk.addAncillary": "Self-service capability token (kiosk-session) issued by authenticate and verified per call",
-    "kiosk.authenticate": "Self-service capability token (kiosk-session) issued by authenticate and verified per call",
+    "kiosk.authenticate": "Reference plus matching surname is the control, under the strict per-address and per-reference quota; it issues the kiosk-session capability",
     "kiosk.checkIn": "Self-service capability token (kiosk-session) issued by authenticate and verified per call",
     "kiosk.printBagTag": "Self-service capability token (kiosk-session) issued by authenticate and verified per call",
     "kiosk.printBoardingPass": "Self-service capability token (kiosk-session) issued by authenticate and verified per call",

@@ -141,14 +141,14 @@ describe("compensation read authority over stored claim rows", () => {
 
   it("checks detail ownership and does not leak a foreign, missing or orphaned booking claim", async () => {
     await expect(getClaimById(104, 7)).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "NOT_FOUND",
     });
     await expect(getClaimById(999, 7)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     fixture.sqlite.exec("DELETE FROM bookings WHERE id = 1");
     await expect(getClaimById(101, 7)).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "NOT_FOUND",
     });
     expect((await getClaimById(101)).id).toBe(101);
   });
@@ -158,7 +158,7 @@ describe("compensation read authority over stored claim rows", () => {
       105, 102, 101,
     ]);
     await expect(getClaimsByBooking(1, 8)).rejects.toMatchObject({
-      code: "FORBIDDEN",
+      code: "NOT_FOUND",
     });
     await expect(getClaimsByBooking(999, 7)).rejects.toMatchObject({
       code: "NOT_FOUND",

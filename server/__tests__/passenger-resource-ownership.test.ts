@@ -172,7 +172,7 @@ describe.each(cases)(
       async role => {
         boundary.ownerId = 202;
         await expect(call(context(role))).rejects.toMatchObject({
-          code: "FORBIDDEN",
+          code: "NOT_FOUND",
         });
         expect(target).not.toHaveBeenCalled();
       }
@@ -181,7 +181,7 @@ describe.each(cases)(
     it("rejects a matching owner in a different booking tenant", async () => {
       boundary.bookingTenantId = 2;
       await expect(call(context())).rejects.toMatchObject({
-        code: "FORBIDDEN",
+        code: "NOT_FOUND",
       });
       expect(target).not.toHaveBeenCalled();
     });
@@ -224,7 +224,7 @@ describe.each(
 )("$name tenant boundary", ({ call, target }) => {
   it("rejects a matching owner with a passenger in a different tenant", async () => {
     boundary.passengerTenantId = 2;
-    await expect(call(context())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(call(context())).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(target).not.toHaveBeenCalled();
   });
 });
@@ -258,7 +258,7 @@ describe("passenger APIS journey ownership", () => {
       if (mismatch === "owner") boundary.ownerId = 202;
       if (mismatch === "bookingTenant") boundary.bookingTenantId = 2;
       if (mismatch === "passengerTenant") boundary.passengerTenantId = 2;
-      await expect(call()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(call()).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(boundary.journey).not.toHaveBeenCalled();
     }
   );

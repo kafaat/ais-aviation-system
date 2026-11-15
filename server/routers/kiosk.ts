@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { responseContracts } from "../contracts/kiosk";
 /** Self-Service Kiosk Router */
@@ -5,6 +6,7 @@ import { responseContracts } from "../contracts/kiosk";
 import { z } from "zod";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as kioskService from "../services/kiosk.service";
+import { rateLimitService } from "../services/rate-limit.service";
 import {
   assertPassengerInKioskCapability,
   issueSelfServiceCapability,
@@ -27,7 +29,26 @@ export const kioskRouter = router({
       })
     )
     .output(responseContracts["authenticate"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // The caller address is bounded by the procedure middleware; the
+      // reference itself is bounded here so one reference cannot be guessed
+      // across many addresses (same control as manageBooking.lookup).
+      const referenceKey = createHash("sha256")
+        .update(input.bookingRef.trim().toUpperCase())
+        .digest("hex");
+      const limit = await rateLimitService.checkStrictRateLimit(
+        `reference:${referenceKey}`,
+        "kioskAuthenticateReference"
+      );
+      for (const [key, value] of Object.entries(
+        rateLimitService.getRateLimitHeaders(limit)
+      ))
+        ctx.res?.setHeader(key, value);
+      if (!limit.allowed)
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many attempts. Please try again later.",
+        });
       const result = await kioskService.authenticatePassenger(
         input.bookingRef,
         input.lastName,
