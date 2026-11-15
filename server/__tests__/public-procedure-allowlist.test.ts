@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import allowlist from "./fixtures/public-procedures.json";
 
 /**
@@ -76,6 +76,12 @@ const NEVER_PUBLIC_PREFIXES = [
 ];
 
 describe("public procedure allowlist (S-20 router sweep)", () => {
+  // The first import of the whole application router can exceed the per-test
+  // budget when the suite runs under load; warm it within the hook budget.
+  beforeAll(async () => {
+    await inventory();
+  }, 60000);
+
   it("marks every procedure of the real router as public or authenticated", async () => {
     const rows = await inventory();
     expect(rows.length).toBeGreaterThan(800);

@@ -579,17 +579,22 @@ class RateLimitService {
   async resetRateLimit(
     identifier: string,
     scope: string = "api"
-  ): Promise<void> {
+  ): Promise<{ reset: boolean }> {
     const key = this.getKey(identifier, scope);
 
+    // Report what actually happened: an administrator resetting a counter
+    // that never existed must not read "success" (review R7).
+    let reset = false;
     if (cacheService.isConnected()) {
-      await cacheService.del(key);
+      const removed = await cacheService.del(key);
       await cacheService.del(`${key}:window`);
+      reset = Boolean(removed);
     }
 
-    inMemoryStore.delete(key);
+    reset = inMemoryStore.delete(key) || reset;
 
-    logger.info({ identifier, scope }, "Rate limit reset");
+    logger.info({ identifier, scope, reset }, "Rate limit reset");
+    return { reset };
   }
 
   /**
