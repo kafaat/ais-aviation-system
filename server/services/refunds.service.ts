@@ -379,18 +379,16 @@ export async function createRefund(
           refund.amount === refundAmount
       );
     // Decision 7: an upgrade collected on its own intent is refunded first.
-    // Its intent is drawn on while the invoice exceeds what the original
-    // intent collected, or when the refund exceeds what the original intent
-    // still holds: a later downgrade can lower the invoice to or below the
-    // original collection while both intents still hold money. A booking
-    // with no modification receipt holding money keeps the single-intent
-    // command and the #346 downgrade cap.
+    // While an applied modification receipt on another intent still holds
+    // money, every new cancellation, full or partial, and also after a later
+    // downgrade, draws on the most recent collection first, whatever the
+    // original intent could still cover. A booking with no modification
+    // receipt holding money keeps the single-intent command and the #346
+    // downgrade cap.
     const upgrades =
       savedCancellation ||
       existingOperationRefund ||
-      !Number.isSafeInteger(receipt.amount) ||
-      (booking.totalAmount <= receipt.amount &&
-        refundAmount <= receipt.amount - alreadyRefundedAmount)
+      !Number.isSafeInteger(receipt.amount)
         ? []
         : await heldUpgradeCollections(database, {
             id: booking.id,
@@ -556,8 +554,11 @@ export async function createRefund(
 }
 
 /** The createRefund response for a cancellation drawn on several intents:
- * the money the provider returned across its parts, the last provider refund,
- * and the balances summed over the intents the cancellation draws on. */
+ * the money the provider returned across its parts and the last provider
+ * refund or, when the provider refused a part, status "failed" with the
+ * refused money and the last refused provider refund, as the single-intent
+ * command returns a refused refund; and the balances summed over the intents
+ * the cancellation draws on. */
 async function partitionedRefundResult(booking: {
   id: number;
   stripePaymentIntentId: string | null;

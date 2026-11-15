@@ -1142,6 +1142,18 @@ export async function processPartitionedRefundCancellation(bookingId: number) {
   if (!before.length) throw new Error("Cancellation refund parts missing");
   await resumeRefundParts(bookingId, before);
   const parts = await getRefundParts(db, bookingId);
+  const paymentIntentIds = parts.map(p => p.paymentIntentId);
+  // A part the provider refused fails the command. As the single-intent
+  // command returns the refused provider refund, report the refused money
+  // and the last refused provider refund, never the parts that were sent.
+  const refused = parts.filter(p => p.status === "failed" && p.refundId);
+  if (refused.length)
+    return {
+      refundId: refused[refused.length - 1].refundId as string,
+      amount: refused.reduce((sum, p) => sum + p.amount, 0),
+      status: "failed",
+      paymentIntentIds,
+    };
   const refunded = parts.filter(
     p => p.refundId && p.errorCode !== CHARGEBACK_SETTLED
   );
@@ -1155,7 +1167,7 @@ export async function processPartitionedRefundCancellation(bookingId: number) {
     status: parts.every(p => p.status === "succeeded")
       ? "succeeded"
       : "pending",
-    paymentIntentIds: parts.map(p => p.paymentIntentId),
+    paymentIntentIds,
   };
 }
 
