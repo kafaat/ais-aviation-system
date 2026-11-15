@@ -155,14 +155,16 @@ export const rateLimitRouter = router({
     )
     .output(responseContracts["resetUser"])
     .mutation(async ({ input }) => {
-      await rateLimitService.resetRateLimit(
+      const { reset } = await rateLimitService.resetRateLimit(
         `user:${input.userId}`,
         input.scope
       );
 
       return {
-        success: true,
-        message: `Rate limit reset for user ${input.userId} in scope ${input.scope}`,
+        success: reset,
+        message: reset
+          ? `Rate limit reset for user ${input.userId} in scope ${input.scope}`
+          : `No active rate limit for user ${input.userId} in scope ${input.scope}`,
       };
     }),
 
@@ -178,11 +180,16 @@ export const rateLimitRouter = router({
     )
     .output(responseContracts["resetIp"])
     .mutation(async ({ input }) => {
-      await rateLimitService.resetRateLimit(`ip:${input.ip}`, input.scope);
+      const { reset } = await rateLimitService.resetRateLimit(
+        `ip:${input.ip}`,
+        input.scope
+      );
 
       return {
-        success: true,
-        message: `Rate limit reset for IP ${input.ip} in scope ${input.scope}`,
+        success: reset,
+        message: reset
+          ? `Rate limit reset for IP ${input.ip} in scope ${input.scope}`
+          : `No active rate limit for IP ${input.ip} in scope ${input.scope}`,
       };
     }),
 

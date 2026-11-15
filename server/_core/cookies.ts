@@ -45,7 +45,10 @@ export function getSessionCookieOptions(
   // - sameSite: 'lax' for better CSRF protection (use 'none' only if needed for cross-site)
   // - path: Cookie available for all routes
 
-  const isSecure = isSecureRequest(req);
+  // In production the flag never depends on what the proxy forwarded: a
+  // session cookie is only ever sent over HTTPS there (review R7).
+  const isSecure =
+    process.env.NODE_ENV === "production" || isSecureRequest(req);
 
   return {
     httpOnly: true,

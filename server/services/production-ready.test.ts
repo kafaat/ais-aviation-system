@@ -85,8 +85,8 @@ describe("Production-Ready Features", () => {
 
     it.skipIf(!process.env.DATABASE_URL)(
       "should check database connectivity",
-      async () => {
-        if (!isDatabaseAvailable) return; // Skip if db not reachable
+      async context => {
+        if (!isDatabaseAvailable) return context.skip(); // Skip if db not reachable
         const result = await checkDatabase();
         expect(result.status).toBe("pass");
         // Date.now() has millisecond resolution; a successful query may take 0 ms.
@@ -179,8 +179,8 @@ describe("Production-Ready Features", () => {
 
     it.skipIf(!process.env.DATABASE_URL)(
       "should clean up expired inventory locks",
-      async () => {
-        if (!isDatabaseAvailable) return; // Skip if db not reachable
+      async context => {
+        if (!isDatabaseAvailable) return context.skip(); // Skip if db not reachable
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
@@ -250,8 +250,8 @@ describe("Production-Ready Features", () => {
 
     it.skipIf(!process.env.DATABASE_URL)(
       "should create payment with idempotency key",
-      async () => {
-        if (!isDatabaseAvailable) return; // Skip if db not reachable
+      async context => {
+        if (!isDatabaseAvailable) return context.skip(); // Skip if db not reachable
         await createPayment({
           bookingId: 1,
           amount: 50000,
@@ -271,8 +271,8 @@ describe("Production-Ready Features", () => {
 
     it.skipIf(!process.env.DATABASE_URL)(
       "should retrieve existing payment by idempotency key",
-      async () => {
-        if (!isDatabaseAvailable) return; // Skip if db not reachable
+      async context => {
+        if (!isDatabaseAvailable) return context.skip(); // Skip if db not reachable
         const payment = await getPaymentByIdempotencyKey(testIdempotencyKey);
         expect(payment).toBeDefined();
         expect(payment?.idempotencyKey).toBe(testIdempotencyKey);
@@ -281,8 +281,8 @@ describe("Production-Ready Features", () => {
 
     it.skipIf(!process.env.DATABASE_URL)(
       "should return null for non-existent idempotency key",
-      async () => {
-        if (!isDatabaseAvailable) return; // Skip if db not reachable
+      async context => {
+        if (!isDatabaseAvailable) return context.skip(); // Skip if db not reachable
         const payment = await getPaymentByIdempotencyKey("non-existent-key");
         expect(payment).toBeNull();
       }

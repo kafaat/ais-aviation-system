@@ -21,9 +21,24 @@ import { enforceProcedureRateLimit } from "./middleware/procedure-rate-limit";
  * - openapi.tags: Array of tags for grouping endpoints
  * - openapi.protect: Whether the endpoint requires authentication
  */
-const t = initTRPC.context<TrpcContext>().meta<OpenApiMeta>().create({
-  transformer: superjson,
-});
+const t = initTRPC
+  .context<TrpcContext>()
+  .meta<OpenApiMeta>()
+  .create({
+    transformer: superjson,
+    // A plain Error thrown inside a handler reaches the client as
+    // INTERNAL_SERVER_ERROR with its original message. In production that
+    // message is replaced; the full error is still logged server-side
+    // (review R7). Tests and development keep the message for diagnosis.
+    errorFormatter({ shape, error }) {
+      if (
+        process.env.NODE_ENV === "production" &&
+        error.code === "INTERNAL_SERVER_ERROR"
+      )
+        return { ...shape, message: "Internal server error" };
+      return shape;
+    },
+  });
 
 export const router = t.router;
 export const publicProcedure = t.procedure

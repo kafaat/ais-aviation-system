@@ -123,6 +123,11 @@ jobs:
         run: pnpm lint:ci
 
       - name: Run TypeScript check
+        # The whole-program check needs more heap than Node's default on this
+        # repository (about 3 GB observed); pin it so the gate cannot fail on
+        # memory alone (review R7).
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: |
           pnpm run check
           pnpm exec tsc -p tsconfig.e2e.json --noEmit
