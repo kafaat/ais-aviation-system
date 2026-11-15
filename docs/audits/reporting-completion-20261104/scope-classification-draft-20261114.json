@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "kind": "product_scope_classification_draft",
-  "state": "draft_for_owner_review",
+  "state": "approved_by_owner",
   "prepared_on": "2026-11-14",
   "catalog": "docs/audits/reporting-completion-20261104/catalog.json",
-  "catalog_changed": false,
+  "catalog_changed": true,
   "issue": "https://github.com/kafaat/ais-aviation-system/issues/280",
   "decision_basis": [
     "docs/decisions/2026-11-10-gap-closure-decisions.md section 3 (scope values; scope never changes availability)",
@@ -910,5 +910,7 @@
       "blocking_source": "Recorded IBE channel and commercial ticketing deadline (improvement-plan module 9; Product).",
       "confidence": "medium"
     }
-  ]
+  ],
+  "approved_on": "2026-11-15",
+  "approval": "Approved unchanged by the repository owner in the Hermes-tech session (session_01JY73PdP1AUY8EoPn9Ez6FU) on 2026-11-15; applied to catalog.json product_scope in #349."
 }

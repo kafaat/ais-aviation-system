@@ -1,6 +1,6 @@
-# Product scope classification: draft for owner review (2026-11-14)
+# Product scope classification: approved by the owner (drafted 2026-11-14, approved 2026-11-15)
 
-**This is a draft, not a decision.** It proposes a `product_scope` value for each of the 99 catalog reports so the product owner can approve or edit it (#280, CAP-01). `catalog.json` is unchanged. Every `product_scope` value there is still `unclassified`, and availability stays at 36 available, 35 partial and 28 blocked. Under decision 3 of `docs/decisions/2026-11-10-gap-closure-decisions.md`, scope never changes availability: a `required` partial or blocked report stays partial or blocked until its source is supplied and accepted. The catalog changes only after the owner and the owner session approve, in a separate change.
+**Approved on 2026-11-15.** The repository owner approved this classification unchanged, and it is now the `product_scope` map in `catalog.json` (55 required, 17 planned, 22 optional, 5 out of scope). Availability stays at 36 available, 35 partial and 28 blocked: under decision 3 of `docs/decisions/2026-11-10-gap-closure-decisions.md`, scope never changes availability, so a `required` partial or blocked report stays partial or blocked until its source is supplied and accepted. The `out_of_scope` exclusions take effect with this approval.
 
 The per-report proposal is in [`scope-classification-draft-20261114.json`](scope-classification-draft-20261114.json). Each entry has the report's id, title and current status, the proposed scope, a one-sentence rationale, the missing source or owner (partial and blocked reports only) and a confidence level.
 
