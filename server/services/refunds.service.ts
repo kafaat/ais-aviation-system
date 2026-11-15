@@ -379,13 +379,18 @@ export async function createRefund(
           refund.amount === refundAmount
       );
     // Decision 7: an upgrade collected on its own intent is refunded first.
-    // It raises the invoice above what the original intent collected; any
-    // other booking keeps the single-intent command, with no extra reads.
+    // Its intent is drawn on while the invoice exceeds what the original
+    // intent collected, or when the refund exceeds what the original intent
+    // still holds: a later downgrade can lower the invoice to or below the
+    // original collection while both intents still hold money. A booking
+    // with no modification receipt holding money keeps the single-intent
+    // command and the #346 downgrade cap.
     const upgrades =
       savedCancellation ||
       existingOperationRefund ||
       !Number.isSafeInteger(receipt.amount) ||
-      booking.totalAmount <= receipt.amount
+      (booking.totalAmount <= receipt.amount &&
+        refundAmount <= receipt.amount - alreadyRefundedAmount)
         ? []
         : await heldUpgradeCollections(database, {
             id: booking.id,
