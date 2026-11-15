@@ -1254,7 +1254,7 @@
       "previous_followup_evidence": "docs/remediation/2026-11-05-gap-acceptance-followup.md",
       "local_receipts": ["cap/handoff.json", "cap/executed-matrix.json"],
       "local_observation": "109/109 native cases passed: 36 reports times golden API/CSV, tenant, period-or-refusal cells, plus one catalog-match assertion. API is the actual tRPC createCaller rather than HTTP transport; CSV is independently parsed. Twenty-two definitions support period boundaries and fourteen reject unsupported period input; the currency catalog retains its documented shared scope.",
-      "decision": "docs/decisions/2026-11-10-gap-closure-decisions.md section 3: product_scope dimension added to the catalog (all rows unclassified until the owner classifies); availability flags unchanged; first sources: sales-office assignments, document-validity policy, GDS receipts."
+      "decision": "docs/decisions/2026-11-10-gap-closure-decisions.md section 3: product_scope dimension added to the catalog; the owner classified all 99 reports on 2026-11-15 (#349: 55 required, 17 planned, 22 optional, 5 out_of_scope); availability flags unchanged; first sources: sales-office assignments, document-validity policy, GDS receipts."
     },
     {
       "id": "UI-M01",
