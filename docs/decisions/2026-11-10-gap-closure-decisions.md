@@ -173,6 +173,12 @@ minor unit. The YER reference rate is an official published rate; which
 source is still for the owner to name. The deployed product stays SAR, and
 the G1 currency list and named owners remain open.
 
+**Owner decision, 2026-11-15 ([#319](https://github.com/kafaat/ais-aviation-system/issues/319#issuecomment-6898269941)).** The YER reference rate is
+the official rate published by the Central Bank of Yemen in Sanaa. How that
+rate is obtained (publication, format, cadence, who enters or ingests it), its
+staleness rule and its contract test stay open under G2. The deployed product
+stays SAR, and YER is not enabled.
+
 ## 7. S-28 — foreign and missing rows are answered alike (decided 2026-11-14)
 
 **Decision (owner, 14 November 2026, #327).** When an authenticated caller
