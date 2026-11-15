@@ -205,8 +205,10 @@ export async function softDeleteBooking(
       throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
     }
 
-    // Check the current owner and status under the same lock as the mutation.
-    if (!isAdmin && booking.status !== "cancelled") {
+    // Check the status under the same lock as the mutation. Administrators
+    // bypass ownership, not state: a live booking is cancelled (or refunded)
+    // first, then deleted (review finding R3, #355).
+    if (booking.status !== "cancelled") {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Only cancelled bookings can be deleted",
