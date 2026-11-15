@@ -2,7 +2,7 @@
   "schema_version": 1,
   "baseline": "AIS_Test_Coverage_Gap_Analysis_AR_2026-11-04",
   "source_revision": "941f86c996b43f6de61fd904259b882a1a39a9b4",
-  "policy": "source_revision is the actual accepted CI source (a main commit; every required workflow family ran on it and passed, see acceptance_runs). Thirty-six findings, including META-01, UI-05 and OPS-06 (after the 2026-11-10 policy decision), are verified by same-source evidence. UI-07 and CAP-01 remain partial with null accepted fields: UI-07 awaits external hardware acceptance and CAP-01 awaits authoritative report sources under the product_scope classification. Earlier accepted sources are retained in previous_acceptances; the current_measurement block records the raw coverage identities of the same source.",
+  "policy": "source_revision is the actual accepted CI source (a main commit; every required workflow family ran on it and passed, see acceptance_runs). Thirty-six findings, including META-01, UI-05 and OPS-06 (after the 2026-11-10 policy decision), are verified by same-source evidence. UI-07 is deferred out of the current scope by the owner's decision of 2026-11-14 (decision_reference on its row); it keeps null accepted fields and its external hardware acceptance requirements, which still apply if it returns to scope. CAP-01 remains partial with null accepted fields and awaits authoritative report sources under the product_scope classification. Earlier accepted sources are retained in previous_acceptances; the current_measurement block records the raw coverage identities of the same source.",
   "findings": [
     {
       "id": "BE-01",
@@ -987,7 +987,12 @@
     {
       "id": "UI-07",
       "priority": "P1",
-      "status": "partial",
+      "status": "deferred",
+      "decision_reference": {
+        "date": "2026-11-14",
+        "source": "https://github.com/kafaat/ais-aviation-system/issues/327#issuecomment-6880288729",
+        "summary": "Owner decision 2: UI-07 (physical bag-tag printer and scanner) is deferred out of the current scope. Not accepted; the hardware receipt below still promotes it if it returns to scope."
+      },
       "evidence": "docs/remediation/2026-11-05-native-gap-acceptance.md",
       "accepted_sha": null,
       "acceptance_run": null,
@@ -1012,7 +1017,7 @@
         "encoded data matches the bag and flight record",
         "printer model, driver and settings used"
       ],
-      "decision": "docs/decisions/2026-11-10-gap-closure-decisions.md section 2"
+      "decision": "docs/decisions/2026-11-10-gap-closure-decisions.md sections 2 and 8"
     },
     {
       "id": "UI-08",

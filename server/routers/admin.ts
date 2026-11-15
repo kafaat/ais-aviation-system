@@ -11,6 +11,7 @@ import {
 import { isAdmin } from "../services/rbac.service";
 import { tenantCondition } from "../services/tenant-scope.service";
 import * as db from "../db";
+import { administerBookingStatus } from "../services/admin-booking-status.service";
 import * as flightStatusService from "../services/flight-status.service";
 import * as metricsService from "../services/metrics.service";
 import {
@@ -174,8 +175,18 @@ export const adminRouter = router({
       })
     )
     .output(responseContracts["updateBookingStatus"])
-    .mutation(async ({ input }) => {
-      await db.updateBookingStatus(input.bookingId, input.status);
+    .mutation(async ({ input, ctx }) => {
+      // Review finding R3 (#355): no direct status write. Cancellation runs
+      // through the shared resource release (paid bookings go through the
+      // refund flow), completion requires flown flights, confirmation is a
+      // settlement outcome.
+      const req = ctx.req as { ip?: string; id?: string } | undefined;
+      await administerBookingStatus(input.bookingId, input.status, {
+        id: ctx.user.id,
+        role: ctx.user.role,
+        sourceIp: req?.ip,
+        requestId: req?.id,
+      });
       return { success: true };
     }),
 

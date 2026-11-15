@@ -124,6 +124,18 @@ export const STRICT_RATE_LIMITS: Record<string, RateLimitTier> = {
     requestsPerWindow: 5,
     windowMs: 15 * 60 * 1000,
   },
+  // Kiosk sign-in by reference and surname is the same public guessing surface
+  // as manage-booking lookup: bound the caller address and the reference.
+  kioskAuthenticate: {
+    name: "kioskAuthenticate",
+    requestsPerWindow: 10,
+    windowMs: 15 * 60 * 1000,
+  },
+  kioskAuthenticateReference: {
+    name: "kioskAuthenticateReference",
+    requestsPerWindow: 5,
+    windowMs: 15 * 60 * 1000,
+  },
   // Login/authentication attempts
   auth: {
     name: "auth",
