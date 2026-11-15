@@ -1,5 +1,30 @@
 # Changelog
 
+## What's Changed in v1.40.2
+
+<!-- ais-release-source: 37a427713c0f4b4a7700af607bcd45f28cae65b3 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(kiosk): bound kiosk sign-in by address and by reference (review R2) (#360) (df70b5e7)
+- fix(admin): route booking status changes through the product rules (review R3) (#361) (37a42771)
+
+### Documentation
+
+- docs(remediation): record UI-07 as deferred by owner decision (#357) (1a326c53)
+- docs(currency): record the Wave 0 owner decision for multi-currency (#359) (6df1318b)
+
+### Other Changes
+
+- test(acceptance): keep the coupon-close control off the fee-tier boundary (#358) (c2a391eb)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.40.1...v1.40.2
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.40.1
 
 <!-- ais-release-source: 7a4c28e31af057860a4e1eb61b7799ae2798dfe0 -->
