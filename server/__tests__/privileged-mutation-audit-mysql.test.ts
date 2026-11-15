@@ -135,10 +135,12 @@ nativeDescribe.sequential("privileged mutation audit on native MySQL", () => {
       context({ id: 20, role: "admin", tenantId: null })
     );
     await expect(
-      caller.admin.updateBookingStatus({ bookingId: 71, status: "confirmed" })
+      // The unpaid pending booking is cancelled through the administrative
+      // path (confirmation is a settlement outcome and is refused, R3).
+      caller.admin.updateBookingStatus({ bookingId: 71, status: "cancelled" })
     ).resolves.toEqual({ success: true });
 
-    expect(await bookingStatus()).toBe("confirmed");
+    expect(await bookingStatus()).toBe("cancelled");
     const rows = await auditRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({

@@ -2,12 +2,13 @@
 
 ## What's Changed in v1.40.2
 
-<!-- ais-release-source: df70b5e7d6c55b00b98a5fd8e3dc2808ea07b66c -->
+<!-- ais-release-source: 37a427713c0f4b4a7700af607bcd45f28cae65b3 -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
 
 - fix(kiosk): bound kiosk sign-in by address and by reference (review R2) (#360) (df70b5e7)
+- fix(admin): route booking status changes through the product rules (review R3) (#361) (37a42771)
 
 ### Documentation
 
