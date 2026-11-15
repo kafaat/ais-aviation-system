@@ -1,0 +1,2 @@
+ALTER TABLE `ticket_coupons` MODIFY COLUMN `status` enum('O','C','F','R','E','V','unverified','S') NOT NULL;--> statement-breakpoint
+ALTER TABLE `ticket_coupons` ADD `suspendedFromStatus` enum('O','C');

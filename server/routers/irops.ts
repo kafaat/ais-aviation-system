@@ -75,7 +75,22 @@ export const iropsRouter = router({
     ),
   executeRecovery: airlineOpsProcedure
     .input(z.object({ id: z.string().uuid(), digest: z.string().length(64) }))
-    .output(z.object({ receiptId: z.string() }))
+    .output(
+      z.object({
+        receiptId: z.string(),
+        // Bookings left on the disrupted flight because a payment dispute
+        // holds their coupons; absent when an executed plan is replayed.
+        skippedBookings: z
+          .array(
+            z.object({
+              bookingId: z.number(),
+              reason: z.enum(["coupons_suspended", "coupons_void"]),
+              disputeIds: z.array(z.string()),
+            })
+          )
+          .optional(),
+      })
+    )
     .mutation(({ input, ctx }) =>
       executeRecovery(input.id, input.digest, ctx.user.id, ctx.tenantId)
     ),

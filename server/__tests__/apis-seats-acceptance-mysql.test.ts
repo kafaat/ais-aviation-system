@@ -46,6 +46,8 @@ const tables = [
   schema.dcsPassengerStates,
   schema.dcsOperationEvents,
   schema.ticketCoupons,
+  // Check-in and boarding read dispute evidence for a passenger without a coupon.
+  schema.financialLedger,
   schema.baggageItems,
   schema.baggageCustodyEvents,
   schema.outbox,

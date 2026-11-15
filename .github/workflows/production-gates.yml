@@ -149,6 +149,8 @@ jobs:
           server/__tests__/privileged-mutation-audit-mysql.test.ts
           server/__tests__/cross-tenant-isolation-mysql.test.ts
           server/__tests__/admin-booking-status-mysql.test.ts
+          server/__tests__/dispute-coupon-suspension-mysql.test.ts
+          server/__tests__/dispute-chargeback-settlement-mysql.test.ts
           --reporter=default
           --reporter=json
           --reporter=junit
