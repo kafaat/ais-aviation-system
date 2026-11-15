@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.41.0
+
+<!-- ais-release-source: e138b142197d7f745711f98d1bc4bf33a09af425 -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(ticketing): suspend coupons while dispute funds are withdrawn (S-08) (#363) (e138b142)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.40.2...v1.41.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.40.2
 
 <!-- ais-release-source: 37a427713c0f4b4a7700af607bcd45f28cae65b3 -->
