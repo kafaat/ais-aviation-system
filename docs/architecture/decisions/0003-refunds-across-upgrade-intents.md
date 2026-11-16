@@ -76,14 +76,34 @@ to what it still holds.
   forensic completion check and its preflight SQL. Departure and DCS
   finalization are unchanged: the parent row of a multi-intent cancellation has
   no refund id, so a failed one always needs reconciliation.
-- **Known limit (legacy replay).** A refund an older release already made on
-  the original intent still settles through the single-intent rule, which marks
-  the booking `refunded` when the original receipt is fully refunded even while
-  an upgrade intent holds money. The code before this change reached the same
-  state through an administrator override of the original's full collection.
-  No money moves twice. `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a
-  read-only query that lists such bookings before deployment. The narrow
-  follow-up is to include `modification` receipts in the single-intent
-  all-refunded check.
+- **Known limit (legacy replay).** A refund an older release made or queued
+  on the original intent alone, or a full refund of that intent made at the
+  provider, still settles through the single-intent rule. The booking becomes
+  `cancelled` and `refunded`, as before. What changed: an applied upgrade on
+  another intent that still holds money now goes to settlement review. Its
+  receipt becomes `review_required`, with one
+  `payment.settlement_review_required` event per upgrade intent.
+  `listSettlementReviews` lists it, and `requestSettlementReviewRefund`
+  refunds it in-app. That refund waits while a servicing refund on the
+  booking is unfinished, because settlement ignores other refunds of an
+  intent until its servicing refund succeeds. The verified provider refund
+  then marks it `review_refunded` and leaves the booking as it is. An upgrade
+  whose open or failed servicing refunds cover everything its intent still
+  holds, such as the refund a flight cancellation plans for each intent, is
+  left to them and not sent to settlement review. A partly covered upgrade is
+  still sent there, and its review refund then refunds only what remains.
+  If departure blocks the
+  release, the booking and its upgrade stay under departure reconciliation
+  instead. Review lists what the upgrade still holds, which can include a
+  cancellation fee kept on that intent, so the operator checks the booking's
+  cancellation before refunding it. No money moves twice. What remains: a
+  booking can still be `refunded` with an `applied` upgrade that holds money.
+  An older release left some before deploy. This change also leaves one while
+  a covering servicing refund is open, and keeps it when that servicing
+  refund fails. A failed flight-cancellation refund is listed on the
+  operations dashboard; a failed exchange servicing refund has no operator
+  list and no in-app resolution yet, which is a follow-up.
+  `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a read-only query that
+  lists all of them, for reconciliation.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
   rounds, then integrator test hardening; the PR lists the evidence.
