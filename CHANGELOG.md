@@ -1,5 +1,29 @@
 # Changelog
 
+## What's Changed in v1.42.1
+
+<!-- ais-release-source: 681fda6d26098f046bbdc0a343eb7edafcb8c841 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(split-payments): deliver payer requests when a plan is created and allow resending (review R1) (#379) (5815dfce)
+- fix(ai-pricing): show the current AI pricing state and let admins switch it off (review R5) (#380) (58a25078)
+- fix(refunds): send held upgrade money to settlement review after a single-intent refund (#377) (681fda6d)
+
+### Maintenance
+
+- chore(deps): bump the contracts-compatible group in /scripts/contracts with 6 updates (#372) (ead13fd8)
+- chore(deps): bump the auth-compatible group in /auth-service with 2 updates (#371) (32cbc250)
+- chore(deps): bump the npm-compatible group across 1 directory with 20 updates (#374) (9f1eb1aa)
+- chore(ci): bump actions/cache from 5.1.0 to 6.1.0 (#373) (d1bc20e7)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.42.0...v1.42.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.42.0
 
 <!-- ais-release-source: 433193fab10ed7ddaf196324165fce84466be118 -->
