@@ -5,6 +5,7 @@ import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import superjson from "superjson";
 import { beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import App from "@/App";
 import i18n from "@/i18n/config";
 import { trpc } from "@/lib/trpc";
@@ -447,4 +448,69 @@ it("rebuilds split amounts from the discounted invoice and resumes an existing p
   expect(
     screen.queryByRole("button", { name: "Send Payment Requests" })
   ).not.toBeInTheDocument();
+});
+
+/** Review finding R1 (#355): the owner is told how many payer requests the
+ * provider accepted, and an unsent or lost request can be resent from the
+ * existing plan without creating a second plan. */
+it("reports a partial delivery after initiating and resends one payer's request from the plan", async () => {
+  let invoice = pendingInvoice();
+  const warning = vi.spyOn(toast, "warning").mockReturnValue("partial");
+  const success = vi.spyOn(toast, "success").mockReturnValue("resent");
+  const splitRows = [
+    { id: 1, payerName: "Yara", amount: 5000, status: "email_sent" },
+    { id: 2, payerName: "Maha", amount: 5000, status: "pending" },
+  ];
+  const initiate = vi.fn(() => {
+    invoice = { ...invoice, state: "split", invoiceEditable: false };
+    return {
+      splitIds: [1, 2],
+      totalAmount: 10000,
+      requestedCount: 2,
+      sentCount: 1,
+    };
+  });
+  const resend = vi.fn(() => {
+    splitRows[1] = { ...splitRows[1], status: "email_sent" };
+    return { sent: true };
+  });
+  const { requests } = visit("/checkout/700?method=split", {
+    "payments.getCheckoutState": () => invoice,
+    "splitPayments.initiate": initiate,
+    "splitPayments.resendRequest": resend,
+    "splitPayments.getStatus": () => ({ bookingId: 700, splits: splitRows }),
+  });
+  await screen.findByRole("button", { name: "Send Payment Requests" });
+  for (const [index, name] of ["Yara", "Maha"].entries()) {
+    fireEvent.change(screen.getAllByLabelText("Name")[index], {
+      target: { value: name },
+    });
+    fireEvent.change(screen.getAllByLabelText("Email")[index], {
+      target: { value: name.toLowerCase() + "@example.test" },
+    });
+  }
+  const submit = screen.getByRole("button", { name: "Send Payment Requests" });
+  await waitFor(() => expect(submit).toBeEnabled());
+  fireEvent.click(submit);
+  await screen.findByRole("heading", { name: "Split payment in progress" });
+  expect(initiate).toHaveBeenCalledOnce();
+  expect(warning).toHaveBeenCalledWith(
+    "Plan created. 1 of 2 payment requests were sent; send the rest from the payer list."
+  );
+  // Only unpaid payers offer delivery; the wording says whether it is a resend.
+  await screen.findByRole("button", { name: "Resend payment request to Yara" });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Send payment request to Maha" })
+  );
+  await waitFor(() => expect(resend).toHaveBeenCalledWith({ splitId: 2 }));
+  await waitFor(() =>
+    expect(success).toHaveBeenCalledWith("Payment request sent.")
+  );
+  await screen.findByRole("button", { name: "Resend payment request to Maha" });
+  // The plan was created once; resending never initiates a second plan.
+  expect(
+    requests.filter(r => r.path === "splitPayments.initiate")
+  ).toHaveLength(1);
+  warning.mockRestore();
+  success.mockRestore();
 });
