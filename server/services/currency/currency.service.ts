@@ -2,10 +2,14 @@
  * Multi-Currency Support Service
  *
  * Provides currency conversion and management:
- * - Real-time exchange rates
+ * - Observed exchange rates (operator quotes, see operator-rates.service)
  * - Currency conversion
  * - Price formatting
  * - Rate caching
+ *
+ * Amounts are converted only with an observed, currently effective rate.
+ * The hard-coded fallback constants can label an estimate returned by
+ * getExchangeRate (source "fallback"); they never produce an amount.
  *
  * @module services/currency/currency.service
  */
@@ -17,7 +21,19 @@ import {
   DISPLAY_RATE_SOURCES,
   type DisplayCurrency,
 } from "../../../shared/ibe-search";
-import { eq, and, asc, desc, gt, lte, inArray, isNull, or } from "drizzle-orm";
+import {
+  eq,
+  and,
+  asc,
+  desc,
+  gt,
+  lte,
+  inArray,
+  isNull,
+  notExists,
+  or,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { cacheService as CacheService } from "../cache.service";
 
 // ============================================================================
@@ -154,7 +170,8 @@ const BASE_CURRENCY = "SAR";
 // Cache TTL for exchange rates (1 hour)
 const RATE_CACHE_TTL = 60 * 60;
 
-// Fallback rates (updated periodically)
+// Label-only estimates. Module-private: reachable solely through
+// getExchangeRate, whose result names its source "fallback". Never an amount.
 const FALLBACK_RATES: Record<string, number> = {
   SAR_USD: 0.2666,
   SAR_EUR: 0.245,
@@ -179,6 +196,37 @@ const FALLBACK_RATES: Record<string, number> = {
 // ============================================================================
 // Main Currency Service
 // ============================================================================
+
+/** No observed, currently effective rate exists for the pair. */
+export class ExchangeRateUnavailableError extends Error {
+  constructor(
+    readonly fromCurrency: string,
+    readonly toCurrency: string
+  ) {
+    super(
+      `No current exchange rate observation: ${fromCurrency} to ${toCurrency}`
+    );
+    this.name = "ExchangeRateUnavailableError";
+  }
+}
+
+type Database = NonNullable<ReturnType<typeof getDb>>;
+
+/** A row stops being eligible once a correction that names it has started. */
+function notSuperseded(database: Database, now: Date) {
+  const correction = alias(exchangeRates, "exchange_rate_correction");
+  return notExists(
+    database
+      .select({ id: correction.id })
+      .from(correction)
+      .where(
+        and(
+          eq(correction.supersedesId, exchangeRates.id),
+          lte(correction.validFrom, now)
+        )
+      )
+  );
+}
 
 /** Exact decimal ratios remain JSON-safe without rounding through a JS number. */
 interface ExactRate {
@@ -288,9 +336,14 @@ async function cacheRate(key: string, snapshot: RateSnapshot) {
   }
 }
 
+/**
+ * `estimate` admits the labelled fallback constants. Only getExchangeRate
+ * passes it; every amount-producing caller resolves observed rates only.
+ */
 async function getRateSnapshot(
   from: string,
-  to: string
+  to: string,
+  estimate: boolean
 ): Promise<RateSnapshot> {
   getCurrencyInfo(from);
   getCurrencyInfo(to);
@@ -325,8 +378,8 @@ async function getRateSnapshot(
     return observed.snapshot;
   }
   if (from !== BASE_CURRENCY && to !== BASE_CURRENCY) {
-    const first = await getRateSnapshot(from, BASE_CURRENCY);
-    const second = await getRateSnapshot(BASE_CURRENCY, to);
+    const first = await getRateSnapshot(from, BASE_CURRENCY, estimate);
+    const second = await getRateSnapshot(BASE_CURRENCY, to, estimate);
     const ratio: ExactRate = {
       numerator: (
         BigInt(first.exactRate.numerator) * BigInt(second.exactRate.numerator)
@@ -379,6 +432,9 @@ async function getRateSnapshot(
     }
     return cross;
   }
+  if (!estimate) {
+    throw new ExchangeRateUnavailableError(from, to);
+  }
   // Constants remain explicitly labelled estimates, never cached observations.
   const rate = FALLBACK_RATES[`${from}_${to}`];
   if (!rate) {
@@ -414,22 +470,33 @@ function requireCurrentRateSnapshot(
   return current;
 }
 
-/** Restore Date and recheck expiry after all database/cache awaits finish. */
+/**
+ * Restore Date and recheck expiry after all database/cache awaits finish.
+ * Without an observation this returns the labelled fallback estimate
+ * (source "fallback" or "cross_rate_fallback"); it is a label, not a price.
+ */
 export async function getExchangeRate(
   fromCurrency: string,
   toCurrency: string
 ): Promise<ExchangeRate> {
-  const snapshot = await getRateSnapshot(fromCurrency, toCurrency);
+  const snapshot = await getRateSnapshot(fromCurrency, toCurrency, true);
   return requireCurrentRateSnapshot(snapshot, fromCurrency, toCurrency).quote;
 }
 
-/** Public fare estimates read only direct, currently effective observations. */
-export async function getDisplayExchangeRate(currency: DisplayCurrency) {
-  const db = await getDb();
-  if (!db || currency === "SAR") return null;
-  const now = new Date();
-  const [quote] = await db
+/**
+ * The newest direct SAR quote a display estimate may use: an approved
+ * source, not superseded by a correction that has started, effective now and
+ * observed less than 24 hours ago. The staleness alarm uses the same rule.
+ */
+export async function findCurrentDisplayQuote(
+  database: Database,
+  currency: DisplayCurrency,
+  now: Date
+) {
+  if (currency === BASE_CURRENCY) return null;
+  const [quote] = await database
     .select({
+      id: exchangeRates.id,
       rate: exchangeRates.rate,
       source: exchangeRates.source,
       validFrom: exchangeRates.validFrom,
@@ -438,7 +505,7 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
     .from(exchangeRates)
     .where(
       and(
-        eq(exchangeRates.fromCurrency, "SAR"),
+        eq(exchangeRates.fromCurrency, BASE_CURRENCY),
         eq(exchangeRates.toCurrency, currency),
         inArray(exchangeRates.source, [...DISPLAY_RATE_SOURCES]),
         gt(exchangeRates.rate, "0"),
@@ -447,7 +514,8 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
           new Date(now.getTime() - DISPLAY_RATE_MAX_AGE_MS)
         ),
         lte(exchangeRates.validFrom, now),
-        or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now))
+        or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now)),
+        notSuperseded(database, now)
       )
     )
     .orderBy(desc(exchangeRates.validFrom), desc(exchangeRates.id))
@@ -455,14 +523,27 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
   if (!quote?.source) return null;
   const maxExpiry = quote.validFrom.getTime() + DISPLAY_RATE_MAX_AGE_MS;
   return {
-    fromCurrency: "SAR",
-    toCurrency: currency,
-    rate: Number(quote.rate),
+    ...quote,
     source: quote.source.toLowerCase(),
-    updatedAt: quote.validFrom,
     expiresAt: new Date(
       Math.min(maxExpiry, quote.validTo?.getTime() ?? maxExpiry)
     ),
+  };
+}
+
+/** Public fare estimates read only direct, currently effective observations. */
+export async function getDisplayExchangeRate(currency: DisplayCurrency) {
+  const db = await getDb();
+  if (!db || currency === BASE_CURRENCY) return null;
+  const quote = await findCurrentDisplayQuote(db, currency, new Date());
+  if (!quote) return null;
+  return {
+    fromCurrency: BASE_CURRENCY,
+    toCurrency: currency,
+    rate: Number(quote.rate),
+    source: quote.source,
+    updatedAt: quote.validFrom,
+    expiresAt: quote.expiresAt,
   };
 }
 
@@ -491,11 +572,13 @@ async function getDbExchangeRate(
           eq(exchangeRates.toCurrency, to),
           gt(exchangeRates.rate, "0"),
           lte(exchangeRates.validFrom, now),
-          or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now))
+          or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now)),
+          notSuperseded(database, now)
         )
       )
       .orderBy(desc(exchangeRates.validFrom), desc(exchangeRates.id))
       .limit(1);
+    // A scheduled row, including a correction, bounds the cached snapshot.
     [next] = await database
       .select({ validFrom: exchangeRates.validFrom })
       .from(exchangeRates)
@@ -639,11 +722,16 @@ export async function convertCurrency(
   toCurrency: string
 ): Promise<ConversionResult> {
   const snapshot = requireCurrentRateSnapshot(
-    await getRateSnapshot(fromCurrency, toCurrency),
+    await getRateSnapshot(fromCurrency, toCurrency, false),
     fromCurrency,
     toCurrency
   );
   const rate = snapshot.quote;
+  // getRateSnapshot(..., false) never builds a fallback; keep the invariant
+  // local to the only function that turns a rate into an amount.
+  if (rate.source.includes("fallback")) {
+    throw new ExchangeRateUnavailableError(fromCurrency, toCurrency);
+  }
   const convertedAmount = fromMinorUnits(
     roundedMinor(amount, snapshot.exactRate, toCurrency),
     toCurrency
@@ -754,66 +842,24 @@ export function parseAmount(formattedAmount: string): number {
 }
 
 // ============================================================================
-// Exchange Rate Updates
+// Exchange Rate Cache Invalidation
 // ============================================================================
 
 /**
- * Update exchange rates from external API
- * Should be called periodically (e.g., every hour)
+ * Drop cached snapshots that may contain the pair, directly or as a leg of a
+ * cross rate, after an operator records or corrects a quote.
  */
-export async function updateExchangeRates(): Promise<void> {
-  console.info(
-    JSON.stringify({
-      event: "exchange_rates_update_started",
-      timestamp: new Date().toISOString(),
-    })
-  );
-
-  try {
-    // In production, this would call an external API like:
-    // - Open Exchange Rates
-    // - Fixer.io
-    // - XE
-    // - Central Bank APIs
-
-    // For now, we'll use the fallback rates
-    for (const [key, _rate] of Object.entries(FALLBACK_RATES)) {
-      const [from, to] = key.split("_");
-
-      // Update database
-      // await db.insert(exchangeRates).values({
-      //   fromCurrency: from,
-      //   toCurrency: to,
-      //   rate: rate.toString(),
-      //   source: 'fallback',
-      //   updatedAt: new Date(),
-      // }).onDuplicateKeyUpdate({
-      //   set: { rate: rate.toString(), updatedAt: new Date() }
-      // });
-
-      // Invalidate cache
-      const cacheKey = `exchange_rate:${from}_${to}`;
-      await CacheService.del(cacheKey);
-      await CacheService.del(`exchange_rate:v2:${from}_${to}`);
-      await CacheService.del(`exchange_rate:v3:${from}_${to}`);
+export async function invalidateExchangeRateSnapshots(
+  fromCurrency: string,
+  toCurrency: string
+): Promise<void> {
+  const keys = new Set<string>();
+  for (const code of [fromCurrency, toCurrency])
+    for (const other of SUPPORTED_CURRENCIES) {
+      keys.add(`exchange_rate:v3:${code}_${other.code}`);
+      keys.add(`exchange_rate:v3:${other.code}_${code}`);
     }
-
-    console.info(
-      JSON.stringify({
-        event: "exchange_rates_update_completed",
-        ratesUpdated: Object.keys(FALLBACK_RATES).length,
-        timestamp: new Date().toISOString(),
-      })
-    );
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "exchange_rates_update_failed",
-        error: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
-      })
-    );
-  }
+  for (const key of keys) await CacheService.del(key);
 }
 
 /**
@@ -845,7 +891,6 @@ export const CurrencyService = {
   formatAmount,
   formatPrice,
   parseAmount,
-  updateExchangeRates,
   getHistoricalRates,
 };
 

@@ -19,6 +19,7 @@ import {
   vi,
 } from "vitest";
 import * as schema from "../../drizzle/schema";
+import type { TrpcContext } from "../_core/context";
 import { responseContracts } from "../contracts/pricing.router";
 import { startNativeRedis } from "./helpers/native-redis";
 
@@ -433,7 +434,7 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     expect(aboveHalf.data.convertedAmount).toBe(0.01);
   });
 
-  it("returns an explicitly labeled uncached fallback after a genuine query failure with a live database handle", async () => {
+  it("fix: returns an explicitly labeled uncached fallback quote, and no converted amount, after a genuine query failure with a live database handle", async () => {
     const time = Date.now();
     await seed(1, "0.086", new Date(time - 60_000), new Date(time + 600_000));
     const handle = boundary.db;
@@ -461,10 +462,15 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
         rate: 0.082,
       });
       expect(estimate.data.updatedAt).toBeInstanceOf(Date);
-      const converted = responseContracts.convertCurrency.parse(
-        await request("convertCurrency", { ...pair, amount: 1 })
+      // Wave 1 (#319): the fallback labels the quote above; it never
+      // becomes a converted amount.
+      const refused = await response("convertCurrency", { ...pair, amount: 1 });
+      expect(refused.status).toBe(400);
+      expect(refused.body.error?.json?.data?.code).toBe("BAD_REQUEST");
+      expect(refused.body.error?.json?.message).toMatch(
+        /No current exchange rate observation/
       );
-      expect(converted.data.convertedAmount).toBe(0.082);
+      expect(refused.body.result).toBeUndefined();
       expect(await reference!.keys("exchange_rate:*")).toEqual([]);
     } finally {
       await connection!.query(
@@ -512,5 +518,526 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     );
     expect(repaired.data.source).toBe("bank");
     expect(repaired.data.rate).toBe(0.086);
+  });
+});
+
+/**
+ * #319 Wave 1 on native MySQL: operator-entered quotes, their provenance and
+ * audit, append-only corrections, the permission boundary, the YER display
+ * estimate and the staleness alarm. The tables are cloned from the migrated
+ * DATABASE_URL schema (CREATE TABLE LIKE keeps the unique indexes), into a
+ * child database that this suite creates and drops.
+ */
+const operatorDescribe =
+  process.env.AIS_DISPOSABLE_DATABASE === "true" &&
+  process.env.NODE_ENV === "test" &&
+  Boolean(process.env.DATABASE_URL)
+    ? describe
+    : describe.skip;
+
+operatorDescribe.sequential("operator exchange rates over native MySQL", () => {
+  type Row = mysql.RowDataPacket & Record<string, unknown>;
+  type Actor = { id: number; role: string; tenantId: number | null };
+  type OperatorApp = Awaited<ReturnType<typeof buildApp>>;
+  let admin: mysql.Connection | undefined;
+  let pool: mysql.Pool | undefined;
+  let databaseName = "";
+  let created = false;
+  let app: OperatorApp | undefined;
+  const cloned = [
+    schema.exchangeRates,
+    schema.auditLogs,
+    schema.users,
+    schema.tenants,
+    schema.operationsAlerts,
+    schema.alertDispatches,
+  ].map(table => getTableName(table));
+  const platformAdmin: Actor = { id: 20, role: "admin", tenantId: null };
+  const customer: Actor = { id: 9, role: "user", tenantId: 3 };
+  const tenantFinance: Actor = { id: 31, role: "finance", tenantId: 3 };
+  const otherTenantAdmin: Actor = {
+    id: 41,
+    role: "airline_admin",
+    tenantId: 4,
+  };
+  const hour = 3_600_000;
+
+  async function buildApp() {
+    const [{ router }, { exchangeRatesRouter }, { ibePublicRouter }] =
+      await Promise.all([
+        import("../_core/trpc"),
+        import("../routers/exchange-rates"),
+        import("../routers/ibe-public"),
+      ]);
+    return router({
+      exchangeRates: exchangeRatesRouter,
+      ibePublic: ibePublicRouter,
+    });
+  }
+
+  function caller(actor: Actor | null, tenantId = actor?.tenantId ?? null) {
+    return app!.createCaller({
+      user: actor,
+      tenantId,
+      authMethod: actor ? "cookie" : null,
+      req: {
+        ip: "198.51.100.9",
+        id: "req-fx-operator",
+        headers: { "user-agent": "vitest-native" },
+      },
+      res: { setHeader: () => undefined },
+    } as unknown as TrpcContext);
+  }
+
+  function wholeSecond(value: number) {
+    return new Date(Math.floor(value / 1000) * 1000);
+  }
+
+  function yerQuote(overrides: Record<string, unknown> = {}) {
+    const now = Date.now();
+    return {
+      baseCurrency: "SAR" as const,
+      quoteCurrency: "YER" as const,
+      rate: "140.50000000",
+      source: "cby_sanaa" as const,
+      sourceReference: "CBY Sanaa daily bulletin 318 of 2026-11-16",
+      validFrom: wholeSecond(now - hour),
+      validTo: wholeSecond(now + 20 * hour),
+      ...overrides,
+    };
+  }
+
+  async function rows(sql: string, values: unknown[] = []) {
+    const [result] = await pool!.query<Row[]>(sql, values);
+    return result;
+  }
+
+  const quoteRows = () => rows("SELECT * FROM `exchange_rates` ORDER BY id");
+  const rateAudit = () =>
+    rows(
+      "SELECT * FROM `audit_logs` WHERE eventType LIKE 'EXCHANGE_RATE_%' ORDER BY id"
+    );
+  const accessAudit = () =>
+    rows(
+      "SELECT * FROM `audit_logs` WHERE eventType='PRIVILEGED_MUTATION' ORDER BY id"
+    );
+  const alarms = () =>
+    rows(
+      "SELECT `key`, status, message FROM `operations_alerts` WHERE `key` LIKE 'fx-display-rate:%' ORDER BY `key`"
+    );
+
+  beforeAll(async () => {
+    const source = new URL(process.env.DATABASE_URL!);
+    const sourceDatabase = source.pathname.slice(1);
+    if (
+      source.protocol !== "mysql:" ||
+      !/^[A-Za-z0-9_]+_test$/.test(sourceDatabase) ||
+      !["127.0.0.1", "localhost", "[::1]"].includes(source.hostname)
+    )
+      throw new Error(
+        "Operator rate acceptance requires a loopback disposable database"
+      );
+    const options = {
+      host: source.hostname.replace(/^\[|\]$/g, ""),
+      port: Number(source.port || 3306),
+      user: decodeURIComponent(source.username),
+      password: decodeURIComponent(source.password),
+      timezone: "Z",
+    };
+    databaseName = `${sourceDatabase.slice(0, 40)}_fx_${randomBytes(6).toString("hex")}`;
+    if (!/^[A-Za-z0-9_]+_fx_[0-9a-f]{12}$/.test(databaseName))
+      throw new Error("Invalid disposable database identity");
+    admin = await mysql.createConnection(options);
+    await admin.query(`CREATE DATABASE \`${databaseName}\``);
+    created = true;
+    for (const name of cloned)
+      await admin.query(
+        `CREATE TABLE \`${databaseName}\`.\`${name}\` LIKE \`${sourceDatabase}\`.\`${name}\``
+      );
+    pool = mysql.createPool({
+      ...options,
+      database: databaseName,
+      connectionLimit: 5,
+    });
+    boundary.db = drizzle(pool, { schema, mode: "default" });
+  }, 60000);
+
+  beforeEach(async () => {
+    boundary.db = drizzle(pool!, { schema, mode: "default" });
+    for (const name of cloned) await pool!.query(`TRUNCATE TABLE \`${name}\``);
+    await pool!.query(
+      "INSERT INTO `tenants` (id, slug, name, status) VALUES (3, 'fx-tenant-three', 'Tenant three', 'active'), (4, 'fx-tenant-four', 'Tenant four', 'active')"
+    );
+    for (const actor of [
+      platformAdmin,
+      customer,
+      tenantFinance,
+      otherTenantAdmin,
+    ])
+      await pool!.query(
+        "INSERT INTO `users` (id, openId, tenantId, role, name, email) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+          actor.id,
+          `fx-native-${actor.id}`,
+          actor.tenantId,
+          actor.role,
+          `Synthetic ${actor.role}`,
+          `fx-${actor.id}@example.test`,
+        ]
+      );
+    // Loaded per test so that, without the procedure, each case fails.
+    app ??= await buildApp();
+  });
+
+  afterAll(async () => {
+    boundary.db = null;
+    try {
+      await pool?.end();
+    } finally {
+      try {
+        if (created) await admin?.query(`DROP DATABASE \`${databaseName}\``);
+      } finally {
+        await admin?.end();
+      }
+    }
+  });
+
+  it("fix: records a Sanaa YER quote and a USD quote, each with provenance and an audit record", async () => {
+    const before = Date.now();
+    const yer = await caller(platformAdmin).exchangeRates.record(yerQuote());
+    const usd = await caller(platformAdmin).exchangeRates.record({
+      baseCurrency: "SAR",
+      quoteCurrency: "USD",
+      rate: "0.26660000",
+      source: "bank",
+      sourceReference: "Bank reference rate sheet 2026-11-16",
+      validFrom: wholeSecond(before - 30 * 60_000),
+      validTo: wholeSecond(before + 12 * hour),
+    });
+    expect(yer).toMatchObject({
+      quoteCurrency: "YER",
+      rate: "140.50000000",
+      source: "cby_sanaa",
+      version: 1,
+      supersedesId: null,
+      recordedBy: platformAdmin.id,
+    });
+    expect(usd).toMatchObject({ quoteCurrency: "USD", version: 1 });
+
+    const stored = await quoteRows();
+    expect(stored).toHaveLength(2);
+    const expected = { YER: yer, USD: usd };
+    for (const row of stored) {
+      const result = expected[row.toCurrency as keyof typeof expected];
+      expect(row).toMatchObject({
+        id: result.id,
+        fromCurrency: "SAR",
+        rate: result.rate,
+        source: result.source,
+        sourceReference: result.sourceReference,
+        recordedBy: platformAdmin.id,
+        version: 1,
+        supersedesId: null,
+      });
+      expect(row.validFrom).toEqual(result.validFrom);
+      expect(row.validTo).toEqual(result.validTo);
+      expect(row.createdAt).toEqual(result.recordedAt);
+      expect((row.createdAt as Date).getTime()).toBeGreaterThanOrEqual(
+        wholeSecond(before).getTime()
+      );
+    }
+    expect(stored.find(row => row.toCurrency === "YER")).toMatchObject({
+      sourceReference: "CBY Sanaa daily bulletin 318 of 2026-11-16",
+    });
+
+    const audit = await rateAudit();
+    expect(audit).toHaveLength(2);
+    for (const [entry, result] of [
+      [audit[0], yer],
+      [audit[1], usd],
+    ] as const) {
+      expect(entry).toMatchObject({
+        eventId: result.auditEventId,
+        eventType: "EXCHANGE_RATE_RECORDED",
+        eventCategory: "system",
+        outcome: "success",
+        userId: platformAdmin.id,
+        userRole: "admin",
+        actorType: "admin",
+        requestId: "req-fx-operator",
+        resourceType: "exchange_rate",
+        resourceId: String(result.id),
+        previousValue: null,
+      });
+      expect(JSON.parse(String(entry.newValue))).toEqual({
+        exchangeRateId: result.id,
+        baseCurrency: "SAR",
+        quoteCurrency: result.quoteCurrency,
+        rate: result.rate,
+        source: result.source,
+        sourceReference: result.sourceReference,
+        validFrom: result.validFrom.toISOString(),
+        validTo: result.validTo!.toISOString(),
+        version: 1,
+        supersedesId: null,
+        recordedBy: platformAdmin.id,
+        recordedAt: result.recordedAt.toISOString(),
+      });
+      expect(entry.timestamp).toEqual(result.recordedAt);
+    }
+    // The privileged builder also records each completed call.
+    expect(
+      (await accessAudit()).map(entry => [entry.outcome, entry.userId])
+    ).toEqual([
+      ["success", platformAdmin.id],
+      ["success", platformAdmin.id],
+    ]);
+  });
+
+  it("fix: a correction is a new version that supersedes the old row, which stays unchanged", async () => {
+    const original = await caller(platformAdmin).exchangeRates.record(
+      yerQuote({ rate: "1405.00000000" })
+    );
+    const [before] = await rows("SELECT * FROM `exchange_rates` WHERE id=?", [
+      original.id,
+    ]);
+    expect(
+      (await caller(null).ibePublic.displayRate({ currency: "YER" }))?.rate
+    ).toBe(1405);
+
+    const correction = await caller(platformAdmin).exchangeRates.record(
+      yerQuote({
+        sourceReference: "CBY Sanaa daily bulletin 318, corrected entry",
+        supersedesId: original.id,
+      })
+    );
+    expect(correction).toMatchObject({
+      version: 2,
+      supersedesId: original.id,
+      rate: "140.50000000",
+    });
+    const [after] = await rows("SELECT * FROM `exchange_rates` WHERE id=?", [
+      original.id,
+    ]);
+    expect(after).toEqual(before);
+    expect(await quoteRows()).toHaveLength(2);
+
+    const audit = await rateAudit();
+    expect(audit.map(entry => entry.eventType)).toEqual([
+      "EXCHANGE_RATE_RECORDED",
+      "EXCHANGE_RATE_CORRECTED",
+    ]);
+    expect(JSON.parse(String(audit[1].previousValue))).toMatchObject({
+      exchangeRateId: original.id,
+      rate: "1405.00000000",
+      version: 1,
+    });
+    expect(JSON.parse(String(audit[1].newValue))).toMatchObject({
+      exchangeRateId: correction.id,
+      rate: "140.50000000",
+      version: 2,
+      supersedesId: original.id,
+    });
+
+    // The display reads the correction; history keeps both versions.
+    expect(
+      await caller(null).ibePublic.displayRate({ currency: "YER" })
+    ).toMatchObject({ rate: 140.5, source: "cby_sanaa" });
+    const history = await caller(platformAdmin).exchangeRates.history({
+      quoteCurrency: "YER",
+    });
+    expect(
+      history.map(row => [row.id, row.version, row.supersededById])
+    ).toEqual([
+      [correction.id, 2, null],
+      [original.id, 1, correction.id],
+    ]);
+
+    // A corrected row cannot be corrected twice, nor across pairs.
+    await expect(
+      caller(platformAdmin).exchangeRates.record(
+        yerQuote({ supersedesId: original.id })
+      )
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      caller(platformAdmin).exchangeRates.record({
+        ...yerQuote(),
+        quoteCurrency: "USD",
+        source: "bank",
+        rate: "0.26660000",
+        supersedesId: correction.id,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await quoteRows()).toHaveLength(2);
+    expect(await rateAudit()).toHaveLength(2);
+  });
+
+  it("fix: simultaneous entries for one pair never share a version", async () => {
+    for (const seeded of [false, true]) {
+      if (seeded)
+        await caller(platformAdmin).exchangeRates.record(
+          yerQuote({ rate: "140.00000000" })
+        );
+      const outcomes = await Promise.allSettled(
+        ["140.10000000", "140.20000000", "140.30000000"].map(rate =>
+          caller(platformAdmin).exchangeRates.record(yerQuote({ rate }))
+        )
+      );
+      for (const outcome of outcomes)
+        if (outcome.status === "rejected")
+          expect(outcome.reason).toMatchObject({ code: "CONFLICT" });
+      expect(outcomes.some(outcome => outcome.status === "fulfilled")).toBe(
+        true
+      );
+      const versions = (await quoteRows()).map(row => row.version);
+      expect(new Set(versions).size).toBe(versions.length);
+      expect(versions.length).toBe(
+        (await rateAudit()).filter(
+          entry => entry.eventType === "EXCHANGE_RATE_RECORDED"
+        ).length
+      );
+    }
+  });
+
+  it("fix: refuses an unauthorised user and tenant staff, including another tenant's administrator", async () => {
+    await expect(
+      caller(null).exchangeRates.record(yerQuote())
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    for (const [actor, tenantId] of [
+      [customer, customer.tenantId],
+      [tenantFinance, tenantFinance.tenantId],
+      [otherTenantAdmin, otherTenantAdmin.tenantId],
+      [otherTenantAdmin, 3],
+    ] as const)
+      await expect(
+        caller(actor, tenantId).exchangeRates.record(yerQuote())
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      caller(tenantFinance).exchangeRates.history({ quoteCurrency: "YER" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    expect(await quoteRows()).toEqual([]);
+    expect(await rateAudit()).toEqual([]);
+    expect(
+      (await accessAudit()).map(entry => [
+        entry.outcome,
+        entry.userId,
+        JSON.parse(String(entry.metadata)).errorCode,
+      ])
+    ).toEqual([
+      ["failure", customer.id, "FORBIDDEN"],
+      ["failure", tenantFinance.id, "FORBIDDEN"],
+      ["failure", otherTenantAdmin.id, "FORBIDDEN"],
+      ["failure", otherTenantAdmin.id, "FORBIDDEN"],
+    ]);
+  });
+
+  it("fix: refuses a YER quote from any source but the Central Bank of Yemen (Sanaa), and that source for other pairs", async () => {
+    await expect(
+      caller(platformAdmin).exchangeRates.record(yerQuote({ source: "bank" }))
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller(platformAdmin).exchangeRates.record({
+        ...yerQuote(),
+        quoteCurrency: "USD",
+        rate: "0.26660000",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const start = wholeSecond(Date.now());
+    await expect(
+      caller(platformAdmin).exchangeRates.record(
+        yerQuote({ validFrom: start, validTo: start })
+      )
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(await quoteRows()).toEqual([]);
+  });
+
+  it("fix: the display estimate shows the operator YER quote, and nothing for YER without one", async () => {
+    const display = () =>
+      caller(null).ibePublic.displayRate({ currency: "YER" });
+    expect(await display()).toBeNull();
+    const quote = await caller(platformAdmin).exchangeRates.record(yerQuote());
+    expect(await display()).toEqual({
+      fromCurrency: "SAR",
+      toCurrency: "YER",
+      rate: 140.5,
+      source: "cby_sanaa",
+      updatedAt: quote.validFrom,
+      // The earlier of the publication's validity and the 24-hour expiry.
+      expiresAt: quote.validTo,
+    });
+    // YER stays outside every conversion that prices an amount.
+    const { convertCurrency } =
+      await import("../services/currency/currency.service");
+    await expect(convertCurrency(100, "SAR", "YER")).rejects.toThrow(
+      "Unsupported currency: YER"
+    );
+  });
+
+  it("fix: the staleness alarm raises for missing and stale quotes and clears on a fresh quote", async () => {
+    const status = await caller(platformAdmin).exchangeRates.refreshAlarms();
+    expect(status.pairs.map(pair => pair.quoteCurrency)).toEqual([
+      "USD",
+      "EUR",
+      "AED",
+      "GBP",
+      "KWD",
+      "BHD",
+      "QAR",
+      "OMR",
+      "EGP",
+      "YER",
+    ]);
+    expect(status.pairs.every(pair => pair.alarm)).toBe(true);
+    const missing = await alarms();
+    expect(missing).toHaveLength(10);
+    expect(missing.every(alarm => alarm.status === "active")).toBe(true);
+    const yerAlarm = async () =>
+      (await alarms()).find(alarm => alarm.key === "fx-display-rate:SAR_YER");
+    expect(await yerAlarm()).toMatchObject({
+      status: "active",
+      message: expect.stringContaining("no current operator quote"),
+    });
+
+    // A quote observed 25 hours ago is recorded but too old to display.
+    const now = Date.now();
+    const stale = await caller(platformAdmin).exchangeRates.record(
+      yerQuote({
+        validFrom: wholeSecond(now - 25 * hour),
+        validTo: wholeSecond(now + hour),
+      })
+    );
+    expect(await yerAlarm()).toMatchObject({ status: "active" });
+
+    // A fresh quote clears the alarm for its pair only.
+    const fresh = await caller(platformAdmin).exchangeRates.record(
+      yerQuote({
+        validFrom: wholeSecond(now - 60_000),
+        validTo: wholeSecond(now + 30 * hour),
+      })
+    );
+    expect(fresh.version).toBe(stale.version! + 1);
+    expect(await yerAlarm()).toMatchObject({ status: "resolved" });
+    expect(
+      (await alarms()).filter(alarm => alarm.status === "active")
+    ).toHaveLength(9);
+
+    // Once the fresh quote reaches the 24-hour display expiry, it alarms again.
+    const { refreshDisplayRateAlarms } =
+      await import("../services/currency/operator-rates.service");
+    const current = await refreshDisplayRateAlarms(
+      new Date(fresh.validFrom.getTime() + 24 * hour - 1000)
+    );
+    expect(
+      current.pairs.find(pair => pair.quoteCurrency === "YER")
+    ).toMatchObject({ alarm: false, quoteId: fresh.id });
+    expect(await yerAlarm()).toMatchObject({ status: "resolved" });
+    const later = await refreshDisplayRateAlarms(
+      new Date(fresh.validFrom.getTime() + 24 * hour)
+    );
+    expect(
+      later.pairs.find(pair => pair.quoteCurrency === "YER")
+    ).toMatchObject({ alarm: true, quoteId: null });
+    expect(await yerAlarm()).toMatchObject({ status: "active" });
   });
 });

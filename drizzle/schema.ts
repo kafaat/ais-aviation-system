@@ -2182,7 +2182,12 @@ export type InsertCurrency = typeof currencies.$inferInsert;
 
 /**
  * Exchange Rates
- * Stores exchange rates between currencies
+ * Stores exchange rates between currencies.
+ *
+ * Operator quotes are append-only (#319 Wave 1): a correction is a new row
+ * with the next pair version that names the row it supersedes, and the
+ * corrected row is never updated. The provenance columns are null on rows
+ * recorded before the operator procedure existed; nothing is backfilled.
  */
 export const exchangeRates = mysqlTable(
   "exchange_rates",
@@ -2200,6 +2205,14 @@ export const exchangeRates = mysqlTable(
     validFrom: timestamp("validFrom").defaultNow().notNull(),
     validTo: timestamp("validTo"),
 
+    // Provenance of an operator quote: the publication it was read from,
+    // the operator who recorded it, its version within the pair, and the
+    // earlier row it corrects.
+    sourceReference: varchar("sourceReference", { length: 255 }),
+    recordedBy: int("recordedBy"),
+    version: int("version"),
+    supersedesId: int("supersedesId"),
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -2209,6 +2222,14 @@ export const exchangeRates = mysqlTable(
       table.toCurrency
     ),
     validFromIdx: index("exchange_rates_valid_idx").on(table.validFrom),
+    pairVersionIdx: uniqueIndex("exchange_rates_pair_version_idx").on(
+      table.fromCurrency,
+      table.toCurrency,
+      table.version
+    ),
+    supersedesIdx: uniqueIndex("exchange_rates_supersedes_idx").on(
+      table.supersedesId
+    ),
   })
 );
 

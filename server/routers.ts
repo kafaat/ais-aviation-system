@@ -5,6 +5,7 @@ import { tenantsRouter } from "./routers/tenants";
 import { systemRouter } from "./_core/systemRouter";
 import { router } from "./_core/trpc";
 import { ibePublicRouter } from "./routers/ibe-public";
+import { exchangeRatesRouter } from "./routers/exchange-rates";
 
 // Import domain routers
 import { flightsRouter } from "./routers/flights";
@@ -116,6 +117,7 @@ import { webhooksRouter } from "./routers/webhooks";
  */
 export const appRouter = router({
   ibePublic: ibePublicRouter,
+  exchangeRates: exchangeRatesRouter,
   aviationIntegrations: aviationIntegrationsRouter,
   operations: operationsRouter,
   supplierFinance: supplierFinanceRouter,

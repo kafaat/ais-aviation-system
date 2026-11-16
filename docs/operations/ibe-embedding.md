@@ -96,12 +96,44 @@ native booking journey. Fares, invoices and wallet charges remain in SAR.
 
 `ibePublic.displayRate` reads the newest effective direct SAR quote for the
 selected currency from `exchange_rates`. The rate is target major units per
-one SAR. Operators may record a verified observation with source `manual`,
-`bank` or `openexchangerates`. Use the observation time for `validFrom` and
-the provider's earlier expiry, if any, for `validTo`. Quotes expire at the
-earlier of that expiry or 24 hours after observation. An edit to the row does
-not extend its validity. Without an eligible quote, AIS displays the SAR price
-and explains why no local estimate is shown. No YER quote is seeded.
+one SAR. Quotes expire at the earlier of their `validTo` or 24 hours after
+observation (`validFrom`). Without an eligible quote, AIS displays the SAR
+price and explains why no local estimate is shown. No YER quote is seeded,
+and no rate is fetched automatically.
+
+### Recording a verified quote
+
+A platform administrator records each quote with the `exchangeRates.record`
+procedure; do not write `exchange_rates` in SQL. Tenant finance, operations
+and airline administrator accounts are refused, because every tenant's
+display reads the same quotes.
+
+| Field             | Value                                                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseCurrency`    | `SAR`                                                                                                                                              |
+| `quoteCurrency`   | A display currency other than SAR                                                                                                                  |
+| `rate`            | Quote-currency major units per one SAR, at most 8 decimal places, as published                                                                     |
+| `source`          | `cby_sanaa` (the official rate of the Central Bank of Yemen in Sanaa) for YER, and only for YER; otherwise `bank`, `manual` or `openexchangerates` |
+| `sourceReference` | The publication read, such as its date and bulletin number                                                                                         |
+| `validFrom`       | The publication's effective time                                                                                                                   |
+| `validTo`         | The end of its validity; the display stops using it after 24 hours regardless                                                                      |
+| `supersedesId`    | Only for a correction: the id of the quote being corrected                                                                                         |
+
+Rows are never edited. A correction is recorded as a new quote that names the
+row it corrects; it receives the next version of the pair and replaces the
+corrected row from its own `validFrom`, while the corrected row stays as it
+was for audit. A quote can be corrected once; correct the latest version. To
+withdraw a quote, record a correction whose `validTo` has already passed.
+Every entry writes an `EXCHANGE_RATE_RECORDED` or `EXCHANGE_RATE_CORRECTED`
+audit record with the actor, time, source, reference, rate, validity and
+version. `exchangeRates.history` lists a pair's quotes with the quote that
+corrected each.
+
+Each enabled display pair has an operational alert `fx-display-rate:SAR_<code>`
+that is active while the pair has no quote the display may use: none
+recorded, expired, superseded, or observed 24 hours ago or earlier. It is
+re-evaluated after every entry and by `exchangeRates.refreshAlarms`, and
+follows the usual acknowledgement and on-call delivery of operational alerts.
 
 ## Verification limits
 
