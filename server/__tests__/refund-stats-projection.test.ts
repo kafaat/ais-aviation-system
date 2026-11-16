@@ -7,6 +7,7 @@ import {
   bookingRefundPlans,
   bookingRefundItems,
   ordinaryBookingRefunds,
+  ordinaryBookingRefundParts,
   paymentReceipts,
   financialLedger,
 } from "../../drizzle/schema";
@@ -23,6 +24,7 @@ it("counts ordinary and split requests separately from posted refunds", async ()
     bookingRefundPlans,
     bookingRefundItems,
     ordinaryBookingRefunds,
+    ordinaryBookingRefundParts,
     paymentReceipts,
     financialLedger,
   ]) {

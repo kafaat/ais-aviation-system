@@ -511,9 +511,11 @@ describe("controls: caps that do not depend on the exchange refund", () => {
     expectNoMoneyMoved();
   });
 
-  it("control: an upgrade collected on a second intent keeps today's behavior", async () => {
+  it("decision 7: an upgrade collected on a second intent is refunded on both intents", async () => {
     // 800 collected on pi_original, 200 on the modification intent; the full
-    // tier quotes 1000 against the invoice and pi_original cannot return it.
+    // tier quotes 1000 against the invoice. Before decision 7 (#327) this was
+    // refused because pi_original alone cannot return it; now the upgrade
+    // intent is drawn first, each intent up to what it holds.
     seed({
       collected: 800,
       totalAmount: 1000,
@@ -536,10 +538,18 @@ describe("controls: caps that do not depend on the exchange refund", () => {
     });
 
     expect(await isBookingRefundable(7)).toEqual({ refundable: true });
-    await expect(cancel()).rejects.toMatchObject({
-      code: "PRECONDITION_FAILED",
-      message: "Refund does not match the original collected balance",
+    await expect(cancel()).resolves.toMatchObject({
+      success: true,
+      amount: 1000,
     });
-    expectNoMoneyMoved();
+    expect(
+      provider.create.mock.calls.map(([params]) => [
+        params.payment_intent,
+        params.amount,
+      ])
+    ).toEqual([
+      ["pi_upgrade", 200],
+      ["pi_original", 800],
+    ]);
   });
 });

@@ -15,6 +15,9 @@ import { quoteCancellationPolicy } from "./cancellation-policy.service";
 import { assertZeroCancellationAllowed } from "./zero-refund-cancellation.service";
 import {
   getOrdinaryRefundCancellation,
+  getRefundParts,
+  processPartitionedRefundCancellation,
+  reserveOrdinaryRefundAcrossIntents,
   reserveOrdinaryRefundCancellation,
   processOrdinaryRefundCancellation,
 } from "./ordinary-refund.service";
@@ -129,6 +132,37 @@ function collectionReceipt(
     .from(paymentReceipts)
     .where(eq(paymentReceipts.paymentIntentId, paymentIntentId))
     .limit(1);
+}
+
+/** Decision 7: upgrade collections of this booking, recorded on their own
+ * payment intent, with each intent's provider refunds; empty unless one still
+ * holds money. A cancellation draws on them before the original intent. */
+async function heldUpgradeCollections(
+  database: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  booking: { id: number; stripePaymentIntentId: string }
+) {
+  const receipts = await database
+    .select()
+    .from(paymentReceipts)
+    .where(
+      and(
+        eq(paymentReceipts.bookingId, booking.id),
+        eq(paymentReceipts.kind, "modification"),
+        eq(paymentReceipts.settlementStatus, "applied")
+      )
+    );
+  const upgrades = [];
+  for (const receipt of receipts) {
+    if (receipt.paymentIntentId === booking.stripePaymentIntentId) continue;
+    const refunds = await listActiveRefunds(receipt.paymentIntentId);
+    upgrades.push({
+      paymentIntentId: receipt.paymentIntentId,
+      amount: receipt.amount,
+      base: sumRefundAmounts(refunds),
+      refunds,
+    });
+  }
+  return upgrades.some(u => u.amount - u.base > 0) ? upgrades : [];
 }
 
 const splitRefundReason =
@@ -246,6 +280,22 @@ export async function createRefund(
       database,
       booking.id
     );
+    const savedParts = savedCancellation
+      ? await getRefundParts(database, booking.id)
+      : [];
+    if (savedParts.length) {
+      // A saved multi-intent cancellation resumes its open parts only.
+      if (
+        input.amount !== undefined &&
+        input.amount !== savedCancellation?.amount
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "An existing cancellation must be reconciled before changing its amount",
+        });
+      return await partitionedRefundResult(booking);
+    }
     if (savedCancellation?.amount === 0)
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
@@ -328,6 +378,27 @@ export async function createRefund(
           refund.metadata.refundOperationId === legacyRefundId &&
           refund.amount === refundAmount
       );
+    // Decision 7: an upgrade collected on its own intent is refunded first.
+    // While an applied modification receipt on another intent still holds
+    // money, every new cancellation, full or partial, and also after a later
+    // downgrade, draws on the most recent collection first, whatever the
+    // original intent could still cover. A booking with no modification
+    // receipt holding money keeps the single-intent command and the #346
+    // downgrade cap.
+    const upgrades =
+      savedCancellation ||
+      existingOperationRefund ||
+      !Number.isSafeInteger(receipt.amount)
+        ? []
+        : await heldUpgradeCollections(database, {
+            id: booking.id,
+            stripePaymentIntentId: booking.stripePaymentIntentId,
+          });
+    const refundableAmount = upgrades.length
+      ? receipt.amount -
+        alreadyRefundedAmount +
+        upgrades.reduce((sum, u) => sum + u.amount - u.base, 0)
+      : remainingRefundableAmount;
 
     if (!existingOperationRefund && !savedCancellation) {
       if (refundAmount === 0)
@@ -365,20 +436,17 @@ export async function createRefund(
         });
       }
 
-      if (
-        booking.paymentStatus === "refunded" ||
-        remainingRefundableAmount <= 0
-      ) {
+      if (booking.paymentStatus === "refunded" || refundableAmount <= 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Booking payment has already been fully refunded",
         });
       }
 
-      if (refundAmount > remainingRefundableAmount) {
+      if (refundAmount > refundableAmount) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `Refund amount exceeds the remaining refundable balance of ${remainingRefundableAmount} cents`,
+          message: `Refund amount exceeds the remaining refundable balance of ${refundableAmount} cents`,
         });
       }
 
@@ -409,12 +477,30 @@ export async function createRefund(
     const otherRefunds = existingRefunds.filter(
       r => r.id !== existingOperationRefund?.id
     );
-    if (!savedCancellation && otherRefunds.some(r => r.status !== "succeeded"))
+    if (
+      !savedCancellation &&
+      [...otherRefunds, ...upgrades.flatMap(u => u.refunds)].some(
+        r => r.status !== "succeeded"
+      )
+    )
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
         message:
           "An earlier pending refund must be reconciled before this cancellation",
       });
+    if (upgrades.length) {
+      await reserveOrdinaryRefundAcrossIntents(database, {
+        bookingId: booking.id,
+        actor,
+        userId: input.userId,
+        tenantId: booking.tenantId,
+        request,
+        baseRefundedAmount: sumRefundAmounts(otherRefunds),
+        upgradeBases: new Map(upgrades.map(u => [u.paymentIntentId, u.base])),
+        policyQuoteHash: feeCalculation?.quoteHash,
+      });
+      return await partitionedRefundResult(booking);
+    }
     await reserveOrdinaryRefundCancellation(database, {
       bookingId: booking.id,
       actor,
@@ -465,6 +551,47 @@ export async function createRefund(
       message: "Failed to create refund",
     });
   }
+}
+
+/** The createRefund response for a cancellation drawn on several intents:
+ * the money the provider returned across its parts and the last provider
+ * refund or, when the provider refused a part, status "failed" with the
+ * refused money and the last refused provider refund, as the single-intent
+ * command returns a refused refund; and the balances summed over the intents
+ * the cancellation draws on. */
+async function partitionedRefundResult(booking: {
+  id: number;
+  stripePaymentIntentId: string | null;
+}) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  const outcome = await processPartitionedRefundCancellation(booking.id);
+  const intents = [
+    ...new Set([
+      ...outcome.paymentIntentIds,
+      ...(booking.stripePaymentIntentId ? [booking.stripePaymentIntentId] : []),
+    ]),
+  ];
+  let collected = 0;
+  let cumulativeRefundedAmount = 0;
+  for (const paymentIntentId of intents) {
+    const [receipt] = await collectionReceipt(database, paymentIntentId);
+    collected += receipt?.amount ?? 0;
+    cumulativeRefundedAmount += sumRefundAmounts(
+      await listActiveRefunds(paymentIntentId)
+    );
+  }
+  return {
+    success: true,
+    refundId: outcome.refundId,
+    amount: outcome.amount,
+    status: outcome.status,
+    cumulativeRefundedAmount,
+    remainingRefundableAmount: Math.max(
+      0,
+      collected - cumulativeRefundedAmount
+    ),
+  };
 }
 
 export async function getRefundDetails(refundId: string, actor: RefundActor) {

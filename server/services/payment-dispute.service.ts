@@ -34,7 +34,7 @@
  * in debt. Already purchased travel remains untouched.
  */
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type Stripe from "stripe";
 import { z } from "zod";
 import {
@@ -42,6 +42,7 @@ import {
   bookings,
   financialLedger,
   orderServiceRefunds,
+  ordinaryBookingRefundParts,
   ordinaryBookingRefunds,
   paymentHistory,
   paymentReceipts,
@@ -361,7 +362,7 @@ export const CHARGEBACK_SETTLED = "settled_by_chargeback";
  * amount goes to review. */
 export const CHARGEBACK_PARTIAL_COVER = "chargeback_partial_cover";
 
-type CoverSource = "ordinary" | "split" | "order";
+type CoverSource = "ordinary" | "split" | "order" | "part";
 const unsent = (row: {
   status: string;
   refundId: string | null;
@@ -409,15 +410,38 @@ export async function lostDisputeCover(
     .from(orderServiceRefunds)
     .where(eq(orderServiceRefunds.paymentIntentId, paymentIntentId))
     .for("update");
+  // Decision 7: a cancellation drawn on several intents refunds through its
+  // parts; its own row is not a provider command of this collection.
+  const parts = await tx
+    .select()
+    .from(ordinaryBookingRefundParts)
+    .where(eq(ordinaryBookingRefundParts.paymentIntentId, paymentIntentId))
+    .for("update");
+  const partitioned = ordinary.length
+    ? await tx
+        .select({ bookingId: ordinaryBookingRefundParts.bookingId })
+        .from(ordinaryBookingRefundParts)
+        .where(
+          inArray(
+            ordinaryBookingRefundParts.bookingId,
+            ordinary.map(row => row.bookingId)
+          )
+        )
+    : [];
   // An ordinary command is the only refund owner of its collection (order
   // refunds and split plans refuse it), so its settled amount is not needed.
   const commands = [
-    ...ordinary.filter(unsent).map(row => ({
-      source: "ordinary" as const,
-      id: String(row.bookingId),
-      amount: row.amount,
-      createdAt: row.createdAt,
-    })),
+    ...ordinary
+      .filter(
+        row =>
+          unsent(row) && !partitioned.some(p => p.bookingId === row.bookingId)
+      )
+      .map(row => ({
+        source: "ordinary" as const,
+        id: String(row.bookingId),
+        amount: row.amount,
+        createdAt: row.createdAt,
+      })),
     ...split
       .filter(row => unsent(row) || allocated(row))
       .map(row => ({
@@ -430,6 +454,14 @@ export async function lostDisputeCover(
       .filter(row => unsent(row) || allocated(row))
       .map(row => ({
         source: "order" as const,
+        id: row.id,
+        amount: row.amount,
+        createdAt: row.createdAt,
+      })),
+    ...parts
+      .filter(row => unsent(row) || allocated(row))
+      .map(row => ({
+        source: "part" as const,
         id: row.id,
         amount: row.amount,
         createdAt: row.createdAt,

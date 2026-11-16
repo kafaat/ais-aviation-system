@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import {
   bookings,
   bookingRefundItems,
+  ordinaryBookingRefundParts,
   ordinaryBookingRefunds,
   paymentReceipts,
   bookingRefundPlans,
@@ -166,7 +167,34 @@ export async function getRefundStats(): Promise<RefundStats> {
           .where(
             and(
               eq(paymentReceipts.currency, "SAR"),
-              eq(paymentReceipts.kind, "booking")
+              eq(paymentReceipts.kind, "booking"),
+              // A multi-intent cancellation counts by its parts until every
+              // part has succeeded, then by its own status.
+              sql`NOT EXISTS (SELECT 1 FROM ${ordinaryBookingRefundParts} WHERE ${ordinaryBookingRefundParts.bookingId} = ${ordinaryBookingRefunds.bookingId} AND ${ordinaryBookingRefundParts.status} <> 'succeeded')`
+            )
+          );
+        // Decision 7: a cancellation drawn on several intents is outstanding
+        // per part, on its own collection; a part that succeeded is posted
+        // above, so the cancellation's total is never counted alongside it.
+        const [parts] = await tx
+          .select({
+            pending: sql<string>`COALESCE(SUM(${ordinaryBookingRefundParts.status} IN ('queued','requesting','pending')), 0)`,
+            pendingAmount: sql<string>`COALESCE(SUM(CASE WHEN ${ordinaryBookingRefundParts.status} IN ('queued','requesting','pending') THEN ${ordinaryBookingRefundParts.amount} ELSE 0 END), 0)`,
+            review: sql<string>`COALESCE(SUM(${ordinaryBookingRefundParts.status} IN ('failed','review_required')), 0)`,
+            reviewAmount: sql<string>`COALESCE(SUM(CASE WHEN ${ordinaryBookingRefundParts.status} IN ('failed','review_required') THEN ${ordinaryBookingRefundParts.amount} ELSE 0 END), 0)`,
+          })
+          .from(ordinaryBookingRefundParts)
+          .innerJoin(
+            paymentReceipts,
+            eq(
+              paymentReceipts.paymentIntentId,
+              ordinaryBookingRefundParts.paymentIntentId
+            )
+          )
+          .where(
+            and(
+              eq(paymentReceipts.currency, "SAR"),
+              inArray(paymentReceipts.kind, ["booking", "modification"])
             )
           );
         const [fees] = await tx
@@ -182,13 +210,22 @@ export async function getRefundStats(): Promise<RefundStats> {
           completedRefunds: count,
           totalRefundedAmount: integer(settled.amount),
           refundedBookings: bookingCount,
-          pendingRefunds: integer(requests.pending) + integer(ordinary.pending),
+          pendingRefunds:
+            integer(requests.pending) +
+            integer(ordinary.pending) +
+            integer(parts.pending),
           pendingRefundAmount:
-            integer(requests.pendingAmount) + integer(ordinary.pendingAmount),
+            integer(requests.pendingAmount) +
+            integer(ordinary.pendingAmount) +
+            integer(parts.pendingAmount),
           reviewRequiredRefunds:
-            integer(requests.review) + integer(ordinary.review),
+            integer(requests.review) +
+            integer(ordinary.review) +
+            integer(parts.review),
           reviewRequiredAmount:
-            integer(requests.reviewAmount) + integer(ordinary.reviewAmount),
+            integer(requests.reviewAmount) +
+            integer(ordinary.reviewAmount) +
+            integer(parts.reviewAmount),
           retainedCancellationFees: integer(fees.amount),
           refundRate: allCount > 0 ? (bookingCount / allCount) * 100 : 0,
         };
