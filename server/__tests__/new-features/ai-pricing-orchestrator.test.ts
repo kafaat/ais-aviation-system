@@ -394,6 +394,21 @@ describe("AI Pricing Orchestrator", () => {
       expect(dashboard.revenueMetrics.totalRevenue).toBe(0);
     });
 
+    // Review finding R5 (#355): the dashboard reports the state the quote
+    // path applies, so the admin toggle can show and invert it.
+    it("reports the enabled flag the quote path uses", async () => {
+      const { AIPricingService } =
+        await import("../../services/pricing/ai-pricing.service");
+      mockCacheGet.mockResolvedValue(null);
+      expect((await AIPricingService.getAIDashboardData()).enabled).toBe(true);
+      expect(await AIPricingService.isAIPricingEnabled()).toBe(true);
+      mockCacheGet.mockImplementation(async (key: string) =>
+        key === "ai_pricing_enabled" ? false : null
+      );
+      expect((await AIPricingService.getAIDashboardData()).enabled).toBe(false);
+      expect(await AIPricingService.isAIPricingEnabled()).toBe(false);
+    });
+
     it("should handle partial data gracefully in dashboard", async () => {
       const { AIPricingService } =
         await import("../../services/pricing/ai-pricing.service");
