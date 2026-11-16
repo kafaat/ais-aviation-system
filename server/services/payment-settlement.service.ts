@@ -500,10 +500,12 @@ const heldUpgradeReviewReason =
  * settlement review, where an operator can refund it, instead of staying
  * applied on a refunded booking. One review event per upgrade intent. The
  * caller passes the booking's applied receipts, read under its locks.
- * An upgrade intent with a servicing refund that is open or failed (a flight
- * cancellation plans one per intent) is left to that servicing refund, which
- * has its own review if it fails; settlement ignores other refunds of that
- * intent until it succeeds. */
+ * Settlement ignores other refunds of an intent until its servicing refunds
+ * succeed. An upgrade whose open or failed servicing refunds cover everything
+ * it still holds (a flight cancellation plans one per intent for the whole
+ * balance) is left to them; they have their own review if they fail. A partly
+ * covered upgrade is still flagged: its review refund waits for them
+ * (requestSettlementReviewRefund) and then refunds the remainder. */
 async function reviewHeldUpgradeCollections(
   tx: SettlementTx,
   booking: typeof bookings.$inferSelect,
@@ -524,6 +526,7 @@ async function reviewHeldUpgradeCollections(
   const servicing = await tx
     .select({
       paymentIntentId: orderServiceRefunds.paymentIntentId,
+      amount: orderServiceRefunds.amount,
       status: orderServiceRefunds.status,
     })
     .from(orderServiceRefunds)
@@ -537,11 +540,16 @@ async function reviewHeldUpgradeCollections(
       )
     )
     .for("update");
-  const ownedByServicing = new Set(
-    servicing.filter(p => p.status !== "succeeded").map(p => p.paymentIntentId)
-  );
+  const openServicing = new Map<string, number>();
+  for (const p of servicing)
+    if (p.status !== "succeeded")
+      openServicing.set(
+        p.paymentIntentId,
+        (openServicing.get(p.paymentIntentId) ?? 0) + p.amount
+      );
   for (const upgrade of held.filter(
-    r => !ownedByServicing.has(r.paymentIntentId)
+    r =>
+      (openServicing.get(r.paymentIntentId) ?? 0) < r.amount - r.refundedAmount
   ))
     await requireCollectionReview(
       tx,

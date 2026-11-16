@@ -88,9 +88,11 @@ to what it still holds.
   booking is unfinished, because settlement ignores other refunds of an
   intent until its servicing refund succeeds. The verified provider refund
   then marks it `review_refunded` and leaves the booking as it is. An upgrade
-  whose intent has an open or failed servicing refund, such as the one a
-  flight cancellation plans for each intent, is left to that servicing refund
-  and not sent to settlement review. If departure blocks the
+  whose open or failed servicing refunds cover everything its intent still
+  holds, such as the refund a flight cancellation plans for each intent, is
+  left to them and not sent to settlement review. A partly covered upgrade is
+  still sent there, and its review refund then refunds only what remains.
+  If departure blocks the
   release, the booking and its upgrade stay under departure reconciliation
   instead. Review lists what the upgrade still holds, which can include a
   cancellation fee kept on that intent, so the operator checks the booking's
