@@ -96,9 +96,14 @@ to what it still holds.
   release, the booking and its upgrade stay under departure reconciliation
   instead. Review lists what the upgrade still holds, which can include a
   cancellation fee kept on that intent, so the operator checks the booking's
-  cancellation before refunding it. No money moves twice. What remains: bookings an older release left
-  `refunded` with an `applied` upgrade before deploy are not changed.
+  cancellation before refunding it. No money moves twice. What remains: a
+  booking can still be `refunded` with an `applied` upgrade that holds money.
+  An older release left some before deploy. This change also leaves one while
+  a covering servicing refund is open, and keeps it when that servicing
+  refund fails. A failed flight-cancellation refund is listed on the
+  operations dashboard; a failed exchange servicing refund has no operator
+  list and no in-app resolution yet, which is a follow-up.
   `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a read-only query that
-  lists them before deployment, for reconciliation.
+  lists all of them, for reconciliation.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
   rounds, then integrator test hardening; the PR lists the evidence.

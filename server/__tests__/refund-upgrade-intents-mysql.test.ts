@@ -2763,6 +2763,50 @@ nativeDescribe.sequential(
             ]);
           }, 60000);
 
+        it("fix: a servicing refund that already succeeded covers nothing, so the rest of the upgrade goes to settlement review", async () => {
+          // 3000 of the upgrade was already returned by a servicing refund.
+          await fixture.db.insert(schema.orderServiceRefunds).values({
+            id: servicingId,
+            bookingId: 71,
+            modificationId: 9001,
+            paymentIntentId: upgrade,
+            amount: 3000,
+            baseRefundedAmount: 0,
+            status: "succeeded",
+            refundId: "re_x7_servicing_done",
+            nextAttemptAt: now,
+            createdAt: new Date(now.getTime() - 60_000),
+          });
+          await fixture.db
+            .update(schema.paymentReceipts)
+            .set({ refundedAmount: 3000 })
+            .where(eq(schema.paymentReceipts.paymentIntentId, upgrade));
+          await chargeRefunded(original, 20000, 20000);
+          expect(await receiptSettlement(upgrade)).toEqual({
+            status: "review_required",
+            error: heldReason,
+          });
+          expect(await reviews()).toEqual([
+            [upgrade, "modification", 6000, 3000],
+          ]);
+        }, 60000);
+
+        it("fix: an open servicing refund covering what the upgrade still holds, after an earlier refund, keeps it out of settlement review", async () => {
+          // 3000 of the upgrade was already returned; a queued servicing
+          // refund covers the 3000 it still holds.
+          await fixture.db
+            .update(schema.paymentReceipts)
+            .set({ refundedAmount: 3000 })
+            .where(eq(schema.paymentReceipts.paymentIntentId, upgrade));
+          await saveServicingRefund("queued", 3000);
+          await chargeRefunded(original, 20000, 20000);
+          expect(await receiptSettlement(upgrade)).toEqual({
+            status: "applied",
+            error: null,
+          });
+          expect(await reviews()).toEqual([]);
+        }, 60000);
+
         it("fix: after a partial servicing refund succeeds, the review refund sends the remaining 4000 once and settles the upgrade", async () => {
           await saveServicingRefund("queued", 2000);
           await chargeRefunded(original, 20000, 20000);

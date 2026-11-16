@@ -503,7 +503,9 @@ const heldUpgradeReviewReason =
  * Settlement ignores other refunds of an intent until its servicing refunds
  * succeed. An upgrade whose open or failed servicing refunds cover everything
  * it still holds (a flight cancellation plans one per intent for the whole
- * balance) is left to them; they have their own review if they fail. A partly
+ * balance) is left to them. A failed flight-cancellation refund is reviewed
+ * on the operations dashboard; a failed exchange servicing refund is listed
+ * only by the decision-7 SQL (ADR 0003). A partly
  * covered upgrade is still flagged: its review refund waits for them
  * (requestSettlementReviewRefund) and then refunds the remainder. */
 async function reviewHeldUpgradeCollections(
