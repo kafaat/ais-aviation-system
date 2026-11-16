@@ -122,7 +122,7 @@ const MONEY_PATH_SEGMENT = new RegExp(
 const DISPLAY_ONLY_IMPORTERS: Record<string, string> = {
   "server/routers/ibe-public.ts": "the labelled display estimate",
   "server/routers/pricing.router.ts":
-    "SAR prices shown in another currency with the display quote, and the labelled quote; base and final prices stay SAR",
+    "SAR prices shown in another currency, conversions and the labelled quote, all under the display rule; base and final prices stay SAR",
   "server/services/standard-reports-commercial.service.ts":
     "the list of supported currency codes only",
   "server/services/currency/operator-rates.service.ts":
@@ -436,13 +436,19 @@ describe("currency fallback guard", () => {
         "No current exchange rate observation: SAR to USD. Request the price in SAR.",
     });
     expect(engine.calculateDynamicPrice).toHaveBeenCalledTimes(1);
+    // Fix round 2: the same precondition as the price routes (it was
+    // BAD_REQUEST before the conversion route took the display rule).
     await expect(
       caller.convertCurrency({
         amount: 100,
         fromCurrency: "SAR",
         toCurrency: "USD",
       })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message:
+        "No current exchange rate observation: SAR to USD. Request the price in SAR.",
+    });
     // The labelled quote remains available for what it is.
     expect(
       await caller.getExchangeRate({ fromCurrency: "SAR", toCurrency: "USD" })
@@ -805,5 +811,333 @@ describe("currency fallback guard", () => {
     expect(await currency.getExchangeRate("USD", "AED")).toMatchObject({
       source: "cross_rate_fallback",
     });
+  });
+
+  // Fix round 2 (lab receipt for #378 at 6600395): pricing.convertCurrency,
+  // pricing.getExchangeRate and convertPriceForDisplay take the display rule
+  // too. A quote the display would not show produces no amount and no rate.
+  const DAY = 24 * HOUR;
+  const operator = { userId: 20, role: "admin" };
+  /** SAR_GBP in the label-only fallback constants. */
+  const GBP_ESTIMATE = 0.21;
+  const gbp = { fromCurrency: "SAR", toCurrency: "GBP" } as const;
+  async function operatorEntry() {
+    fixture.close();
+    fixture = relational.authorityRelationalFixture([
+      exchangeRates,
+      auditLogs,
+      operationsAlerts,
+    ]);
+    boundary.db = fixture.db;
+    const { recordOperatorExchangeRate } =
+      await import("../services/currency/operator-rates.service");
+    return recordOperatorExchangeRate;
+  }
+  function gbpQuote(
+    validFromMs: number,
+    validToMs: number,
+    extra: { rate?: string; supersedesId?: number } = {}
+  ) {
+    const start = Date.now();
+    return {
+      baseCurrency: "SAR" as const,
+      quoteCurrency: "GBP" as const,
+      rate: "0.30000000",
+      source: "bank" as const,
+      sourceReference: "Bank reference rate sheet 2026-11-14",
+      validFrom: new Date(start + validFromMs),
+      validTo: new Date(start + validToMs),
+      ...extra,
+    };
+  }
+  function seedGbpRow(source: string, id = 1) {
+    const observed = sqlTime(-HOUR);
+    fixture.insert(exchangeRates, {
+      id,
+      ...gbp,
+      rate: "0.30000000",
+      source,
+      validFrom: observed,
+      validTo: sqlTime(20 * HOUR),
+      updatedAt: observed,
+    });
+    return new Date(`${observed.replace(" ", "T")}Z`);
+  }
+  /** Each leaves no quote the display shows for SAR/GBP; 100 SAR at the
+   * stored rate would be 30 or 31 GBP. */
+  const rejected = {
+    "a maintained quote observed 48 hours ago, inside its validity window":
+      async () => {
+        const record = await operatorEntry();
+        await record(gbpQuote(-48 * HOUR, 20 * DAY), operator);
+      },
+    "a fresh row from the unapproved source fallback": async () => {
+      seedGbpRow("fallback");
+    },
+    "a fresh row from the unapproved source ecb": async () => {
+      seedGbpRow("ecb");
+    },
+    "a maintained quote superseded by a correction observed 48 hours ago":
+      async () => {
+        const record = await operatorEntry();
+        const first = await record(gbpQuote(-HOUR, 20 * HOUR), operator);
+        await record(
+          gbpQuote(-48 * HOUR, 20 * DAY, {
+            rate: "0.31000000",
+            supersedesId: first.id,
+          }),
+          operator
+        );
+      },
+    "a maintained quote withdrawn by a correction that has expired":
+      async () => {
+        const record = await operatorEntry();
+        const first = await record(gbpQuote(-HOUR, 20 * HOUR), operator);
+        await record(
+          gbpQuote(-2 * HOUR, -HOUR / 2, { supersedesId: first.id }),
+          operator
+        );
+      },
+    "a maintained quote that starts in an hour": async () => {
+      const record = await operatorEntry();
+      await record(gbpQuote(HOUR, 20 * HOUR), operator);
+    },
+  } as const;
+  type Rejected = keyof typeof rejected;
+  const rejectedCases = Object.keys(rejected) as Rejected[];
+
+  it.each(rejectedCases)(
+    "fix: pricing.convertCurrency answers PRECONDITION_FAILED and pricing.getExchangeRate the labelled estimate for %s",
+    async name => {
+      await rejected[name]();
+      expect(await currency.getDisplayExchangeRate("GBP")).toBeNull();
+      const caller = await pricingCaller();
+      await expect(
+        caller.convertCurrency({ ...gbp, amount: 100 })
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message:
+          "No current exchange rate observation: SAR to GBP. Request the price in SAR.",
+      });
+      const quote = await caller.getExchangeRate(gbp);
+      expect(quote).toEqual({
+        success: true,
+        data: {
+          ...gbp,
+          rate: GBP_ESTIMATE,
+          inverseRate: 1 / GBP_ESTIMATE,
+          source: "fallback",
+          updatedAt: expect.any(Date),
+        },
+      });
+    }
+  );
+
+  it.each([
+    rejectedCases[0],
+    rejectedCases[2],
+    rejectedCases[3],
+  ] satisfies Rejected[])(
+    "fix: convertPriceForDisplay returns no converted amount for %s",
+    async name => {
+      await rejected[name]();
+      await expect(currency.convertPriceForDisplay(100, "GBP")).rejects.toThrow(
+        new currency.ExchangeRateUnavailableError("SAR", "GBP")
+      );
+    }
+  );
+
+  it.each([
+    rejectedCases[1],
+    rejectedCases[4],
+    rejectedCases[5],
+  ] satisfies Rejected[])(
+    "control: convertPriceForDisplay returns no converted amount for %s",
+    async name => {
+      await rejected[name]();
+      await expect(currency.convertPriceForDisplay(100, "GBP")).rejects.toThrow(
+        new currency.ExchangeRateUnavailableError("SAR", "GBP")
+      );
+    }
+  );
+
+  it.each(rejectedCases)(
+    "control: the three price routes answer as before for %s",
+    async name => {
+      await rejected[name]();
+      mockEngine();
+      const caller = await pricingCaller();
+      for (const route of Object.values(routes)) {
+        await expect(route.call(caller, "GBP")).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message:
+            "No current exchange rate observation: SAR to GBP. Request the price in SAR.",
+        });
+        expect(await route.call(caller, "SAR")).toEqual(route.sar);
+      }
+    }
+  );
+
+  it("fix: pricing.convertCurrency refuses a cross rate with a leg the display rule rejects", async () => {
+    fixture.insert(exchangeRates, {
+      id: 1,
+      fromCurrency: "USD",
+      toCurrency: "SAR",
+      rate: "3.75000000",
+      source: "bank",
+      validFrom: sqlTime(-HOUR),
+      validTo: sqlTime(20 * HOUR),
+      updatedAt: sqlTime(-HOUR),
+    });
+    fixture.insert(exchangeRates, {
+      id: 2,
+      fromCurrency: "SAR",
+      toCurrency: "AED",
+      rate: "0.95000000",
+      source: "bank",
+      validFrom: sqlTime(-48 * HOUR),
+      validTo: sqlTime(20 * DAY),
+      updatedAt: sqlTime(-48 * HOUR),
+    });
+    const caller = await pricingCaller();
+    const usdToAed = { fromCurrency: "USD", toCurrency: "AED" };
+    await expect(
+      caller.convertCurrency({ ...usdToAed, amount: 1000 })
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message:
+        "No current exchange rate observation: SAR to AED. Request the price in SAR.",
+    });
+    // The quote labels the stale leg as an estimate: 3.75 x 0.9793, not 0.95.
+    const quote = await caller.getExchangeRate(usdToAed);
+    expect(quote.data.source).toBe("cross_rate_fallback");
+    expect(quote.data.rate).toBeCloseTo(3.672375, 12);
+  });
+
+  it("fix: pricing.convertCurrency does not use a cross rate cached without the display rule", async () => {
+    fixture.insert(exchangeRates, {
+      id: 1,
+      fromCurrency: "USD",
+      toCurrency: "SAR",
+      rate: "3.75000000",
+      source: "bank",
+      validFrom: sqlTime(-HOUR),
+      validTo: sqlTime(20 * HOUR),
+      updatedAt: sqlTime(-HOUR),
+    });
+    fixture.insert(exchangeRates, {
+      id: 2,
+      fromCurrency: "SAR",
+      toCurrency: "AED",
+      rate: "0.95000000",
+      source: "ecb",
+      validFrom: sqlTime(-HOUR),
+      validTo: sqlTime(20 * HOUR),
+      updatedAt: sqlTime(-HOUR),
+    });
+    // A conversion without the display rule composes and caches the cross
+    // rate from the ecb leg.
+    expect(
+      (await currency.convertCurrency(1000, "USD", "AED")).convertedAmount
+    ).toBe(3562.5);
+    expect(boundary.cache.has("exchange_rate:v3:USD_AED")).toBe(true);
+    // Only that cached cross rate is left: it cannot show its legs.
+    fixture.sqlite.exec("DELETE FROM exchange_rates");
+    boundary.cache.delete("exchange_rate:v3:USD_SAR");
+    boundary.cache.delete("exchange_rate:v3:SAR_AED");
+    const caller = await pricingCaller();
+    await expect(
+      caller.convertCurrency({
+        fromCurrency: "USD",
+        toCurrency: "AED",
+        amount: 1000,
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(
+      (await caller.getExchangeRate({ fromCurrency: "USD", toCurrency: "AED" }))
+        .data.source
+    ).toBe("cross_rate_fallback");
+  });
+
+  it("control: a fresh quote converts on all three paths", async () => {
+    const observed = seedGbpRow("bank");
+    expect(await currency.getDisplayExchangeRate("GBP")).toMatchObject({
+      rate: 0.3,
+      source: "bank",
+    });
+    const caller = await pricingCaller();
+    expect(await caller.convertCurrency({ ...gbp, amount: 100 })).toEqual({
+      success: true,
+      data: {
+        originalAmount: 100,
+        originalCurrency: "SAR",
+        convertedAmount: 30,
+        targetCurrency: "GBP",
+        exchangeRate: 0.3,
+        formattedOriginal: "100.00",
+        formattedConverted: "30.00",
+        rateTimestamp: observed,
+      },
+    });
+    expect(await caller.getExchangeRate(gbp)).toEqual({
+      success: true,
+      data: {
+        ...gbp,
+        rate: 0.3,
+        inverseRate: 1 / 0.3,
+        source: "bank",
+        updatedAt: observed,
+      },
+    });
+    expect(await currency.convertPriceForDisplay(100, "GBP")).toEqual({
+      amount: 30,
+      currency: "GBP",
+      formatted: "30.00",
+      formattedWithSymbol: "£ 30.00",
+    });
+  });
+
+  it("control: SAR responses are unchanged", async () => {
+    // Whatever the stored quotes, SAR never reads them.
+    await rejected[rejectedCases[0]]();
+    seedGbpRow("ecb", 99);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const now = new Date("2030-01-01T00:00:00Z");
+      vi.setSystemTime(now);
+      const caller = await pricingCaller();
+      const sar = { fromCurrency: "SAR", toCurrency: "SAR" };
+      expect(await caller.convertCurrency({ ...sar, amount: 1.234 })).toEqual({
+        success: true,
+        data: {
+          originalAmount: 1.234,
+          originalCurrency: "SAR",
+          convertedAmount: 1.23,
+          targetCurrency: "SAR",
+          exchangeRate: 1,
+          formattedOriginal: "1.23",
+          formattedConverted: "1.23",
+          rateTimestamp: now,
+        },
+      });
+      expect(await caller.getExchangeRate(sar)).toEqual({
+        success: true,
+        data: {
+          ...sar,
+          rate: 1,
+          inverseRate: 1,
+          source: "identity",
+          updatedAt: now,
+        },
+      });
+      expect(await currency.convertPriceForDisplay(500, "SAR")).toEqual({
+        amount: 500,
+        currency: "SAR",
+        formatted: "500.00",
+        formattedWithSymbol: "ر.س 500.00",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

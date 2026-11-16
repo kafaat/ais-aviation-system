@@ -17,11 +17,17 @@ import {
 } from "../services/currency/currency.service";
 import { TRPCError } from "@trpc/server";
 
-/** No converted price is quoted without a current rate (#319 Wave 1): the
- * price routes convert only with the quote the display estimate would show
- * (CurrencyService.sarPriceConverter). A missing rate is a client-visible
- * precondition, not a server fault. */
-function pricingError(error: unknown, fallback: string): TRPCError {
+/** No converted price or amount is quoted without a current rate (#319
+ * Wave 1): the price routes convert only with the quote the display estimate
+ * would show (CurrencyService.sarPriceConverter), and convertCurrency and
+ * getExchangeRate apply the same display rule to every observed leg. A
+ * missing rate is a client-visible precondition, not a server fault; any
+ * other error keeps the route's own code. */
+function pricingError(
+  error: unknown,
+  fallback: string,
+  otherCode: "INTERNAL_SERVER_ERROR" | "BAD_REQUEST" = "INTERNAL_SERVER_ERROR"
+): TRPCError {
   if (error instanceof ExchangeRateUnavailableError)
     return new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -29,7 +35,7 @@ function pricingError(error: unknown, fallback: string): TRPCError {
       cause: error,
     });
   return new TRPCError({
-    code: "INTERNAL_SERVER_ERROR",
+    code: otherCode,
     message: error instanceof Error ? error.message : fallback,
   });
 }
@@ -289,7 +295,8 @@ export const pricingRouter = router({
     }),
 
   /**
-   * Convert price between currencies
+   * Convert price between currencies, only with observations the display
+   * estimate rule accepts; otherwise PRECONDITION_FAILED.
    */
   convertCurrency: publicProcedure
     .input(
@@ -302,7 +309,7 @@ export const pricingRouter = router({
     .output(responseContracts["convertCurrency"])
     .query(async ({ input }) => {
       try {
-        const result = await CurrencyService.convertCurrency(
+        const result = await CurrencyService.convertCurrencyWithDisplayRule(
           input.amount,
           input.fromCurrency,
           input.toCurrency
@@ -313,18 +320,13 @@ export const pricingRouter = router({
           data: result,
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Currency conversion failed",
-        });
+        throw pricingError(error, "Currency conversion failed", "BAD_REQUEST");
       }
     }),
 
   /**
-   * Get exchange rate
+   * Get exchange rate. An observation the display estimate rule would not use
+   * answers as none: the labelled estimate (source "fallback").
    */
   getExchangeRate: publicProcedure
     .input(
@@ -336,7 +338,7 @@ export const pricingRouter = router({
     .output(responseContracts["getExchangeRate"])
     .query(async ({ input }) => {
       try {
-        const rate = await CurrencyService.getExchangeRate(
+        const rate = await CurrencyService.getExchangeRateWithDisplayRule(
           input.fromCurrency,
           input.toCurrency
         );
@@ -346,13 +348,7 @@ export const pricingRouter = router({
           data: rate,
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to get exchange rate",
-        });
+        throw pricingError(error, "Failed to get exchange rate", "BAD_REQUEST");
       }
     }),
 });

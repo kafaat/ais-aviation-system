@@ -463,10 +463,12 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
       });
       expect(estimate.data.updatedAt).toBeInstanceOf(Date);
       // Wave 1 (#319): the fallback labels the quote above; it never
-      // becomes a converted amount.
+      // becomes a converted amount. Without a quote the display rule accepts
+      // the route answers the price routes' precondition (fix round 2; it
+      // was BAD_REQUEST before).
       const refused = await response("convertCurrency", { ...pair, amount: 1 });
-      expect(refused.status).toBe(400);
-      expect(refused.body.error?.json?.data?.code).toBe("BAD_REQUEST");
+      expect(refused.status).toBe(412);
+      expect(refused.body.error?.json?.data?.code).toBe("PRECONDITION_FAILED");
       expect(refused.body.error?.json?.message).toMatch(
         /No current exchange rate observation/
       );
@@ -519,6 +521,89 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     expect(repaired.data.source).toBe("bank");
     expect(repaired.data.rate).toBe(0.086);
   });
+
+  // Fix round 2 (lab receipt for #378 at 6600395): the public conversion
+  // and quote routes take the display rule (approved source, current, not
+  // superseded, observed less than 24 hours ago), also over a warm Redis.
+  const HOUR = 3_600_000;
+  const DAY = 24 * HOUR;
+
+  it("fix: converts no amount from a quote observed 48 hours ago and quotes the labelled estimate instead", async () => {
+    const time = Date.now();
+    const gbp = { fromCurrency: "SAR", toCurrency: "GBP" };
+    await seed(
+      1,
+      "0.30",
+      new Date(time - 48 * HOUR),
+      new Date(time + 20 * DAY),
+      gbp
+    );
+    const refused = await response("convertCurrency", { ...gbp, amount: 100 });
+    expect(refused.status).toBe(412);
+    expect(refused.body.error?.json?.data?.code).toBe("PRECONDITION_FAILED");
+    expect(refused.body.error?.json?.message).toBe(
+      "No current exchange rate observation: SAR to GBP. Request the price in SAR."
+    );
+    expect(refused.body.result).toBeUndefined();
+    const quote = responseContracts.getExchangeRate.parse(
+      await request("getExchangeRate", gbp)
+    );
+    // SAR_GBP 0.21 is the label-only constant, not the stored 0.30.
+    expect(quote.data).toMatchObject({
+      ...gbp,
+      rate: 0.21,
+      source: "fallback",
+    });
+    expect(await reference!.keys("exchange_rate:*")).toEqual([]);
+  });
+
+  it.each(["the conversion route", "a conversion without the display rule"])(
+    "fix: refuses a Redis snapshot warmed by %s once its quote is 24 hours old",
+    async warmedBy => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const now = new Date("2030-06-10T12:00:00Z");
+      vi.setSystemTime(now);
+      await seed(
+        1,
+        "0.081",
+        new Date(+now - DAY + 60_000),
+        new Date(+now + 20 * DAY)
+      );
+      const input = { ...pair, amount: 1 };
+      if (warmedBy === "the conversion route") {
+        const warm = responseContracts.convertCurrency.parse(
+          await request("convertCurrency", input)
+        );
+        expect(warm.data.convertedAmount).toBe(0.081);
+        // Cached no longer than the quote's 24-hour display use: 60 s left.
+        expect(await reference!.ttl(key)).toBeGreaterThan(0);
+        expect(await reference!.ttl(key)).toBeLessThanOrEqual(60);
+      } else {
+        const { convertCurrency } =
+          await import("../services/currency/currency.service");
+        expect((await convertCurrency(1, "SAR", "KWD")).convertedAmount).toBe(
+          0.081
+        );
+      }
+      expect(await reference!.get(key)).not.toBeNull();
+
+      vi.setSystemTime(new Date(+now + 120_000));
+      // Redis keeps its own clock: the warmed bytes are still there.
+      expect(await reference!.get(key)).not.toBeNull();
+      const refused = await response("convertCurrency", input);
+      expect(refused.status).toBe(412);
+      expect(refused.body.error?.json?.data?.code).toBe("PRECONDITION_FAILED");
+      const quote = responseContracts.getExchangeRate.parse(
+        await request("getExchangeRate", pair)
+      );
+      // SAR_KWD 0.082 is the label-only constant, not the stored 0.081.
+      expect(quote.data).toMatchObject({
+        ...pair,
+        rate: 0.082,
+        source: "fallback",
+      });
+    }
+  );
 });
 
 /**
