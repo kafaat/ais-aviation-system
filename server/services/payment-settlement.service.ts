@@ -499,7 +499,11 @@ const heldUpgradeReviewReason =
  * applied upgrade collected on another intent that still holds money goes to
  * settlement review, where an operator can refund it, instead of staying
  * applied on a refunded booking. One review event per upgrade intent. The
- * caller passes the booking's applied receipts, read under its locks. */
+ * caller passes the booking's applied receipts, read under its locks.
+ * An upgrade intent with a servicing refund that is open or failed (a flight
+ * cancellation plans one per intent) is left to that servicing refund, which
+ * has its own review if it fails; settlement ignores other refunds of that
+ * intent until it succeeds. */
 async function reviewHeldUpgradeCollections(
   tx: SettlementTx,
   booking: typeof bookings.$inferSelect,
@@ -514,7 +518,31 @@ async function reviewHeldUpgradeCollections(
         r.refundedAmount < r.amount
     )
     .sort((a, b) => a.paymentIntentId.localeCompare(b.paymentIntentId));
-  for (const upgrade of held)
+  if (!held.length) return;
+  // A current read under the booking lock, which servicing refund commands
+  // take first.
+  const servicing = await tx
+    .select({
+      paymentIntentId: orderServiceRefunds.paymentIntentId,
+      status: orderServiceRefunds.status,
+    })
+    .from(orderServiceRefunds)
+    .where(
+      and(
+        eq(orderServiceRefunds.bookingId, booking.id),
+        inArray(
+          orderServiceRefunds.paymentIntentId,
+          held.map(r => r.paymentIntentId)
+        )
+      )
+    )
+    .for("update");
+  const ownedByServicing = new Set(
+    servicing.filter(p => p.status !== "succeeded").map(p => p.paymentIntentId)
+  );
+  for (const upgrade of held.filter(
+    r => !ownedByServicing.has(r.paymentIntentId)
+  ))
     await requireCollectionReview(
       tx,
       upgrade,

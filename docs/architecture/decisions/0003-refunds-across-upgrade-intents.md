@@ -84,8 +84,13 @@ to what it still holds.
   receipt becomes `review_required`, with one
   `payment.settlement_review_required` event per upgrade intent.
   `listSettlementReviews` lists it, and `requestSettlementReviewRefund`
-  refunds it in-app. The verified provider refund then marks it
-  `review_refunded` and leaves the booking as it is. If departure blocks the
+  refunds it in-app. That refund waits while a servicing refund on the
+  booking is unfinished, because settlement ignores other refunds of an
+  intent until its servicing refund succeeds. The verified provider refund
+  then marks it `review_refunded` and leaves the booking as it is. An upgrade
+  whose intent has an open or failed servicing refund, such as the one a
+  flight cancellation plans for each intent, is left to that servicing refund
+  and not sent to settlement review. If departure blocks the
   release, the booking and its upgrade stay under departure reconciliation
   instead. Review lists what the upgrade still holds, which can include a
   cancellation fee kept on that intent, so the operator checks the booking's

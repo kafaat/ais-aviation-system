@@ -69,6 +69,11 @@ import {
   processPendingOrdinaryRefunds,
   reserveOrdinaryRefundAcrossIntents,
 } from "../services/ordinary-refund.service";
+import { processPendingOrderRefunds } from "../services/order-refunds.service";
+import {
+  processFlightCancellations,
+  requestFlightCancellation,
+} from "../services/flight-cancellation.service";
 import { getRefundStats } from "../services/refunds-stats.service";
 import { consumeLocalEvent } from "../services/event-inbox.service";
 import { ordinaryRefundRequiresReconciliation } from "../services/departure-financial-authority.service";
@@ -2475,6 +2480,373 @@ nativeDescribe.sequential(
         expect(sentTo(upgrade)).toHaveLength(1);
         expect(provider.create).toHaveBeenCalledTimes(2);
       }, 60000);
+
+      // A servicing refund (order_service_refunds) on an upgrade intent: an
+      // exchange refund after a downgrade, or the per-intent refund a flight
+      // cancellation plans. Settlement ignores other refunds of that intent
+      // until the servicing refund succeeds. So an unfinished one keeps the
+      // upgrade out of settlement review, and a review refund on the booking
+      // waits for it. "fix" cases fail on 863074e, which flagged the upgrade
+      // and let the review refund go out: the provider refunded money that
+      // settlement then ignored.
+      describe("a servicing refund on an upgrade intent", () => {
+        const servicingId = "00000000-0000-4000-8000-000000000377";
+        const early = "pi_x7_early_upgrade";
+        const servicingRefused = {
+          code: "PRECONDITION_FAILED",
+          message:
+            "An order-service refund on this booking is unfinished; the settlement review refund can be requested once it has been reconciled",
+        };
+        const reviewRefunds = (paymentIntentId: string) =>
+          sentTo(paymentIntentId).filter(
+            ([request]: [any]) =>
+              request.metadata?.purpose === "settlement_review"
+          );
+        async function servicing() {
+          return fixture.db
+            .select({
+              paymentIntentId: schema.orderServiceRefunds.paymentIntentId,
+              amount: schema.orderServiceRefunds.amount,
+              status: schema.orderServiceRefunds.status,
+              errorCode: schema.orderServiceRefunds.errorCode,
+            })
+            .from(schema.orderServiceRefunds)
+            .orderBy(schema.orderServiceRefunds.paymentIntentId);
+        }
+        // Saved as order servicing saves it: queued and due on the upgrade
+        // intent. A provider refusal through the worker leaves it failed.
+        async function saveServicingRefund(
+          status: "queued" | "failed",
+          amount: number
+        ) {
+          await fixture.db.insert(schema.orderServiceRefunds).values({
+            id: servicingId,
+            bookingId: 71,
+            modificationId: 9001,
+            paymentIntentId: upgrade,
+            amount,
+            baseRefundedAmount: 0,
+            status: "queued",
+            nextAttemptAt: now,
+            createdAt: new Date(now.getTime() - 60_000),
+          });
+          if (status === "failed") {
+            const send = provider.create.getMockImplementation();
+            refusedBy(upgrade);
+            await processPendingOrderRefunds();
+            // The provider accepts later requests again.
+            provider.create.mockReset().mockImplementation(send);
+          }
+          expect(await servicing()).toEqual([
+            {
+              paymentIntentId: upgrade,
+              amount,
+              status,
+              errorCode: status === "failed" ? "provider_refund_failed" : null,
+            },
+          ]);
+        }
+        // A second upgrade, with no servicing refund, on its own intent.
+        async function earlyUpgrade() {
+          await fixture.db.insert(schema.paymentReceipts).values({
+            paymentIntentId: early,
+            bookingId: 71,
+            targetId: 502,
+            userId: 9,
+            kind: "modification",
+            amount: 3000,
+            refundedAmount: 0,
+            currency: "SAR",
+            settlementStatus: "applied",
+            createdAt: new Date("2030-05-06T00:00:00Z"),
+          });
+          await fixture.db
+            .update(schema.bookings)
+            .set({ totalAmount: 29000 })
+            .where(eq(schema.bookings.id, 71));
+        }
+        // Without an amount the provider refunds what the intent still holds.
+        function refundRemainingBalance(collected: Record<string, number>) {
+          const send = provider.create.getMockImplementation();
+          provider.create.mockImplementation(
+            async (request: any, options: any) =>
+              send(
+                {
+                  ...request,
+                  amount:
+                    request.amount ??
+                    collected[request.payment_intent] -
+                      provider.refunds
+                        .filter(
+                          r =>
+                            r.payment_intent === request.payment_intent &&
+                            r.status === "succeeded"
+                        )
+                        .reduce((sum, r) => sum + r.amount, 0),
+                },
+                options
+              )
+          );
+        }
+        async function cancellationJobs() {
+          return (
+            await fixture.db
+              .select({ status: schema.flightCancellationJobs.status })
+              .from(schema.flightCancellationJobs)
+          ).map(row => row.status);
+        }
+
+        for (const first of ["original", "upgrade"] as const)
+          it(`${first === "original" ? "fix" : "control"}: a flight cancellation refunds each intent through its own servicing refund, and the upgrade never enters settlement review (${first} part settles first)`, async () => {
+            provider.status = "pending";
+            await requestFlightCancellation({
+              flightId: 41,
+              reason: "Native x7 flight cancellation",
+              actorId: 20,
+              tenantId: 3,
+            });
+            await processFlightCancellations();
+            expect(
+              provider.create.mock.calls.map(([r]: [any]) => [
+                r.payment_intent,
+                r.amount,
+              ])
+            ).toEqual(
+              expect.arrayContaining([
+                [original, 20000],
+                [upgrade, 6000],
+              ])
+            );
+            expect(provider.create).toHaveBeenCalledTimes(2);
+            expect(await servicing()).toEqual([
+              {
+                paymentIntentId: original,
+                amount: 20000,
+                status: "pending",
+                errorCode: null,
+              },
+              {
+                paymentIntentId: upgrade,
+                amount: 6000,
+                status: "pending",
+                errorCode: null,
+              },
+            ]);
+            expect(await booking()).toMatchObject({
+              status: "cancelled",
+              paymentStatus: "paid",
+            });
+            expect(await cancellationJobs()).toEqual(["planned"]);
+            const order =
+              first === "original" ? [original, upgrade] : [upgrade, original];
+            for (const intent of order) {
+              const refund = provider.refunds.find(
+                r => r.payment_intent === intent
+              );
+              refund.status = "succeeded";
+              await deliverRefund(refund);
+              expect(await reviews()).toEqual([]);
+              expect(await receiptSettlement(upgrade)).toEqual({
+                status: "applied",
+                error: null,
+              });
+            }
+            expect(await receipts()).toEqual({
+              [original]: 20000,
+              [upgrade]: 6000,
+            });
+            expect(await refundLedger()).toEqual(
+              order.map(paymentIntentId => ({
+                type: "refund",
+                amount: paymentIntentId === original ? "200.00" : "60.00",
+                paymentIntentId,
+              }))
+            );
+            expect(await booking()).toMatchObject({
+              status: "cancelled",
+              paymentStatus: "refunded",
+              seatsReserved: false,
+            });
+            expect(await economySeats()).toBe(8);
+            expect(await receiptSettlement(original)).toEqual({
+              status: "applied",
+              error: null,
+            });
+            expect((await servicing()).map(row => row.status)).toEqual([
+              "succeeded",
+              "succeeded",
+            ]);
+            expect(await reviewEvents()).toEqual([]);
+            expect(await readFinding("collected_funds_under_review")).toEqual(
+              []
+            );
+            later(2);
+            await processFlightCancellations();
+            expect(await cancellationJobs()).toEqual(["completed"]);
+            // The provider's charge events add nothing; nothing more is sent.
+            await chargeRefunded(original, 20000, 20000);
+            await chargeRefunded(upgrade, 6000, 6000);
+            expect(await refundLedger()).toHaveLength(2);
+            expect(await reviews()).toEqual([]);
+            expect(provider.create).toHaveBeenCalledTimes(2);
+          }, 60000);
+
+        for (const status of ["queued", "failed"] as const)
+          it(`fix: a ${status} servicing refund on the upgrade intent keeps the upgrade out of settlement review when the original is fully refunded`, async () => {
+            await saveServicingRefund(status, 2000);
+            await chargeRefunded(original, 20000, 20000);
+            expect(await booking()).toMatchObject({
+              status: "cancelled",
+              paymentStatus: "refunded",
+              seatsReserved: false,
+            });
+            expect(await coupons()).toEqual(["R", "R"]);
+            expect(await receipts()).toEqual({
+              [original]: 20000,
+              [upgrade]: 0,
+            });
+            expect(await receiptSettlement(upgrade)).toEqual({
+              status: "applied",
+              error: null,
+            });
+            expect(await reviewEvents()).toEqual([]);
+            expect(await reviews()).toEqual([]);
+            const ledger = await refundLedger();
+            expect(ledger).toEqual([
+              { type: "refund", amount: "200.00", paymentIntentId: original },
+            ]);
+            // Settlement review holds nothing of it to refund.
+            await expect(
+              requestSettlementReviewRefund(upgrade, 20)
+            ).rejects.toMatchObject({ code: "NOT_FOUND" });
+            expect(provider.create).not.toHaveBeenCalled();
+            expect(await receipts()).toEqual({
+              [original]: 20000,
+              [upgrade]: 0,
+            });
+            expect(await refundLedger()).toEqual(ledger);
+            expect((await servicing()).map(row => row.status)).toEqual([
+              status,
+            ]);
+          }, 60000);
+
+        it("fix: a review refund on the booking waits while a servicing refund on another upgrade intent is unfinished, then is sent once and settles", async () => {
+          await earlyUpgrade();
+          await saveServicingRefund("queued", 6000);
+          await chargeRefunded(original, 20000, 20000);
+          // Only the upgrade without a servicing refund goes to review.
+          expect(await receiptSettlement(early)).toEqual({
+            status: "review_required",
+            error: heldReason,
+          });
+          expect(await receiptSettlement(upgrade)).toEqual({
+            status: "applied",
+            error: null,
+          });
+          expect(await reviews()).toEqual([[early, "modification", 3000, 0]]);
+          expect((await reviewEvents()).map(e => e.aggregateId)).toEqual([
+            early,
+          ]);
+          // The guard is booking-wide, as for the other refund commands.
+          await expect(
+            requestSettlementReviewRefund(early, 20)
+          ).rejects.toMatchObject(servicingRefused);
+          expect(provider.create).not.toHaveBeenCalled();
+          expect(await receipts()).toEqual({
+            [original]: 20000,
+            [upgrade]: 0,
+            [early]: 0,
+          });
+          expect(await refundLedger()).toHaveLength(1);
+          const before = {
+            booking: await booking(),
+            coupons: await coupons(),
+            seats: await economySeats(),
+            cancellations: (await cancellations()).length,
+          };
+          // The servicing refund reaches its terminal success through the
+          // worker, and its verified refund settles the whole upgrade.
+          await processPendingOrderRefunds();
+          expect(sentTo(upgrade)).toEqual([
+            [
+              {
+                payment_intent: upgrade,
+                amount: 6000,
+                metadata: {
+                  orderServiceRefundId: servicingId,
+                  modificationId: "9001",
+                },
+              },
+              { idempotencyKey: `order-refund:${servicingId}` },
+            ],
+          ]);
+          expect((await servicing()).map(row => row.status)).toEqual([
+            "succeeded",
+          ]);
+          expect(await receipts()).toEqual({
+            [original]: 20000,
+            [upgrade]: 6000,
+            [early]: 0,
+          });
+          expect(await receiptSettlement(upgrade)).toEqual({
+            status: "applied",
+            error: null,
+          });
+          // The review refund now proceeds, once, for what the early upgrade
+          // holds.
+          refundRemainingBalance({ [early]: 3000 });
+          await expect(
+            requestSettlementReviewRefund(early, 20)
+          ).resolves.toMatchObject({ state: "awaiting_webhook" });
+          expect(reviewRefunds(early)).toEqual([
+            [
+              {
+                payment_intent: early,
+                metadata: { purpose: "settlement_review" },
+              },
+              { idempotencyKey: `ais-review-refund:${early}` },
+            ],
+          ]);
+          expect(provider.refunds.at(-1)).toMatchObject({
+            status: "succeeded",
+            amount: 3000,
+            payment_intent: early,
+          });
+          await chargeRefunded(early, 3000, 3000);
+          expect(await receipts()).toEqual({
+            [original]: 20000,
+            [upgrade]: 6000,
+            [early]: 3000,
+          });
+          expect(await receiptSettlement(early)).toEqual({
+            status: "review_refunded",
+            error: heldReason,
+          });
+          expect(await refundLedger()).toEqual([
+            { type: "refund", amount: "200.00", paymentIntentId: original },
+            { type: "refund", amount: "60.00", paymentIntentId: upgrade },
+            { type: "refund", amount: "30.00", paymentIntentId: early },
+          ]);
+          expect(await reviews()).toEqual([]);
+          expect(await booking()).toMatchObject({
+            status: "cancelled",
+            paymentStatus: "refunded",
+            seatsReserved: false,
+          });
+          expect(await coupons()).toEqual(before.coupons);
+          expect(await economySeats()).toBe(before.seats);
+          expect(await cancellations()).toHaveLength(before.cancellations);
+          // A replayed charge event adds no ledger row; a repeated request
+          // sends nothing.
+          await chargeRefunded(early, 3000, 3000);
+          expect(await refundLedger()).toHaveLength(3);
+          await expect(
+            requestSettlementReviewRefund(early, 20)
+          ).resolves.toEqual({ state: "refunded", refundId: null });
+          expect(reviewRefunds(early)).toHaveLength(1);
+          expect(provider.create).toHaveBeenCalledTimes(2);
+        }, 60000);
+      });
 
       it("control: a legacy cancellation of a booking without an upgrade intent still ends cancelled and refunded", async () => {
         await fixture.db
