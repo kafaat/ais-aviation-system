@@ -337,6 +337,33 @@ nativeDescribe.sequential(
           } as never
         )
       );
+    // A cancellation saved by a release before decision 7, on the original
+    // intent alone, and resumed by the worker.
+    async function legacyCancellation() {
+      const request = {
+        payment_intent: original,
+        amount: 20000,
+        reason: "requested_by_customer",
+        metadata: {
+          bookingId: "71",
+          refundOperationId: "booking-71-refund-20000",
+        },
+      };
+      await fixture.db.insert(schema.ordinaryBookingRefunds).values({
+        bookingId: 71,
+        paymentIntentId: original,
+        operationId: "booking-71-refund-20000",
+        actorId: 20,
+        amount: 20000,
+        collectedAmount: 20000,
+        baseRefundedAmount: 0,
+        requestPayload: JSON.stringify(request),
+        refundId: null,
+        status: "queued",
+        nextAttemptAt: new Date(now.getTime() - 60_000),
+      });
+      await processPendingOrdinaryRefunds();
+    }
     const refusedBy = (refused: string) => {
       const send = provider.create.getMockImplementation();
       provider.create.mockImplementation(async (request: any, options: any) => {
@@ -2195,6 +2222,134 @@ nativeDescribe.sequential(
       }, 60000);
     });
 
+    // ADR 0003 "Known limit (legacy replay)": a cancellation an older release
+    // queued on the original intent alone settles through the single-intent
+    // rule. "fix" cases fail on 251450b: that rule ignored the upgrade's
+    // `modification` receipt, marked the booking refunded while the upgrade
+    // intent still held 6000, and a later refund of that intent never
+    // completed the booking. No in-app command sends that later refund today:
+    // createRefund resumes the saved cancellation, and the order-refund and
+    // settlement-review routes refuse it. Reconciliation refunds it at the
+    // provider, and the verified charge event records it.
+    describe("legacy replay", () => {
+      it("fix: a legacy cancellation of the original intent alone keeps the booking paid while the upgrade intent still holds money", async () => {
+        await legacyCancellation();
+        expect(
+          provider.create.mock.calls.map(([r]: [any]) => [
+            r.payment_intent,
+            r.amount,
+          ])
+        ).toEqual([[original, 20000]]);
+        expect(await command()).toMatchObject({
+          paymentIntentId: original,
+          amount: 20000,
+          status: "succeeded",
+          refundId: provider.refunds[0].id,
+        });
+        expect((await command()).completedAt).not.toBeNull();
+        expect(await receipts()).toEqual({ [original]: 20000, [upgrade]: 0 });
+        // A cancelled itinerary whose money is not all returned: the state a
+        // partial cancellation leaves.
+        expect(await booking()).toMatchObject({
+          status: "cancelled",
+          paymentStatus: "paid",
+        });
+        expect(await coupons()).toEqual(["V", "V"]);
+        expect(await cancellations()).toHaveLength(1);
+        expect(
+          await readFinding("ordinary_refund_completion_mismatch")
+        ).toEqual([]);
+      }, 60000);
+
+      it("fix: the upgrade intent's remaining 6000, refunded afterwards, then marks the booking refunded", async () => {
+        await legacyCancellation();
+        expect(await booking()).toMatchObject({
+          status: "cancelled",
+          paymentStatus: "paid",
+        });
+        await chargeRefunded(upgrade, 6000, 6000);
+        expect(sentTo(upgrade)).toHaveLength(0);
+        expect(await receipts()).toEqual({
+          [original]: 20000,
+          [upgrade]: 6000,
+        });
+        expect(await refundLedger()).toEqual([
+          { type: "refund", amount: "200.00", paymentIntentId: original },
+          { type: "refund", amount: "60.00", paymentIntentId: upgrade },
+        ]);
+        expect(await booking()).toMatchObject({
+          status: "cancelled",
+          paymentStatus: "refunded",
+        });
+        expect(await coupons()).toEqual(["R", "R"]);
+        expect(await cancellations()).toHaveLength(1);
+        // A replay of the provider's charge event adds nothing.
+        await chargeRefunded(upgrade, 6000, 6000);
+        expect(await refundLedger()).toHaveLength(2);
+      }, 60000);
+
+      it("control: a legacy cancellation of a booking without an upgrade intent still ends cancelled and refunded", async () => {
+        await fixture.db
+          .delete(schema.paymentReceipts)
+          .where(eq(schema.paymentReceipts.paymentIntentId, upgrade));
+        await fixture.db
+          .update(schema.bookings)
+          .set({ totalAmount: 20000 })
+          .where(eq(schema.bookings.id, 71));
+        await legacyCancellation();
+        expect(sentTo(original)).toHaveLength(1);
+        expect(await receipts()).toEqual({ [original]: 20000 });
+        expect(await booking()).toMatchObject({
+          status: "cancelled",
+          paymentStatus: "refunded",
+        });
+        expect(await coupons()).toEqual(["R", "R"]);
+      }, 60000);
+
+      for (const status of ["review_required", "review_refunded"] as const)
+        it(`control: an upgrade receipt in ${status} does not keep a legacy cancellation from ending refunded`, async () => {
+          await fixture.db
+            .update(schema.paymentReceipts)
+            .set({ settlementStatus: status })
+            .where(eq(schema.paymentReceipts.paymentIntentId, upgrade));
+          await legacyCancellation();
+          expect(sentTo(upgrade)).toHaveLength(0);
+          expect(await receipts()).toEqual({
+            [original]: 20000,
+            [upgrade]: 0,
+          });
+          expect(await booking()).toMatchObject({
+            status: "cancelled",
+            paymentStatus: "refunded",
+          });
+          expect(await coupons()).toEqual(["R", "R"]);
+        }, 60000);
+
+      it("control: a refund of the whole upgrade intent alone leaves a confirmed booking paid", async () => {
+        await chargeRefunded(upgrade, 6000, 6000);
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 6000 });
+        expect(await booking()).toMatchObject({
+          status: "confirmed",
+          paymentStatus: "paid",
+        });
+        expect(await coupons()).toEqual(["O", "O"]);
+      }, 60000);
+
+      it("control: without an applied original collection, a refund of the whole upgrade intent does not cancel the booking", async () => {
+        // A paid booking older than receipt tracking has no original receipt.
+        await fixture.db
+          .delete(schema.paymentReceipts)
+          .where(eq(schema.paymentReceipts.paymentIntentId, original));
+        await chargeRefunded(upgrade, 6000, 6000);
+        expect(await receipts()).toEqual({ [upgrade]: 6000 });
+        expect(await booking()).toMatchObject({
+          status: "confirmed",
+          paymentStatus: "paid",
+        });
+        expect(await coupons()).toEqual(["O", "O"]);
+      }, 60000);
+    });
+
     // The read-only pre-deploy query for bookings a cancellation before
     // decision 7 left refunded on the original intent alone while an applied
     // upgrade intent still holds money.
@@ -2236,33 +2391,6 @@ nativeDescribe.sequential(
           })),
         };
       }
-      // A cancellation saved by a release before decision 7, on the original
-      // intent alone, and resumed by the worker.
-      async function legacyCancellation() {
-        const request = {
-          payment_intent: original,
-          amount: 20000,
-          reason: "requested_by_customer",
-          metadata: {
-            bookingId: "71",
-            refundOperationId: "booking-71-refund-20000",
-          },
-        };
-        await fixture.db.insert(schema.ordinaryBookingRefunds).values({
-          bookingId: 71,
-          paymentIntentId: original,
-          operationId: "booking-71-refund-20000",
-          actorId: 20,
-          amount: 20000,
-          collectedAmount: 20000,
-          baseRefundedAmount: 0,
-          requestPayload: JSON.stringify(request),
-          refundId: null,
-          status: "queued",
-          nextAttemptAt: new Date(now.getTime() - 60_000),
-        });
-        await processPendingOrdinaryRefunds();
-      }
       const none = {
         summary: { bookings: 0, receipts: 0, heldAmount: 0 },
         rows: [],
@@ -2281,7 +2409,14 @@ nativeDescribe.sequential(
 
       it("finds a booking refunded on the original intent alone while the upgrade intent still holds money", async () => {
         expect(await legacyFindings()).toEqual(none);
+        // The worker refunds the original intent alone, as the older release
+        // did. Current code then keeps the booking paid; the older release
+        // marked it refunded, so that payment status is written directly.
         await legacyCancellation();
+        await fixture.db
+          .update(schema.bookings)
+          .set({ paymentStatus: "refunded" })
+          .where(eq(schema.bookings.id, 71));
         expect(sentTo(original)).toHaveLength(1);
         expect(sentTo(upgrade)).toHaveLength(0);
         expect(await booking()).toMatchObject({

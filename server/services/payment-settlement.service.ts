@@ -831,26 +831,36 @@ export async function settleVerifiedRefund(
     });
   } else if (
     receipt.bookingId &&
-    receipt.kind !== "modification" &&
     receipt.settlementStatus === "applied" &&
     // A multi-intent cancellation releases carriage once, at completion.
     !(partitioned && !bookingCancellation.completedAt)
   ) {
     const booking = ownerBooking;
     if (!booking) throw new Error("Refund booking missing");
+    // Decision 7: an applied upgrade collected on its own intent is part of
+    // the booking's money. The booking is refunded only once the original
+    // collection and every such upgrade are fully refunded, so a legacy
+    // cancellation of the original intent alone leaves it paid, and the later
+    // refund of the upgrade intent completes it. An upgrade alone, without an
+    // applied original collection, never cancels the booking.
     const receipts = await tx
       .select()
       .from(paymentReceipts)
       .where(
         and(
           eq(paymentReceipts.bookingId, booking.id),
-          inArray(paymentReceipts.kind, ["booking", "split_payment"]),
+          inArray(paymentReceipts.kind, [
+            "booking",
+            "split_payment",
+            "modification",
+          ]),
           eq(paymentReceipts.settlementStatus, "applied")
         )
       )
       .for("update");
     const allRefunded =
-      receipts.length > 0 && receipts.every(r => r.amount === r.refundedAmount);
+      receipts.some(r => r.kind !== "modification") &&
+      receipts.every(r => r.amount === r.refundedAmount);
     if (allRefunded) {
       try {
         couponTransitions = await releaseBookingSeats(tx, booking, "refunded");

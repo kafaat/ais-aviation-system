@@ -76,14 +76,17 @@ to what it still holds.
   forensic completion check and its preflight SQL. Departure and DCS
   finalization are unchanged: the parent row of a multi-intent cancellation has
   no refund id, so a failed one always needs reconciliation.
-- **Known limit (legacy replay).** A refund an older release already made on
-  the original intent still settles through the single-intent rule, which marks
-  the booking `refunded` when the original receipt is fully refunded even while
-  an upgrade intent holds money. The code before this change reached the same
-  state through an administrator override of the original's full collection.
-  No money moves twice. `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a
-  read-only query that lists such bookings before deployment. The narrow
-  follow-up is to include `modification` receipts in the single-intent
-  all-refunded check.
+- **Known limit (legacy replay).** A refund an older release already made or
+  queued on the original intent alone still settles through the single-intent
+  rule. That rule now counts applied `modification` receipts. The booking
+  becomes `refunded` only when the original collection and every applied
+  upgrade are fully refunded. Until then it stays `cancelled` and `paid`, as
+  after a partial cancellation. A later refund of the upgrade intent, recorded
+  by the verified provider webhook, then marks it `refunded`. No in-app command
+  sends that refund today; reconciliation sends it at the provider. No money
+  moves twice. What remains: bookings an older release already left `refunded`
+  while an upgrade intent still holds money are not changed by this fix.
+  `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a read-only query that
+  lists them before deployment, for reconciliation.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
   rounds, then integrator test hardening; the PR lists the evidence.
