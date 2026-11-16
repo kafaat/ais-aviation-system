@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.42.0
+
+<!-- ais-release-source: 5e8ab034781fc164f9b78af25ad91537fab15d6d -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(refunds): refund across the original and upgrade intents (decision 7) (#365) (5e8ab034)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.41.2...v1.42.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.41.2
 
 <!-- ais-release-source: 786c6295628fe9ddba0d9962bf8c5b4faf471a2c -->
