@@ -67,6 +67,13 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     return superjson.deserialize(body.result.data);
   }
 
+  // Round 3 (#378): the routes take the display rule and read MySQL on every
+  // call, with no Redis snapshot. The generic functions keep the cache, so
+  // the snapshot assertions below exercise them.
+  const generic = () => import("../services/currency/currency.service");
+  const rateKeys = async () =>
+    (await reference!.keys("exchange_rate:v3:*")).sort();
+
   async function seed(
     id: number,
     rate: string,
@@ -212,22 +219,35 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     const first = responseContracts.getExchangeRate.parse(
       await request("getExchangeRate", pair)
     );
+    expect(await rateKeys()).toEqual([]);
+    const { getExchangeRate, convertCurrency } = await generic();
+    expect(await getExchangeRate("SAR", "KWD")).toEqual(first.data);
     const stored = await reference!.get(key);
     expect(stored).not.toBeNull();
     expect(typeof JSON.parse(stored!).quote.updatedAt).toBe("string");
     expect(await reference!.ttl(key)).toBeGreaterThan(0);
     expect(await reference!.ttl(key)).toBeLessThanOrEqual(60);
     await connection!.query(`DELETE FROM \`${table}\``);
-    const second = responseContracts.getExchangeRate.parse(
+    const second = await getExchangeRate("SAR", "KWD");
+    expect(second).toEqual(first.data);
+    expect(second.source).toBe("bank");
+    const converted = await convertCurrency(1, "SAR", "KWD");
+    expect(converted.convertedAmount).toBe(0.082);
+    expect(converted.rateTimestamp).toEqual(first.data.updatedAt);
+    // With the row gone the routes answer from MySQL: the labelled estimate
+    // (SAR_KWD 0.082 is also the constant) and no converted amount.
+    const routeQuote = responseContracts.getExchangeRate.parse(
       await request("getExchangeRate", pair)
     );
-    expect(second.data).toEqual(first.data);
-    expect(second.data.source).toBe("bank");
-    const converted = responseContracts.convertCurrency.parse(
-      await request("convertCurrency", { ...pair, amount: 1 })
-    );
-    expect(converted.data.convertedAmount).toBe(0.082);
-    expect(converted.data.rateTimestamp).toEqual(first.data.updatedAt);
+    expect(routeQuote.data).toMatchObject({
+      ...pair,
+      rate: 0.082,
+      source: "fallback",
+    });
+    const refused = await response("convertCurrency", { ...pair, amount: 1 });
+    expect(refused.status).toBe(412);
+    expect(refused.body.error?.json?.data?.code).toBe("PRECONDITION_FAILED");
+    expect(await reference!.get(key)).toBe(stored);
   });
 
   it("rejects future and expired MySQL observations", async () => {
@@ -249,6 +269,9 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     const future = new Date(time + 60000);
     await seed(1, "0.081", past, future);
     await request("getExchangeRate", pair);
+    expect(await rateKeys()).toEqual([]);
+    const { getExchangeRate } = await generic();
+    await getExchangeRate("SAR", "KWD");
     const stored = await reference!.get(key);
     expect(stored).not.toBeNull();
     const snapshot = JSON.parse(stored!);
@@ -261,6 +284,11 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     );
     expect(result.data.rate).toBe(0.084);
     expect(result.data.source).toBe("bank");
+    // The route left the planted bytes alone; the generic quote rechecks them.
+    expect(await reference!.get(key)).toBe(JSON.stringify(snapshot));
+    const recheck = await getExchangeRate("SAR", "KWD");
+    expect(recheck.rate).toBe(0.084);
+    expect(recheck.source).toBe("bank");
   });
 
   it.each([
@@ -317,6 +345,14 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     );
     expect(first.data.rate).toBeCloseTo(scenario.before, 12);
     expect(first.data.source).toBe(scenario.beforeSource);
+    expect(await rateKeys()).toEqual([]);
+    const { getExchangeRate } = await generic();
+    const quote = () =>
+      getExchangeRate(
+        scenario.currencies.fromCurrency,
+        scenario.currencies.toCurrency
+      );
+    expect(await quote()).toEqual(first.data);
     const cacheKey = `exchange_rate:v3:${scenario.currencies.fromCurrency}_${scenario.currencies.toCurrency}`;
     const cached = await reference!.get(cacheKey);
     expect(cached).not.toBeNull();
@@ -328,6 +364,7 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
       await request("getExchangeRate", scenario.currencies)
     );
     expect(before.data).toEqual(first.data);
+    expect(await quote()).toEqual(first.data);
     expect(await reference!.get(cacheKey)).toBe(cached);
 
     vi.setSystemTime(starts);
@@ -339,6 +376,7 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     expect(current.data.rate).toBe(scenario.after);
     expect(current.data.source).toBe(scenario.afterSource);
     expect(current.data.updatedAt).toBeInstanceOf(Date);
+    expect(await quote()).toEqual(current.data);
     expect(await reference!.get(cacheKey)).not.toBe(cached);
   });
 
@@ -370,6 +408,9 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
       rateTimestamp: from,
     });
     expect(cold.data.exchangeRate).toBeCloseTo(3.672375, 12);
+    expect(await rateKeys()).toEqual([]);
+    const { convertCurrency, getExchangeRate } = await generic();
+    expect(await convertCurrency(1000, "USD", "AED")).toEqual(cold.data);
     const crossKey = "exchange_rate:v3:USD_AED";
     expect(await reference!.get(crossKey)).not.toBeNull();
     expect(await reference!.ttl(crossKey)).toBeGreaterThan(0);
@@ -381,19 +422,25 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
       "exchange_rate:v3:USD_SAR",
       "exchange_rate:v3:SAR_AED"
     );
-    const warm = responseContracts.convertCurrency.parse(
-      await request("convertCurrency", input)
-    );
-    expect(warm.data).toEqual(cold.data);
-    expect(warm.data.convertedAmount).toBe(3672.38);
-    const quote = responseContracts.getExchangeRate.parse(
+    const warm = await convertCurrency(1000, "USD", "AED");
+    expect(warm).toEqual(cold.data);
+    expect(warm.convertedAmount).toBe(3672.38);
+    const quote = await getExchangeRate("USD", "AED");
+    expect(quote.source).toBe("cross_rate");
+    expect(quote.updatedAt).toEqual(from);
+    // With both legs gone the routes answer from MySQL: no converted amount,
+    // and the labelled estimate.
+    const refused = await response("convertCurrency", input);
+    expect(refused.status).toBe(412);
+    expect(refused.body.error?.json?.data?.code).toBe("PRECONDITION_FAILED");
+    const routeQuote = responseContracts.getExchangeRate.parse(
       await request("getExchangeRate", {
         fromCurrency: "USD",
         toCurrency: "AED",
       })
     );
-    expect(quote.data.source).toBe("cross_rate");
-    expect(quote.data.updatedAt).toEqual(from);
+    expect(routeQuote.data.source).toBe("cross_rate_fallback");
+    expect(await rateKeys()).toEqual([crossKey]);
   });
 
   it("retains the native DECIMAL string when the public numeric rate rounds to a neighboring value", async () => {
@@ -418,13 +465,7 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     // Number before multiplying would incorrectly turn this into 0.01 AED.
     expect(cold.data.convertedAmount).toBe(0);
     expect(cold.data.exchangeRate).toBe(1_000_000_000);
-    expect(await reference!.get("exchange_rate:v3:USD_AED")).not.toBeNull();
-
-    await connection!.query(`DELETE FROM \`${table}\``);
-    const warm = responseContracts.convertCurrency.parse(
-      await request("convertCurrency", input)
-    );
-    expect(warm.data).toEqual(cold.data);
+    // Asked of the route while the row exists: the route reads MySQL.
     const aboveHalf = responseContracts.convertCurrency.parse(
       await request("convertCurrency", {
         ...currencies,
@@ -432,6 +473,21 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
       })
     );
     expect(aboveHalf.data.convertedAmount).toBe(0.01);
+    expect(await rateKeys()).toEqual([]);
+    const { convertCurrency } = await generic();
+    expect(await convertCurrency(5e-12, "USD", "AED")).toEqual(cold.data);
+    expect(await reference!.get("exchange_rate:v3:USD_AED")).not.toBeNull();
+
+    await connection!.query(`DELETE FROM \`${table}\``);
+    const warm = await convertCurrency(5e-12, "USD", "AED");
+    expect(warm).toEqual(cold.data);
+    expect(
+      (await convertCurrency(5.00000001e-12, "USD", "AED")).convertedAmount
+    ).toBe(0.01);
+    // With the row gone the route answers from MySQL: no converted amount.
+    const refused = await response("convertCurrency", input);
+    expect(refused.status).toBe(412);
+    expect(refused.body.error?.json?.data?.code).toBe("PRECONDITION_FAILED");
   });
 
   it("fix: returns an explicitly labeled uncached fallback quote, and no converted amount, after a genuine query failure with a live database handle", async () => {
@@ -485,6 +541,9 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
     );
     expect(recovered.data.rate).toBe(0.086);
     expect(recovered.data.source).toBe("bank");
+    expect(await rateKeys()).toEqual([]);
+    const { getExchangeRate } = await generic();
+    expect(await getExchangeRate("SAR", "KWD")).toEqual(recovered.data);
     expect(await reference!.get(key)).not.toBeNull();
   });
 
@@ -558,7 +617,7 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
   });
 
   it.each(["the conversion route", "a conversion without the display rule"])(
-    "fix: refuses a Redis snapshot warmed by %s once its quote is 24 hours old",
+    "fix: refuses a quote converted by %s once it is 24 hours old, whatever Redis holds",
     async warmedBy => {
       vi.useFakeTimers({ toFake: ["Date"] });
       const now = new Date("2030-06-10T12:00:00Z");
@@ -575,21 +634,21 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
           await request("convertCurrency", input)
         );
         expect(warm.data.convertedAmount).toBe(0.081);
-        // Cached no longer than the quote's 24-hour display use: 60 s left.
-        expect(await reference!.ttl(key)).toBeGreaterThan(0);
-        expect(await reference!.ttl(key)).toBeLessThanOrEqual(60);
+        // Round 3: the route caches nothing, not even for its 60 s left.
+        expect(await rateKeys()).toEqual([]);
       } else {
-        const { convertCurrency } =
-          await import("../services/currency/currency.service");
+        const { convertCurrency } = await generic();
         expect((await convertCurrency(1, "SAR", "KWD")).convertedAmount).toBe(
           0.081
         );
+        expect(await reference!.get(key)).not.toBeNull();
       }
-      expect(await reference!.get(key)).not.toBeNull();
 
       vi.setSystemTime(new Date(+now + 120_000));
-      // Redis keeps its own clock: the warmed bytes are still there.
-      expect(await reference!.get(key)).not.toBeNull();
+      // Redis keeps its own clock: bytes the generic path warmed are still
+      // there, and the route does not read them.
+      if (warmedBy !== "the conversion route")
+        expect(await reference!.get(key)).not.toBeNull();
       const refused = await response("convertCurrency", input);
       expect(refused.status).toBe(412);
       expect(refused.body.error?.json?.data?.code).toBe("PRECONDITION_FAILED");
@@ -604,6 +663,344 @@ nativeDescribe("currency over native MySQL, Redis and HTTP", () => {
       });
     }
   );
+
+  // Fix round 3 (lab receipt for #378 at 1cec4e6): a Redis snapshot is never
+  // re-checked for supersession, so under the display rule the two routes
+  // read MySQL on every call and neither read nor write a snapshot. The
+  // generic functions share the key and still cache it.
+  const gbp = { fromCurrency: "SAR", toCurrency: "GBP" };
+  const gbpKey = "exchange_rate:v3:SAR_GBP";
+  const wholeSecond = () => Math.floor(Date.now() / 1000) * 1000;
+
+  /** A correction written in SQL, outside exchangeRates.record: nothing
+   * clears the cache for it. */
+  async function correct(
+    id: number,
+    supersedesId: number,
+    rate: string,
+    observed: Date,
+    currencies = gbp,
+    source = "bank"
+  ) {
+    await connection!.execute(
+      `INSERT INTO \`${table}\` (id,fromCurrency,toCurrency,rate,source,validFrom,validTo,updatedAt,supersedesId,version) VALUES (?,?,?,?,?,?,?,?,?,2)`,
+      [
+        id,
+        currencies.fromCurrency,
+        currencies.toCurrency,
+        rate,
+        source,
+        observed,
+        new Date(wholeSecond() + 20 * HOUR),
+        observed,
+        supersedesId,
+      ]
+    );
+  }
+
+  async function convertGbp(amount: number) {
+    const reply = await response("convertCurrency", { ...gbp, amount });
+    if (reply.status !== 200)
+      return { status: reply.status, code: reply.body.error?.json?.data?.code };
+    return responseContracts.convertCurrency.parse(
+      superjson.deserialize(reply.body.result.data)
+    ).data;
+  }
+
+  it.each([
+    {
+      name: "a display-eligible correction",
+      observedAgo: 1000,
+      converted: { convertedAmount: 31, exchangeRate: 0.31 },
+      quote: { rate: 0.31, source: "bank" },
+    },
+    {
+      name: "a correction observed 48 hours ago",
+      observedAgo: 48 * HOUR,
+      converted: { status: 412, code: "PRECONDITION_FAILED" },
+      // SAR_GBP 0.21 is the label-only constant.
+      quote: { rate: 0.21, source: "fallback" },
+    },
+  ])(
+    "fix: pricing.convertCurrency and pricing.getExchangeRate ignore the Redis snapshot of a quote superseded by $name",
+    async scenario => {
+      const time = wholeSecond();
+      await seed(
+        1,
+        "0.30",
+        new Date(time - HOUR),
+        new Date(time + 20 * HOUR),
+        gbp
+      );
+      // Quote A, cached under the routes' key by the generic quote.
+      const { getExchangeRate } = await generic();
+      expect(await getExchangeRate("SAR", "GBP")).toMatchObject({
+        rate: 0.3,
+        source: "bank",
+      });
+      const planted = await reference!.get(gbpKey);
+      expect(JSON.parse(planted!).quote.rate).toBe(0.3);
+      await correct(2, 1, "0.31", new Date(time - scenario.observedAgo));
+      expect(await convertGbp(100)).toMatchObject(scenario.converted);
+      const quote = responseContracts.getExchangeRate.parse(
+        await request("getExchangeRate", gbp)
+      );
+      expect(quote.data).toMatchObject({ ...gbp, ...scenario.quote });
+      // The superseded snapshot is still there; the routes did not read it.
+      expect(await reference!.get(gbpKey)).toBe(planted);
+    }
+  );
+
+  it("fix: pricing.convertCurrency and pricing.getExchangeRate ignore the Redis snapshot of a superseded cross-rate leg", async () => {
+    const time = wholeSecond();
+    const usdToAed = { fromCurrency: "USD", toCurrency: "AED" };
+    const sarToAed = { fromCurrency: "SAR", toCurrency: "AED" };
+    const window = [new Date(time - HOUR), new Date(time + 20 * HOUR)] as const;
+    await seed(1, "3.75", ...window, {
+      fromCurrency: "USD",
+      toCurrency: "SAR",
+    });
+    await seed(2, "0.95", ...window, sarToAed);
+    const { convertCurrency } = await generic();
+    expect((await convertCurrency(1000, "USD", "AED")).convertedAmount).toBe(
+      3562.5
+    );
+    expect(await rateKeys()).toEqual([
+      "exchange_rate:v3:SAR_AED",
+      "exchange_rate:v3:USD_AED",
+      "exchange_rate:v3:USD_SAR",
+    ]);
+    await correct(3, 2, "1.00", new Date(time - 1000), sarToAed);
+    const converted = responseContracts.convertCurrency.parse(
+      await request("convertCurrency", { ...usdToAed, amount: 1000 })
+    );
+    expect(converted.data).toMatchObject({
+      convertedAmount: 3750,
+      exchangeRate: 3.75,
+    });
+    const quote = responseContracts.getExchangeRate.parse(
+      await request("getExchangeRate", usdToAed)
+    );
+    expect(quote.data).toMatchObject({ rate: 3.75, source: "cross_rate" });
+  });
+
+  it("fix: pricing.convertCurrency and pricing.getExchangeRate write no exchange-rate key and change no TTL", async () => {
+    const time = wholeSecond();
+    const window = [new Date(time - HOUR), new Date(time + 20 * HOUR)] as const;
+    await seed(1, "0.30", ...window, gbp);
+    await seed(2, "3.75", ...window, {
+      fromCurrency: "USD",
+      toCurrency: "SAR",
+    });
+    const usdToGbp = { fromCurrency: "USD", toCurrency: "GBP" };
+    const sarToEur = { fromCurrency: "SAR", toCurrency: "EUR" };
+    const routes = async () => {
+      expect(await convertGbp(100)).toMatchObject({ convertedAmount: 30 });
+      expect(
+        responseContracts.getExchangeRate.parse(
+          await request("getExchangeRate", gbp)
+        ).data
+      ).toMatchObject({ rate: 0.3, source: "bank" });
+      expect(
+        responseContracts.convertCurrency.parse(
+          await request("convertCurrency", { ...usdToGbp, amount: 100 })
+        ).data
+      ).toMatchObject({ convertedAmount: 112.5, exchangeRate: 1.125 });
+      expect(
+        responseContracts.getExchangeRate.parse(
+          await request("getExchangeRate", usdToGbp)
+        ).data
+      ).toMatchObject({ rate: 1.125, source: "cross_rate" });
+      expect(
+        responseContracts.getExchangeRate.parse(
+          await request("getExchangeRate", sarToEur)
+        ).data
+      ).toMatchObject({ source: "fallback" });
+      expect(
+        (await response("convertCurrency", { ...sarToEur, amount: 100 })).status
+      ).toBe(412);
+    };
+    // Cold: no new key.
+    await routes();
+    expect(await rateKeys()).toEqual([]);
+    // Warm through the generic conversion, then pin each key's TTL: a route
+    // that rewrote a key would reset it to the snapshot's own TTL.
+    const { convertCurrency } = await generic();
+    await convertCurrency(100, "USD", "GBP");
+    const keys = await rateKeys();
+    expect(keys).toEqual([
+      gbpKey,
+      "exchange_rate:v3:USD_GBP",
+      "exchange_rate:v3:USD_SAR",
+    ]);
+    const bytes = new Map<string, string | null>();
+    for (const name of keys) {
+      expect(await reference!.expire(name, 1234)).toBe(1);
+      bytes.set(name, await reference!.get(name));
+    }
+    await routes();
+    expect(await rateKeys()).toEqual(keys);
+    for (const name of keys) {
+      expect(await reference!.get(name)).toBe(bytes.get(name));
+      expect(await reference!.ttl(name)).toBeLessThanOrEqual(1234);
+      expect(await reference!.ttl(name)).toBeGreaterThan(1200);
+    }
+  });
+
+  it.each(["convertCurrency", "getExchangeRate"] as const)(
+    "fix: a pricing.%s call in flight while a correction commits leaves nothing that outlives the correction",
+    async procedure => {
+      const time = wholeSecond();
+      await seed(
+        1,
+        "0.30",
+        new Date(time - HOUR),
+        new Date(time + 20 * HOUR),
+        gbp
+      );
+      const { invalidateExchangeRateSnapshots } = await generic();
+      // The lab's B6 interleaving, deterministic: a hook around the read
+      // holds the in-flight call once its second exchange_rates select has
+      // returned, until a correction has committed and its cache delete has
+      // run. No sleep.
+      const query = connection!.query.bind(connection!);
+      let selects = 0;
+      let entered!: () => void;
+      const reachedRead = new Promise<void>(resolve => (entered = resolve));
+      let release!: () => void;
+      const released = new Promise<void>(resolve => (release = resolve));
+      const hook = vi.spyOn(connection!, "query").mockImplementation((async (
+        ...args: Parameters<typeof query>
+      ) => {
+        const result = await query(...args);
+        const sql =
+          typeof args[0] === "string"
+            ? args[0]
+            : ((args[0] as { sql?: string }).sql ?? "");
+        if (sql.includes(`from \`${table}\``) && ++selects === 2) {
+          entered();
+          await released;
+        }
+        return result;
+      }) as never);
+      const input =
+        procedure === "convertCurrency" ? { ...gbp, amount: 100 } : gbp;
+      try {
+        const inFlight = request(procedure, input);
+        await Promise.race([reachedRead, inFlight]);
+        expect(selects).toBe(2);
+        await correct(2, 1, "0.31", new Date(time - 1000));
+        await invalidateExchangeRateSnapshots("SAR", "GBP");
+        release();
+        // It read quote A before the correction committed.
+        expect(await inFlight).toMatchObject({
+          data:
+            procedure === "convertCurrency"
+              ? { convertedAmount: 30 }
+              : { rate: 0.3 },
+        });
+      } finally {
+        release();
+        hook.mockRestore();
+      }
+      // The next calls show the correction, and no snapshot of quote A was
+      // written after the correction's delete.
+      expect(await convertGbp(100)).toMatchObject({
+        convertedAmount: 31,
+        exchangeRate: 0.31,
+      });
+      expect(
+        responseContracts.getExchangeRate.parse(
+          await request("getExchangeRate", gbp)
+        ).data
+      ).toMatchObject({ rate: 0.31, source: "bank" });
+      expect(await rateKeys()).toEqual([]);
+    }
+  );
+
+  it("control: the generic quote and conversion cache in Redis as before", async () => {
+    const time = wholeSecond();
+    await seed(
+      1,
+      "0.30",
+      new Date(time - HOUR),
+      new Date(time + 20 * HOUR),
+      gbp
+    );
+    const { getExchangeRate, convertCurrency } = await generic();
+    const first = await getExchangeRate("SAR", "GBP");
+    expect(first).toMatchObject({ rate: 0.3, source: "bank" });
+    expect(await reference!.ttl(gbpKey)).toBeGreaterThan(3500);
+    expect(await reference!.ttl(gbpKey)).toBeLessThanOrEqual(3600);
+    await connection!.query(`DELETE FROM \`${table}\``);
+    expect(await getExchangeRate("SAR", "GBP")).toEqual(first);
+    expect((await convertCurrency(100, "SAR", "GBP")).convertedAmount).toBe(30);
+  });
+
+  it("control: SAR responses are byte-identical over HTTP", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+    // Whatever is stored, SAR never reads it.
+    await seed(
+      1,
+      "0.30",
+      new Date("2029-12-31T23:00:00Z"),
+      new Date("2030-01-01T20:00:00Z"),
+      gbp
+    );
+    const raw = async (procedure: string, input: Record<string, unknown>) => {
+      const serialized = encodeURIComponent(
+        JSON.stringify(superjson.serialize(input))
+      );
+      const reply = await fetch(`${url}/${procedure}?input=${serialized}`);
+      expect(reply.status).toBe(200);
+      return reply.text();
+    };
+    const sar = { fromCurrency: "SAR", toCurrency: "SAR" };
+    expect(await raw("convertCurrency", { ...sar, amount: 1.234 })).toBe(
+      JSON.stringify({
+        result: {
+          data: {
+            json: {
+              success: true,
+              data: {
+                originalAmount: 1.234,
+                originalCurrency: "SAR",
+                convertedAmount: 1.23,
+                targetCurrency: "SAR",
+                exchangeRate: 1,
+                formattedOriginal: "1.23",
+                formattedConverted: "1.23",
+                rateTimestamp: "2030-01-01T00:00:00.000Z",
+              },
+            },
+            meta: { values: { "data.rateTimestamp": ["Date"] } },
+          },
+        },
+      })
+    );
+    expect(await raw("getExchangeRate", sar)).toBe(
+      JSON.stringify({
+        result: {
+          data: {
+            json: {
+              success: true,
+              data: {
+                fromCurrency: "SAR",
+                toCurrency: "SAR",
+                rate: 1,
+                inverseRate: 1,
+                source: "identity",
+                updatedAt: "2030-01-01T00:00:00.000Z",
+              },
+            },
+            meta: { values: { "data.updatedAt": ["Date"] } },
+          },
+        },
+      })
+    );
+    expect(await rateKeys()).toEqual([]);
+  });
 });
 
 /**

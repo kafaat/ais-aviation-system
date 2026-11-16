@@ -16,7 +16,9 @@
  * use the quote the display estimate would show (sarPriceConverter);
  * pricing.convertCurrency and pricing.getExchangeRate apply the same rule to
  * every observed leg (convertCurrencyWithDisplayRule,
- * getExchangeRateWithDisplayRule).
+ * getExchangeRateWithDisplayRule). The display rule reads MySQL on every
+ * call: it never reads or writes a Redis snapshot, which is not re-checked
+ * for supersession.
  *
  * @module services/currency/currency.service
  */
@@ -252,15 +254,13 @@ interface RateSnapshot {
   exactRate: ExactRate;
   validFrom: Date;
   expiresAt: Date;
-  /** Set only under the display rule: every observed leg passes it until
-   * this time. A cross rate shows its legs through this field alone. */
-  displayUntil?: Date;
 }
 
 /**
  * How getRateSnapshot may answer. `estimate` admits the labelled fallback
  * constants, never an amount. `display` admits only observations that pass
- * the display rule, leg by leg (displaySnapshot).
+ * the display rule, leg by leg (displaySnapshot), each read from MySQL on
+ * every call with no Redis snapshot.
  */
 interface RateRule {
   estimate: boolean;
@@ -328,12 +328,7 @@ function decodeRateSnapshot(
   const expiresAt = cacheDate(record.expiresAt);
   const updatedAt = cacheDate(quote?.updatedAt);
   const ratio = decodeExactRate(record.exactRate);
-  const displayUntil =
-    record.displayUntil === undefined
-      ? undefined
-      : cacheDate(record.displayUntil);
   if (
-    displayUntil === null ||
     record.version !== 3 ||
     !quote ||
     quote.fromCurrency !== from ||
@@ -360,7 +355,6 @@ function decodeRateSnapshot(
     exactRate: ratio,
     validFrom,
     expiresAt,
-    ...(displayUntil ? { displayUntil } : {}),
   };
 }
 
@@ -369,34 +363,23 @@ function isDisplayRateSource(source: string): boolean {
 }
 
 /**
- * The display rule for a snapshot, cached or just observed: the rule
+ * The display rule for a direct observation just read from MySQL: the rule
  * findCurrentDisplayQuote applies to a SAR quote, applied to every observed
- * leg. A direct observation needs an approved source (DISPLAY_RATE_SOURCES)
- * and an observation (validFrom) less than 24 hours old; getDbExchangeRate
- * and the snapshot expiry already require it to be effective and not
- * superseded. A cross rate is used only when it was composed under this rule
- * (displayUntil); one composed without it cannot show its legs. Returns the
- * snapshot with its expiry capped at the end of that 24-hour use, or null.
+ * leg. It needs an approved source (DISPLAY_RATE_SOURCES) and an observation
+ * (validFrom) less than 24 hours old; getDbExchangeRate already requires it
+ * to be effective and not superseded. Returns the snapshot with its expiry
+ * capped at the end of that 24-hour use, or null.
  */
 function displaySnapshot(
   snapshot: RateSnapshot,
   now: Date
 ): RateSnapshot | null {
-  const source = snapshot.quote.source.toLowerCase();
-  let until: number;
-  if (source === "cross_rate") {
-    if (!snapshot.displayUntil) return null;
-    until = snapshot.displayUntil.getTime();
-  } else if (isDisplayRateSource(source)) {
-    until = snapshot.validFrom.getTime() + DISPLAY_RATE_MAX_AGE_MS;
-  } else {
-    return null;
-  }
+  if (!isDisplayRateSource(snapshot.quote.source.toLowerCase())) return null;
+  const until = snapshot.validFrom.getTime() + DISPLAY_RATE_MAX_AGE_MS;
   if (until <= now.getTime()) return null;
   return {
     ...snapshot,
     expiresAt: new Date(Math.min(snapshot.expiresAt.getTime(), until)),
-    displayUntil: new Date(until),
   };
 }
 
@@ -412,7 +395,10 @@ async function cacheRate(key: string, snapshot: RateSnapshot) {
 /**
  * `rule.estimate` admits the labelled fallback constants. Only the quote
  * functions pass it; every amount-producing caller resolves observed rates
- * only. `rule.display` admits only observations that pass the display rule.
+ * only. `rule.display` admits only observations that pass the display rule,
+ * and resolves each from MySQL on every call: a snapshot is never re-checked
+ * for supersession, so under that rule none is read from or written to Redis
+ * (a correction shows on the next call, whatever Redis holds).
  */
 async function getRateSnapshot(
   from: string,
@@ -441,11 +427,13 @@ async function getRateSnapshot(
   // Older envelopes did not preserve the exact decimal cross product. Never
   // reconstruct that financial value from an imprecise legacy numeric quote.
   const key = `exchange_rate:v3:${from}_${to}`;
-  const value = await CacheService.get<unknown>(key);
-  let cached = decodeRateSnapshot(value, from, to, new Date());
-  if (cached && rule.display) cached = displaySnapshot(cached, new Date());
-  if (cached) {
-    return cached;
+  const cache = !rule.display;
+  if (cache) {
+    const value = await CacheService.get<unknown>(key);
+    const cached = decodeRateSnapshot(value, from, to, new Date());
+    if (cached) {
+      return cached;
+    }
   }
   const observed = await getDbExchangeRate(from, to, new Date());
   // Under the display rule an observation the display would not use counts
@@ -453,7 +441,7 @@ async function getRateSnapshot(
   let direct = observed?.snapshot ?? null;
   if (direct && rule.display) direct = displaySnapshot(direct, new Date());
   if (direct) {
-    await cacheRate(key, direct);
+    if (cache) await cacheRate(key, direct);
     return direct;
   }
   if (from !== BASE_CURRENCY && to !== BASE_CURRENCY) {
@@ -488,16 +476,6 @@ async function getRateSnapshot(
       second.expiresAt.getTime(),
       observed?.nextValidFrom?.getTime() ?? Infinity
     );
-    // Both legs passed the display rule (their expiry is already capped).
-    const displayUntil =
-      rule.display && first.displayUntil && second.displayUntil
-        ? new Date(
-            Math.min(
-              first.displayUntil.getTime(),
-              second.displayUntil.getTime()
-            )
-          )
-        : undefined;
     const cross: RateSnapshot = {
       version: 3,
       quote: {
@@ -511,13 +489,12 @@ async function getRateSnapshot(
       exactRate: ratio,
       validFrom: new Date(starts),
       expiresAt: new Date(expires),
-      ...(displayUntil ? { displayUntil } : {}),
     };
     if (expires <= Date.now()) {
       throw new Error("Exchange rate expired during conversion");
     }
     // A failed direct lookup leaves its next effective boundary unknown.
-    if (!fallback && observed) {
+    if (cache && !fallback && observed) {
       await cacheRate(key, cross);
     }
     return cross;

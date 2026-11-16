@@ -1207,4 +1207,155 @@ describe("currency fallback guard", () => {
       expect(quote.data.source).not.toBe(source);
     }
   );
+
+  // Fix round 3 (lab receipt for #378 at 1cec4e6): a cached snapshot is never
+  // re-checked for supersession, so under the display rule the two routes
+  // neither read nor write the rate cache. The generic functions still do,
+  // under the same key.
+  const gbpKey = "exchange_rate:v3:SAR_GBP";
+  const cachedRate = (key: string) =>
+    (JSON.parse(boundary.cache.get(key)!) as { quote: { rate: number } }).quote
+      .rate;
+
+  it.each([
+    {
+      name: "the correction's cache invalidation fails",
+      via: "record",
+      observedMs: -60_000,
+      eligible: true,
+    },
+    {
+      name: "the correction is written in SQL",
+      via: "sql",
+      observedMs: -60_000,
+      eligible: true,
+    },
+    {
+      name: "a correction observed 48 hours ago fails to invalidate the cache",
+      via: "record",
+      observedMs: -48 * HOUR,
+      eligible: false,
+    },
+  ] as const)(
+    "fix: pricing.convertCurrency and pricing.getExchangeRate ignore a superseded quote left in the cache when $name",
+    async scenario => {
+      const record = await operatorEntry();
+      const first = await record(gbpQuote(-HOUR, 20 * HOUR), operator);
+      // Quote A, cached under the routes' key by the generic conversion.
+      expect(
+        (await currency.convertCurrency(100, "SAR", "GBP")).convertedAmount
+      ).toBe(30);
+      expect(cachedRate(gbpKey)).toBe(0.3);
+      if (scenario.via === "sql") {
+        fixture.insert(exchangeRates, {
+          id: first.id + 1,
+          ...gbp,
+          rate: "0.31000000",
+          source: "bank",
+          validFrom: sqlTime(scenario.observedMs),
+          validTo: sqlTime(20 * HOUR),
+          updatedAt: sqlTime(scenario.observedMs),
+          supersedesId: first.id,
+          version: 2,
+        });
+      } else {
+        const { cacheService } = await import("../services/cache.service");
+        // cache.service.ts del() answers 0 after a Redis error.
+        const del = vi.spyOn(cacheService, "del").mockResolvedValue(0);
+        try {
+          await record(
+            gbpQuote(scenario.observedMs, 20 * HOUR, {
+              rate: "0.31000000",
+              supersedesId: first.id,
+            }),
+            operator
+          );
+        } finally {
+          del.mockRestore();
+        }
+      }
+      expect(cachedRate(gbpKey)).toBe(0.3);
+      const caller = await pricingCaller();
+      if (scenario.eligible) {
+        expect(
+          await caller.convertCurrency({ ...gbp, amount: 100 })
+        ).toMatchObject({ data: { convertedAmount: 31, exchangeRate: 0.31 } });
+        expect(await caller.getExchangeRate(gbp)).toMatchObject({
+          data: { rate: 0.31, source: "bank" },
+        });
+      } else {
+        await expect(
+          caller.convertCurrency({ ...gbp, amount: 100 })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        expect(await caller.getExchangeRate(gbp)).toMatchObject({
+          data: { rate: GBP_ESTIMATE, source: "fallback" },
+        });
+      }
+      // The superseded snapshot is still cached; the routes did not read it.
+      expect(cachedRate(gbpKey)).toBe(0.3);
+    }
+  );
+
+  it("fix: pricing.convertCurrency and pricing.getExchangeRate neither read nor write the rate cache", async () => {
+    seedGbpRow("bank");
+    fixture.insert(exchangeRates, {
+      id: 2,
+      fromCurrency: "USD",
+      toCurrency: "SAR",
+      rate: "3.75000000",
+      source: "bank",
+      validFrom: sqlTime(-HOUR),
+      validTo: sqlTime(20 * HOUR),
+      updatedAt: sqlTime(-HOUR),
+    });
+    const { cacheService } = await import("../services/cache.service");
+    const get = vi.spyOn(cacheService, "get");
+    const set = vi.spyOn(cacheService, "set");
+    const caller = await pricingCaller();
+    const usdToGbp = { fromCurrency: "USD", toCurrency: "GBP" };
+    const sarToEur = { fromCurrency: "SAR", toCurrency: "EUR" };
+    const routes = async () => {
+      expect(
+        await caller.convertCurrency({ ...gbp, amount: 100 })
+      ).toMatchObject({ data: { convertedAmount: 30 } });
+      expect(await caller.getExchangeRate(gbp)).toMatchObject({
+        data: { rate: 0.3, source: "bank" },
+      });
+      expect(
+        await caller.convertCurrency({ ...usdToGbp, amount: 100 })
+      ).toMatchObject({ data: { convertedAmount: 112.5 } });
+      expect(await caller.getExchangeRate(usdToGbp)).toMatchObject({
+        data: { rate: 1.125, source: "cross_rate" },
+      });
+      expect(await caller.getExchangeRate(sarToEur)).toMatchObject({
+        data: { source: "fallback" },
+      });
+      await expect(
+        caller.convertCurrency({ ...sarToEur, amount: 100 })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    };
+    try {
+      await routes();
+      expect(get).not.toHaveBeenCalled();
+      expect(set).not.toHaveBeenCalled();
+      expect(boundary.cache.size).toBe(0);
+      // Warmed by the generic conversion, the cache is still left alone.
+      await currency.convertCurrency(100, "USD", "GBP");
+      const warmed = new Map(boundary.cache);
+      expect([...warmed.keys()].sort()).toEqual([
+        gbpKey,
+        "exchange_rate:v3:USD_GBP",
+        "exchange_rate:v3:USD_SAR",
+      ]);
+      get.mockClear();
+      set.mockClear();
+      await routes();
+      expect(get).not.toHaveBeenCalled();
+      expect(set).not.toHaveBeenCalled();
+      expect(new Map(boundary.cache)).toEqual(warmed);
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+    }
+  });
 });
