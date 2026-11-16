@@ -182,7 +182,9 @@ export const gdprRouter = router({
 
   /**
    * Confirm account deletion
-   * User must confirm deletion using the token sent via email
+   * Two-step in-app confirmation: the token is returned only to the
+   * authenticated session that requested the deletion and must be posted
+   * back from that same session. No email is involved (decision on #355).
    */
   confirmDeletion: protectedProcedure
     .input(

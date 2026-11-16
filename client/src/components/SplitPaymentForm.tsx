@@ -86,8 +86,20 @@ export function SplitPaymentForm({
   const [_equalSplit, setEqualSplit] = useState(true);
 
   const initiateMutation = trpc.splitPayments.initiate.useMutation({
-    onSuccess: () => {
-      toast.success(t("splitPayment.initiateSuccess"));
+    onSuccess: ({ requestedCount, sentCount }) => {
+      // The server reports how many payer requests the provider accepted;
+      // the plan exists either way, and unsent requests can be resent from
+      // the payer list (review finding R1, #355).
+      if (sentCount >= requestedCount)
+        toast.success(t("splitPayment.initiateSuccess", { count: sentCount }));
+      else if (sentCount > 0)
+        toast.warning(
+          t("splitPayment.initiatePartial", {
+            sent: sentCount,
+            total: requestedCount,
+          })
+        );
+      else toast.warning(t("splitPayment.initiateNoneSent"));
       onSuccess?.();
     },
     onError: error => {
