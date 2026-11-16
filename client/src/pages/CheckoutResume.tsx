@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WalletBookingPayment } from "@/components/WalletBookingPayment";
 import { SplitPaymentForm } from "@/components/SplitPaymentForm";
+import { toast } from "sonner";
 
 type PaymentMethod = "card" | "wallet" | "split";
 
@@ -362,6 +363,17 @@ function ExistingSplitPlan({ bookingId }: { bookingId: number }) {
     { bookingId },
     { retry: false }
   );
+  // Review finding R1 (#355): a payer whose request was never accepted by
+  // the provider, or who lost the email, had no way to receive the link.
+  const resend = trpc.splitPayments.resendRequest.useMutation({
+    onSuccess: ({ sent }) => {
+      if (sent) toast.success(t("checkoutResume.resendSuccess"));
+      else toast.error(t("checkoutResume.resendFailed"));
+      void status.refetch();
+    },
+    onError: error =>
+      toast.error(error.message || t("checkoutResume.resendFailed")),
+  });
   if (status.isLoading) return <p role="status">{t("common.loading")}</p>;
   if (status.error || !status.data)
     return (
@@ -396,6 +408,21 @@ function ExistingSplitPlan({ bookingId }: { bookingId: number }) {
                 defaultValue: t("checkoutResume.splitStatuses.unknown"),
               })}
             </span>
+            {["pending", "email_sent", "failed"].includes(split.status) && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={resend.isPending}
+                onClick={() => resend.mutate({ splitId: split.id })}
+              >
+                {t(
+                  split.status === "email_sent"
+                    ? "checkoutResume.resendRequest"
+                    : "checkoutResume.sendRequest",
+                  { name: split.payerName }
+                )}
+              </Button>
+            )}
           </li>
         ))}
       </ul>
