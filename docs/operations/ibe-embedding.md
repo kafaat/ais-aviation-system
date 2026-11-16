@@ -119,8 +119,10 @@ display reads the same quotes.
 | `validTo`         | The end of its validity, at most 31 days after `validFrom`; the display stops using it after 24 hours regardless                                   |
 | `supersedesId`    | Only for a correction: the id of the quote being corrected                                                                                         |
 
-A manually entered reference rate is re-entered at least monthly, so a
-quote's window is at most 31 days. Both times must lie within the MySQL
+The display uses a quote for 24 hours after it is observed, so a maintained
+pair needs a fresh entry at least daily to keep its estimate shown and its
+alarm clear. The 31-day cap on a quote's window only stops a mistyped date
+from keeping a quote valid for long. Both times must lie within the MySQL
 `TIMESTAMP` range (1970-01-01 00:00:01 to 2038-01-19 03:14:07 UTC). An entry
 outside these bounds, or with a rate that does not fit, is refused with
 `BAD_REQUEST` and a message naming the field.
@@ -139,8 +141,9 @@ A display pair is maintained once at least one quote has been recorded for it
 with this procedure. Each maintained pair has an operational alert
 `fx-display-rate:SAR_<code>` that is active while the pair has no quote the
 display may use: expired, superseded, or observed 24 hours ago or earlier. A
-pair never entered displays nothing and raises nothing, so a new deployment
-pages nobody for pairs no one maintains; a row written in SQL does not make a
+pair never entered through this procedure raises nothing, and displays
+nothing unless a legacy row written in SQL is still current (slice B removes
+that), so a new deployment pages nobody for pairs no one maintains; a row written in SQL does not make a
 pair maintained. The alert is re-evaluated every ten minutes by the worker job
 `displayRateAlarms`, after every entry and by `exchangeRates.refreshAlarms`,
 and follows the usual acknowledgement and on-call delivery of operational
