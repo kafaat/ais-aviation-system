@@ -547,6 +547,13 @@
       "when": 1794704251069,
       "tag": "0077_ordinary_refund_parts",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "5",
+      "when": 1794817225762,
+      "tag": "0078_booking_id_indexes",
+      "breakpoints": true
     }
   ]
 }
