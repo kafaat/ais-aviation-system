@@ -2753,6 +2753,7 @@
           "flights",
           "gateAssignments",
           "groupBookings",
+          "ordinaryBookingRefundParts",
           "ordinaryBookingRefunds",
           "users",
           "waitlist"
@@ -5051,11 +5052,16 @@
       "tableExpressions": {
         "reads": [
           "bookings",
+          "ordinaryBookingRefundParts",
           "ordinaryBookingRefunds",
           "paymentReceipts",
           "paymentSplits"
         ],
-        "writes": ["ordinaryBookingRefunds", "paymentReceipts"]
+        "writes": [
+          "ordinaryBookingRefundParts",
+          "ordinaryBookingRefunds",
+          "paymentReceipts"
+        ]
       },
       "replacement": null
     },
@@ -5215,6 +5221,7 @@
       "consumers": [
         "server/services/order-refunds.service.ts",
         "server/services/ordinary-refund.service.ts",
+        "server/services/payment-settlement.service.ts",
         "server/services/settlement-review.service.ts",
         "server/services/split-refund.service.ts",
         "server/services/ticket-coupons.service.ts",
@@ -5232,6 +5239,7 @@
           "bookings",
           "financialLedger",
           "orderServiceRefunds",
+          "ordinaryBookingRefundParts",
           "ordinaryBookingRefunds",
           "paymentReceipts",
           "payments",
@@ -5521,6 +5529,7 @@
         "server/services/corporate-settlement.service.ts",
         "server/services/order-servicing.service.ts",
         "server/services/outbox.service.ts",
+        "server/services/payment-dispute.service.ts",
         "server/services/tenant.service.ts",
         "server/services/wallet-funding.service.ts"
       ],
@@ -5531,6 +5540,7 @@
           "bookings",
           "flights",
           "orderServiceRefunds",
+          "ordinaryBookingRefundParts",
           "ordinaryBookingRefunds",
           "paymentReceipts",
           "paymentSplits",
@@ -6379,6 +6389,7 @@
           "bookings",
           "financialLedger",
           "flights",
+          "ordinaryBookingRefundParts",
           "ordinaryBookingRefunds",
           "paymentReceipts",
           "users"

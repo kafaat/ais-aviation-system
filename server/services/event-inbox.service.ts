@@ -10,6 +10,7 @@ import {
   notifications,
   auditLogs,
   users,
+  ordinaryBookingRefundParts,
   ordinaryBookingRefunds,
   waitlist,
   groupBookings,
@@ -397,14 +398,28 @@ async function ordinaryRefundDetails(tx: SettlementTx, event: InboxEvent) {
     .select()
     .from(ordinaryBookingRefunds)
     .where(eq(ordinaryBookingRefunds.bookingId, data.bookingId));
+  // Decision 7: a cancellation drawn on several intents reports the money the
+  // provider returned across its parts and the last provider refund.
+  const parts = await tx
+    .select()
+    .from(ordinaryBookingRefundParts)
+    .where(eq(ordinaryBookingRefundParts.bookingId, data.bookingId));
+  const refunded = parts.filter(
+    p => p.refundId && p.errorCode !== "settled_by_chargeback"
+  );
+  const matched = parts.length
+    ? intent?.status === "succeeded" &&
+      refunded.some(p => p.refundId === data.refundId) &&
+      refunded.reduce((sum, p) => sum + p.amount, 0) === data.amount
+    : intent?.refundId === data.refundId &&
+      intent.amount === data.amount &&
+      (intent.status === "succeeded" || intent.providerStatus === "succeeded");
   if (
     !booking ||
     booking.tenantId !== event.tenantId ||
     booking.userId !== data.userId ||
     !intent ||
-    intent.refundId !== data.refundId ||
-    intent.amount !== data.amount ||
-    (intent.status !== "succeeded" && intent.providerStatus !== "succeeded")
+    !matched
   )
     throw new Error("Refund event ownership mismatch");
   return { data, booking, intent };
