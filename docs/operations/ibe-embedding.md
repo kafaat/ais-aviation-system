@@ -112,12 +112,18 @@ display reads the same quotes.
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `baseCurrency`    | `SAR`                                                                                                                                              |
 | `quoteCurrency`   | A display currency other than SAR                                                                                                                  |
-| `rate`            | Quote-currency major units per one SAR, at most 8 decimal places, as published                                                                     |
+| `rate`            | Quote-currency major units per one SAR, as published: a positive plain decimal, at most 10 digits before the point and 8 after (`DECIMAL(18,8)`)   |
 | `source`          | `cby_sanaa` (the official rate of the Central Bank of Yemen in Sanaa) for YER, and only for YER; otherwise `bank`, `manual` or `openexchangerates` |
 | `sourceReference` | The publication read, such as its date and bulletin number                                                                                         |
 | `validFrom`       | The publication's effective time                                                                                                                   |
-| `validTo`         | The end of its validity; the display stops using it after 24 hours regardless                                                                      |
+| `validTo`         | The end of its validity, at most 31 days after `validFrom`; the display stops using it after 24 hours regardless                                   |
 | `supersedesId`    | Only for a correction: the id of the quote being corrected                                                                                         |
+
+A manually entered reference rate is re-entered at least monthly, so a
+quote's window is at most 31 days. Both times must lie within the MySQL
+`TIMESTAMP` range (1970-01-01 00:00:01 to 2038-01-19 03:14:07 UTC). An entry
+outside these bounds, or with a rate that does not fit, is refused with
+`BAD_REQUEST` and a message naming the field.
 
 Rows are never edited. A correction is recorded as a new quote that names the
 row it corrects; it receives the next version of the pair and replaces the
@@ -129,12 +135,20 @@ audit record with the actor, time, source, reference, rate, validity and
 version. `exchangeRates.history` lists a pair's quotes with the quote that
 corrected each.
 
-Each enabled display pair has an operational alert `fx-display-rate:SAR_<code>`
-that is active while the pair has no quote the display may use: none
-recorded, expired, superseded, or observed 24 hours ago or earlier. It is
-re-evaluated every ten minutes by the worker job `displayRateAlarms`, after
-every entry and by `exchangeRates.refreshAlarms`, and
-follows the usual acknowledgement and on-call delivery of operational alerts.
+A display pair is maintained once at least one quote has been recorded for it
+with this procedure. Each maintained pair has an operational alert
+`fx-display-rate:SAR_<code>` that is active while the pair has no quote the
+display may use: expired, superseded, or observed 24 hours ago or earlier. A
+pair never entered displays nothing and raises nothing, so a new deployment
+pages nobody for pairs no one maintains; a row written in SQL does not make a
+pair maintained. The alert is re-evaluated every ten minutes by the worker job
+`displayRateAlarms`, after every entry and by `exchangeRates.refreshAlarms`,
+and follows the usual acknowledgement and on-call delivery of operational
+alerts.
+
+`pricing.calculate`, `getPriceRange` and `getForecast` show a SAR price in
+another currency only with the quote the display estimate would show; without
+one they answer `PRECONDITION_FAILED` and the price is requested in SAR.
 
 ## Verification limits
 

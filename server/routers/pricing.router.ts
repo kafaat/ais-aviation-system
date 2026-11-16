@@ -13,11 +13,14 @@ import { DynamicPricingService } from "../services/pricing/dynamic-pricing.servi
 import {
   CurrencyService,
   ExchangeRateUnavailableError,
+  type SarPriceConverter,
 } from "../services/currency/currency.service";
 import { TRPCError } from "@trpc/server";
 
-/** No converted price is quoted without an observed rate (#319 Wave 1). A
- * missing rate is a client-visible precondition, not a server fault. */
+/** No converted price is quoted without a current rate (#319 Wave 1): the
+ * price routes convert only with the quote the display estimate would show
+ * (CurrencyService.sarPriceConverter). A missing rate is a client-visible
+ * precondition, not a server fault. */
 function pricingError(error: unknown, fallback: string): TRPCError {
   if (error instanceof ExchangeRateUnavailableError)
     return new TRPCError({
@@ -107,13 +110,11 @@ export const pricingRouter = router({
         let displayCurrency = "SAR";
 
         if (input.currency !== "SAR") {
-          const conversion = await CurrencyService.convertCurrency(
-            CurrencyService.fromMinorUnits(result.finalPrice, "SAR"),
-            "SAR",
+          const toTarget = await CurrencyService.sarPriceConverter(
             input.currency
           );
           convertedPrice = CurrencyService.toMinorUnits(
-            conversion.convertedAmount,
+            toTarget(CurrencyService.fromMinorUnits(result.finalPrice, "SAR")),
             input.currency
           );
           displayCurrency = input.currency;
@@ -160,46 +161,23 @@ export const pricingRouter = router({
 
         // Convert to requested currency if needed
         if (input.currency !== "SAR" && range.min > 0) {
-          const minConversion = await CurrencyService.convertCurrency(
-            range.min / 100,
-            "SAR",
+          // One quote for the whole response.
+          const toTarget = await CurrencyService.sarPriceConverter(
             input.currency
           );
-          const maxConversion = await CurrencyService.convertCurrency(
-            range.max / 100,
-            "SAR",
-            input.currency
-          );
-          const avgConversion = await CurrencyService.convertCurrency(
-            range.average / 100,
-            "SAR",
-            input.currency
-          );
+          const min = toTarget(range.min / 100);
+          const max = toTarget(range.max / 100);
+          const average = toTarget(range.average / 100);
 
           return {
             success: true,
             data: {
-              min: CurrencyService.toMinorUnits(
-                minConversion.convertedAmount,
-                input.currency
-              ),
-              max: CurrencyService.toMinorUnits(
-                maxConversion.convertedAmount,
-                input.currency
-              ),
-              average: CurrencyService.toMinorUnits(
-                avgConversion.convertedAmount,
-                input.currency
-              ),
+              min: CurrencyService.toMinorUnits(min, input.currency),
+              max: CurrencyService.toMinorUnits(max, input.currency),
+              average: CurrencyService.toMinorUnits(average, input.currency),
               currency: input.currency,
-              formattedMin: CurrencyService.formatPrice(
-                minConversion.convertedAmount,
-                input.currency
-              ),
-              formattedMax: CurrencyService.formatPrice(
-                maxConversion.convertedAmount,
-                input.currency
-              ),
+              formattedMin: CurrencyService.formatPrice(min, input.currency),
+              formattedMax: CurrencyService.formatPrice(max, input.currency),
             },
           };
         }
@@ -253,26 +231,22 @@ export const pricingRouter = router({
 
         // Convert to requested currency if needed
         if (input.currency !== "SAR") {
-          const convertedForecast = await Promise.all(
-            forecast.map(async item => {
-              const conversion = await CurrencyService.convertCurrency(
-                item.predictedPrice / 100,
-                "SAR",
+          // One quote for every day, resolved only when there is a price to
+          // convert (an empty forecast needed no rate before either).
+          const toTarget: SarPriceConverter = forecast.length
+            ? await CurrencyService.sarPriceConverter(input.currency)
+            : amount => amount;
+          const convertedForecast = forecast.map(item => {
+            const amount = toTarget(item.predictedPrice / 100);
+            return {
+              date: item.date,
+              predictedPrice: CurrencyService.toMinorUnits(
+                amount,
                 input.currency
-              );
-              return {
-                date: item.date,
-                predictedPrice: CurrencyService.toMinorUnits(
-                  conversion.convertedAmount,
-                  input.currency
-                ),
-                formatted: CurrencyService.formatPrice(
-                  conversion.convertedAmount,
-                  input.currency
-                ),
-              };
-            })
-          );
+              ),
+              formatted: CurrencyService.formatPrice(amount, input.currency),
+            };
+          });
 
           return {
             success: true,

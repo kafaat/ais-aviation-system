@@ -1,16 +1,20 @@
-import { existsSync, readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { exchangeRates } from "../../drizzle/schema";
+import {
+  auditLogs,
+  exchangeRates,
+  operationsAlerts,
+} from "../../drizzle/schema";
 import type { TrpcContext } from "../_core/context";
 import * as relational from "./helpers/authority-relational-fixture";
 
 /**
  * #319 Wave 1 fallback guard: the hard-coded FALLBACK_RATES may label an
  * estimate (a quote whose source says "fallback"); they never produce an
- * amount, and no pricing-engine, quote, checkout, order-servicing,
- * settlement or refund module can reach them.
+ * amount, and no module on a money path (found by the rule below, not by a
+ * fixed list) can reach them.
  */
 const boundary = vi.hoisted(() => ({
   db: null as unknown,
@@ -49,9 +53,85 @@ type PricingCaller = ReturnType<
   (typeof import("../routers/pricing.router"))["pricingRouter"]["createCaller"]
 >;
 
-/** Modules that price, quote, check out, service, settle or refund money. */
-const MONEY_PATHS = [
-  // pricing engine and binding quotes
+/**
+ * Money paths, by rule: every non-test module under server/ whose path has a
+ * segment (split on "/", ".", "_" or "-") naming money: a refund, payment,
+ * payout, settlement, ledger, pricing engine, price or fare, quote, offer,
+ * checkout, invoice, order and its servicing or modification, booking,
+ * rebooking, NDC, loyalty or miles, wallet, credit, voucher, revenue, BSP,
+ * cancellation, compensation, EMD, ticket or coupon, financial, finance or
+ * accounting, reconciliation, Stripe, split payment, fee, tax, ancillary,
+ * hotel, commission or economics. A new module named for any of these is
+ * covered without editing this test.
+ */
+const MONEY_PATH_SEGMENT = new RegExp(
+  `(?:^|[/._-])(?:${[
+    "refunds?",
+    "payments?",
+    "payout",
+    "pay",
+    "settlements?",
+    "ledgers?",
+    "pricing",
+    "prices?",
+    "fares?",
+    "quotes?",
+    "offers?",
+    "checkout",
+    "invoices?",
+    "orders?",
+    "servicing",
+    "modifications?",
+    "bookings?",
+    "rebooking",
+    "ndc",
+    "loyalty",
+    "miles",
+    "wallet",
+    "credits?",
+    "vouchers?",
+    "revenue",
+    "bsp",
+    "cancellation",
+    "compensation",
+    "emd",
+    "tickets?",
+    "eticket",
+    "coupons?",
+    "financial",
+    "finance",
+    "accounting",
+    "reconciliation",
+    "stripe",
+    "split",
+    "fees?",
+    "tax(?:es)?",
+    "ancillary",
+    "hotel",
+    "commissions?",
+    "economics",
+  ].join("|")})(?=$|[/._-])`,
+  "i"
+);
+
+/**
+ * Display-only importers: the only modules that may import the currency
+ * module directly. A money-path module may reach it only if it is listed
+ * here, with the reason it is display-only.
+ */
+const DISPLAY_ONLY_IMPORTERS: Record<string, string> = {
+  "server/routers/ibe-public.ts": "the labelled display estimate",
+  "server/routers/pricing.router.ts":
+    "SAR prices shown in another currency with the display quote, and the labelled quote; base and final prices stay SAR",
+  "server/services/standard-reports-commercial.service.ts":
+    "the list of supported currency codes only",
+  "server/services/currency/operator-rates.service.ts":
+    "operator quote entry and the display-rate alarm",
+};
+
+/** The explicit list this guard used before the rule; the rule must keep
+ * covering it, plus the two modules the list missed. */
+const EARLIER_MONEY_PATHS = [
   "server/services/pricing/dynamic-pricing.service.ts",
   "server/services/dynamic-pricing.service.ts",
   "server/services/price-quote.service.ts",
@@ -59,7 +139,6 @@ const MONEY_PATHS = [
   "server/services/fare-components.service.ts",
   "server/services/retail-offer.service.ts",
   "server/routers/price-quote.ts",
-  // checkout and collection
   "server/services/booking-checkout.service.ts",
   "server/services/booking-invoice.service.ts",
   "server/services/payments.service.ts",
@@ -70,12 +149,10 @@ const MONEY_PATHS = [
   "server/routers/payments.ts",
   "server/routers/bookings.ts",
   "server/routers/split-payments.ts",
-  // order servicing
   "server/services/order-servicing.service.ts",
   "server/services/booking-modification.service.ts",
   "server/routers/modifications.ts",
   "server/routers/ndc.ts",
-  // settlement and ledger
   "server/services/payment-settlement.service.ts",
   "server/services/booking-settlement.service.ts",
   "server/services/stripe/stripe-reconciliation.service.ts",
@@ -84,7 +161,6 @@ const MONEY_PATHS = [
   "server/services/financial-reporting.service.ts",
   "server/services/wallet.service.ts",
   "server/webhooks/stripe.ts",
-  // refunds
   "server/services/refunds.service.ts",
   "server/services/internal-refund.service.ts",
   "server/services/ordinary-refund.service.ts",
@@ -92,11 +168,33 @@ const MONEY_PATHS = [
   "server/services/split-refund.service.ts",
   "server/routers/refunds.ts",
   "server/routers/wallet.ts",
+  "server/services/flight-cancellation.service.ts",
+  "server/services/revenue-accounting.service.ts",
 ];
 
+/** Non-test TypeScript modules under server/, relative to the repository. */
+function serverModules(directory = "server"): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory())
+      return entry.name === "__tests__" || entry.name === "node_modules"
+        ? []
+        : serverModules(path);
+    return /\.tsx?$/.test(entry.name) &&
+      !/\.(test|spec)\.tsx?$/.test(entry.name) &&
+      !entry.name.endsWith(".d.ts")
+      ? [path]
+      : [];
+  });
+}
+
+const isMoneyPath = (module: string) =>
+  MONEY_PATH_SEGMENT.test(module.replace(/^server\//, ""));
+
 /** Static runtime import graph (type-only imports excluded), as the service
- * catalog builds it: static, re-export and dynamic imports inside the repo. */
-function importGraph() {
+ * catalog builds it: static, re-export and dynamic imports inside the repo.
+ * `extraEdges` adds imports to the real graph, to prove the guard fails. */
+function importGraph(extraEdges: Record<string, string[]> = {}) {
   const root = process.cwd();
   const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
@@ -146,11 +244,13 @@ function importGraph() {
       ts.forEachChild(node, visit);
     };
     visit(source);
+    for (const extra of extraEdges[relative(root, file)] ?? [])
+      found.push(resolve(extra));
     edges.set(file, found);
     return found;
   };
   /** The import chain from entry to target, or null when unreachable. */
-  return (entry: string, target: string): string[] | null => {
+  const chainTo = (entry: string, target: string): string[] | null => {
     const start = resolve(entry);
     const goal = resolve(target);
     const previous = new Map<string, string | null>([[start, null]]);
@@ -171,6 +271,29 @@ function importGraph() {
     }
     return null;
   };
+  const directImporters = (target: string) =>
+    serverModules()
+      .filter(module => dependencies(resolve(module)).includes(resolve(target)))
+      .sort();
+  return { chainTo, directImporters };
+}
+
+/** Money-path modules outside the allow-list that reach the currency module. */
+function moneyPathViolations(graph: ReturnType<typeof importGraph>) {
+  return serverModules()
+    .sort()
+    .filter(
+      module => isMoneyPath(module) && !(module in DISPLAY_ONLY_IMPORTERS)
+    )
+    .map(module => graph.chainTo(module, CURRENCY_SERVICE))
+    .filter(chain => chain !== null);
+}
+
+function sqlTime(offsetMs: number) {
+  return new Date(Date.now() + offsetMs)
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 19);
 }
 
 describe("currency fallback guard", () => {
@@ -190,18 +313,54 @@ describe("currency fallback guard", () => {
     fixture.close();
   });
 
-  it("keeps every money path outside the currency module's import graph", () => {
-    const chainTo = importGraph();
-    const reaching = MONEY_PATHS.map(entry => {
-      expect(existsSync(entry), entry).toBe(true);
-      return chainTo(entry, CURRENCY_SERVICE);
-    }).filter(chain => chain !== null);
-    expect(reaching).toEqual([]);
+  it("control: keeps every money path, found by rule, outside the currency module's import graph", () => {
+    const graph = importGraph();
+    const modules = serverModules();
+    const money = modules.filter(isMoneyPath);
+    // The rule is not vacuous: it finds well over the earlier explicit list,
+    // covers every module of that list and the two the list missed.
+    expect(money.length).toBeGreaterThan(150);
+    for (const module of EARLIER_MONEY_PATHS) {
+      expect(existsSync(module), module).toBe(true);
+      expect(isMoneyPath(module), module).toBe(true);
+    }
+    expect(moneyPathViolations(graph)).toEqual([]);
     // The graph is live: the display and pricing routers do reach it.
-    expect(chainTo("server/routers/ibe-public.ts", CURRENCY_SERVICE)).toEqual([
-      "server/routers/ibe-public.ts",
-      CURRENCY_SERVICE,
+    expect(
+      graph.chainTo("server/routers/ibe-public.ts", CURRENCY_SERVICE)
+    ).toEqual(["server/routers/ibe-public.ts", CURRENCY_SERVICE]);
+  });
+
+  it("control: only the allow-listed display-only modules import the currency module", () => {
+    const graph = importGraph();
+    expect(graph.directImporters(CURRENCY_SERVICE)).toEqual(
+      Object.keys(DISPLAY_ONLY_IMPORTERS).sort()
+    );
+    // The only allow-listed money path is the pricing router.
+    expect(Object.keys(DISPLAY_ONLY_IMPORTERS).filter(isMoneyPath)).toEqual([
+      "server/routers/pricing.router.ts",
     ]);
+  });
+
+  it("control: the rule flags a money path that gains a route to the currency module", () => {
+    const added = {
+      "server/services/flight-cancellation.service.ts": [CURRENCY_SERVICE],
+      // A route through an intermediate module counts as well.
+      "server/services/revenue-accounting.service.ts": [
+        "server/services/currency/operator-rates.service.ts",
+      ],
+    };
+    const flagged = moneyPathViolations(importGraph(added)).map(
+      chain => chain[0]
+    );
+    expect(flagged).toEqual(
+      expect.arrayContaining([
+        "server/services/flight-cancellation.service.ts",
+        "server/services/revenue-accounting.service.ts",
+        // ...and every money path that imports them.
+        "server/routers/revenue-accounting.ts",
+      ])
+    );
   });
 
   it("fix: exposes no fallback constant and no stub that writes or caches them", () => {
@@ -442,4 +601,209 @@ describe("currency fallback guard", () => {
       });
     }
   );
+
+  // Fix round 1, item 3: a price is converted only with the quote the
+  // display estimate would show (approved source, observed < 24 h ago).
+  const HOUR = 3_600_000;
+  function mockEngine() {
+    engine.calculateDynamicPrice.mockResolvedValue({
+      basePrice: 50000,
+      finalPrice: 50000,
+      breakdown,
+      validUntil,
+      priceId: "price-fx-guard",
+    });
+    engine.getPriceRange.mockResolvedValue({
+      min: 40000,
+      max: 60000,
+      average: 50000,
+    });
+    engine.getPriceForecast.mockResolvedValue([
+      { date: forecastDate, predictedPrice: 50000 },
+    ]);
+  }
+  async function pricingCaller(): Promise<PricingCaller> {
+    const { pricingRouter } = await import("../routers/pricing.router");
+    return pricingRouter.createCaller({
+      user: null,
+      tenantId: null,
+      authMethod: null,
+      req: { headers: {} },
+      res: undefined,
+    } as unknown as TrpcContext);
+  }
+  function seedUsdQuote(quote: { observedAgoMs: number; source?: string }) {
+    fixture.insert(exchangeRates, {
+      id: 1,
+      fromCurrency: "SAR",
+      toCurrency: "USD",
+      rate: "0.25000000",
+      source: quote.source ?? "bank",
+      validFrom: sqlTime(-quote.observedAgoMs),
+      validTo: sqlTime(20 * HOUR),
+      updatedAt: sqlTime(-quote.observedAgoMs),
+    });
+  }
+  const convertedAtQuarter = {
+    calculate: {
+      success: true,
+      data: {
+        basePrice: 50000,
+        finalPrice: 50000,
+        convertedPrice: 12500,
+        currency: "USD",
+        breakdown,
+        validUntil,
+        priceId: "price-fx-guard",
+        formatted: "$125.00",
+      },
+    },
+    getPriceRange: {
+      success: true,
+      data: {
+        min: 10000,
+        max: 15000,
+        average: 12500,
+        currency: "USD",
+        formattedMin: "$100.00",
+        formattedMax: "$150.00",
+      },
+    },
+    getForecast: {
+      success: true,
+      data: {
+        forecast: [
+          { date: forecastDate, predictedPrice: 12500, formatted: "$125.00" },
+        ],
+        currency: "USD",
+      },
+    },
+  } as const;
+
+  it.each(Object.keys(routes) as Array<keyof typeof routes>)(
+    "fix: pricing.%s converts no price with a quote the display would not show",
+    async name => {
+      mockEngine();
+      const caller = await pricingCaller();
+      for (const [quote, why] of [
+        [{ observedAgoMs: 30 * HOUR }, "observed 30 hours ago"],
+        [{ observedAgoMs: HOUR, source: "ecb" }, "from an unapproved source"],
+      ] as const) {
+        fixture.sqlite.exec("DELETE FROM exchange_rates");
+        boundary.cache.clear();
+        seedUsdQuote(quote);
+        expect(await currency.getDisplayExchangeRate("USD"), why).toBeNull();
+        await expect(
+          routes[name].call(caller, "USD"),
+          why
+        ).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message:
+            "No current exchange rate observation: SAR to USD. Request the price in SAR.",
+        });
+      }
+    }
+  );
+
+  it.each(Object.keys(routes) as Array<keyof typeof routes>)(
+    "control: pricing.%s converts a price with the quote the display shows",
+    async name => {
+      mockEngine();
+      seedUsdQuote({ observedAgoMs: HOUR });
+      expect(await currency.getDisplayExchangeRate("USD")).toMatchObject({
+        rate: 0.25,
+        source: "bank",
+      });
+      expect(await routes[name].call(await pricingCaller(), "USD")).toEqual(
+        convertedAtQuarter[name]
+      );
+    }
+  );
+
+  // Fix round 1, item 5: each layer below holds on its own.
+  it("control: a correction reaches the next conversion at once, not a cached snapshot", async () => {
+    fixture.close();
+    fixture = relational.authorityRelationalFixture([
+      exchangeRates,
+      auditLogs,
+      operationsAlerts,
+    ]);
+    boundary.db = fixture.db;
+    const { recordOperatorExchangeRate } =
+      await import("../services/currency/operator-rates.service");
+    const actor = { userId: 20, role: "admin" };
+    const start = Date.now();
+    const usdQuote = (rate: string, supersedesId?: number) => ({
+      baseCurrency: "SAR" as const,
+      quoteCurrency: "USD" as const,
+      rate,
+      source: "bank" as const,
+      sourceReference: "Bank reference rate sheet 2026-11-16",
+      validFrom: new Date(start - HOUR),
+      validTo: new Date(start + 20 * HOUR),
+      ...(supersedesId === undefined ? {} : { supersedesId }),
+    });
+    const first = await recordOperatorExchangeRate(
+      usdQuote("0.25000000"),
+      actor
+    );
+    expect(
+      (await currency.convertCurrency(100, "SAR", "USD")).convertedAmount
+    ).toBe(25);
+    expect(boundary.cache.has("exchange_rate:v3:SAR_USD")).toBe(true);
+    await recordOperatorExchangeRate(usdQuote("0.30000000", first.id), actor);
+    expect(
+      (await currency.convertCurrency(100, "SAR", "USD")).convertedAmount
+    ).toBe(30);
+  });
+
+  it("control: an amount conversion refuses a stored row whose source names a fallback", async () => {
+    fixture.insert(exchangeRates, {
+      id: 1,
+      fromCurrency: "SAR",
+      toCurrency: "KWD",
+      rate: "0.08200000",
+      source: "fallback",
+      validFrom: sqlTime(-60_000),
+      validTo: null,
+      updatedAt: sqlTime(-60_000),
+    });
+    await expect(currency.convertCurrency(100, "SAR", "KWD")).rejects.toThrow(
+      currency.ExchangeRateUnavailableError
+    );
+    // It stays a labelled quote, also once the quote path has cached it.
+    expect(await currency.getExchangeRate("SAR", "KWD")).toMatchObject({
+      rate: 0.082,
+      source: "fallback",
+    });
+    expect(boundary.cache.has("exchange_rate:v3:SAR_KWD")).toBe(true);
+    await expect(currency.convertCurrency(100, "SAR", "KWD")).rejects.toThrow(
+      currency.ExchangeRateUnavailableError
+    );
+  });
+
+  it("control: an amount conversion refuses at the missing observation, before any estimate", async () => {
+    fixture.insert(exchangeRates, {
+      id: 1,
+      fromCurrency: "SAR",
+      toCurrency: "AED",
+      rate: "0.97930000",
+      source: "bank",
+      validFrom: sqlTime(-60_000),
+      validTo: null,
+      updatedAt: sqlTime(-60_000),
+    });
+    const refusal = await currency
+      .convertCurrency(100, "USD", "AED")
+      .catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(currency.ExchangeRateUnavailableError);
+    // It names the leg without an observation: no estimate was built for
+    // that leg and then refused as a cross rate.
+    expect(refusal).toMatchObject({ fromCurrency: "USD", toCurrency: "SAR" });
+    expect(boundary.cache.has("exchange_rate:v3:USD_AED")).toBe(false);
+    // The quote path still labels the same cross rate as an estimate.
+    expect(await currency.getExchangeRate("USD", "AED")).toMatchObject({
+      source: "cross_rate_fallback",
+    });
+  });
 });

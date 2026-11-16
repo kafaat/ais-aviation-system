@@ -12,7 +12,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import {
@@ -49,15 +49,28 @@ export const DISPLAY_RATE_ALERT_PREFIX = "fx-display-rate:";
 
 const quoteCurrency = z.enum(OPERATOR_QUOTE_CURRENCIES);
 
+/** MySQL TIMESTAMP holds 1970-01-01 00:00:01 to 2038-01-19 03:14:07 UTC. */
+export const QUOTE_TIMESTAMP_RANGE = {
+  min: new Date(Date.UTC(1970, 0, 1, 0, 0, 1)),
+  max: new Date(Date.UTC(2038, 0, 19, 3, 14, 7)),
+} as const;
+/** A manually entered reference rate is re-entered at least monthly. */
+export const MAX_QUOTE_VALIDITY_DAYS = 31;
+const DAY_MS = 86_400_000;
+
 export const operatorRateInput = z
   .strictObject({
     baseCurrency: z.literal(OPERATOR_RATE_BASE),
     quoteCurrency,
-    // Quote-currency major units per one SAR, as DECIMAL(18,8) text.
+    // Quote-currency major units per one SAR, as DECIMAL(18,8) text: plain
+    // ASCII digits only, so no sign, exponent, NaN or Infinity is accepted.
     rate: z
       .string()
       .trim()
-      .regex(/^\d{1,10}(\.\d{1,8})?$/, "Use a decimal with at most 8 places")
+      .regex(
+        /^\d{1,10}(\.\d{1,8})?$/,
+        "Rate must be a plain decimal number with at most 10 digits before the point and 8 after it (DECIMAL(18,8))"
+      )
       .refine(value => /[1-9]/.test(value), "Rate must be positive"),
     source: z.enum(DISPLAY_RATE_SOURCES),
     // The publication the operator read, e.g. its date and number.
@@ -67,6 +80,32 @@ export const operatorRateInput = z
     supersedesId: z.number().int().positive().optional(),
   })
   .superRefine((input, ctx) => {
+    // Bounds checked here answer BAD_REQUEST; MySQL would refuse the row as
+    // a server error.
+    const validFrom = wholeSecond(input.validFrom);
+    const validTo = wholeSecond(input.validTo);
+    for (const [field, value] of [
+      ["validFrom", validFrom],
+      ["validTo", validTo],
+    ] as const)
+      if (
+        value < QUOTE_TIMESTAMP_RANGE.min ||
+        value > QUOTE_TIMESTAMP_RANGE.max
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message: `${field} must be between ${QUOTE_TIMESTAMP_RANGE.min.toISOString()} and ${QUOTE_TIMESTAMP_RANGE.max.toISOString()} (the MySQL TIMESTAMP range)`,
+        });
+    if (
+      validTo.getTime() - validFrom.getTime() >
+      MAX_QUOTE_VALIDITY_DAYS * DAY_MS
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["validTo"],
+        message: `A quote is valid for at most ${MAX_QUOTE_VALIDITY_DAYS} days; record the reference rate again at least monthly`,
+      });
     if (
       (input.quoteCurrency === "YER") !==
       (input.source === YER_REFERENCE_SOURCE)
@@ -103,6 +142,8 @@ export const displayRateAlarmStatus = z.object({
     z.object({
       key: z.string(),
       quoteCurrency: z.string(),
+      // At least one operator-entered quote with provenance exists.
+      maintained: z.boolean(),
       alarm: z.boolean(),
       quoteId: z.number().int().nullable(),
       observedAt: z.date().nullable(),
@@ -201,8 +242,10 @@ export async function recordOperatorExchangeRate(
   let stored: ExchangeRateRecord;
   try {
     stored = await db.transaction(async tx => {
-      // Lock the pair's newest version; the unique pair-version index is
-      // the backstop if two operators record the same pair at once.
+      // The unique pair-version index decides a race between two entries
+      // for one pair. This lock only makes the later entry fail fast: InnoDB
+      // resolves its wait as a deadlock, which conflict() reports as
+      // CONFLICT, exactly as it reports the duplicate version without it.
       const [latest] = await tx
         .select({ version: exchangeRates.version })
         .from(exchangeRates)
@@ -336,30 +379,61 @@ export async function listOperatorExchangeRates(
 }
 
 /**
+ * Pairs an operator maintains: at least one quote recorded through
+ * exchangeRates.record, i.e. a row with its provenance (actor, version and
+ * source reference). A row written in SQL or before migration 0079 does not
+ * count.
+ */
+async function maintainedQuoteCurrencies(
+  db: NonNullable<ReturnType<typeof getDb>>
+): Promise<Set<string>> {
+  const rows = await db
+    .selectDistinct({ quoteCurrency: exchangeRates.toCurrency })
+    .from(exchangeRates)
+    .where(
+      and(
+        eq(exchangeRates.fromCurrency, OPERATOR_RATE_BASE),
+        isNotNull(exchangeRates.recordedBy),
+        isNotNull(exchangeRates.version),
+        isNotNull(exchangeRates.sourceReference)
+      )
+    );
+  return new Set(rows.map(row => row.quoteCurrency));
+}
+
+/**
  * Staleness alarm, through the shared operational alert transition
- * (operations_alerts and its on-call dispatch). An enabled display pair
- * alarms when it has no quote a display estimate may use: none recorded,
- * expired, superseded, or observed 24 hours ago or earlier.
+ * (operations_alerts and its on-call dispatch). It covers only pairs an
+ * operator maintains: a pair never entered displays nothing and raises
+ * nothing (an alert left active for it is resolved). A maintained pair
+ * alarms when it has no quote a display estimate may use: expired,
+ * superseded, or observed 24 hours ago or earlier.
  */
 export async function refreshDisplayRateAlarms(now = new Date()) {
   const db = getDb();
   if (!db) throw new Error("Exchange rate storage unavailable");
+  const maintained = await maintainedQuoteCurrencies(db);
   const checks: OperationalCheck[] = [];
   const pairs: z.infer<typeof displayRateAlarmStatus>["pairs"] = [];
   for (const currency of OPERATOR_QUOTE_CURRENCIES) {
     const quote = await findCurrentDisplayQuote(db, currency, now);
     const key = `${DISPLAY_RATE_ALERT_PREFIX}${OPERATOR_RATE_BASE}_${currency}`;
+    const isMaintained = maintained.has(currency);
+    const alarm = isMaintained && !quote;
     checks.push({
       key,
-      bad: !quote,
+      bad: alarm,
       message: quote
         ? `${OPERATOR_RATE_BASE}/${currency} display quote ${quote.id} observed ${quote.validFrom.toISOString()}`
-        : `${OPERATOR_RATE_BASE}/${currency} has no current operator quote observed within 24 hours; the display estimate is withheld`,
+        : isMaintained
+          ? `${OPERATOR_RATE_BASE}/${currency} has no current operator quote observed within 24 hours; the display estimate is withheld`
+          : `${OPERATOR_RATE_BASE}/${currency} has no operator-entered quote; the pair is not maintained and does not alarm`,
     });
     pairs.push({
       key,
       quoteCurrency: currency,
-      alarm: !quote,
+      maintained: isMaintained,
+      alarm,
       quoteId: quote?.id ?? null,
       observedAt: quote?.validFrom ?? null,
       expiresAt: quote?.expiresAt ?? null,

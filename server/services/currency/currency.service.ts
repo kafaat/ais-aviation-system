@@ -9,7 +9,9 @@
  *
  * Amounts are converted only with an observed, currently effective rate.
  * The hard-coded fallback constants can label an estimate returned by
- * getExchangeRate (source "fallback"); they never produce an amount.
+ * getExchangeRate (source "fallback"); they never produce an amount. A SAR
+ * price shown in another currency (sarPriceConverter) further requires the
+ * quote the display estimate would show.
  *
  * @module services/currency/currency.service
  */
@@ -17,6 +19,7 @@
 import { getDb } from "../../db";
 import { exchangeRates } from "../../../drizzle/schema";
 import {
+  DISPLAY_CURRENCIES,
   DISPLAY_RATE_MAX_AGE_MS,
   DISPLAY_RATE_SOURCES,
   type DisplayCurrency,
@@ -547,6 +550,71 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
   };
 }
 
+/** Converts a SAR amount, in major units, into the converter's currency. */
+export type SarPriceConverter = (amountInSar: number) => number;
+
+/**
+ * A converter for SAR prices quoted in another currency (pricing.calculate,
+ * getPriceRange and getForecast). It uses only the quote the display
+ * estimate would show, through the same findCurrentDisplayQuote rule: an
+ * approved source, effective now, not superseded and observed less than 24
+ * hours ago. A quote the display would not show converts no price either.
+ * Throws ExchangeRateUnavailableError when no such quote exists; YER and
+ * other unsupported codes stay "Unsupported currency".
+ */
+export async function sarPriceConverter(
+  targetCurrency: string
+): Promise<SarPriceConverter> {
+  getCurrencyInfo(targetCurrency);
+  if (targetCurrency === BASE_CURRENCY)
+    return amount =>
+      fromMinorUnits(
+        roundedMinor(amount, UNIT_RATE, BASE_CURRENCY),
+        BASE_CURRENCY
+      );
+  const displayCurrency = DISPLAY_CURRENCIES.find(
+    code => code === targetCurrency
+  );
+  let quote: Awaited<ReturnType<typeof findCurrentDisplayQuote>> = null;
+  try {
+    const database = await getDb();
+    if (database && displayCurrency)
+      quote = await findCurrentDisplayQuote(
+        database,
+        displayCurrency,
+        new Date()
+      );
+  } catch (error) {
+    // As for an observation: a failed query is no quote, never an estimate.
+    console.error(
+      JSON.stringify({
+        event: "exchange_rate_query_failed",
+        fromCurrency: BASE_CURRENCY,
+        toCurrency: targetCurrency,
+        error: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+  if (!quote)
+    throw new ExchangeRateUnavailableError(BASE_CURRENCY, targetCurrency);
+  const ratio = exactRate(quote.rate);
+  const rate = rateAsNumber(ratio);
+  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(1 / rate)) {
+    throw new Error("Invalid exchange rate observation");
+  }
+  const expiresAt = quote.expiresAt.getTime();
+  return amount => {
+    // Recheck synchronously at each use, after the caller's last await.
+    if (Date.now() >= expiresAt)
+      throw new ExchangeRateUnavailableError(BASE_CURRENCY, targetCurrency);
+    return fromMinorUnits(
+      roundedMinor(amount, ratio, targetCurrency),
+      targetCurrency
+    );
+  };
+}
+
 /** Select a currently effective observation, not the most recently edited row. */
 async function getDbExchangeRate(
   from: string,
@@ -885,6 +953,7 @@ export const CurrencyService = {
   fromMinorUnits,
   convertCurrency,
   convertPriceForDisplay,
+  sarPriceConverter,
   getCurrencyInfo,
   getSupportedCurrencies,
   isCurrencySupported,

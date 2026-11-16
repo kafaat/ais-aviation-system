@@ -659,6 +659,10 @@ operatorDescribe.sequential("operator exchange rates over native MySQL", () => {
       database: databaseName,
       connectionLimit: 5,
     });
+    // As server/db.ts does: TIMESTAMP values convert in UTC.
+    pool.pool.on("connection", connection => {
+      connection.query("SET SESSION time_zone = '+00:00'", () => undefined);
+    });
     boundary.db = drizzle(pool, { schema, mode: "default" });
   }, 60000);
 
@@ -974,7 +978,7 @@ operatorDescribe.sequential("operator exchange rates over native MySQL", () => {
     );
   });
 
-  it("fix: the staleness alarm raises for missing and stale quotes and clears on a fresh quote", async () => {
+  it("fix: the staleness alarm raises for a stale quote of an entered pair and clears on a fresh quote", async () => {
     const status = await caller(platformAdmin).exchangeRates.refreshAlarms();
     expect(status.pairs.map(pair => pair.quoteCurrency)).toEqual([
       "USD",
@@ -988,16 +992,13 @@ operatorDescribe.sequential("operator exchange rates over native MySQL", () => {
       "EGP",
       "YER",
     ]);
-    expect(status.pairs.every(pair => pair.alarm)).toBe(true);
-    const missing = await alarms();
-    expect(missing).toHaveLength(10);
-    expect(missing.every(alarm => alarm.status === "active")).toBe(true);
+    // A pair nobody has entered is not maintained and raises nothing.
+    expect(status.pairs.every(pair => !pair.maintained && !pair.alarm)).toBe(
+      true
+    );
+    expect(await alarms()).toEqual([]);
     const yerAlarm = async () =>
       (await alarms()).find(alarm => alarm.key === "fx-display-rate:SAR_YER");
-    expect(await yerAlarm()).toMatchObject({
-      status: "active",
-      message: expect.stringContaining("no current operator quote"),
-    });
 
     // A quote observed 25 hours ago is recorded but too old to display.
     const now = Date.now();
@@ -1007,7 +1008,10 @@ operatorDescribe.sequential("operator exchange rates over native MySQL", () => {
         validTo: wholeSecond(now + hour),
       })
     );
-    expect(await yerAlarm()).toMatchObject({ status: "active" });
+    expect(await yerAlarm()).toMatchObject({
+      status: "active",
+      message: expect.stringContaining("no current operator quote"),
+    });
 
     // A fresh quote clears the alarm for its pair only.
     const fresh = await caller(platformAdmin).exchangeRates.record(
@@ -1018,9 +1022,7 @@ operatorDescribe.sequential("operator exchange rates over native MySQL", () => {
     );
     expect(fresh.version).toBe(stale.version! + 1);
     expect(await yerAlarm()).toMatchObject({ status: "resolved" });
-    expect(
-      (await alarms()).filter(alarm => alarm.status === "active")
-    ).toHaveLength(9);
+    expect(await alarms()).toHaveLength(1);
 
     // Once the fresh quote reaches the 24-hour display expiry, it alarms again.
     const { refreshDisplayRateAlarms } =
@@ -1039,5 +1041,261 @@ operatorDescribe.sequential("operator exchange rates over native MySQL", () => {
       later.pairs.find(pair => pair.quoteCurrency === "YER")
     ).toMatchObject({ alarm: true, quoteId: null });
     expect(await yerAlarm()).toMatchObject({ status: "active" });
+  });
+
+  // Fix round 1 (#319 Wave 1 slice A hardening).
+  const record = (input: Record<string, unknown>) =>
+    caller(platformAdmin).exchangeRates.record(
+      input as Parameters<
+        ReturnType<typeof caller>["exchangeRates"]["record"]
+      >[0]
+    );
+  function usdQuote(overrides: Record<string, unknown> = {}) {
+    const now = Date.now();
+    return {
+      baseCurrency: "SAR" as const,
+      quoteCurrency: "USD" as const,
+      rate: "0.26660000",
+      source: "bank" as const,
+      sourceReference: "Bank reference rate sheet 2026-11-16",
+      validFrom: wholeSecond(now - hour),
+      validTo: wholeSecond(now + 20 * hour),
+      ...overrides,
+    };
+  }
+
+  it("fix: refuses validity outside the MySQL TIMESTAMP range with BAD_REQUEST, never a server error", async () => {
+    for (const [validFrom, validTo] of [
+      ["1960-01-01T00:00:00Z", "1960-01-02T00:00:00Z"],
+      ["1970-01-01T00:00:00Z", "1970-01-02T00:00:00Z"],
+      ["2039-12-31T00:00:00Z", "2040-01-01T00:00:00Z"],
+      ["2038-01-18T03:14:08Z", "2038-01-19T03:14:08Z"],
+    ])
+      await expect(
+        record(
+          yerQuote({
+            validFrom: new Date(validFrom),
+            validTo: new Date(validTo),
+          })
+        ),
+        `${validFrom} to ${validTo}`
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: expect.stringContaining("(the MySQL TIMESTAMP range)"),
+      });
+    expect(await quoteRows()).toEqual([]);
+    // Both ends of the range are accepted.
+    for (const [validFrom, validTo] of [
+      ["1970-01-01T00:00:01Z", "1970-01-02T00:00:01Z"],
+      ["2038-01-18T03:14:07Z", "2038-01-19T03:14:07Z"],
+    ])
+      await record(
+        yerQuote({ validFrom: new Date(validFrom), validTo: new Date(validTo) })
+      );
+    expect((await quoteRows()).map(row => row.validTo)).toEqual([
+      new Date("1970-01-02T00:00:01Z"),
+      new Date("2038-01-19T03:14:07Z"),
+    ]);
+  });
+
+  it("fix: refuses a validity window longer than 31 days with BAD_REQUEST", async () => {
+    const start = wholeSecond(Date.now() - hour);
+    const month = 31 * 24 * hour;
+    await expect(
+      record(
+        yerQuote({
+          validFrom: start,
+          validTo: new Date(start.getTime() + month + 1000),
+        })
+      )
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining(
+        "A quote is valid for at most 31 days; record the reference rate again at least monthly"
+      ),
+    });
+    expect(await quoteRows()).toEqual([]);
+    const longest = await record(
+      yerQuote({ validFrom: start, validTo: new Date(start.getTime() + month) })
+    );
+    expect(longest.validTo!.getTime() - longest.validFrom.getTime()).toBe(
+      month
+    );
+  });
+
+  it("fix: refuses a rate that is not a positive decimal fitting DECIMAL(18,8), with a clear message", async () => {
+    const format =
+      "Rate must be a plain decimal number with at most 10 digits before the point and 8 after it (DECIMAL(18,8))";
+    for (const [rate, message] of [
+      ["0", "Rate must be positive"],
+      ["0.00000000", "Rate must be positive"],
+      ["-1", format],
+      ["1e3", format],
+      ["NaN", format],
+      ["Infinity", format],
+      ["", format],
+      ["12345678901", format],
+      ["1.123456789", format],
+      ["\u0661\u0664\u0660", format],
+    ])
+      await expect(record(yerQuote({ rate })), rate).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: expect.stringContaining(message),
+      });
+    expect(await quoteRows()).toEqual([]);
+    // The largest and smallest rates the column holds are stored exactly.
+    for (const rate of ["9999999999.99999999", "0.00000001"])
+      await record(yerQuote({ rate }));
+    expect((await quoteRows()).map(row => row.rate)).toEqual([
+      "9999999999.99999999",
+      "0.00000001",
+    ]);
+  });
+
+  it("fix: a pair never entered raises nothing; an entered pair raises once it has no current quote and clears on a fresh one", async () => {
+    const now = Date.now();
+    // Rows without provenance (written in SQL, or before migration 0079) do
+    // not make a pair maintained, whether current (EUR) or stale (GBP).
+    await pool!.query(
+      "INSERT INTO `exchange_rates` (fromCurrency, toCurrency, rate, source, validFrom, validTo) VALUES ('SAR', 'EUR', '0.24500000', 'bank', ?, ?), ('SAR', 'GBP', '0.21000000', 'bank', ?, ?)",
+      [
+        wholeSecond(now - hour),
+        wholeSecond(now + hour),
+        wholeSecond(now - 30 * hour),
+        wholeSecond(now + hour),
+      ]
+    );
+    // An alert left active for a pair nobody maintains is resolved.
+    await pool!.query(
+      "INSERT INTO `operations_alerts` (`key`, status, message) VALUES ('fx-display-rate:SAR_KWD', 'active', 'Raised before the maintained-pair rule')"
+    );
+    const before = await caller(platformAdmin).exchangeRates.refreshAlarms();
+    expect(before.pairs.filter(pair => pair.maintained || pair.alarm)).toEqual(
+      []
+    );
+    // The legacy EUR row still displays (slice B will require provenance).
+    expect(
+      before.pairs.find(pair => pair.quoteCurrency === "EUR")?.quoteId
+    ).toEqual(expect.any(Number));
+    expect(await alarms()).toEqual([
+      {
+        key: "fx-display-rate:SAR_KWD",
+        status: "resolved",
+        message: expect.stringContaining("not maintained"),
+      },
+    ]);
+
+    // Entered once, with a quote that has already expired: the pair alarms.
+    await record(
+      usdQuote({
+        validFrom: wholeSecond(now - 3 * hour),
+        validTo: wholeSecond(now - 2 * hour),
+      })
+    );
+    expect(await alarms()).toEqual([
+      expect.objectContaining({ key: "fx-display-rate:SAR_KWD" }),
+      {
+        key: "fx-display-rate:SAR_USD",
+        status: "active",
+        message: expect.stringContaining("no current operator quote"),
+      },
+    ]);
+    const entered = await caller(platformAdmin).exchangeRates.refreshAlarms();
+    expect(
+      entered.pairs
+        .filter(pair => pair.maintained)
+        .map(pair => [pair.quoteCurrency, pair.alarm])
+    ).toEqual([["USD", true]]);
+
+    // A fresh quote clears it; nothing else is active.
+    await record(usdQuote());
+    expect((await alarms()).map(alarm => [alarm.key, alarm.status])).toEqual([
+      ["fx-display-rate:SAR_KWD", "resolved"],
+      ["fx-display-rate:SAR_USD", "resolved"],
+    ]);
+  });
+
+  it("control: a quote and its audit record commit together", async () => {
+    const counts = async () => {
+      const [quotes] = await rows("SELECT COUNT(*) AS c FROM `exchange_rates`");
+      const [audits] = await rows(
+        "SELECT COUNT(*) AS c FROM `audit_logs` WHERE eventType LIKE 'EXCHANGE_RATE_%'"
+      );
+      return { quotes: Number(quotes.c), audits: Number(audits.c) };
+    };
+    // A forced audit failure leaves no quote row...
+    await pool!.query(
+      "ALTER TABLE `audit_logs` ADD CONSTRAINT `fx_audit_refused` CHECK (eventType NOT IN ('EXCHANGE_RATE_RECORDED', 'EXCHANGE_RATE_CORRECTED'))"
+    );
+    try {
+      await expect(record(yerQuote())).rejects.toMatchObject({
+        code: "INTERNAL_SERVER_ERROR",
+      });
+      expect(await counts()).toEqual({ quotes: 0, audits: 0 });
+    } finally {
+      await pool!.query(
+        "ALTER TABLE `audit_logs` DROP CHECK `fx_audit_refused`"
+      );
+    }
+    // ...and a correction whose audit fails leaves only the corrected row.
+    const original = await record(yerQuote());
+    const before = await quoteRows();
+    await pool!.query(
+      "ALTER TABLE `audit_logs` ADD CONSTRAINT `fx_correction_refused` CHECK (eventType <> 'EXCHANGE_RATE_CORRECTED')"
+    );
+    try {
+      await expect(
+        record(yerQuote({ supersedesId: original.id, rate: "141.00000000" }))
+      ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+      expect(await quoteRows()).toEqual(before);
+    } finally {
+      await pool!.query(
+        "ALTER TABLE `audit_logs` DROP CHECK `fx_correction_refused`"
+      );
+    }
+    // The audit row is written in the quote's own transaction: until that
+    // transaction commits, another session sees neither of them.
+    const real = boundary.db as {
+      transaction: (
+        run: (tx: unknown) => Promise<unknown>,
+        config?: unknown
+      ) => Promise<unknown>;
+    };
+    const beforeCommit: Array<{ quotes: number; audits: number }> = [];
+    boundary.db = new Proxy(real, {
+      get(target, property, receiver) {
+        if (property !== "transaction")
+          return Reflect.get(target, property, receiver);
+        return (run: (tx: unknown) => Promise<unknown>, config?: unknown) =>
+          target.transaction(async tx => {
+            const result = await run(tx);
+            if (result && typeof result === "object" && "toCurrency" in result)
+              beforeCommit.push(await counts());
+            return result;
+          }, config);
+      },
+    });
+    try {
+      await record(
+        yerQuote({ supersedesId: original.id, rate: "141.00000000" })
+      );
+    } finally {
+      boundary.db = real;
+    }
+    expect(beforeCommit).toEqual([{ quotes: 1, audits: 1 }]);
+    expect(await counts()).toEqual({ quotes: 2, audits: 2 });
+  });
+
+  it("control: a second correction of a quote names the correction to correct instead", async () => {
+    // The unique supersedes index alone would answer a generic CONFLICT.
+    const original = await record(yerQuote({ rate: "1405.00000000" }));
+    const correction = await record(yerQuote({ supersedesId: original.id }));
+    await expect(
+      record(yerQuote({ supersedesId: original.id, rate: "140.60000000" }))
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: `Quote ${original.id} is already corrected by quote ${correction.id}; correct that quote instead`,
+    });
+    expect(await quoteRows()).toHaveLength(2);
   });
 });
