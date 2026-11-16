@@ -99,6 +99,22 @@ it.each(["2027-01-15", "2027-01-15T12:00:00.000Z"])(
     expect(url.searchParams.get("date")).toBe("2027-01-15");
   }
 );
+// WCAG 2.5.3 (Label in Name, axe label-content-name-mismatch): each date
+// button's accessible name must contain the text it shows, whatever the timing
+// of the page's entrance animation.
+it("names each home date button with its label and its visible text", async () => {
+  const user = userEvent.setup();
+  render(<Home />);
+  const departure = screen.getByTestId("home-date-trigger");
+  const shown = departure.textContent?.trim() ?? "";
+  expect(shown).not.toBe("");
+  expect(departure).toHaveAccessibleName(`home.search.departureDate ${shown}`);
+
+  await user.click(screen.getByRole("tab", { name: "ibe.roundTrip" }));
+  const ret = screen.getByTestId("home-return-date-trigger");
+  expect(ret).toHaveTextContent("home.search.selectDate");
+  expect(ret).toHaveAccessibleName("ibe.returnDate home.search.selectDate");
+});
 it("carries party types and display preferences from the actual home form into search", () => {
   render(<Home />);
   fireEvent.change(screen.getByLabelText("ibe.adults"), {
