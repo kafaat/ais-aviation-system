@@ -49,6 +49,8 @@ export interface AIPricingResult {
 }
 
 export interface AIDashboardData {
+  /** Whether the AI multiplier is applied to quotes right now. */
+  enabled: boolean;
   demandForecasts: {
     flightId: number;
     forecasts: { date: string; demand: number; lower: number; upper: number }[];
@@ -197,11 +199,15 @@ export async function getAIDashboardData(): Promise<AIDashboardData> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  // Get components in parallel
-  const [segments, tests, metrics] = await Promise.allSettled([
-    CustomerSegmentationService.getSegments(),
-    ABTestingService.getTests("running"),
-    RevenueOptimizationService.getRevenueMetrics(thirtyDaysAgo, now),
+  // Get components in parallel. The enabled flag is read the same way the
+  // quote path reads it, so the dashboard shows the state that applies.
+  const [enabled, [segments, tests, metrics]] = await Promise.all([
+    isAIPricingEnabled(),
+    Promise.allSettled([
+      CustomerSegmentationService.getSegments(),
+      ABTestingService.getTests("running"),
+      RevenueOptimizationService.getRevenueMetrics(thirtyDaysAgo, now),
+    ]),
   ]);
 
   const segmentData = segments.status === "fulfilled" ? segments.value : [];
@@ -238,6 +244,7 @@ export async function getAIDashboardData(): Promise<AIDashboardData> {
   }));
 
   return {
+    enabled,
     demandForecasts: [], // Populated on-demand per flight
     segmentDistribution,
     activeTests,
@@ -370,7 +377,7 @@ function calculateConfidence(
   return Math.min(1, confidence);
 }
 
-async function isAIPricingEnabled(): Promise<boolean> {
+export async function isAIPricingEnabled(): Promise<boolean> {
   const setting = await cacheService.get<boolean>(AI_ENABLED_KEY);
   return setting !== false; // Enabled by default
 }
@@ -389,6 +396,7 @@ export async function setAIPricingEnabled(enabled: boolean): Promise<void> {
 export const AIPricingService = {
   calculateAIPricingMultiplier,
   getAIDashboardData,
+  isAIPricingEnabled,
   setAIPricingEnabled,
 };
 

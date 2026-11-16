@@ -53,6 +53,10 @@ export const splitPaymentsRouter = router({
       z.object({
         splitIds: z.array(z.number()),
         totalAmount: z.number(),
+        /** Number of payers the plan was created for. */
+        requestedCount: z.number(),
+        /** Payers whose request the email provider accepted. */
+        sentCount: z.number(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -97,10 +101,18 @@ export const splitPaymentsRouter = router({
         });
       }
 
-      return await splitPaymentService.initiateSplitPayment({
+      const plan = await splitPaymentService.initiateSplitPayment({
         ...input,
         userId: ctx.user.id,
       });
+      // Review finding R1 (#355): the plan used to be created without any
+      // request reaching the payers, while the client reported them as sent.
+      // Delivery runs after the plan's transaction has committed; a payer
+      // whose request was not accepted stays "pending" and can be resent.
+      const sentCount = await splitPaymentService.sendAllPaymentRequests(
+        input.bookingId
+      );
+      return { ...plan, requestedCount: plan.splitIds.length, sentCount };
     }),
 
   /**

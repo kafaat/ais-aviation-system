@@ -24,6 +24,7 @@ export const responseContracts = {
   getDashboard: z.object({
     success: z.boolean(),
     data: z.object({
+      enabled: z.boolean(),
       demandForecasts: z.array(
         z.object({
           flightId: outputNumber,

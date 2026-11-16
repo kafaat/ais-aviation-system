@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -83,8 +84,25 @@ export default function AIPricingDashboard() {
   const { data: abTests, isLoading: testsLoading } =
     trpc.aiPricing.getABTests.useQuery({});
 
-  // Toggle AI pricing
-  const toggleMutation = trpc.aiPricing.setEnabled.useMutation();
+  // Toggle AI pricing. Review finding R5 (#355): the button used to send
+  // `enabled: true` on every click and never showed the current state, so an
+  // admin could not switch the multiplier off from this page.
+  const utils = trpc.useUtils();
+  const enabled = dashboard?.data.enabled;
+  const toggleMutation = trpc.aiPricing.setEnabled.useMutation({
+    onSuccess: result => {
+      toast.success(
+        t(
+          result.enabled
+            ? "admin.aiPricing.toggleOn"
+            : "admin.aiPricing.toggleOff"
+        )
+      );
+      void utils.aiPricing.getDashboard.invalidate();
+    },
+    onError: error =>
+      toast.error(error.message || t("admin.aiPricing.toggleError")),
+  });
 
   const formatPrice = (price: number) => {
     return (price / 100).toLocaleString(isRTL ? "ar-SA" : "en-US", {
@@ -112,15 +130,34 @@ export default function AIPricingDashboard() {
             {t("admin.aiPricing.subtitle")}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => toggleMutation.mutate({ enabled: true })}
-          disabled={toggleMutation.isPending}
-        >
-          <Power className="mr-2 h-4 w-4" />
-          {t("admin.aiPricing.toggleEnabled")}
-        </Button>
+        <div className="flex items-center gap-3">
+          {enabled !== undefined && (
+            <Badge
+              variant={enabled ? "default" : "secondary"}
+              aria-live="polite"
+            >
+              {t(
+                enabled
+                  ? "admin.aiPricing.stateEnabled"
+                  : "admin.aiPricing.stateDisabled"
+              )}
+            </Badge>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            aria-pressed={enabled}
+            onClick={() => toggleMutation.mutate({ enabled: !enabled })}
+            disabled={enabled === undefined || toggleMutation.isPending}
+          >
+            <Power className="mr-2 h-4 w-4" />
+            {t(
+              enabled === false
+                ? "admin.aiPricing.enable"
+                : "admin.aiPricing.disable"
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Revenue Metrics Cards */}
