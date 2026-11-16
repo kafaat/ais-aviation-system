@@ -494,15 +494,21 @@ export default function Home() {
                             <Button
                               variant="outline"
                               className="w-full h-12 justify-start text-left font-normal"
-                              aria-labelledby="date-label"
+                              aria-labelledby="date-label date-trigger-value"
                               data-testid="home-date-trigger"
                             >
+                              {/* WCAG 2.5.3: the accessible name must contain the visible text. */}
                               {departureDate ? (
-                                format(departureDate, "PPP", {
-                                  locale: currentLocale,
-                                })
+                                <span id="date-trigger-value">
+                                  {format(departureDate, "PPP", {
+                                    locale: currentLocale,
+                                  })}
+                                </span>
                               ) : (
-                                <span className="text-muted-foreground">
+                                <span
+                                  id="date-trigger-value"
+                                  className="text-muted-foreground"
+                                >
                                   {t("home.search.selectDate")}
                                 </span>
                               )}
@@ -535,14 +541,16 @@ export default function Home() {
                               <Button
                                 variant="outline"
                                 className="w-full h-12 justify-start font-normal"
-                                aria-labelledby="return-date-label"
+                                aria-labelledby="return-date-label return-date-trigger-value"
                                 data-testid="home-return-date-trigger"
                               >
-                                {returnDate
-                                  ? format(returnDate, "PPP", {
-                                      locale: currentLocale,
-                                    })
-                                  : t("home.search.selectDate")}
+                                <span id="return-date-trigger-value">
+                                  {returnDate
+                                    ? format(returnDate, "PPP", {
+                                        locale: currentLocale,
+                                      })
+                                    : t("home.search.selectDate")}
+                                </span>
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">

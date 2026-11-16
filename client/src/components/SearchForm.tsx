@@ -211,15 +211,17 @@ export function SearchForm({
                 <Button
                   variant="outline"
                   className="w-full h-12 justify-start text-left font-normal"
-                  aria-labelledby="date-label"
+                  aria-labelledby="date-label date-trigger-value"
                   data-testid="date-picker-button"
                 >
+                  {/* WCAG 2.5.3: the accessible name must contain the visible text. */}
                   {departureDate ? (
-                    <span data-testid="selected-date">
+                    <span id="date-trigger-value" data-testid="selected-date">
                       {format(departureDate, "PPP", { locale: currentLocale })}
                     </span>
                   ) : (
                     <span
+                      id="date-trigger-value"
                       className="text-muted-foreground"
                       data-testid="date-placeholder"
                     >
