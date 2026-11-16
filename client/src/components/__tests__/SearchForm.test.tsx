@@ -411,8 +411,26 @@ describe("SearchForm", () => {
 
       expect(screen.getByTestId("date-picker-button")).toHaveAttribute(
         "aria-labelledby",
-        "date-label"
+        "date-label date-trigger-value"
       );
+    });
+
+    // WCAG 2.5.3 (Label in Name, axe label-content-name-mismatch): the
+    // button's accessible name must contain the text it shows.
+    it("names the date picker with its label and its visible placeholder", () => {
+      renderSearchForm();
+
+      const button = screen.getByTestId("date-picker-button");
+      expect(button).toHaveTextContent("Select Date");
+      expect(button).toHaveAccessibleName("Departure Date Select Date");
+    });
+
+    it("names the date picker with its label and the visible selected date", () => {
+      renderSearchForm({ departureDate: new Date("2027-01-15T00:00:00Z") });
+
+      const button = screen.getByTestId("date-picker-button");
+      expect(button).toHaveTextContent("2027-01-15");
+      expect(button).toHaveAccessibleName("Departure Date 2027-01-15");
     });
   });
 
