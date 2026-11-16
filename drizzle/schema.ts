@@ -904,6 +904,10 @@ export const milesTransactions = mysqlTable(
       table.loyaltyAccountId
     ),
     typeIdx: index("type_idx").on(table.type),
+    // Booking statements and refund reconciliation read by booking (review R7).
+    bookingIdIdx: index("miles_transactions_booking_id_idx").on(
+      table.bookingId
+    ),
   })
 );
 
@@ -924,7 +928,11 @@ export const loyaltyCreditLots = mysqlTable(
     reversedMiles: int("reversedMiles").notNull().default(0),
     expiresAt: timestamp("expiresAt"),
   },
-  t => ({ account: index("loyalty_lots_account_idx").on(t.loyaltyAccountId) })
+  t => ({
+    account: index("loyalty_lots_account_idx").on(t.loyaltyAccountId),
+    // Reversal on cancellation looks lots up by booking (review R7).
+    booking: index("loyalty_lots_booking_idx").on(t.bookingId),
+  })
 );
 
 /**
@@ -1675,6 +1683,8 @@ export const paymentReceipts = mysqlTable(
       table.kind,
       table.paymentIntentId
     ),
+    // Refund, settlement and dispute paths lock receipts by booking (review R7).
+    bookingIdIdx: index("payment_receipts_booking_id_idx").on(table.bookingId),
   })
 );
 
