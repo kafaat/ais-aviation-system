@@ -5,6 +5,7 @@ vi.mock("../db", () => ({ getDb: () => boundary.db }));
 vi.mock("../stripe", () => ({
   stripe: { refunds: { create: boundary.refund } },
 }));
+import { orderServiceRefunds } from "../../drizzle/schema";
 import { paymentsRouter } from "../routers/payments";
 import { DepartureReleaseError } from "../services/booking-settlement.service";
 
@@ -131,4 +132,67 @@ describe("settlement review operator boundary", () => {
       });
     }
   );
+  // Settlement ignores other refunds of an intent while a servicing refund
+  // on it is unfinished, so the review refund waits for the booking's
+  // servicing refunds, as the other refund commands do.
+  const servicingRefund = (overrides: Record<string, unknown>) => ({
+    id: "osr_1",
+    bookingId: 1,
+    modificationId: 9001,
+    paymentIntentId: "pi_review",
+    amount: 2000,
+    baseRefundedAmount: 0,
+    status: "queued",
+    ...overrides,
+  });
+  it.each(["queued", "requesting", "pending", "failed", "review_required"])(
+    "waits while a %s order-service refund on the booking is unfinished, before any provider request",
+    async status => {
+      await fixture.db
+        .insert(orderServiceRefunds)
+        .values(servicingRefund({ status, paymentIntentId: "pi_other" }));
+      await expect(
+        caller("admin").refundSettlementReview({ paymentIntentId: "pi_review" })
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message:
+          "An order-service refund on this booking is unfinished; the settlement review refund can be requested once it has been reconciled",
+      });
+      expect(boundary.refund).not.toHaveBeenCalled();
+      expect(fixture.rows("payment_receipts")[0]).toMatchObject({
+        refundedAmount: 0,
+        settlementStatus: "review_required",
+      });
+    }
+  );
+  it("does not wait for a succeeded order-service refund or one on another booking", async () => {
+    await fixture.db.insert(orderServiceRefunds).values([
+      servicingRefund({ id: "osr_done", status: "succeeded" }),
+      servicingRefund({
+        id: "osr_elsewhere",
+        bookingId: 2,
+        paymentIntentId: "pi_elsewhere",
+      }),
+    ]);
+    expect(
+      await caller("admin").refundSettlementReview({
+        paymentIntentId: "pi_review",
+      })
+    ).toEqual({ state: "awaiting_webhook", refundId: "re_1" });
+    expect(boundary.refund).toHaveBeenCalledTimes(1);
+  });
+  it("control: a wallet top-up review has no booking servicing refund to wait for", async () => {
+    Object.assign(fixture.rows("payment_receipts")[0], {
+      kind: "wallet_topup",
+      bookingId: null,
+      targetId: 7,
+    });
+    await fixture.db.insert(orderServiceRefunds).values(servicingRefund({}));
+    expect(
+      await caller("admin").refundSettlementReview({
+        paymentIntentId: "pi_review",
+      })
+    ).toEqual({ state: "awaiting_webhook", refundId: "re_1" });
+    expect(boundary.refund).toHaveBeenCalledTimes(1);
+  });
 });

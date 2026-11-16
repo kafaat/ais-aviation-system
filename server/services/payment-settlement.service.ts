@@ -491,6 +491,76 @@ async function requireCollectionReview(
   });
 }
 
+const heldUpgradeReviewReason =
+  "Booking refunded on its original collection while this upgrade collection still holds money";
+
+/** Decision 7, legacy replay (ADR 0003): a refund made on the original intent
+ * alone settles through the single-intent rule, which refunds the booking. An
+ * applied upgrade collected on another intent that still holds money goes to
+ * settlement review, where an operator can refund it, instead of staying
+ * applied on a refunded booking. One review event per upgrade intent. The
+ * caller passes the booking's applied receipts, read under its locks.
+ * Settlement ignores other refunds of an intent until its servicing refunds
+ * succeed. An upgrade whose open or failed servicing refunds cover everything
+ * it still holds (a flight cancellation plans one per intent for the whole
+ * balance) is left to them. A failed flight-cancellation refund is reviewed
+ * on the operations dashboard; a failed exchange servicing refund is listed
+ * only by the decision-7 SQL (ADR 0003). A partly
+ * covered upgrade is still flagged: its review refund waits for them
+ * (requestSettlementReviewRefund) and then refunds the remainder. */
+async function reviewHeldUpgradeCollections(
+  tx: SettlementTx,
+  booking: typeof bookings.$inferSelect,
+  appliedReceipts: (typeof paymentReceipts.$inferSelect)[],
+  refundedPaymentIntentId: string
+) {
+  const held = appliedReceipts
+    .filter(
+      r =>
+        r.kind === "modification" &&
+        r.paymentIntentId !== refundedPaymentIntentId &&
+        r.refundedAmount < r.amount
+    )
+    .sort((a, b) => a.paymentIntentId.localeCompare(b.paymentIntentId));
+  if (!held.length) return;
+  // A current read under the booking lock, which servicing refund commands
+  // take first.
+  const servicing = await tx
+    .select({
+      paymentIntentId: orderServiceRefunds.paymentIntentId,
+      amount: orderServiceRefunds.amount,
+      status: orderServiceRefunds.status,
+    })
+    .from(orderServiceRefunds)
+    .where(
+      and(
+        eq(orderServiceRefunds.bookingId, booking.id),
+        inArray(
+          orderServiceRefunds.paymentIntentId,
+          held.map(r => r.paymentIntentId)
+        )
+      )
+    )
+    .for("update");
+  const openServicing = new Map<string, number>();
+  for (const p of servicing)
+    if (p.status !== "succeeded")
+      openServicing.set(
+        p.paymentIntentId,
+        (openServicing.get(p.paymentIntentId) ?? 0) + p.amount
+      );
+  for (const upgrade of held.filter(
+    r =>
+      (openServicing.get(r.paymentIntentId) ?? 0) < r.amount - r.refundedAmount
+  ))
+    await requireCollectionReview(
+      tx,
+      upgrade,
+      booking,
+      heldUpgradeReviewReason
+    );
+}
+
 async function confirmCollectedBooking(
   tx: SettlementTx,
   booking: typeof bookings.$inferSelect,
@@ -838,19 +908,27 @@ export async function settleVerifiedRefund(
   ) {
     const booking = ownerBooking;
     if (!booking) throw new Error("Refund booking missing");
+    // Applied upgrades are read under the same lock for the review below;
+    // only booking and split collections decide the booking's refund.
     const receipts = await tx
       .select()
       .from(paymentReceipts)
       .where(
         and(
           eq(paymentReceipts.bookingId, booking.id),
-          inArray(paymentReceipts.kind, ["booking", "split_payment"]),
+          inArray(paymentReceipts.kind, [
+            "booking",
+            "split_payment",
+            "modification",
+          ]),
           eq(paymentReceipts.settlementStatus, "applied")
         )
       )
       .for("update");
+    const collections = receipts.filter(r => r.kind !== "modification");
     const allRefunded =
-      receipts.length > 0 && receipts.every(r => r.amount === r.refundedAmount);
+      collections.length > 0 &&
+      collections.every(r => r.amount === r.refundedAmount);
     if (allRefunded) {
       try {
         couponTransitions = await releaseBookingSeats(tx, booking, "refunded");
@@ -858,6 +936,14 @@ export async function settleVerifiedRefund(
           .update(bookings)
           .set({ status: "cancelled", paymentStatus: "refunded" })
           .where(eq(bookings.id, booking.id));
+        // Only once the booking is refunded: a blocked departure release
+        // keeps the booking, and its upgrade, under departure reconciliation.
+        await reviewHeldUpgradeCollections(
+          tx,
+          booking,
+          receipts,
+          input.paymentIntentId
+        );
       } catch (error) {
         if (!(error instanceof DepartureReleaseError)) throw error;
         await requireCollectionReview(tx, input, booking, error.message);
