@@ -1140,4 +1140,71 @@ describe("currency fallback guard", () => {
       vi.useRealTimers();
     }
   });
+
+  // Integrator hardening after the independent review of fix round 2: two
+  // weakenings of the rule survived the tests above.
+  it("fix: a quote observed exactly 24 hours ago converts nothing, as the display shows nothing", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+      fixture.insert(exchangeRates, {
+        id: 1,
+        ...gbp,
+        rate: "0.30000000",
+        source: "bank",
+        validFrom: sqlTime(-DAY),
+        validTo: sqlTime(20 * HOUR),
+        updatedAt: sqlTime(-DAY),
+      });
+      expect(await currency.getDisplayExchangeRate("GBP")).toBeNull();
+      const caller = await pricingCaller();
+      await expect(
+        caller.convertCurrency({ ...gbp, amount: 100 })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+      expect((await caller.getExchangeRate(gbp)).data.source).toBe("fallback");
+      await expect(currency.convertPriceForDisplay(100, "GBP")).rejects.toThrow(
+        new currency.ExchangeRateUnavailableError("SAR", "GBP")
+      );
+      // One second younger, the same quote is shown and converts.
+      vi.setSystemTime(new Date("2029-12-31T23:59:59Z"));
+      expect(await caller.convertCurrency({ ...gbp, amount: 100 })).toEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ convertedAmount: 30 }),
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ["observed 48 hours ago by an approved source", "bank", -48 * HOUR],
+    ["observed an hour ago by the unapproved source ecb", "ecb", -HOUR],
+  ])(
+    "fix: a direct pair without SAR converts nothing when its quote was %s",
+    async (_name, source, observedOffsetMs) => {
+      fixture.insert(exchangeRates, {
+        id: 1,
+        fromCurrency: "USD",
+        toCurrency: "AED",
+        rate: "3.67250000",
+        source,
+        validFrom: sqlTime(observedOffsetMs),
+        validTo: sqlTime(20 * DAY),
+        updatedAt: sqlTime(observedOffsetMs),
+      });
+      const caller = await pricingCaller();
+      const usdToAed = { fromCurrency: "USD", toCurrency: "AED" };
+      await expect(
+        caller.convertCurrency({ ...usdToAed, amount: 1000 })
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: expect.stringContaining(
+          "No current exchange rate observation"
+        ),
+      });
+      const quote = await caller.getExchangeRate(usdToAed);
+      expect(quote.data.source).not.toBe(source);
+    }
+  );
 });
