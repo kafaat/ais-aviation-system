@@ -2,12 +2,16 @@
 
 ## What's Changed in v1.42.0
 
-<!-- ais-release-source: 5e8ab034781fc164f9b78af25ad91537fab15d6d -->
+<!-- ais-release-source: 433193fab10ed7ddaf196324165fce84466be118 -->
 <!-- ais-release-notes:start -->
 
 ### Features
 
 - feat(refunds): refund across the original and upgrade intents (decision 7) (#365) (5e8ab034)
+
+### Performance Improvements
+
+- perf(db): index bookingId on miles transactions, loyalty credit lots and payment receipts (review R7) (#376) (433193fa)
 
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.41.2...v1.42.0
 
