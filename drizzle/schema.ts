@@ -904,6 +904,10 @@ export const milesTransactions = mysqlTable(
       table.loyaltyAccountId
     ),
     typeIdx: index("type_idx").on(table.type),
+    // Booking statements and refund reconciliation read by booking (review R7).
+    bookingIdIdx: index("miles_transactions_booking_id_idx").on(
+      table.bookingId
+    ),
   })
 );
 
@@ -924,7 +928,11 @@ export const loyaltyCreditLots = mysqlTable(
     reversedMiles: int("reversedMiles").notNull().default(0),
     expiresAt: timestamp("expiresAt"),
   },
-  t => ({ account: index("loyalty_lots_account_idx").on(t.loyaltyAccountId) })
+  t => ({
+    account: index("loyalty_lots_account_idx").on(t.loyaltyAccountId),
+    // Reversal on cancellation looks lots up by booking (review R7).
+    booking: index("loyalty_lots_booking_idx").on(t.bookingId),
+  })
 );
 
 /**
@@ -1675,6 +1683,8 @@ export const paymentReceipts = mysqlTable(
       table.kind,
       table.paymentIntentId
     ),
+    // Refund, settlement and dispute paths lock receipts by booking (review R7).
+    bookingIdIdx: index("payment_receipts_booking_id_idx").on(table.bookingId),
   })
 );
 
@@ -1718,6 +1728,54 @@ export const ordinaryBookingRefunds = mysqlTable(
       table.status,
       table.nextAttemptAt
     ),
+  })
+);
+
+/** Decision 7 (#327): a cancellation whose refund draws on more than one
+ * collection of the booking (an order-servicing upgrade collected on its own
+ * payment intent) keeps one part per intent under its ordinary_booking_refunds
+ * row. Parts are drawn from the most recent collection first; none is 0. Each
+ * part owns its own provider request, idempotency key, status and retry; the
+ * cancellation completes only when every part has succeeded. A booking with a
+ * single intent has no parts. */
+export const ordinaryBookingRefundParts = mysqlTable(
+  "ordinary_booking_refund_parts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    sequence: int("sequence").notNull(),
+    paymentIntentId: varchar("paymentIntentId", { length: 255 })
+      .notNull()
+      .unique(),
+    operationId: varchar("operationId", { length: 255 }).notNull().unique(),
+    amount: int("amount").notNull(),
+    collectedAmount: int("collectedAmount").notNull(),
+    baseRefundedAmount: int("baseRefundedAmount").notNull(),
+    requestPayload: text("requestPayload").notNull(),
+    requestedAt: timestamp("requestedAt"),
+    refundId: varchar("refundId", { length: 255 }).unique(),
+    status: mysqlEnum("status", [
+      "queued",
+      "requesting",
+      "pending",
+      "succeeded",
+      "failed",
+      "review_required",
+    ])
+      .default("queued")
+      .notNull(),
+    providerStatus: varchar("providerStatus", { length: 32 }),
+    errorCode: varchar("errorCode", { length: 64 }),
+    nextAttemptAt: timestamp("nextAttemptAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    bookingSequence: uniqueIndex("refund_parts_booking_sequence_idx").on(
+      table.bookingId,
+      table.sequence
+    ),
+    dueIdx: index("refund_parts_due_idx").on(table.status, table.nextAttemptAt),
   })
 );
 

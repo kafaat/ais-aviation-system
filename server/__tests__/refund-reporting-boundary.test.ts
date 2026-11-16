@@ -110,6 +110,8 @@ describe("refund reporting money and failure boundaries", () => {
           reviewAmount: "3000",
         },
       ],
+      // Decision 7: parts of multi-intent cancellations (none here).
+      [{ pending: "0", pendingAmount: "0", review: "0", reviewAmount: "0" }],
       [{ amount: "2500" }],
     ];
     const db: any = { select: vi.fn(() => queryRows(results.shift()!).query) };

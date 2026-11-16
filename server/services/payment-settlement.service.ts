@@ -7,6 +7,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   bookings,
   bookingRefundItems,
+  ordinaryBookingRefundParts,
   ordinaryBookingRefunds,
   flights,
   bookingModifications,
@@ -34,6 +35,7 @@ import { CorporateAccountInactiveError } from "./corporate-settlement.service";
 import { TenantNotOperationalError } from "./tenant.service";
 import { isActiveSplitPayment } from "./booking-checkout.service";
 import { reconcileWalletFunding } from "./wallet-funding.service";
+import { CHARGEBACK_SETTLED } from "./payment-dispute.service";
 
 export interface VerifiedPayment {
   paymentIntentId: string;
@@ -708,15 +710,47 @@ export async function settleVerifiedRefund(
     )
       return;
   }
-  const [ordinaryCancellation] = ownerBooking
+  const [bookingCancellation] = ownerBooking
     ? await tx
         .select()
         .from(ordinaryBookingRefunds)
-        .where(
-          eq(ordinaryBookingRefunds.paymentIntentId, input.paymentIntentId)
-        )
+        .where(eq(ordinaryBookingRefunds.bookingId, ownerBooking.id))
         .for("update")
     : [];
+  // Decision 7: a cancellation drawn on several intents settles each intent
+  // through its own part and completes once every part has succeeded.
+  const cancellationParts = bookingCancellation
+    ? await tx
+        .select()
+        .from(ordinaryBookingRefundParts)
+        .where(
+          eq(
+            ordinaryBookingRefundParts.bookingId,
+            bookingCancellation.bookingId
+          )
+        )
+        .orderBy(ordinaryBookingRefundParts.sequence)
+        .for("update")
+    : [];
+  const partitioned = bookingCancellation && cancellationParts.length > 0;
+  const ordinaryCancellation =
+    !partitioned &&
+    bookingCancellation?.paymentIntentId === input.paymentIntentId
+      ? bookingCancellation
+      : undefined;
+  if (partitioned && !bookingCancellation.completedAt) {
+    const part = cancellationParts.find(
+      p => p.paymentIntentId === input.paymentIntentId
+    );
+    if (
+      part
+        ? part.status !== "succeeded" ||
+          part.refundId !== input.refundId ||
+          input.amountRefunded !== part.baseRefundedAmount + part.amount
+        : bookingCancellation.paymentIntentId === input.paymentIntentId
+    )
+      return;
+  }
   // The charge aggregate can include a still-pending refund. Require the saved
   // cancellation's individual success before applying it or releasing carriage.
   if (
@@ -769,6 +803,7 @@ export async function settleVerifiedRefund(
     // cancellation was adopted. Zero new money must not lose the intent.
     if (ownerBooking && ordinaryCancellation?.status === "succeeded")
       await completeOrdinaryCancellation(tx, ordinaryCancellation);
+    if (partitioned) await completeRefundParts(tx, bookingCancellation);
     return;
   }
   await tx
@@ -797,7 +832,9 @@ export async function settleVerifiedRefund(
   } else if (
     receipt.bookingId &&
     receipt.kind !== "modification" &&
-    receipt.settlementStatus === "applied"
+    receipt.settlementStatus === "applied" &&
+    // A multi-intent cancellation releases carriage once, at completion.
+    !(partitioned && !bookingCancellation.completedAt)
   ) {
     const booking = ownerBooking;
     if (!booking) throw new Error("Refund booking missing");
@@ -855,6 +892,7 @@ export async function settleVerifiedRefund(
   }
   if (ownerBooking && ordinaryCancellation?.status === "succeeded")
     await completeOrdinaryCancellation(tx, ordinaryCancellation);
+  if (partitioned) await completeRefundParts(tx, bookingCancellation);
   await recordEvent(tx, {
     aggregateType: "payment",
     aggregateId: input.paymentIntentId,
@@ -910,6 +948,114 @@ async function completeOrdinaryCancellation(
           }
     )
     .where(eq(ordinaryBookingRefunds.bookingId, intent.bookingId));
+}
+
+/** Decision 7: completes a cancellation drawn on several intents once every
+ * part has succeeded (by provider refund or, S-08, by a lost dispute's
+ * chargeback). The booking is cancelled once, here; when every collection of
+ * the booking is fully refunded it is also marked refunded (coupons R), as a
+ * single-intent full refund is. The completion event carries the money the
+ * provider returned and the last provider refund. */
+export async function completeRefundParts(
+  tx: SettlementTx,
+  intent: typeof ordinaryBookingRefunds.$inferSelect
+) {
+  if (intent.completedAt) return;
+  const parts = await tx
+    .select()
+    .from(ordinaryBookingRefundParts)
+    .where(eq(ordinaryBookingRefundParts.bookingId, intent.bookingId))
+    .orderBy(ordinaryBookingRefundParts.sequence)
+    .for("update");
+  if (!parts.length || parts.some(p => p.status !== "succeeded")) return;
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, intent.bookingId))
+    .for("update");
+  const [receipt] = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, intent.paymentIntentId))
+    .for("update");
+  if (!booking || !receipt)
+    throw new Error("Cancellation settlement owner missing");
+  const chargeback = parts.some(p => p.errorCode === CHARGEBACK_SETTLED);
+  let completed = booking.status === "cancelled";
+  if (!completed && receipt.settlementStatus === "applied") {
+    const funding = await tx
+      .select()
+      .from(paymentReceipts)
+      .where(
+        and(
+          eq(paymentReceipts.bookingId, booking.id),
+          inArray(paymentReceipts.kind, [
+            "booking",
+            "split_payment",
+            "modification",
+          ]),
+          eq(paymentReceipts.settlementStatus, "applied")
+        )
+      )
+      .for("update");
+    const allRefunded =
+      funding.length > 0 && funding.every(r => r.amount === r.refundedAmount);
+    if (allRefunded)
+      await tx
+        .update(bookings)
+        .set({ paymentStatus: "refunded" })
+        .where(eq(bookings.id, booking.id));
+    completed = await cancelAfterPartialRefund(
+      tx,
+      allRefunded ? { ...booking, paymentStatus: "refunded" } : booking,
+      intent.paymentIntentId,
+      intent.actorId,
+      chargeback
+        ? "Cancelled by customer; refund settled by the lost payment dispute"
+        : undefined
+    );
+    if (!completed && allRefunded)
+      await tx
+        .update(bookings)
+        .set({ paymentStatus: booking.paymentStatus })
+        .where(eq(bookings.id, booking.id));
+  }
+  const refunded = parts.filter(
+    p => p.refundId && p.errorCode !== CHARGEBACK_SETTLED
+  );
+  await tx
+    .update(ordinaryBookingRefunds)
+    .set(
+      completed
+        ? {
+            status: "succeeded",
+            providerStatus: refunded.length ? "succeeded" : CHARGEBACK_SETTLED,
+            errorCode: null,
+            completedAt: new Date(),
+          }
+        : {
+            status: "review_required",
+            errorCode: "cancellation_reconciliation_required",
+          }
+    )
+    .where(eq(ordinaryBookingRefunds.bookingId, intent.bookingId));
+  const amount = refunded.reduce((sum, p) => sum + p.amount, 0);
+  const last = refunded[refunded.length - 1];
+  if (completed && last?.refundId && amount > 0)
+    await recordEvent(tx, {
+      aggregateType: "booking",
+      aggregateId: intent.bookingId,
+      eventType: "booking.ordinary_refund_completed",
+      tenantId: booking.tenantId,
+      payload: {
+        bookingId: intent.bookingId,
+        userId: booking.userId,
+        actorId: intent.actorId,
+        amount,
+        refundId: last.refundId,
+        paymentIntentId: last.paymentIntentId,
+      },
+    });
 }
 
 /** A provider-confirmed, fee-bearing cancellation keeps its financial receipt
