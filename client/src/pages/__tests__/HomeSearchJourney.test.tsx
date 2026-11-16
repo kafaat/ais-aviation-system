@@ -115,6 +115,28 @@ it("names each home date button with its label and its visible text", async () =
   expect(ret).toHaveTextContent("home.search.selectDate");
   expect(ret).toHaveAccessibleName("ibe.returnDate home.search.selectDate");
 });
+it("names the home departure placeholder and the chosen return date with their visible text", async () => {
+  // The state the CI smoke scan sees: no date chosen yet.
+  calls.search = "origin=1&destination=2";
+  const user = userEvent.setup();
+  render(<Home />);
+  const departure = screen.getByTestId("home-date-trigger");
+  expect(departure).toHaveTextContent("home.search.selectDate");
+  expect(departure).toHaveAccessibleName(
+    "home.search.departureDate home.search.selectDate"
+  );
+
+  await user.click(screen.getByRole("tab", { name: "ibe.roundTrip" }));
+  await user.click(screen.getByTestId("home-return-date-trigger"));
+  fireEvent.change(screen.getByLabelText("Calendar day"), {
+    target: { value: "2027-01-20" },
+  });
+  const ret = screen.getByTestId("home-return-date-trigger");
+  const shown = ret.textContent?.trim() ?? "";
+  expect(shown).not.toBe("home.search.selectDate");
+  expect(shown).toContain("2027");
+  expect(ret).toHaveAccessibleName(`ibe.returnDate ${shown}`);
+});
 it("carries party types and display preferences from the actual home form into search", () => {
   render(<Home />);
   fireEvent.change(screen.getByLabelText("ibe.adults"), {
