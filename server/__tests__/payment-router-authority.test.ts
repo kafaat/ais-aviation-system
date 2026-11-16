@@ -296,7 +296,14 @@ describe("split-payment API ownership before disclosure or side effects", () => 
     const client = caller();
     expect(
       await client.splitPayments.initiate({ ...input, userId: 999 } as never)
-    ).toEqual({ splitIds: [20, 21], totalAmount: 10000 });
+    ).toEqual({
+      splitIds: [20, 21],
+      totalAmount: 10000,
+      requestedCount: 2,
+      sentCount: 2,
+    });
+    // Review finding R1 (#355): initiation now delivers the payer requests.
+    expect(state.split.sendAllPaymentRequests).toHaveBeenCalledWith(10);
     const results = [];
     for (const request of protectedCalls(client)) results.push(await request());
     expect(results).toEqual([
