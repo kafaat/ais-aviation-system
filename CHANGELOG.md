@@ -2,12 +2,13 @@
 
 ## What's Changed in v1.42.1
 
-<!-- ais-release-source: 5815dfce7fe1a94e75802d2dbb9f7b4bcf233fe8 -->
+<!-- ais-release-source: 58a25078ea807111039ed90a49ea63699ad6e327 -->
 <!-- ais-release-notes:start -->
 
 ### Bug Fixes
 
 - fix(split-payments): deliver payer requests when a plan is created and allow resending (review R1) (#379) (5815dfce)
+- fix(ai-pricing): show the current AI pricing state and let admins switch it off (review R5) (#380) (58a25078)
 
 ### Maintenance
 
