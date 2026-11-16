@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.41.1
+
+<!-- ais-release-source: 8e96da51f3e9d57afa0987fed9f4961266f723c5 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(server): review R7 hardenings on the server side (#367) (8e96da51)
+
+### Documentation
+
+- docs(currency): record the owner decisions that close Wave 0 (#366) (63696277)
+- docs(reports): classify the 99 catalog reports by product scope, owner-approved (#349) (ab7a6a8f)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.41.0...v1.41.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.41.0
 
 <!-- ais-release-source: e138b142197d7f745711f98d1bc4bf33a09af425 -->
