@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.41.2
+
+<!-- ais-release-source: 786c6295628fe9ddba0d9962bf8c5b4faf471a2c -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(a11y): name the date buttons with their visible text (WCAG 2.5.3) (#369) (786c6295)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.41.1...v1.41.2
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.41.1
 
 <!-- ais-release-source: 8e96da51f3e9d57afa0987fed9f4961266f723c5 -->
