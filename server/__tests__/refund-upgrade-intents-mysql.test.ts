@@ -2336,6 +2336,50 @@ nativeDescribe.sequential(
         await expectHeldUpgradeUnderReview();
       }, 60000);
 
+      it("fix: two held upgrades on other intents each go to settlement review, one event each, in intent order", async () => {
+        // A second upgrade collected on its own intent, inserted after the
+        // first but sorting before it, so the review order is not row order.
+        const early = "pi_x7_early_upgrade";
+        await fixture.db.insert(schema.paymentReceipts).values({
+          paymentIntentId: early,
+          bookingId: 71,
+          targetId: 502,
+          userId: 9,
+          kind: "modification",
+          amount: 3000,
+          refundedAmount: 0,
+          currency: "SAR",
+          settlementStatus: "applied",
+          createdAt: new Date("2030-05-06T00:00:00Z"),
+        });
+        await fixture.db
+          .update(schema.bookings)
+          .set({ totalAmount: 29000 })
+          .where(eq(schema.bookings.id, 71));
+        await chargeRefunded(original, 20000, 20000);
+        expect(await booking()).toMatchObject({
+          status: "cancelled",
+          paymentStatus: "refunded",
+        });
+        for (const held of [early, upgrade])
+          expect(await receiptSettlement(held)).toEqual({
+            status: "review_required",
+            error: heldReason,
+          });
+        expect((await reviewEvents()).map(e => e.aggregateId)).toEqual([
+          early,
+          upgrade,
+        ]);
+        const listed = await reviews();
+        expect(listed).toHaveLength(2);
+        expect(listed).toEqual(
+          expect.arrayContaining([
+            [early, "modification", 3000, 0],
+            [upgrade, "modification", 6000, 0],
+          ])
+        );
+      }, 60000);
+
       it("fix: settlement review refunds the held upgrade once, and its verified refund leaves the refunded booking unchanged", async () => {
         await legacyCancellation();
         const before = {

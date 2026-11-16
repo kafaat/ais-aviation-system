@@ -87,7 +87,9 @@ to what it still holds.
   refunds it in-app. The verified provider refund then marks it
   `review_refunded` and leaves the booking as it is. If departure blocks the
   release, the booking and its upgrade stay under departure reconciliation
-  instead. No money moves twice. What remains: bookings an older release left
+  instead. Review lists what the upgrade still holds, which can include a
+  cancellation fee kept on that intent, so the operator checks the booking's
+  cancellation before refunding it. No money moves twice. What remains: bookings an older release left
   `refunded` with an `applied` upgrade before deploy are not changed.
   `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a read-only query that
   lists them before deployment, for reconciliation.
