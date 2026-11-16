@@ -132,7 +132,8 @@ corrected each.
 Each enabled display pair has an operational alert `fx-display-rate:SAR_<code>`
 that is active while the pair has no quote the display may use: none
 recorded, expired, superseded, or observed 24 hours ago or earlier. It is
-re-evaluated after every entry and by `exchangeRates.refreshAlarms`, and
+re-evaluated every ten minutes by the worker job `displayRateAlarms`, after
+every entry and by `exchangeRates.refreshAlarms`, and
 follows the usual acknowledgement and on-call delivery of operational alerts.
 
 ## Verification limits

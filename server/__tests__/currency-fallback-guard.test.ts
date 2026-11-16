@@ -16,7 +16,11 @@ const boundary = vi.hoisted(() => ({
   db: null as unknown,
   cache: new Map<string, string>(),
 }));
-const engine = vi.hoisted(() => ({ calculateDynamicPrice: vi.fn() }));
+const engine = vi.hoisted(() => ({
+  calculateDynamicPrice: vi.fn(),
+  getPriceRange: vi.fn(),
+  getPriceForecast: vi.fn(),
+}));
 vi.mock("../db", () => ({ getDb: () => boundary.db }));
 vi.mock("../services/cache.service", () => ({
   cacheService: {
@@ -35,14 +39,15 @@ vi.mock("../services/cache.service", () => ({
   },
 }));
 vi.mock("../services/pricing/dynamic-pricing.service", () => ({
-  DynamicPricingService: {
-    calculateDynamicPrice: engine.calculateDynamicPrice,
-  },
+  DynamicPricingService: engine,
 }));
 
 import * as currency from "../services/currency/currency.service";
 
 const CURRENCY_SERVICE = "server/services/currency/currency.service.ts";
+type PricingCaller = ReturnType<
+  (typeof import("../routers/pricing.router"))["pricingRouter"]["createCaller"]
+>;
 
 /** Modules that price, quote, check out, service, settle or refund money. */
 const MONEY_PATHS = [
@@ -174,6 +179,8 @@ describe("currency fallback guard", () => {
   beforeEach(() => {
     boundary.cache.clear();
     engine.calculateDynamicPrice.mockReset();
+    engine.getPriceRange.mockReset();
+    engine.getPriceForecast.mockReset();
     fixture = relational.authorityRelationalFixture([exchangeRates]);
     boundary.db = fixture.db;
   });
@@ -265,7 +272,9 @@ describe("currency fallback guard", () => {
         currency: "USD",
       })
     ).rejects.toMatchObject({
-      message: "No current exchange rate observation: SAR to USD",
+      code: "PRECONDITION_FAILED",
+      message:
+        "No current exchange rate observation: SAR to USD. Request the price in SAR.",
     });
     expect(engine.calculateDynamicPrice).toHaveBeenCalledTimes(1);
     await expect(
@@ -305,4 +314,132 @@ describe("currency fallback guard", () => {
       })
     ).toMatchObject({ data: { convertedAmount: 25, exchangeRate: 0.25 } });
   });
+  const breakdown = {
+    basePrice: 50000,
+    demandMultiplier: 1,
+    timeMultiplier: 1,
+    occupancyMultiplier: 1,
+    seasonalMultiplier: 1,
+    aiMultiplier: 1,
+    promoDiscount: 0,
+    taxes: 0,
+    fees: 0,
+    total: 50000,
+  };
+  const validUntil = new Date("2030-01-01T00:00:00Z");
+  const forecastDate = new Date("2030-01-02T00:00:00Z");
+  const routes = {
+    calculate: {
+      call: (caller: PricingCaller, currency: string) =>
+        caller.calculate({
+          flightId: 1,
+          cabinClass: "economy",
+          passengers: 1,
+          currency,
+        }),
+      engine: engine.calculateDynamicPrice,
+      sar: {
+        success: true,
+        data: {
+          basePrice: 50000,
+          finalPrice: 50000,
+          convertedPrice: 50000,
+          currency: "SAR",
+          breakdown,
+          validUntil,
+          priceId: "price-fx-guard",
+          formatted: "500.00 ر.س",
+        },
+      },
+    },
+    getPriceRange: {
+      call: (caller: PricingCaller, currency: string) =>
+        caller.getPriceRange({
+          originId: 1,
+          destinationId: 2,
+          cabinClass: "economy",
+          startDate: "2030-01-01T00:00:00.000Z",
+          endDate: "2030-01-31T00:00:00.000Z",
+          currency,
+        }),
+      engine: engine.getPriceRange,
+      sar: {
+        success: true,
+        data: {
+          min: 40000,
+          max: 60000,
+          average: 50000,
+          currency: "SAR",
+          formattedMin: "400.00 ر.س",
+          formattedMax: "600.00 ر.س",
+        },
+      },
+    },
+    getForecast: {
+      call: (caller: PricingCaller, currency: string) =>
+        caller.getForecast({
+          flightId: 1,
+          cabinClass: "economy",
+          days: 1,
+          currency,
+        }),
+      engine: engine.getPriceForecast,
+      sar: {
+        success: true,
+        data: {
+          forecast: [
+            {
+              date: forecastDate,
+              predictedPrice: 50000,
+              formatted: "500.00 ر.س",
+            },
+          ],
+          currency: "SAR",
+        },
+      },
+    },
+  } as const;
+
+  it.each(Object.keys(routes) as Array<keyof typeof routes>)(
+    "fix: pricing.%s answers a non-SAR request without a rate with PRECONDITION_FAILED and a SAR request unchanged",
+    async name => {
+      engine.calculateDynamicPrice.mockResolvedValue({
+        basePrice: 50000,
+        finalPrice: 50000,
+        breakdown,
+        validUntil,
+        priceId: "price-fx-guard",
+      });
+      engine.getPriceRange.mockResolvedValue({
+        min: 40000,
+        max: 60000,
+        average: 50000,
+      });
+      engine.getPriceForecast.mockResolvedValue([
+        { date: forecastDate, predictedPrice: 50000 },
+      ]);
+      const { pricingRouter } = await import("../routers/pricing.router");
+      const caller = pricingRouter.createCaller({
+        user: null,
+        tenantId: null,
+        authMethod: null,
+        req: { headers: {} },
+        res: undefined,
+      } as unknown as TrpcContext);
+      const route = routes[name];
+      for (const currency of ["USD", "EUR"])
+        await expect(route.call(caller, currency)).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: `No current exchange rate observation: SAR to ${currency}. Request the price in SAR.`,
+        });
+      expect(await route.call(caller, "SAR")).toEqual(route.sar);
+      // Only a missing rate is a precondition; an engine fault stays a
+      // server error.
+      route.engine.mockRejectedValueOnce(new Error("engine down"));
+      await expect(route.call(caller, "USD")).rejects.toMatchObject({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "engine down",
+      });
+    }
+  );
 });

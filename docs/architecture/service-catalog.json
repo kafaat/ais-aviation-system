@@ -2149,6 +2149,7 @@
         "server/jobs/check-in-reminder.job.ts",
         "server/jobs/loyalty-cleanup.job.ts",
         "server/services/bag-drop.service.ts",
+        "server/services/currency/operator-rates.service.ts",
         "server/services/data-warehouse.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/gdpr.service.ts",
@@ -2210,7 +2211,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/exchange-rates.ts"],
+      "consumers": [
+        "server/routers/exchange-rates.ts",
+        "server/services/cron.service.ts"
+      ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/_core/logger.ts",

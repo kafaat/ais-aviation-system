@@ -10,8 +10,26 @@ import { responseContracts } from "../contracts/pricing.router";
 import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { DynamicPricingService } from "../services/pricing/dynamic-pricing.service";
-import { CurrencyService } from "../services/currency/currency.service";
+import {
+  CurrencyService,
+  ExchangeRateUnavailableError,
+} from "../services/currency/currency.service";
 import { TRPCError } from "@trpc/server";
+
+/** No converted price is quoted without an observed rate (#319 Wave 1). A
+ * missing rate is a client-visible precondition, not a server fault. */
+function pricingError(error: unknown, fallback: string): TRPCError {
+  if (error instanceof ExchangeRateUnavailableError)
+    return new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `${error.message}. Request the price in SAR.`,
+      cause: error,
+    });
+  return new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: error instanceof Error ? error.message : fallback,
+  });
+}
 
 // ============================================================================
 // Input Schemas
@@ -120,13 +138,7 @@ export const pricingRouter = router({
           },
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to calculate price",
-        });
+        throw pricingError(error, "Failed to calculate price");
       }
     }),
 
@@ -202,13 +214,7 @@ export const pricingRouter = router({
           },
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to get price range",
-        });
+        throw pricingError(error, "Failed to get price range");
       }
     }),
 
@@ -291,11 +297,7 @@ export const pricingRouter = router({
           },
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            error instanceof Error ? error.message : "Failed to get forecast",
-        });
+        throw pricingError(error, "Failed to get forecast");
       }
     }),
 
