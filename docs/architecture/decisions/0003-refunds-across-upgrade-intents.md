@@ -76,16 +76,19 @@ to what it still holds.
   forensic completion check and its preflight SQL. Departure and DCS
   finalization are unchanged: the parent row of a multi-intent cancellation has
   no refund id, so a failed one always needs reconciliation.
-- **Known limit (legacy replay).** A refund an older release already made or
-  queued on the original intent alone still settles through the single-intent
-  rule. That rule now counts applied `modification` receipts. The booking
-  becomes `refunded` only when the original collection and every applied
-  upgrade are fully refunded. Until then it stays `cancelled` and `paid`, as
-  after a partial cancellation. A later refund of the upgrade intent, recorded
-  by the verified provider webhook, then marks it `refunded`. No in-app command
-  sends that refund today; reconciliation sends it at the provider. No money
-  moves twice. What remains: bookings an older release already left `refunded`
-  while an upgrade intent still holds money are not changed by this fix.
+- **Known limit (legacy replay).** A refund an older release made or queued
+  on the original intent alone, or a full refund of that intent made at the
+  provider, still settles through the single-intent rule. The booking becomes
+  `cancelled` and `refunded`, as before. What changed: an applied upgrade on
+  another intent that still holds money now goes to settlement review. Its
+  receipt becomes `review_required`, with one
+  `payment.settlement_review_required` event per upgrade intent.
+  `listSettlementReviews` lists it, and `requestSettlementReviewRefund`
+  refunds it in-app. The verified provider refund then marks it
+  `review_refunded` and leaves the booking as it is. If departure blocks the
+  release, the booking and its upgrade stay under departure reconciliation
+  instead. No money moves twice. What remains: bookings an older release left
+  `refunded` with an `applied` upgrade before deploy are not changed.
   `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a read-only query that
   lists them before deployment, for reconciliation.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix

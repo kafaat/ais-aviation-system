@@ -491,6 +491,38 @@ async function requireCollectionReview(
   });
 }
 
+const heldUpgradeReviewReason =
+  "Booking refunded on its original collection while this upgrade collection still holds money";
+
+/** Decision 7, legacy replay (ADR 0003): a refund made on the original intent
+ * alone settles through the single-intent rule, which refunds the booking. An
+ * applied upgrade collected on another intent that still holds money goes to
+ * settlement review, where an operator can refund it, instead of staying
+ * applied on a refunded booking. One review event per upgrade intent. The
+ * caller passes the booking's applied receipts, read under its locks. */
+async function reviewHeldUpgradeCollections(
+  tx: SettlementTx,
+  booking: typeof bookings.$inferSelect,
+  appliedReceipts: (typeof paymentReceipts.$inferSelect)[],
+  refundedPaymentIntentId: string
+) {
+  const held = appliedReceipts
+    .filter(
+      r =>
+        r.kind === "modification" &&
+        r.paymentIntentId !== refundedPaymentIntentId &&
+        r.refundedAmount < r.amount
+    )
+    .sort((a, b) => a.paymentIntentId.localeCompare(b.paymentIntentId));
+  for (const upgrade of held)
+    await requireCollectionReview(
+      tx,
+      upgrade,
+      booking,
+      heldUpgradeReviewReason
+    );
+}
+
 async function confirmCollectedBooking(
   tx: SettlementTx,
   booking: typeof bookings.$inferSelect,
@@ -831,18 +863,15 @@ export async function settleVerifiedRefund(
     });
   } else if (
     receipt.bookingId &&
+    receipt.kind !== "modification" &&
     receipt.settlementStatus === "applied" &&
     // A multi-intent cancellation releases carriage once, at completion.
     !(partitioned && !bookingCancellation.completedAt)
   ) {
     const booking = ownerBooking;
     if (!booking) throw new Error("Refund booking missing");
-    // Decision 7: an applied upgrade collected on its own intent is part of
-    // the booking's money. The booking is refunded only once the original
-    // collection and every such upgrade are fully refunded, so a legacy
-    // cancellation of the original intent alone leaves it paid, and the later
-    // refund of the upgrade intent completes it. An upgrade alone, without an
-    // applied original collection, never cancels the booking.
+    // Applied upgrades are read under the same lock for the review below;
+    // only booking and split collections decide the booking's refund.
     const receipts = await tx
       .select()
       .from(paymentReceipts)
@@ -858,9 +887,10 @@ export async function settleVerifiedRefund(
         )
       )
       .for("update");
+    const collections = receipts.filter(r => r.kind !== "modification");
     const allRefunded =
-      receipts.some(r => r.kind !== "modification") &&
-      receipts.every(r => r.amount === r.refundedAmount);
+      collections.length > 0 &&
+      collections.every(r => r.amount === r.refundedAmount);
     if (allRefunded) {
       try {
         couponTransitions = await releaseBookingSeats(tx, booking, "refunded");
@@ -868,6 +898,14 @@ export async function settleVerifiedRefund(
           .update(bookings)
           .set({ status: "cancelled", paymentStatus: "refunded" })
           .where(eq(bookings.id, booking.id));
+        // Only once the booking is refunded: a blocked departure release
+        // keeps the booking, and its upgrade, under departure reconciliation.
+        await reviewHeldUpgradeCollections(
+          tx,
+          booking,
+          receipts,
+          input.paymentIntentId
+        );
       } catch (error) {
         if (!(error instanceof DepartureReleaseError)) throw error;
         await requireCollectionReview(tx, input, booking, error.message);
