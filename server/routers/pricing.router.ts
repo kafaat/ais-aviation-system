@@ -25,14 +25,30 @@ const calculatePriceInput = z.object({
   promoCode: z.string().optional(),
 });
 
-const getPriceRangeInput = z.object({
-  originId: z.number().int().positive(),
-  destinationId: z.number().int().positive(),
-  cabinClass: z.enum(["economy", "business"]),
-  startDate: z.string().datetime(),
-  endDate: z.string().datetime(),
-  currency: z.string().length(3).default("SAR"),
-});
+/** The public range query scans one row per departure day; an open window let
+ * an anonymous caller ask for decades (review R7). One year is the fare
+ * calendar horizon. */
+export const MAX_PRICE_RANGE_DAYS = 366;
+const getPriceRangeInput = z
+  .object({
+    originId: z.number().int().positive(),
+    destinationId: z.number().int().positive(),
+    cabinClass: z.enum(["economy", "business"]),
+    startDate: z.string().datetime(),
+    endDate: z.string().datetime(),
+    currency: z.string().length(3).default("SAR"),
+  })
+  .refine(
+    input => {
+      const span =
+        (Date.parse(input.endDate) - Date.parse(input.startDate)) / 86_400_000;
+      return span >= 0 && span <= MAX_PRICE_RANGE_DAYS;
+    },
+    {
+      message: `endDate must not precede startDate and the window may span at most ${MAX_PRICE_RANGE_DAYS} days`,
+      path: ["endDate"],
+    }
+  );
 
 const validatePriceInput = z.object({
   priceId: z.string(),

@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { canServiceOrder } from "./services/ndc-capabilities";
 import {
   and,
@@ -1085,10 +1086,12 @@ export async function updateFlightAvailability(
 
 // Helper function to generate unique booking reference
 export function generateBookingReference(): string {
+  // A booking reference is a bearer of sorts (manage-booking, kiosk sign-in),
+  // so it is drawn from the OS random source, not Math.random (review R7).
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let result = "";
   for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(randomInt(chars.length));
   }
   return result;
 }

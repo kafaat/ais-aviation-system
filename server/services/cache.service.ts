@@ -249,18 +249,21 @@ class CacheService {
   /**
    * Delete value from cache
    */
-  async del(key: string): Promise<void> {
+  /** Returns how many keys were removed (0 when disconnected or on error). */
+  async del(key: string): Promise<number> {
     if (!this.isConnected()) {
-      return;
+      return 0;
     }
 
     try {
       const client = this.client;
-      if (!client) return;
-      await client.del(key);
-      logger.debug({ key }, "Cache delete");
+      if (!client) return 0;
+      const removed = await client.del(key);
+      logger.debug({ key, removed }, "Cache delete");
+      return removed;
     } catch (error) {
       logger.error({ key, error }, "Cache delete error");
+      return 0;
     }
   }
 
