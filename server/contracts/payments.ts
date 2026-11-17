@@ -14,6 +14,22 @@ const settlementReview = z.object({
   settlementError: z.union([z.null(), z.string()]),
   createdAt: z.date(),
 });
+const servicingRefundStatus = z.enum([
+  "queued",
+  "requesting",
+  "pending",
+  "succeeded",
+  "failed",
+  "review_required",
+  "cancelled",
+]);
+const servicingRefundResolution = {
+  requestId: z.string(),
+  status: servicingRefundStatus,
+  attempt: outputNumber,
+  errorCode: z.union([z.null(), z.string()]),
+  refundId: z.union([z.null(), z.string()]),
+};
 export const responseContracts = {
   getCheckoutState: z.object({
     bookingId: outputNumber,
@@ -40,6 +56,45 @@ export const responseContracts = {
   }),
   settlementReviews: z.array(settlementReview),
   settlementReview,
+  servicingRefundReviews: z.array(
+    z.object({
+      id: z.string(),
+      origin: z.enum(["exchange", "flight_cancellation"]),
+      status: z.enum(["failed", "review_required"]),
+      bookingId: outputNumber,
+      bookingReference: z.union([z.null(), z.string()]),
+      modificationId: z.union([z.null(), outputNumber]),
+      cancellationFlightId: z.union([z.null(), outputNumber]),
+      paymentIntentId: z.string(),
+      amount: outputNumber,
+      currency: z.literal("SAR"),
+      errorCode: z.union([z.null(), z.string()]),
+      refundId: z.union([z.null(), z.string()]),
+      attempt: outputNumber,
+      requestedAt: z.union([z.null(), z.date()]),
+      createdAt: z.date(),
+    })
+  ),
+  reconcileServicingRefund: z.object({
+    ...servicingRefundResolution,
+    outcome: z.enum([
+      "settled",
+      "pending",
+      "provider_failed",
+      "no_provider_refund",
+      "review_required",
+      "unchanged",
+    ]),
+  }),
+  retryServicingRefund: z.object({
+    ...servicingRefundResolution,
+    replayed: z.boolean(),
+  }),
+  cancelServicingRefund: z.object({
+    ...servicingRefundResolution,
+    settlementReview: z.boolean(),
+    replayed: z.boolean(),
+  }),
   getProviders: z.array(
     z.object({
       integrationState: z

@@ -1,0 +1,1566 @@
+import { eq, sql } from "drizzle-orm";
+import type { RowDataPacket } from "mysql2/promise";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import * as schema from "../../drizzle/schema";
+import {
+  createPaidBookingNativeFixture,
+  type PaidBookingNativeFixture,
+} from "./helpers/paid-booking-native-fixture";
+
+/**
+ * Issue #382 (ADR 0003 follow-up): failed and review_required servicing
+ * refunds (order_service_refunds) of both origins, exchange and flight
+ * cancellation, are listed for operators and resolved in-app: reconcile
+ * (provider read only), retry after a definitive provider failure (a new
+ * attempt key), and cancel with a reason (the held upgrade money goes to
+ * settlement review). Booking 71 collected 20000 on its original intent and
+ * 6000 on an upgrade intent. These cases drive the payments router, the
+ * refund worker and the verified Stripe event path on migrated native MySQL
+ * tables; provider responses are synthetic.
+ *
+ * "fix" cases fail on 036417292c; "control" cases pass there too.
+ */
+const provider = vi.hoisted(() => ({
+  db: null as any,
+  refunds: [] as any[],
+  refuse: new Set<string>(),
+  failing: new Set<string>(),
+  status: "succeeded",
+  create: null as any,
+  retrieve: null as any,
+  list: null as any,
+  email: null as any,
+}));
+vi.mock("../db", () => ({ getDb: () => provider.db }));
+vi.mock("../services/email.service", () => ({
+  sendRefundConfirmation: (...args: unknown[]) => provider.email(...args),
+}));
+vi.mock("../stripe", () => ({
+  stripe: {
+    refunds: {
+      create: (...args: unknown[]) => provider.create(...args),
+      retrieve: (...args: unknown[]) => provider.retrieve(...args),
+      list: (...args: unknown[]) => provider.list(...args),
+    },
+  },
+}));
+vi.mock("../_core/middleware/procedure-rate-limit", () => ({
+  enforceProcedureRateLimit: vi.fn(),
+}));
+import { processStripeEvent } from "../webhooks/stripe";
+import {
+  assertNoOrderRefundPending,
+  processPendingOrderRefunds,
+} from "../services/order-refunds.service";
+import {
+  processFlightCancellations,
+  requestFlightCancellation,
+} from "../services/flight-cancellation.service";
+import {
+  listSettlementReviews,
+  requestSettlementReviewRefund,
+} from "../services/settlement-review.service";
+import { lostDisputeCover } from "../services/payment-dispute.service";
+import { getExchangeContext } from "../services/order-exchange-context.service";
+import { paymentsRouter } from "../routers/payments";
+import type { TrpcContext } from "../_core/context";
+
+const nativeDescribe =
+  process.env.AIS_DISPOSABLE_DATABASE === "true" &&
+  process.env.NODE_ENV === "test" &&
+  process.env.DATABASE_URL
+    ? describe
+    : describe.skip;
+
+const now = new Date("2030-05-20T06:00:00Z");
+const original = "pi_r382_original";
+const upgrade = "pi_r382_upgrade";
+const requestId = "00000000-0000-4000-8000-000000000382";
+const collected: Record<string, number> = {
+  [original]: 20000,
+  [upgrade]: 6000,
+};
+const later = (minutes: number) =>
+  vi.setSystemTime(new Date(now.getTime() + minutes * 60_000));
+const heldReason =
+  "Booking refunded on its original collection while this upgrade collection still holds money";
+const reason = "Customer refunded by bank transfer, case 4411";
+const REVIEW_CODES = [
+  "unknown_provider_outcome",
+  "duplicate_provider_refund",
+  "provider_refund_balance_conflict",
+  "provider_history_limit",
+] as const;
+const NON_ADMIN_ROLES = ["user", "support", "airline_admin", "finance", "ops"];
+
+function caller(role = "admin") {
+  return paymentsRouter.createCaller({
+    user: { id: 20, role, tenantId: 3 },
+    tenantId: null,
+    authMethod: "bearer",
+    req: { ip: "198.51.100.82", headers: {} },
+    res: {},
+  } as unknown as TrpcContext);
+}
+
+nativeDescribe.sequential(
+  "issue #382: operator resolution of failed servicing refunds on native MySQL",
+  () => {
+    let fixture: PaidBookingNativeFixture;
+    let sequence = 0;
+
+    const keys = () =>
+      provider.create.mock.calls.map(
+        ([, options]: [unknown, { idempotencyKey?: string }]) =>
+          options?.idempotencyKey
+      );
+    async function row(id = requestId) {
+      const [saved] = await fixture.db
+        .select()
+        .from(schema.orderServiceRefunds)
+        .where(eq(schema.orderServiceRefunds.id, id));
+      return saved;
+    }
+    async function rows() {
+      return fixture.db
+        .select()
+        .from(schema.orderServiceRefunds)
+        .orderBy(schema.orderServiceRefunds.paymentIntentId);
+    }
+    async function attempts() {
+      return (
+        await fixture.db
+          .select()
+          .from(schema.orderServiceRefundAttempts)
+          .orderBy(schema.orderServiceRefundAttempts.attempt)
+      ).map(({ requestId, attempt, refundId, status, errorCode }) => ({
+        requestId,
+        attempt,
+        refundId,
+        status,
+        errorCode,
+      }));
+    }
+    async function receipts() {
+      const saved = await fixture.db.select().from(schema.paymentReceipts);
+      return Object.fromEntries(
+        saved.map(r => [r.paymentIntentId, r.refundedAmount])
+      );
+    }
+    async function receiptSettlement(paymentIntentId: string) {
+      const [saved] = await fixture.db
+        .select({
+          status: schema.paymentReceipts.settlementStatus,
+          error: schema.paymentReceipts.settlementError,
+        })
+        .from(schema.paymentReceipts)
+        .where(eq(schema.paymentReceipts.paymentIntentId, paymentIntentId));
+      return saved;
+    }
+    async function refundLedger() {
+      return (
+        await fixture.db
+          .select({
+            type: schema.financialLedger.type,
+            amount: schema.financialLedger.amount,
+            paymentIntentId: schema.financialLedger.stripePaymentIntentId,
+          })
+          .from(schema.financialLedger)
+          .orderBy(schema.financialLedger.id)
+      ).filter(r => ["refund", "partial_refund"].includes(r.type));
+    }
+    async function events(eventType: string) {
+      return (
+        await fixture.db
+          .select()
+          .from(schema.outbox)
+          .where(eq(schema.outbox.eventType, eventType))
+          .orderBy(schema.outbox.id)
+      ).map(r => r.payload as Record<string, unknown>);
+    }
+    async function booking() {
+      const [saved] = await fixture.db
+        .select()
+        .from(schema.bookings)
+        .where(eq(schema.bookings.id, 71));
+      return saved;
+    }
+    async function resolutionAudits() {
+      return (
+        await fixture.db
+          .select()
+          .from(schema.auditLogs)
+          .orderBy(schema.auditLogs.id)
+      ).filter(r => r.eventType.startsWith("ORDER_REFUND_"));
+    }
+    async function liabilityOpen() {
+      return fixture.db
+        .transaction(tx => assertNoOrderRefundPending(tx as never, 71))
+        .then(
+          () => false,
+          (error: Error) => /liability/.test(error.message)
+        );
+    }
+    async function deliverRefund(refund: any, id = `evt_r382_${++sequence}`) {
+      await fixture.db.transaction(tx =>
+        processStripeEvent(
+          tx as never,
+          { id, type: "refund.updated", data: { object: refund } } as never
+        )
+      );
+    }
+    const chargeRefunded = (paymentIntentId: string, refunded: number) =>
+      fixture.db.transaction(tx =>
+        processStripeEvent(
+          tx as never,
+          {
+            id: `evt_r382_${++sequence}`,
+            type: "charge.refunded",
+            data: {
+              object: {
+                id: `ch_${paymentIntentId}`,
+                object: "charge",
+                payment_intent: paymentIntentId,
+                amount: collected[paymentIntentId],
+                amount_refunded: refunded,
+                currency: "sar",
+              },
+            },
+          } as never
+        )
+      );
+    async function deliverDispute(
+      type: string,
+      paymentIntentId: string,
+      amount: number,
+      status: string
+    ) {
+      await fixture.db.transaction(tx =>
+        processStripeEvent(
+          tx as never,
+          {
+            id: `evt_r382_${++sequence}`,
+            type,
+            data: {
+              object: {
+                id: `dp_r382_${paymentIntentId}`,
+                object: "dispute",
+                charge: `ch_${paymentIntentId}`,
+                payment_intent: paymentIntentId,
+                amount,
+                currency: "sar",
+                status,
+                reason: "fraudulent",
+              },
+            },
+          } as never
+        )
+      );
+    }
+    const withdraw = (paymentIntentId: string, amount: number) =>
+      deliverDispute(
+        "charge.dispute.funds_withdrawn",
+        paymentIntentId,
+        amount,
+        "under_review"
+      );
+    const lose = (paymentIntentId: string, amount: number) =>
+      deliverDispute("charge.dispute.closed", paymentIntentId, amount, "lost");
+    async function saveServicing(
+      values: Partial<typeof schema.orderServiceRefunds.$inferInsert> = {}
+    ) {
+      await fixture.db.insert(schema.orderServiceRefunds).values({
+        id: requestId,
+        bookingId: 71,
+        modificationId: 9001,
+        paymentIntentId: upgrade,
+        amount: 6000,
+        baseRefundedAmount: 0,
+        status: "queued",
+        nextAttemptAt: now,
+        createdAt: new Date(now.getTime() - 60_000),
+        ...values,
+      });
+    }
+    // Saved as order servicing saves it, then refused by the provider through
+    // the worker: failed, with the refused refund recorded.
+    async function failServicing(
+      values: Partial<typeof schema.orderServiceRefunds.$inferInsert> = {}
+    ) {
+      await saveServicing(values);
+      const intent = values.paymentIntentId ?? upgrade;
+      provider.refuse.add(intent);
+      await processPendingOrderRefunds();
+      provider.refuse.delete(intent);
+      const saved = await row(values.id ?? requestId);
+      expect(saved).toMatchObject({
+        status: "failed",
+        errorCode: "provider_refund_failed",
+      });
+      return provider.refunds.find(r => r.id === saved.refundId);
+    }
+    // Two operators retrying the same reviewed attempt at once, while a
+    // transaction holds the booking lock: both must wait on it.
+    async function waitForWaiters(count: number) {
+      for (let i = 0; i < 250; i++) {
+        const [found] = await fixture.admin.query<RowDataPacket[]>(
+          "SELECT COUNT(DISTINCT w.REQUESTING_ENGINE_TRANSACTION_ID) AS waiting FROM performance_schema.data_lock_waits w JOIN performance_schema.data_locks l ON l.ENGINE=w.ENGINE AND l.ENGINE_LOCK_ID=w.REQUESTING_ENGINE_LOCK_ID WHERE l.OBJECT_SCHEMA=?",
+          [fixture.databaseName]
+        );
+        if (Number(found[0]?.waiting) >= count) return;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      throw new Error(`Expected ${count} InnoDB waiters on the booking lock`);
+    }
+    async function retryConcurrently() {
+      const holder = await fixture.pool.getConnection();
+      try {
+        await holder.query("START TRANSACTION");
+        await holder.query("SELECT id FROM bookings WHERE id = 71 FOR UPDATE");
+        const first = caller().retryServicingRefund({ requestId, attempt: 1 });
+        const second = caller().retryServicingRefund({ requestId, attempt: 1 });
+        const settled = Promise.allSettled([first, second]);
+        try {
+          await waitForWaiters(2);
+        } finally {
+          await holder.query("COMMIT");
+        }
+        return await settled;
+      } finally {
+        holder.release();
+      }
+    }
+
+    beforeAll(async () => {
+      fixture = await createPaidBookingNativeFixture("ais_api_process");
+    }, 60000);
+    beforeEach(async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(now);
+      await fixture.reset();
+      await fixture.seed();
+      sequence = 0;
+      provider.db = fixture.db;
+      provider.refunds = [];
+      provider.refuse = new Set();
+      provider.failing = new Set();
+      provider.status = "succeeded";
+      provider.email = vi.fn(async () => true);
+      provider.retrieve = vi.fn(
+        async (id: string) => provider.refunds.find(r => r.id === id) ?? null
+      );
+      provider.list = vi.fn((params: { payment_intent?: string }) => ({
+        async *[Symbol.asyncIterator]() {
+          for (const refund of provider.refunds)
+            if (refund.payment_intent === params.payment_intent) yield refund;
+        },
+      }));
+      provider.create = vi.fn(
+        async (request: any, options?: { idempotencyKey?: string }) => {
+          if (provider.failing.has(request.payment_intent))
+            throw new Error("Synthetic provider outage");
+          const replay = provider.refunds.find(
+            r => r.idempotencyKey === options?.idempotencyKey
+          );
+          if (replay) return replay;
+          const refund = {
+            id: `re_${request.payment_intent}_${provider.refunds.length + 1}`,
+            object: "refund",
+            status: provider.refuse.has(request.payment_intent)
+              ? "failed"
+              : provider.status,
+            // Without an amount the provider refunds what the intent holds.
+            amount:
+              request.amount ??
+              collected[request.payment_intent] -
+                provider.refunds
+                  .filter(
+                    r =>
+                      r.payment_intent === request.payment_intent &&
+                      r.status === "succeeded"
+                  )
+                  .reduce((sum, r) => sum + r.amount, 0),
+            currency: "sar",
+            payment_intent: request.payment_intent,
+            charge: `ch_${request.payment_intent}`,
+            metadata: request.metadata,
+            idempotencyKey: options?.idempotencyKey,
+          };
+          provider.refunds.push(refund);
+          return refund;
+        }
+      );
+      await fixture.db.insert(schema.users).values({
+        id: 20,
+        openId: "native-r382-operator",
+        tenantId: 3,
+        role: "admin",
+      });
+      await fixture.db
+        .update(schema.bookings)
+        .set({
+          status: "confirmed",
+          paymentStatus: "paid",
+          seatsReserved: true,
+          stripePaymentIntentId: original,
+          totalAmount: 26000,
+          createdAt: new Date("2030-05-01T00:00:00Z"),
+        })
+        .where(eq(schema.bookings.id, 71));
+      await fixture.db
+        .update(schema.flights)
+        .set({ economyAvailable: 6 })
+        .where(eq(schema.flights.id, 41));
+      await fixture.db.insert(schema.paymentReceipts).values([
+        {
+          paymentIntentId: original,
+          bookingId: 71,
+          targetId: 71,
+          userId: 9,
+          kind: "booking",
+          amount: 20000,
+          refundedAmount: 0,
+          currency: "SAR",
+          settlementStatus: "applied",
+          createdAt: new Date("2030-05-01T00:00:00Z"),
+        },
+        {
+          paymentIntentId: upgrade,
+          bookingId: 71,
+          targetId: 9001,
+          userId: 9,
+          kind: "modification",
+          amount: 6000,
+          refundedAmount: 0,
+          currency: "SAR",
+          settlementStatus: "applied",
+          createdAt: new Date("2030-05-05T00:00:00Z"),
+        },
+      ]);
+      await fixture.db.insert(schema.payments).values({
+        tenantId: 3,
+        bookingId: 71,
+        amount: 20000,
+        currency: "SAR",
+        method: "card",
+        provider: "stripe",
+        status: "completed",
+        stripePaymentIntentId: original,
+      });
+      for (const [i, passengerId] of [81, 82].entries()) {
+        const ticketNumber = `06500000000${passengerId}`;
+        await fixture.db
+          .update(schema.passengers)
+          .set({ ticketNumber })
+          .where(eq(schema.passengers.id, passengerId));
+        await fixture.db.insert(schema.ticketCoupons).values({
+          bookingId: 71,
+          passengerId,
+          flightId: 41,
+          ticketNumber,
+          couponNumber: 1,
+          status: "O",
+        });
+        await fixture.db.insert(schema.seatInventory).values({
+          flightId: 41,
+          seatMapId: 1,
+          seatNumber: `12${i ? "B" : "A"}`,
+          row: 12,
+          column: i ? "B" : "A",
+          cabinClass: "economy",
+          seatType: "window",
+          status: "available",
+        });
+      }
+    }, 40000);
+    afterEach(() => vi.useRealTimers());
+    afterAll(async () => {
+      await fixture?.close();
+    });
+
+    describe("operator list", () => {
+      it("fix: a provider-failed exchange servicing refund is listed with its booking, intent, amount and error code", async () => {
+        const refused = await failServicing();
+        const listed = await caller().servicingRefundReviews({ limit: 50 });
+        expect(listed).toEqual([
+          {
+            id: requestId,
+            origin: "exchange",
+            status: "failed",
+            bookingId: 71,
+            bookingReference: "NM0071",
+            modificationId: 9001,
+            cancellationFlightId: null,
+            paymentIntentId: upgrade,
+            amount: 6000,
+            currency: "SAR",
+            errorCode: "provider_refund_failed",
+            refundId: refused.id,
+            attempt: 1,
+            requestedAt: expect.any(Date),
+            createdAt: expect.any(Date),
+          },
+        ]);
+      }, 60000);
+
+      it("fix: provider-failed flight-cancellation servicing refunds are listed too", async () => {
+        provider.refuse = new Set([original, upgrade]);
+        await requestFlightCancellation({
+          flightId: 41,
+          reason: "Native r382 flight cancellation",
+          actorId: 20,
+          tenantId: 3,
+        });
+        await processFlightCancellations();
+        const listed = await caller().servicingRefundReviews({ limit: 50 });
+        expect(
+          listed
+            .map(r => [
+              r.origin,
+              r.status,
+              r.bookingReference,
+              r.cancellationFlightId,
+              r.modificationId,
+              r.paymentIntentId,
+              r.amount,
+              r.errorCode,
+              r.attempt,
+            ])
+            .sort((a, b) => String(a[5]).localeCompare(String(b[5])))
+        ).toEqual([
+          [
+            "flight_cancellation",
+            "failed",
+            "NM0071",
+            41,
+            null,
+            original,
+            20000,
+            "provider_refund_failed",
+            1,
+          ],
+          [
+            "flight_cancellation",
+            "failed",
+            "NM0071",
+            41,
+            null,
+            upgrade,
+            6000,
+            "provider_refund_failed",
+            1,
+          ],
+        ]);
+      }, 60000);
+
+      it("fix: only failed and review_required rows are listed, newest first, within the limit", async () => {
+        const at = (minutes: number) =>
+          new Date(now.getTime() + minutes * 60_000);
+        const ids = (n: number) => `00000000-0000-4000-8000-00000000038${n}`;
+        const statuses = [
+          ["failed", 1],
+          ["review_required", 2],
+          ["failed", 3],
+          ["succeeded", 4],
+          ["queued", 5],
+          ["cancelled", 6],
+        ] as const;
+        for (const [status, n] of statuses)
+          await saveServicing({
+            id: ids(n),
+            modificationId: 9000 + n,
+            status,
+            errorCode:
+              status === "review_required" ? "unknown_provider_outcome" : null,
+            createdAt: at(n),
+          });
+        expect(
+          (await caller().servicingRefundReviews({ limit: 50 })).map(r => r.id)
+        ).toEqual([ids(3), ids(2), ids(1)]);
+        expect(
+          (await caller().servicingRefundReviews({ limit: 2 })).map(r => r.id)
+        ).toEqual([ids(3), ids(2)]);
+        await expect(
+          caller().servicingRefundReviews({ limit: 101 })
+        ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      }, 60000);
+    });
+
+    describe("reconcile", () => {
+      it("fix: a review_required row whose provider refund later succeeded settles once, as a normal success would", async () => {
+        // An exchange refund of 5000 on the original intent: its request was
+        // sent a day ago and the provider showed no refund, so the worker
+        // could not know the outcome.
+        await saveServicing({
+          paymentIntentId: original,
+          amount: 5000,
+          status: "requesting",
+          requestedAt: new Date(now.getTime() - 24 * 3600_000),
+          nextAttemptAt: new Date(now.getTime() - 60_000),
+        });
+        await processPendingOrderRefunds();
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "unknown_provider_outcome",
+        });
+        expect(provider.create).not.toHaveBeenCalled();
+        // The provider now shows the request's refund, succeeded.
+        const late = {
+          id: "re_r382_late",
+          object: "refund",
+          status: "succeeded",
+          amount: 5000,
+          currency: "sar",
+          payment_intent: original,
+          charge: `ch_${original}`,
+          metadata: { orderServiceRefundId: requestId, modificationId: "9001" },
+        };
+        provider.refunds.push(late);
+        const answer = await caller().reconcileServicingRefund({ requestId });
+        expect(answer).toEqual({
+          requestId,
+          status: "succeeded",
+          attempt: 1,
+          errorCode: null,
+          refundId: late.id,
+          outcome: "settled",
+        });
+        const settled = async () => {
+          expect(await row()).toMatchObject({
+            status: "succeeded",
+            refundId: late.id,
+            completedAt: expect.any(Date),
+          });
+          expect(await receipts()).toEqual({ [original]: 5000, [upgrade]: 0 });
+          expect(await refundLedger()).toEqual([
+            {
+              type: "partial_refund",
+              amount: "50.00",
+              paymentIntentId: original,
+            },
+          ]);
+          expect(await booking()).toMatchObject({
+            status: "confirmed",
+            paymentStatus: "paid",
+          });
+          expect(await events("order.refund_updated")).toEqual([
+            {
+              requestId,
+              modificationId: 9001,
+              status: "succeeded",
+              refundId: late.id,
+            },
+          ]);
+        };
+        await settled();
+        // Repeats change nothing and nothing is ever sent.
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "unchanged", status: "succeeded" });
+        await deliverRefund(late);
+        await chargeRefunded(original, 5000);
+        await processPendingOrderRefunds();
+        await settled();
+        expect(provider.create).not.toHaveBeenCalled();
+      }, 60000);
+
+      it("fix: with no provider refund the row is unchanged and the answer says so; a provider outage changes nothing", async () => {
+        await saveServicing({
+          status: "review_required",
+          errorCode: "unknown_provider_outcome",
+          requestedAt: new Date(now.getTime() - 24 * 3600_000),
+        });
+        const before = await row();
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({
+          outcome: "no_provider_refund",
+          status: "review_required",
+        });
+        provider.list.mockImplementation(() => ({
+          async *[Symbol.asyncIterator]() {
+            throw new Error("Synthetic provider outage");
+          },
+        }));
+        await expect(
+          caller().reconcileServicingRefund({ requestId })
+        ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+        expect(await row()).toEqual(before);
+        expect(provider.create).not.toHaveBeenCalled();
+      }, 60000);
+
+      it("fix: a provider refund the saved balance no longer matches is a typed refusal and changes nothing", async () => {
+        await saveServicing({
+          status: "review_required",
+          errorCode: "unknown_provider_outcome",
+          requestedAt: new Date(now.getTime() - 24 * 3600_000),
+        });
+        provider.refunds.push({
+          id: "re_r382_late_upgrade",
+          object: "refund",
+          status: "succeeded",
+          amount: 6000,
+          currency: "sar",
+          payment_intent: upgrade,
+          charge: `ch_${upgrade}`,
+          metadata: { orderServiceRefundId: requestId, modificationId: "9001" },
+        });
+        // The receipt recorded another refund since the request was saved.
+        await fixture.db
+          .update(schema.paymentReceipts)
+          .set({ refundedAmount: 1000 })
+          .where(eq(schema.paymentReceipts.paymentIntentId, upgrade));
+        const before = await row();
+        await expect(
+          caller().reconcileServicingRefund({ requestId })
+        ).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: "Refund balance changed outside this servicing request",
+        });
+        expect(await row()).toEqual(before);
+        expect(await refundLedger()).toEqual([]);
+      }, 60000);
+    });
+
+    describe("retry after a definitive provider failure", () => {
+      it("fix: two concurrent retries queue one attempt; the worker sends one refund under order-refund:<id>:a2 and its verified webhook settles it once", async () => {
+        const refused = await failServicing();
+        const results = await retryConcurrently();
+        expect(results.map(r => r.status)).toEqual(["fulfilled", "fulfilled"]);
+        const values = results
+          .map(r => (r as PromiseFulfilledResult<any>).value)
+          .sort((a, b) => Number(a.replayed) - Number(b.replayed));
+        expect(values).toEqual([
+          {
+            requestId,
+            status: "queued",
+            attempt: 2,
+            errorCode: null,
+            refundId: null,
+            replayed: false,
+          },
+          expect.objectContaining({ attempt: 2, replayed: true }),
+        ]);
+        expect(await attempts()).toEqual([
+          {
+            requestId,
+            attempt: 1,
+            refundId: refused.id,
+            status: "failed",
+            errorCode: "provider_refund_failed",
+          },
+        ]);
+        expect(await row()).toMatchObject({
+          attempt: 2,
+          status: "queued",
+          refundId: null,
+          requestedAt: null,
+          errorCode: null,
+        });
+        expect(await liabilityOpen()).toBe(true);
+        // Exactly one new provider refund, under the attempt key.
+        provider.status = "pending";
+        await processPendingOrderRefunds();
+        expect(provider.create).toHaveBeenCalledTimes(2);
+        expect(provider.create.mock.calls[1]).toEqual([
+          {
+            payment_intent: upgrade,
+            amount: 6000,
+            metadata: {
+              orderServiceRefundId: requestId,
+              modificationId: "9001",
+              attempt: "2",
+            },
+          },
+          { idempotencyKey: `order-refund:${requestId}:a2` },
+        ]);
+        const sent = provider.refunds.at(-1);
+        expect(await row()).toMatchObject({
+          status: "pending",
+          refundId: sent.id,
+        });
+        sent.status = "succeeded";
+        await deliverRefund(sent);
+        const settledOnce = async () => {
+          expect(await row()).toMatchObject({
+            status: "succeeded",
+            attempt: 2,
+            refundId: sent.id,
+          });
+          expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 6000 });
+          expect(await refundLedger()).toEqual([
+            { type: "refund", amount: "60.00", paymentIntentId: upgrade },
+          ]);
+          expect(
+            (await events("order.refund_updated")).filter(
+              e => e.status === "succeeded"
+            )
+          ).toHaveLength(1);
+        };
+        await settledOnce();
+        await deliverRefund(sent);
+        await chargeRefunded(upgrade, 6000);
+        later(5);
+        await processPendingOrderRefunds();
+        await settledOnce();
+        expect(provider.create).toHaveBeenCalledTimes(2);
+        expect(await liabilityOpen()).toBe(false);
+        // A repeated retry of the reviewed attempt changes nothing.
+        expect(
+          await caller().retryServicingRefund({ requestId, attempt: 1 })
+        ).toMatchObject({ attempt: 2, status: "succeeded", replayed: true });
+        expect(await attempts()).toHaveLength(1);
+        expect(
+          (await resolutionAudits()).map(r => [r.eventType, r.userId])
+        ).toEqual([["ORDER_REFUND_RETRY_REQUESTED", 20]]);
+      }, 60000);
+
+      for (const providerStatus of ["failed", "canceled"] as const)
+        it(`fix: a late ${providerStatus} event or charge aggregate for the archived attempt changes nothing, before and after the new attempt settles`, async () => {
+          const refused = await failServicing();
+          refused.status = providerStatus;
+          await caller().retryServicingRefund({ requestId, attempt: 1 });
+          expect((await attempts())[0].status).toBe(providerStatus);
+          const queued = await row();
+          const eventsBefore = await events("order.refund_updated");
+          provider.retrieve.mockClear();
+          provider.list.mockClear();
+          await deliverRefund(refused);
+          await chargeRefunded(upgrade, 0);
+          expect(await row()).toEqual(queued);
+          expect(await events("order.refund_updated")).toEqual(eventsBefore);
+          expect(await refundLedger()).toEqual([]);
+          // The webhook transaction never calls the provider.
+          expect(provider.retrieve).not.toHaveBeenCalled();
+          expect(provider.list).not.toHaveBeenCalled();
+          // Attempt 2 succeeds; the late event for attempt 1 arrives after.
+          await processPendingOrderRefunds();
+          const settled = await row();
+          expect(settled).toMatchObject({ status: "succeeded", attempt: 2 });
+          await deliverRefund(refused);
+          expect(await row()).toEqual(settled);
+          expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 6000 });
+          expect(await refundLedger()).toHaveLength(1);
+        }, 60000);
+
+      for (const code of REVIEW_CODES)
+        it(`fix: a review_required row with ${code} is never retried, even when the provider shows no refund that has not failed`, async () => {
+          const refused = await failServicing();
+          // Reconcile found an uncertain outcome; the refused refund stays.
+          await fixture.db
+            .update(schema.orderServiceRefunds)
+            .set({ status: "review_required", errorCode: code })
+            .where(eq(schema.orderServiceRefunds.id, requestId));
+          const before = await row();
+          await expect(
+            caller().retryServicingRefund({ requestId, attempt: 1 })
+          ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+          await fixture.db
+            .update(schema.orderServiceRefunds)
+            .set({ refundId: null })
+            .where(eq(schema.orderServiceRefunds.id, requestId));
+          await expect(
+            caller().retryServicingRefund({ requestId, attempt: 1 })
+          ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+          expect(await row()).toEqual({ ...before, refundId: null });
+          expect(await attempts()).toEqual([]);
+          await processPendingOrderRefunds();
+          expect(provider.create).toHaveBeenCalledTimes(1);
+          expect(refused.status).toBe("failed");
+        }, 60000);
+
+      it("fix: retry is refused when the collection no longer holds the refund at its saved balance", async () => {
+        await failServicing();
+        // Another refund of 1000 was recorded on the upgrade collection.
+        await fixture.db
+          .update(schema.paymentReceipts)
+          .set({ refundedAmount: 1000 })
+          .where(eq(schema.paymentReceipts.paymentIntentId, upgrade));
+        const before = await row();
+        await expect(
+          caller().retryServicingRefund({ requestId, attempt: 1 })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        expect(await row()).toEqual(before);
+        expect(await attempts()).toEqual([]);
+      }, 60000);
+
+      it("fix: retry is refused when the provider's other refunds of the collection differ from the saved balance", async () => {
+        await failServicing();
+        provider.refunds.push({
+          id: "re_r382_elsewhere",
+          object: "refund",
+          status: "succeeded",
+          amount: 1000,
+          currency: "sar",
+          payment_intent: upgrade,
+          charge: `ch_${upgrade}`,
+          metadata: {},
+        });
+        const before = await row();
+        await expect(
+          caller().retryServicingRefund({ requestId, attempt: 1 })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        expect(await row()).toEqual(before);
+        expect(await attempts()).toEqual([]);
+      }, 60000);
+
+      it("fix: a retry for another attempt than the one reviewed is a conflict", async () => {
+        await failServicing();
+        await expect(
+          caller().retryServicingRefund({ requestId, attempt: 3 })
+        ).rejects.toMatchObject({ code: "CONFLICT" });
+        await expect(
+          caller().retryServicingRefund({
+            requestId: "00000000-0000-4000-8000-000000000999",
+            attempt: 1,
+          })
+        ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      }, 60000);
+    });
+
+    describe("a provider refund that has not failed blocks retry and cancel", () => {
+      it("fix: the provider reports the recorded refund as succeeded", async () => {
+        const refused = await failServicing();
+        refused.status = "succeeded";
+        const before = await row();
+        await expect(
+          caller().retryServicingRefund({ requestId, attempt: 1 })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        await expect(
+          caller().cancelServicingRefund({ requestId, attempt: 1, reason })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        expect(await row()).toEqual(before);
+        expect(await attempts()).toEqual([]);
+        expect(await resolutionAudits()).toEqual([]);
+      }, 60000);
+
+      it("fix: a pending refund for a request whose outcome was unknown", async () => {
+        await saveServicing({
+          status: "review_required",
+          errorCode: "unknown_provider_outcome",
+          requestedAt: new Date(now.getTime() - 24 * 3600_000),
+        });
+        provider.refunds.push({
+          id: "re_r382_pending",
+          object: "refund",
+          status: "pending",
+          amount: 6000,
+          currency: "sar",
+          payment_intent: upgrade,
+          charge: `ch_${upgrade}`,
+          metadata: { orderServiceRefundId: requestId, modificationId: "9001" },
+        });
+        const before = await row();
+        await expect(
+          caller().cancelServicingRefund({ requestId, attempt: 1, reason })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        expect(await row()).toEqual(before);
+      }, 60000);
+    });
+
+    describe("never two successful refunds for one liability, whatever the event order", () => {
+      async function retried() {
+        const refused = await failServicing();
+        await caller().retryServicingRefund({ requestId, attempt: 1 });
+        return refused;
+      }
+      const settledOnce = async () => {
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 6000 });
+        expect(await refundLedger()).toEqual([
+          { type: "refund", amount: "60.00", paymentIntentId: upgrade },
+        ]);
+      };
+
+      it("fix (a): attempt 2 succeeds, then attempt 1's failed event arrives late: settled once, no change", async () => {
+        const refused = await retried();
+        await processPendingOrderRefunds();
+        const settled = await row();
+        expect(settled).toMatchObject({ status: "succeeded", attempt: 2 });
+        await deliverRefund(refused);
+        expect(await row()).toEqual(settled);
+        await settledOnce();
+      }, 60000);
+
+      it("fix (b): attempt 1 reports succeeded after attempt 2 settled: no second settlement, the row goes to review", async () => {
+        const refused = await retried();
+        await processPendingOrderRefunds();
+        expect(await row()).toMatchObject({ status: "succeeded" });
+        // Provider anomaly: the refused refund is reported as succeeded.
+        refused.status = "succeeded";
+        provider.retrieve.mockClear();
+        await deliverRefund(refused);
+        expect(provider.retrieve).not.toHaveBeenCalled();
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "earlier_attempt_succeeded",
+          completedAt: expect.any(Date),
+        });
+        expect((await events("order.refund_updated")).at(-1)).toMatchObject({
+          status: "review_required",
+          refundId: refused.id,
+          errorCode: "earlier_attempt_succeeded",
+        });
+        await settledOnce();
+        // Reconcile reads the refund from the provider and settles nothing.
+        const answer = await caller().reconcileServicingRefund({ requestId });
+        expect(provider.retrieve).toHaveBeenCalledWith(refused.id);
+        expect(answer).toMatchObject({
+          outcome: "review_required",
+          status: "review_required",
+        });
+        await deliverRefund(refused);
+        await deliverRefund(provider.refunds.at(-1));
+        await settledOnce();
+        expect(await liabilityOpen()).toBe(true);
+      }, 60000);
+
+      it("fix (c): attempt 1's success arrives while attempt 2 is queued: attempt 2 is never sent, and reconcile settles once from the provider", async () => {
+        const refused = await retried();
+        refused.status = "succeeded";
+        await deliverRefund(refused);
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "earlier_attempt_succeeded",
+          attempt: 2,
+          refundId: null,
+        });
+        expect(await refundLedger()).toEqual([]);
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 0 });
+        later(5);
+        await processPendingOrderRefunds();
+        expect(provider.create).toHaveBeenCalledTimes(1);
+        expect(keys()).toEqual([`order-refund:${requestId}`]);
+        provider.retrieve.mockClear();
+        const answer = await caller().reconcileServicingRefund({ requestId });
+        expect(provider.retrieve).toHaveBeenCalledWith(refused.id);
+        expect(answer).toMatchObject({
+          outcome: "settled",
+          status: "succeeded",
+          refundId: refused.id,
+        });
+        await settledOnce();
+        await deliverRefund(refused);
+        await chargeRefunded(upgrade, 6000);
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "unchanged" });
+        later(10);
+        await processPendingOrderRefunds();
+        await settledOnce();
+        expect(provider.create).toHaveBeenCalledTimes(1);
+        expect(await row()).toMatchObject({
+          status: "succeeded",
+          refundId: refused.id,
+        });
+      }, 60000);
+    });
+
+    describe("the worker finds an earlier attempt's success", () => {
+      it("fix: with no event, the queued attempt is never sent, its request time stays empty and reconcile settles once", async () => {
+        const refused = await failServicing();
+        await caller().retryServicingRefund({ requestId, attempt: 1 });
+        // Provider anomaly, seen only in the provider's history.
+        refused.status = "succeeded";
+        await processPendingOrderRefunds();
+        expect(provider.create).toHaveBeenCalledTimes(1);
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "earlier_attempt_succeeded",
+          attempt: 2,
+          refundId: null,
+          requestedAt: null,
+        });
+        expect((await events("order.refund_updated")).at(-1)).toMatchObject({
+          status: "review_required",
+          refundId: refused.id,
+        });
+        expect(await refundLedger()).toEqual([]);
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "settled", refundId: refused.id });
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 6000 });
+        expect(await refundLedger()).toEqual([
+          { type: "refund", amount: "60.00", paymentIntentId: upgrade },
+        ]);
+        later(5);
+        await processPendingOrderRefunds();
+        expect(provider.create).toHaveBeenCalledTimes(1);
+        expect(await refundLedger()).toHaveLength(1);
+      }, 60000);
+    });
+
+    describe("cancel with a reason", () => {
+      it("fix: cancelling a failed servicing refund removes the liability; the held upgrade goes to settlement review and is refunded there once, with an audit row", async () => {
+        // Decision 7 legacy replay: the original intent is fully refunded
+        // while a failed servicing refund covers the whole upgrade.
+        await failServicing();
+        await chargeRefunded(original, 20000);
+        expect(await booking()).toMatchObject({
+          status: "cancelled",
+          paymentStatus: "refunded",
+        });
+        expect(await receiptSettlement(upgrade)).toEqual({
+          status: "applied",
+          error: null,
+        });
+        expect(await liabilityOpen()).toBe(true);
+        const answer = await caller().cancelServicingRefund({
+          requestId,
+          attempt: 1,
+          reason: `  ${reason}  `,
+        });
+        expect(answer).toMatchObject({
+          requestId,
+          status: "cancelled",
+          attempt: 1,
+          settlementReview: true,
+          replayed: false,
+        });
+        expect(await row()).toMatchObject({
+          status: "cancelled",
+          resolvedBy: 20,
+          resolvedAt: expect.any(Date),
+          resolutionReason: reason,
+          errorCode: "provider_refund_failed",
+        });
+        expect(await liabilityOpen()).toBe(false);
+        expect(await receiptSettlement(upgrade)).toEqual({
+          status: "review_required",
+          error: heldReason,
+        });
+        expect(
+          (await listSettlementReviews(50)).map(r => [
+            r.paymentIntentId,
+            r.kind,
+            r.amount,
+            r.refundedAmount,
+          ])
+        ).toEqual([[upgrade, "modification", 6000, 0]]);
+        expect(await events("payment.settlement_review_required")).toEqual([
+          { paymentIntentId: upgrade, bookingId: 71, reason: heldReason },
+        ]);
+        const audits = await resolutionAudits();
+        expect(
+          audits.map(a => ({
+            eventType: a.eventType,
+            eventCategory: a.eventCategory,
+            userId: a.userId,
+            resourceType: a.resourceType,
+            resourceId: a.resourceId,
+            newValue: JSON.parse(a.newValue ?? "null"),
+          }))
+        ).toEqual([
+          {
+            eventType: "ORDER_REFUND_CANCELLED",
+            eventCategory: "refund",
+            userId: 20,
+            resourceType: "order_service_refund",
+            resourceId: requestId,
+            newValue: { status: "cancelled", reason },
+          },
+        ]);
+        // The settlement review refund goes out once and settles the upgrade.
+        await expect(
+          requestSettlementReviewRefund(upgrade, 20)
+        ).resolves.toMatchObject({ state: "awaiting_webhook" });
+        expect(keys().at(-1)).toBe(`ais-review-refund:${upgrade}`);
+        await chargeRefunded(upgrade, 6000);
+        expect(await receipts()).toEqual({
+          [original]: 20000,
+          [upgrade]: 6000,
+        });
+        expect(await receiptSettlement(upgrade)).toEqual({
+          status: "review_refunded",
+          error: heldReason,
+        });
+        expect(await refundLedger()).toEqual([
+          { type: "refund", amount: "200.00", paymentIntentId: original },
+          { type: "refund", amount: "60.00", paymentIntentId: upgrade },
+        ]);
+        await chargeRefunded(upgrade, 6000);
+        await expect(
+          requestSettlementReviewRefund(upgrade, 20)
+        ).resolves.toEqual({ state: "refunded", refundId: null });
+        expect(
+          keys().filter(k => k === `ais-review-refund:${upgrade}`)
+        ).toHaveLength(1);
+        expect(await refundLedger()).toHaveLength(2);
+        // A repeated cancel changes nothing.
+        expect(
+          await caller().cancelServicingRefund({
+            requestId,
+            attempt: 1,
+            reason,
+          })
+        ).toMatchObject({ status: "cancelled", replayed: true });
+        expect(await resolutionAudits()).toHaveLength(1);
+        expect(await events("payment.settlement_review_required")).toHaveLength(
+          1
+        );
+        expect(await caller().servicingRefundReviews({ limit: 50 })).toEqual(
+          []
+        );
+      }, 60000);
+
+      it("fix: a cancelled exchange refund reads as review to the customer", async () => {
+        await fixture.db.insert(schema.bookingModifications).values({
+          id: 9001,
+          bookingId: 71,
+          userId: 9,
+          modificationType: "change_flight",
+          originalFlightId: 41,
+          newFlightId: 42,
+          originalAmount: 26000,
+          newAmount: 20000,
+          priceDifference: -6000,
+          totalCost: -6000,
+          status: "completed",
+        });
+        await saveServicing({
+          status: "cancelled",
+          errorCode: "provider_refund_failed",
+          resolvedBy: 20,
+          resolvedAt: now,
+          resolutionReason: reason,
+        });
+        const context = await getExchangeContext(71, 9, 3);
+        expect(context.latest?.refundStatus).toBe("review");
+      }, 60000);
+
+      it("fix: the reason must be 10 to 500 characters and the attempt must be the one reviewed", async () => {
+        await failServicing();
+        await expect(
+          caller().cancelServicingRefund({
+            requestId,
+            attempt: 1,
+            reason: "short",
+          })
+        ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect(
+          caller().cancelServicingRefund({
+            requestId,
+            attempt: 1,
+            reason: "x".repeat(501),
+          })
+        ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect(
+          caller().cancelServicingRefund({ requestId, attempt: 2, reason })
+        ).rejects.toMatchObject({ code: "CONFLICT" });
+        expect(await row()).toMatchObject({ status: "failed" });
+      }, 60000);
+
+      it("fix: a queued, pending or succeeded row cannot be cancelled", async () => {
+        for (const [n, status] of (
+          ["queued", "pending", "succeeded"] as const
+        ).entries()) {
+          const id = `00000000-0000-4000-8000-00000000039${n}`;
+          await saveServicing({ id, modificationId: 9100 + n, status });
+          await expect(
+            caller().cancelServicingRefund({
+              requestId: id,
+              attempt: 1,
+              reason,
+            })
+          ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+          expect((await row(id)).status).toBe(status);
+        }
+      }, 60000);
+
+      it("fix: a flight-cancellation refund cannot be cancelled while its cancellation job still counts it as planned", async () => {
+        provider.status = "pending";
+        await requestFlightCancellation({
+          flightId: 41,
+          reason: "Native r382 flight cancellation",
+          actorId: 20,
+          tenantId: 3,
+        });
+        await processFlightCancellations();
+        const upgradeRow = (await rows()).find(
+          r => r.paymentIntentId === upgrade
+        )!;
+        const sent = provider.refunds.find(r => r.payment_intent === upgrade);
+        // The provider refuses the upgrade refund; the job is not yet updated.
+        sent.status = "failed";
+        await deliverRefund(sent);
+        expect(await row(upgradeRow.id)).toMatchObject({ status: "failed" });
+        const jobs = async () =>
+          (await fixture.db.select().from(schema.flightCancellationJobs)).map(
+            j => j.status
+          );
+        expect(await jobs()).toEqual(["planned"]);
+        await expect(
+          caller().cancelServicingRefund({
+            requestId: upgradeRow.id,
+            attempt: 1,
+            reason,
+          })
+        ).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: expect.stringMatching(
+            /job still counts this refund as planned/
+          ),
+        });
+        expect(await row(upgradeRow.id)).toMatchObject({ status: "failed" });
+        later(2);
+        await processFlightCancellations();
+        expect(await jobs()).toEqual(["review_required"]);
+        expect(
+          await caller().cancelServicingRefund({
+            requestId: upgradeRow.id,
+            attempt: 1,
+            reason,
+          })
+        ).toMatchObject({ status: "cancelled", settlementReview: false });
+        // The original refund then succeeds: the booking is refunded and the
+        // upgrade, no longer covered, goes to settlement review.
+        const originalRefund = provider.refunds.find(
+          r => r.payment_intent === original
+        );
+        originalRefund.status = "succeeded";
+        await deliverRefund(originalRefund);
+        expect(await booking()).toMatchObject({ paymentStatus: "refunded" });
+        expect(await receiptSettlement(upgrade)).toEqual({
+          status: "review_required",
+          error: heldReason,
+        });
+      }, 60000);
+    });
+
+    describe("disputes keep their rows (lost-dispute allocation)", () => {
+      for (const state of ["held", "lost"] as const)
+        it(`fix: retry and cancel are refused while a dispute on the collection is ${state}`, async () => {
+          await failServicing();
+          await withdraw(upgrade, 6000);
+          if (state === "lost") await lose(upgrade, 6000);
+          const before = await row();
+          await expect(
+            caller().retryServicingRefund({ requestId, attempt: 1 })
+          ).rejects.toMatchObject({
+            code: "PRECONDITION_FAILED",
+            message: expect.stringMatching(/stays with the dispute flow/),
+          });
+          await expect(
+            caller().cancelServicingRefund({ requestId, attempt: 1, reason })
+          ).rejects.toMatchObject({
+            code: "PRECONDITION_FAILED",
+            message: expect.stringMatching(/stays with the dispute flow/),
+          });
+          expect(await row()).toEqual(before);
+          expect(await attempts()).toEqual([]);
+        }, 60000);
+
+      it("fix: a row partly covered by a lost dispute cannot be cancelled", async () => {
+        await saveServicing({
+          status: "review_required",
+          errorCode: "chargeback_partial_cover",
+        });
+        const before = await row();
+        await expect(
+          caller().cancelServicingRefund({ requestId, attempt: 1, reason })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        expect(await row()).toEqual(before);
+      }, 60000);
+
+      it("control: after a refused retry and cancel, a lost dispute's allocation and the saved commands' chargeback closure are as on 036417292c", async () => {
+        const failedId = requestId;
+        const queuedId = "00000000-0000-4000-8000-000000000383";
+        // A refused 2000 refund, then a later saved 3000 command, on the
+        // upgrade collection; a lost dispute returns 1000 of it.
+        await failServicing({ amount: 2000 });
+        await saveServicing({
+          id: queuedId,
+          modificationId: 9002,
+          amount: 3000,
+          createdAt: now,
+          nextAttemptAt: new Date(now.getTime() + 3600_000),
+        });
+        await withdraw(upgrade, 1000);
+        await lose(upgrade, 1000);
+        await expect(
+          caller().retryServicingRefund({ requestId: failedId, attempt: 1 })
+        ).rejects.toThrow();
+        await expect(
+          caller().cancelServicingRefund({
+            requestId: failedId,
+            attempt: 1,
+            reason,
+          })
+        ).rejects.toThrow();
+        later(120);
+        await processPendingOrderRefunds();
+        await expect(
+          caller().cancelServicingRefund({
+            requestId: queuedId,
+            attempt: 1,
+            reason,
+          })
+        ).rejects.toThrow();
+        const cover = await fixture.db.transaction(tx =>
+          lostDisputeCover(tx as never, 71, upgrade, {
+            source: "order",
+            id: queuedId,
+          })
+        );
+        expect({
+          cover,
+          rows: (await rows())
+            .sort((a, b) => a.amount - b.amount)
+            .map(r => ({
+              amount: r.amount,
+              status: r.status,
+              errorCode: r.errorCode,
+              requested: r.requestedAt !== null,
+              completed: r.completedAt !== null,
+            })),
+          sent: keys().length,
+          ledger: await refundLedger(),
+        }).toEqual({
+          cover: 1000,
+          rows: [
+            {
+              amount: 2000,
+              status: "failed",
+              errorCode: "provider_refund_failed",
+              requested: true,
+              completed: false,
+            },
+            {
+              amount: 3000,
+              status: "review_required",
+              errorCode: "chargeback_partial_cover",
+              requested: false,
+              completed: false,
+            },
+          ],
+          sent: 1,
+          ledger: [],
+        });
+      }, 60000);
+    });
+
+    describe("authorization", () => {
+      for (const role of NON_ADMIN_ROLES)
+        it(`fix: ${role} is refused on all four procedures before any provider or row access`, async () => {
+          await saveServicing({
+            status: "failed",
+            errorCode: "provider_refund_failed",
+            refundId: "re_r382_refused",
+          });
+          const before = await row();
+          const forbidden = { code: "FORBIDDEN" };
+          await expect(
+            caller(role).servicingRefundReviews({ limit: 50 })
+          ).rejects.toMatchObject(forbidden);
+          await expect(
+            caller(role).reconcileServicingRefund({ requestId })
+          ).rejects.toMatchObject(forbidden);
+          await expect(
+            caller(role).retryServicingRefund({ requestId, attempt: 1 })
+          ).rejects.toMatchObject(forbidden);
+          await expect(
+            caller(role).cancelServicingRefund({
+              requestId,
+              attempt: 1,
+              reason,
+            })
+          ).rejects.toMatchObject(forbidden);
+          expect(provider.list).not.toHaveBeenCalled();
+          expect(provider.retrieve).not.toHaveBeenCalled();
+          expect(provider.create).not.toHaveBeenCalled();
+          expect(await row()).toEqual(before);
+        }, 60000);
+    });
+
+    describe("schema guard", () => {
+      it("fix: the attempts table holds only failed or canceled refunds, one per attempt and per provider refund", async () => {
+        const insert = (attempt: number, refundId: string, status: string) =>
+          fixture.db.execute(
+            sql`INSERT INTO order_service_refund_attempts (requestId, attempt, refundId, status) VALUES (${requestId}, ${attempt}, ${refundId}, ${status})`
+          );
+        for (const status of ["succeeded", "pending", "requires_action", ""])
+          await expect(insert(1, `re_${status}`, status)).rejects.toThrow();
+        await insert(1, "re_one", "failed");
+        await insert(2, "re_two", "canceled");
+        await expect(insert(2, "re_three", "failed")).rejects.toThrow();
+        await expect(insert(3, "re_one", "failed")).rejects.toThrow();
+        expect((await attempts()).map(a => [a.attempt, a.status])).toEqual([
+          [1, "failed"],
+          [2, "canceled"],
+        ]);
+      }, 60000);
+    });
+
+    describe("controls: the worker's existing behaviour", () => {
+      it("control: queued to succeeded keeps the attempt-1 key order-refund:<id> and its exact request", async () => {
+        await saveServicing();
+        await processPendingOrderRefunds();
+        expect(provider.create.mock.calls).toEqual([
+          [
+            {
+              payment_intent: upgrade,
+              amount: 6000,
+              metadata: {
+                orderServiceRefundId: requestId,
+                modificationId: "9001",
+              },
+            },
+            { idempotencyKey: `order-refund:${requestId}` },
+          ],
+        ]);
+        expect(await row()).toMatchObject({ status: "succeeded" });
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 6000 });
+        expect(await refundLedger()).toEqual([
+          { type: "refund", amount: "60.00", paymentIntentId: upgrade },
+        ]);
+      }, 60000);
+
+      it("control: the worker's review codes are unchanged", async () => {
+        const id = (n: number) => `00000000-0000-4000-8000-00000000040${n}`;
+        // No provider record a day after the request.
+        await saveServicing({
+          id: id(1),
+          status: "requesting",
+          requestedAt: new Date(now.getTime() - 24 * 3600_000),
+          nextAttemptAt: new Date(now.getTime() - 60_000),
+        });
+        // Two provider refunds carrying the same request.
+        await saveServicing({
+          id: id(2),
+          modificationId: 9002,
+          paymentIntentId: original,
+          amount: 1000,
+        });
+        for (const n of [1, 2])
+          provider.refunds.push({
+            id: `re_r382_duplicate_${n}`,
+            object: "refund",
+            status: "pending",
+            amount: 1000,
+            currency: "sar",
+            payment_intent: original,
+            charge: `ch_${original}`,
+            metadata: { orderServiceRefundId: id(2) },
+          });
+        await processPendingOrderRefunds();
+        expect(
+          (await rows())
+            .sort((a, b) => a.id.localeCompare(b.id))
+            .map(r => [r.status, r.errorCode])
+        ).toEqual([
+          ["review_required", "unknown_provider_outcome"],
+          ["review_required", "duplicate_provider_refund"],
+        ]);
+        expect(provider.create).not.toHaveBeenCalled();
+      }, 60000);
+    });
+  }
+);

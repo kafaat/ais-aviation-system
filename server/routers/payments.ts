@@ -38,6 +38,12 @@ import {
   listSettlementReviews,
   requestSettlementReviewRefund,
 } from "../services/settlement-review.service";
+import {
+  cancelServicingRefund,
+  listServicingRefundReviews,
+  reconcileServicingRefund,
+  retryServicingRefund,
+} from "../services/order-refunds.service";
 import * as paymentHistoryService from "../services/payment-history.service";
 import {
   getAllProviderInfo,
@@ -130,6 +136,86 @@ export const paymentsRouter = router({
     )
     .mutation(({ input, ctx }) =>
       requestSettlementReviewRefund(input.paymentIntentId, ctx.user.id)
+    ),
+  // Issue #382 (ADR 0003): failed and review_required servicing refunds of
+  // both origins, and their in-app resolution. No action creates a provider
+  // refund; a retry queues the next attempt for the refund worker.
+  servicingRefundReviews: adminProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/admin/payments/servicing-refunds",
+        tags: ["Payments", "Admin"],
+        summary:
+          "List failed and review-required servicing refunds (exchange and flight cancellation), newest first",
+        protect: true,
+      },
+    })
+    .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
+    .output(responseContracts["servicingRefundReviews"])
+    .query(({ input }) => listServicingRefundReviews(input.limit)),
+  reconcileServicingRefund: adminProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/admin/payments/servicing-refunds/{requestId}/reconcile",
+        tags: ["Payments", "Admin"],
+        summary:
+          "Re-read the provider for a servicing refund and record what it holds; never creates a refund",
+        protect: true,
+      },
+    })
+    .input(z.object({ requestId: z.string().uuid() }))
+    .output(responseContracts["reconcileServicingRefund"])
+    .mutation(({ input, ctx }) =>
+      reconcileServicingRefund(input.requestId, {
+        id: ctx.user.id,
+        role: ctx.user.role,
+      })
+    ),
+  retryServicingRefund: adminProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/admin/payments/servicing-refunds/{requestId}/retry",
+        tags: ["Payments", "Admin"],
+        summary:
+          "Queue the next attempt of a servicing refund the provider definitively refused",
+        protect: true,
+      },
+    })
+    .input(
+      z.object({
+        requestId: z.string().uuid(),
+        /** The attempt the operator reviewed. */
+        attempt: z.number().int().min(1),
+      })
+    )
+    .output(responseContracts["retryServicingRefund"])
+    .mutation(({ input, ctx }) =>
+      retryServicingRefund(input, { id: ctx.user.id, role: ctx.user.role })
+    ),
+  cancelServicingRefund: adminProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/admin/payments/servicing-refunds/{requestId}/cancel",
+        tags: ["Payments", "Admin"],
+        summary:
+          "Cancel a failed or review-required servicing refund with a recorded reason",
+        protect: true,
+      },
+    })
+    .input(
+      z.object({
+        requestId: z.string().uuid(),
+        attempt: z.number().int().min(1),
+        reason: z.string().trim().min(10).max(500),
+      })
+    )
+    .output(responseContracts["cancelServicingRefund"])
+    .mutation(({ input, ctx }) =>
+      cancelServicingRefund(input, { id: ctx.user.id, role: ctx.user.role })
     ),
   expireCheckoutSession: protectedProcedure
     .meta({

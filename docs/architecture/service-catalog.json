@@ -4917,6 +4917,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/routers/payments.ts",
         "server/services/cron.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/internal-refund.service.ts",
@@ -4942,11 +4943,17 @@
         "reads": [
           "bookingRefundPlans",
           "bookings",
+          "flightCancellationJobs",
+          "orderServiceRefundAttempts",
           "orderServiceRefunds",
           "ordinaryBookingRefunds",
           "paymentReceipts"
         ],
-        "writes": ["orderServiceRefunds"]
+        "writes": [
+          "auditLogs",
+          "orderServiceRefundAttempts",
+          "orderServiceRefunds"
+        ]
       },
       "replacement": null
     },
