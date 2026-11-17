@@ -388,13 +388,10 @@ describe("identity and currency configuration reports", () => {
     // A correction scheduled in the future must not invalidate today's quote.
     expect(result.rows.find(row => row.rateId === 12)?.status).toBe("current");
     expect(result.rows.find(row => row.rateId === 13)?.status).toBe("future");
-    expect(
-      result.rows.some(
-        row =>
-          row.toCurrency === "EUR" &&
-          row.status === "missing_current_rate"
-      )
-    ).toBe(false);
+    const missingEur = result.rows.filter(
+      row => row.toCurrency === "EUR" && row.status === "missing_current_rate"
+    );
+    expect(missingEur).toHaveLength(0);
   });
 
   it("retains exact configured rate versions and records absent current prices without fallback", async () => {
