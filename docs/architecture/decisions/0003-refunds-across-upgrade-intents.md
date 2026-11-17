@@ -121,7 +121,13 @@ to what it still holds.
     pending refund goes back to the worker, and none found leaves the row
     unchanged with the answer `no_provider_refund`. A duplicate, a balance
     conflict or an unverifiable history stays `review_required`. A provider
-    outage changes nothing.
+    outage changes nothing. Reconcile refuses a row that a lost dispute
+    partly covers (`chargeback_partial_cover`), and any row whose collection
+    has funds held or taken by a dispute: either would change the lost
+    amount's allocation. A reconcile that changes the row writes an
+    `audit_logs` row in the same transaction, naming the actor, the request,
+    the status before and after, and the provider refund. A repeat that
+    changes nothing records no event and no audit row.
   - _Retry_ (`POST …/retry`, naming the attempt reviewed) only follows a
     definitive provider failure (`failed`, `provider_refund_failed`). A
     `review_required` row with an uncertain outcome is never retried; its
@@ -141,7 +147,10 @@ to what it still holds.
     `order-refund:<id>:a<n>` and an `attempt` metadata entry. A new key is
     needed because the provider replays a saved response for a key for 24
     hours. Attempt 1 keeps `order-refund:<id>` and its exact request.
-    Concurrent retries give one attempt.
+    Concurrent retries give one attempt. A lost dispute can close a retried
+    request by its chargeback. Before that, the worker reads the provider's
+    history outside any transaction. A refund of the request that has not
+    failed sends the row to review instead. Attempt 1 is unchanged.
 
   - _Late events:_ an event for an archived attempt that failed, was
     canceled or is pending changes nothing, because those provider states
@@ -168,7 +177,13 @@ to what it still holds.
     which shows `review`. On a refunded booking, an applied upgrade on that
     intent that still holds money goes to settlement review. There
     `listSettlementReviews` shows it and `requestSettlementReviewRefund`
-    refunds it once.
+    refunds it once. A provider refund that has not failed and arrives after
+    a cancel reopens the row as `provider_refund_after_cancel`. Reconcile
+    retrieves that refund and closes the row once, by one of two paths:
+    - if the receipt already records it, because the charge aggregate came
+      first, the row closes as `succeeded` (`succeeded_after_cancel`) with
+      no second settlement;
+    - otherwise the refund settles once.
 
   - _Follow-ups:_ a client screen (this change ships the API and OpenAPI
     only), and resolution of rows that stay with the dispute flow. A
