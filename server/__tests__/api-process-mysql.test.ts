@@ -870,8 +870,29 @@ nativeDescribe.sequential(
       assertPublicResponse(apiLimited.text);
       // Both transports share the original anonymous quota, even with Redis
       // unavailable. Switching routers must not bypass the exhausted bucket.
-      for (const path of livePaths)
-        expect((await request(path)).status).toBe(429);
+      // The fixed window can reset between the 429 above and this check on a
+      // loaded runner (#383); an admitted response is then accepted only when
+      // its remaining count shows a fresh window, never a bypass of the
+      // exhausted one, and the bucket is exhausted again before re-checking.
+      // The limiter itself is unchanged: real windows, real 429s.
+      for (let round = 0; ; round++) {
+        const results: Awaited<ReturnType<typeof request>>[] = [];
+        for (const path of livePaths) results.push(await request(path));
+        if (results.every(result => result.status === 429)) break;
+        if (round === 2)
+          throw new Error("shared quota window reset on three checks in a row");
+        for (const result of results) {
+          expect(result.status).toBe(200);
+          expect(
+            Number(result.headers.get("x-ratelimit-remaining"))
+          ).toBeGreaterThanOrEqual(60 - livePaths.length);
+        }
+        await exhaust(
+          60,
+          attempt => request(livePaths[attempt % livePaths.length]),
+          result => expect(result.status).toBe(200)
+        );
+      }
 
       const invalidWebhook = {
         method: "POST",
