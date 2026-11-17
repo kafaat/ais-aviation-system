@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.43.0
+
+<!-- ais-release-source: 9e7c7874b1c611d6b5f80ad4be72ccdec119305b -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(currency): operator-entered rates with provenance and a staleness alarm (#319 Wave 1, slice A) (#378) (9e7c7874)
+
+### Other Changes
+
+- test(api-process): make the shared-quota follow-up check window-aware (#384) (d3b38e24)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.42.1...v1.43.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.42.1
 
 <!-- ais-release-source: 681fda6d26098f046bbdc0a343eb7edafcb8c841 -->
