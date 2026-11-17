@@ -501,18 +501,20 @@ const heldUpgradeReviewReason =
  * applied on a refunded booking. One review event per upgrade intent. The
  * caller passes the booking's applied receipts, read under its locks.
  * Settlement ignores other refunds of an intent until its servicing refunds
- * succeed. An upgrade whose open or failed servicing refunds cover everything
- * it still holds (a flight cancellation plans one per intent for the whole
- * balance) is left to them. A failed flight-cancellation refund is reviewed
- * on the operations dashboard; a failed exchange servicing refund is listed
- * only by the decision-7 SQL (ADR 0003). A partly
+ * succeed or are cancelled. An upgrade whose open or failed servicing refunds
+ * cover everything it still holds (a flight cancellation plans one per intent
+ * for the whole balance) is left to them. Failed and review_required
+ * servicing refunds of both origins are listed by
+ * payments.servicingRefundReviews, where an operator reconciles, retries or
+ * cancels them; a cancelled one covers nothing (ADR 0003). A partly
  * covered upgrade is still flagged: its review refund waits for them
- * (requestSettlementReviewRefund) and then refunds the remainder. */
+ * (requestSettlementReviewRefund) and then refunds the remainder. Returns the
+ * number of upgrades sent to review. */
 async function reviewHeldUpgradeCollections(
   tx: SettlementTx,
   booking: typeof bookings.$inferSelect,
   appliedReceipts: (typeof paymentReceipts.$inferSelect)[],
-  refundedPaymentIntentId: string
+  refundedPaymentIntentId: string | null
 ) {
   const held = appliedReceipts
     .filter(
@@ -522,7 +524,7 @@ async function reviewHeldUpgradeCollections(
         r.refundedAmount < r.amount
     )
     .sort((a, b) => a.paymentIntentId.localeCompare(b.paymentIntentId));
-  if (!held.length) return;
+  if (!held.length) return 0;
   // A current read under the booking lock, which servicing refund commands
   // take first.
   const servicing = await tx
@@ -544,21 +546,49 @@ async function reviewHeldUpgradeCollections(
     .for("update");
   const openServicing = new Map<string, number>();
   for (const p of servicing)
-    if (p.status !== "succeeded")
+    if (p.status !== "succeeded" && p.status !== "cancelled")
       openServicing.set(
         p.paymentIntentId,
         (openServicing.get(p.paymentIntentId) ?? 0) + p.amount
       );
-  for (const upgrade of held.filter(
+  const uncovered = held.filter(
     r =>
       (openServicing.get(r.paymentIntentId) ?? 0) < r.amount - r.refundedAmount
-  ))
+  );
+  for (const upgrade of uncovered)
     await requireCollectionReview(
       tx,
       upgrade,
       booking,
       heldUpgradeReviewReason
     );
+  return uncovered.length;
+}
+
+/** Issue #382: an operator cancelled a servicing refund on a refunded booking.
+ * An applied upgrade on that refund's intent that still holds money, and that
+ * no other open servicing refund covers, goes to settlement review through
+ * the same path as above. The caller holds the booking lock and has already
+ * cancelled the request in this transaction. */
+export async function reviewCancelledServicingUpgrade(
+  tx: SettlementTx,
+  booking: typeof bookings.$inferSelect,
+  paymentIntentId: string
+) {
+  if (booking.paymentStatus !== "refunded") return false;
+  const receipts = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(
+      and(
+        eq(paymentReceipts.bookingId, booking.id),
+        eq(paymentReceipts.paymentIntentId, paymentIntentId),
+        eq(paymentReceipts.kind, "modification"),
+        eq(paymentReceipts.settlementStatus, "applied")
+      )
+    )
+    .for("update");
+  return (await reviewHeldUpgradeCollections(tx, booking, receipts, null)) > 0;
 }
 
 async function confirmCollectedBooking(
@@ -839,8 +869,11 @@ export async function settleVerifiedRefund(
         .where(eq(orderServiceRefunds.paymentIntentId, input.paymentIntentId))
         .for("update")
     : [];
+  // A servicing refund an operator cancelled no longer gates the intent.
   if (
-    servicePlans.some(p => p.status !== "succeeded") &&
+    servicePlans.some(
+      p => p.status !== "succeeded" && p.status !== "cancelled"
+    ) &&
     (!input.refundId ||
       !servicePlans.some(
         p =>

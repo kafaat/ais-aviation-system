@@ -7,7 +7,7 @@
     "description": "At-least-once authenticated HTTP delivery. Deduplicate source/id, retain tenant scope and schema version. New writes require registered payload contracts; unlisted historical payloads remain readable for replay. Producer names are checked against this registry. No broker or production server is implied."
   },
   "x-ais-producer-coverage": {
-    "callSites": 82,
+    "callSites": 83,
     "eventTypes": 97,
     "unregistered": []
   },

@@ -100,10 +100,80 @@ to what it still holds.
   booking can still be `refunded` with an `applied` upgrade that holds money.
   An older release left some before deploy. This change also leaves one while
   a covering servicing refund is open, and keeps it when that servicing
-  refund fails. A failed flight-cancellation refund is listed on the
-  operations dashboard; a failed exchange servicing refund has no operator
-  list and no in-app resolution yet, which is a follow-up.
-  `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a read-only query that
-  lists all of them, for reconciliation.
+  refund fails, until an operator resolves the servicing refund as described
+  in the next item. `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a
+  read-only query that lists all of them, for reconciliation.
+- **Operator resolution of failed servicing refunds (issue #382).** Failed
+  and `review_required` servicing refunds of both origins, exchange and
+  flight cancellation, are listed and resolved in-app. Each action is an
+  admin-only privileged mutation. It re-reads the provider outside any
+  transaction: a retrieve of every refund id the request recorded, and the
+  intent's refunds matched by `orderServiceRefundId`. It then decides under
+  the booking lock, in the worker's lock order. No action creates a provider
+  refund.
+  - _List:_ `payments.servicingRefundReviews`
+    (`GET /admin/payments/servicing-refunds`), newest first, limit 1 to 100.
+    Each row has its origin, booking id and reference, intent, amount (minor
+    units, SAR), error code, provider refund id, attempt, and request and
+    creation times.
+  - _Reconcile_ (`POST …/{requestId}/reconcile`) records what the provider
+    holds through `recordVerifiedOrderRefund`: a success settles once, a
+    pending refund goes back to the worker, and none found leaves the row
+    unchanged with the answer `no_provider_refund`. A duplicate, a balance
+    conflict or an unverifiable history stays `review_required`. A provider
+    outage changes nothing.
+  - _Retry_ (`POST …/retry`, naming the attempt reviewed) only follows a
+    definitive provider failure (`failed`, `provider_refund_failed`). A
+    `review_required` row with an uncertain outcome is never retried; its
+    resolutions are reconcile or cancel. Retry is also refused in these
+    cases:
+    - the provider holds a refund for the request that has not failed;
+    - the collection's other provider refunds differ from the saved base;
+    - the receipt no longer holds the amount at that base;
+    - a dispute holds or has taken the collection's funds. A retry clears the
+      request time, so the row would re-enter the lost-dispute allocation.
+
+    Under the lock, retry archives the refused refund in
+    `order_service_refund_attempts`. That table accepts only `failed` or
+    `canceled`, one row per attempt and per provider refund, so the schema
+    allows a liability at most one refund that has not failed. Retry then
+    queues attempt _n_+1. The worker sends it with the key
+    `order-refund:<id>:a<n>` and an `attempt` metadata entry. A new key is
+    needed because the provider replays a saved response for a key for 24
+    hours. Attempt 1 keeps `order-refund:<id>` and its exact request.
+    Concurrent retries give one attempt.
+
+  - _Late events:_ an event for an archived attempt that failed, was
+    canceled or is pending changes nothing, because those provider states
+    are terminal. A success from an earlier attempt never settles from the
+    event. The row goes to `review_required` (`earlier_attempt_succeeded`)
+    with an event, and a queued attempt is not sent. Reconcile then reads
+    that refund from the provider and settles it once, only if the live
+    attempt was never requested and nothing else settled. Whatever the event
+    order, a liability settles once.
+  - _Cancel_ (`POST …/cancel`, naming the attempt and giving a reason of 10
+    to 500 characters) applies to a `failed` or `review_required` row when
+    the provider shows no refund for the request that has not failed. It is
+    refused in three cases:
+    - a row only partly covered by a lost dispute
+      (`chargeback_partial_cover`);
+    - a held or lost dispute on the collection;
+    - a flight-cancellation refund whose job still counts it as planned.
+
+    Cancel sets `cancelled` with `resolvedBy`, `resolvedAt` and
+    `resolutionReason`, and writes an `audit_logs` row in the same
+    transaction. A cancelled refund is closed everywhere it was counted as
+    open: in `assertNoOrderRefundPending`, in the covering check above, in
+    the settlement gate on its intent, and in the customer's exchange status,
+    which shows `review`. On a refunded booking, an applied upgrade on that
+    intent that still holds money goes to settlement review. There
+    `listSettlementReviews` shows it and `requestSettlementReviewRefund`
+    refunds it once.
+
+  - _Follow-ups:_ a client screen (this change ships the API and OpenAPI
+    only), and resolution of rows that stay with the dispute flow. A
+    `review_required` flight-cancellation job is never recomputed, so the
+    operations dashboard keeps listing a booking whose refunds an operator
+    has since resolved.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
   rounds, then integrator test hardening; the PR lists the evidence.

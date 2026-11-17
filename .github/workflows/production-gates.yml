@@ -152,6 +152,7 @@ jobs:
           server/__tests__/dispute-coupon-suspension-mysql.test.ts
           server/__tests__/dispute-chargeback-settlement-mysql.test.ts
           server/__tests__/refund-upgrade-intents-mysql.test.ts
+          server/__tests__/servicing-refund-resolution-mysql.test.ts
           --reporter=default
           --reporter=json
           --reporter=junit

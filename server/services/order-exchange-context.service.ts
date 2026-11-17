@@ -199,7 +199,11 @@ export async function getExchangeContext(
       refundStatus = refunds.every(r => r.status === "succeeded")
         ? "completed"
         : refunds.some(
-              r => r.status === "review_required" || r.status === "failed"
+              r =>
+                r.status === "review_required" ||
+                r.status === "failed" ||
+                // An operator cancelled it with a reason (issue #382).
+                r.status === "cancelled"
             )
           ? "review"
           : "processing";
