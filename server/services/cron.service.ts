@@ -71,6 +71,20 @@ export const PERIODIC_JOB_CATALOG = [
     },
   },
   {
+    // Display-rate staleness alarm (#319 Wave 1). Quotes are entered by hand
+    // against a 24-hour display window, so a ten-minute cadence flags an
+    // expired or missing quote well inside that window at ten small reads per
+    // run; the display itself withholds a stale estimate immediately.
+    name: "displayRateAlarms",
+    cron: "*/10 * * * *",
+    periodMs: 600_000,
+    run: async () => {
+      const { refreshDisplayRateAlarms } =
+        await import("./currency/operator-rates.service");
+      await refreshDisplayRateAlarms();
+    },
+  },
+  {
     name: "operationalAlerts",
     cron: "* * * * *",
     periodMs: 60000,

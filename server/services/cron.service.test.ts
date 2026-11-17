@@ -35,6 +35,7 @@ const auditJobs = vi.hoisted(() => ({
   priceAlerts: vi.fn(),
   warehouse: vi.fn(),
   reports: vi.fn(),
+  displayRates: vi.fn(),
   error: vi.fn(),
 }));
 vi.mock("./hotel-fulfillment.service", () => ({
@@ -42,6 +43,9 @@ vi.mock("./hotel-fulfillment.service", () => ({
 }));
 vi.mock("./operational-observations.service", () => ({
   refreshOperationalAlerts: auditJobs.observations,
+}));
+vi.mock("./currency/operator-rates.service", () => ({
+  refreshDisplayRateAlarms: auditJobs.displayRates,
 }));
 vi.mock("./on-call.service", () => ({
   processOnCallDeliveries: auditJobs.onCall,
@@ -191,6 +195,31 @@ describe("cron.service scheduler", () => {
       expect(run).toHaveBeenCalledTimes(1);
     }
   );
+  it("fix: registers the display-rate staleness alarm every ten minutes on its durable tick", async () => {
+    startCronJobs();
+    const job = PERIODIC_JOB_CATALOG.find(
+      entry => entry.name === "displayRateAlarms"
+    );
+    expect(job).toMatchObject({ cron: "*/10 * * * *", periodMs: 600_000 });
+    const index = PERIODIC_JOB_CATALOG.findIndex(
+      entry => entry.name === "displayRateAlarms"
+    );
+    expect(scheduled[index].expr).toBe("*/10 * * * *");
+    await scheduled[index].fn();
+    expect(auditJobs.displayRates).toHaveBeenCalledTimes(1);
+    expect(runScheduledTask).toHaveBeenCalledWith(
+      "displayRateAlarms",
+      expect.any(String),
+      expect.any(Function)
+    );
+    // A failed evaluation is logged by the guard, never thrown into cron.
+    auditJobs.displayRates.mockRejectedValueOnce(new Error("db down"));
+    await expect(scheduled[index].fn()).resolves.toBeUndefined();
+    expect(auditJobs.error).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "db down" }),
+      { operation: "displayRateAlarms" }
+    );
+  });
   it("the relay tick actually invokes the outbox relay", async () => {
     startCronJobs();
     const relayTask =

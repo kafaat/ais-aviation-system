@@ -10,8 +10,35 @@ import { responseContracts } from "../contracts/pricing.router";
 import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { DynamicPricingService } from "../services/pricing/dynamic-pricing.service";
-import { CurrencyService } from "../services/currency/currency.service";
+import {
+  CurrencyService,
+  ExchangeRateUnavailableError,
+  type SarPriceConverter,
+} from "../services/currency/currency.service";
 import { TRPCError } from "@trpc/server";
+
+/** No converted price or amount is quoted without a current rate (#319
+ * Wave 1): the price routes convert only with the quote the display estimate
+ * would show (CurrencyService.sarPriceConverter), and convertCurrency and
+ * getExchangeRate apply the same display rule to every observed leg. A
+ * missing rate is a client-visible precondition, not a server fault; any
+ * other error keeps the route's own code. */
+function pricingError(
+  error: unknown,
+  fallback: string,
+  otherCode: "INTERNAL_SERVER_ERROR" | "BAD_REQUEST" = "INTERNAL_SERVER_ERROR"
+): TRPCError {
+  if (error instanceof ExchangeRateUnavailableError)
+    return new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `${error.message}. Request the price in SAR.`,
+      cause: error,
+    });
+  return new TRPCError({
+    code: otherCode,
+    message: error instanceof Error ? error.message : fallback,
+  });
+}
 
 // ============================================================================
 // Input Schemas
@@ -89,13 +116,11 @@ export const pricingRouter = router({
         let displayCurrency = "SAR";
 
         if (input.currency !== "SAR") {
-          const conversion = await CurrencyService.convertCurrency(
-            CurrencyService.fromMinorUnits(result.finalPrice, "SAR"),
-            "SAR",
+          const toTarget = await CurrencyService.sarPriceConverter(
             input.currency
           );
           convertedPrice = CurrencyService.toMinorUnits(
-            conversion.convertedAmount,
+            toTarget(CurrencyService.fromMinorUnits(result.finalPrice, "SAR")),
             input.currency
           );
           displayCurrency = input.currency;
@@ -120,13 +145,7 @@ export const pricingRouter = router({
           },
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to calculate price",
-        });
+        throw pricingError(error, "Failed to calculate price");
       }
     }),
 
@@ -148,46 +167,23 @@ export const pricingRouter = router({
 
         // Convert to requested currency if needed
         if (input.currency !== "SAR" && range.min > 0) {
-          const minConversion = await CurrencyService.convertCurrency(
-            range.min / 100,
-            "SAR",
+          // One quote for the whole response.
+          const toTarget = await CurrencyService.sarPriceConverter(
             input.currency
           );
-          const maxConversion = await CurrencyService.convertCurrency(
-            range.max / 100,
-            "SAR",
-            input.currency
-          );
-          const avgConversion = await CurrencyService.convertCurrency(
-            range.average / 100,
-            "SAR",
-            input.currency
-          );
+          const min = toTarget(range.min / 100);
+          const max = toTarget(range.max / 100);
+          const average = toTarget(range.average / 100);
 
           return {
             success: true,
             data: {
-              min: CurrencyService.toMinorUnits(
-                minConversion.convertedAmount,
-                input.currency
-              ),
-              max: CurrencyService.toMinorUnits(
-                maxConversion.convertedAmount,
-                input.currency
-              ),
-              average: CurrencyService.toMinorUnits(
-                avgConversion.convertedAmount,
-                input.currency
-              ),
+              min: CurrencyService.toMinorUnits(min, input.currency),
+              max: CurrencyService.toMinorUnits(max, input.currency),
+              average: CurrencyService.toMinorUnits(average, input.currency),
               currency: input.currency,
-              formattedMin: CurrencyService.formatPrice(
-                minConversion.convertedAmount,
-                input.currency
-              ),
-              formattedMax: CurrencyService.formatPrice(
-                maxConversion.convertedAmount,
-                input.currency
-              ),
+              formattedMin: CurrencyService.formatPrice(min, input.currency),
+              formattedMax: CurrencyService.formatPrice(max, input.currency),
             },
           };
         }
@@ -202,13 +198,7 @@ export const pricingRouter = router({
           },
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to get price range",
-        });
+        throw pricingError(error, "Failed to get price range");
       }
     }),
 
@@ -247,26 +237,22 @@ export const pricingRouter = router({
 
         // Convert to requested currency if needed
         if (input.currency !== "SAR") {
-          const convertedForecast = await Promise.all(
-            forecast.map(async item => {
-              const conversion = await CurrencyService.convertCurrency(
-                item.predictedPrice / 100,
-                "SAR",
+          // One quote for every day, resolved only when there is a price to
+          // convert (an empty forecast needed no rate before either).
+          const toTarget: SarPriceConverter = forecast.length
+            ? await CurrencyService.sarPriceConverter(input.currency)
+            : amount => amount;
+          const convertedForecast = forecast.map(item => {
+            const amount = toTarget(item.predictedPrice / 100);
+            return {
+              date: item.date,
+              predictedPrice: CurrencyService.toMinorUnits(
+                amount,
                 input.currency
-              );
-              return {
-                date: item.date,
-                predictedPrice: CurrencyService.toMinorUnits(
-                  conversion.convertedAmount,
-                  input.currency
-                ),
-                formatted: CurrencyService.formatPrice(
-                  conversion.convertedAmount,
-                  input.currency
-                ),
-              };
-            })
-          );
+              ),
+              formatted: CurrencyService.formatPrice(amount, input.currency),
+            };
+          });
 
           return {
             success: true,
@@ -291,11 +277,7 @@ export const pricingRouter = router({
           },
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            error instanceof Error ? error.message : "Failed to get forecast",
-        });
+        throw pricingError(error, "Failed to get forecast");
       }
     }),
 
@@ -313,7 +295,8 @@ export const pricingRouter = router({
     }),
 
   /**
-   * Convert price between currencies
+   * Convert price between currencies, only with observations the display
+   * estimate rule accepts; otherwise PRECONDITION_FAILED.
    */
   convertCurrency: publicProcedure
     .input(
@@ -326,7 +309,7 @@ export const pricingRouter = router({
     .output(responseContracts["convertCurrency"])
     .query(async ({ input }) => {
       try {
-        const result = await CurrencyService.convertCurrency(
+        const result = await CurrencyService.convertCurrencyWithDisplayRule(
           input.amount,
           input.fromCurrency,
           input.toCurrency
@@ -337,18 +320,13 @@ export const pricingRouter = router({
           data: result,
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Currency conversion failed",
-        });
+        throw pricingError(error, "Currency conversion failed", "BAD_REQUEST");
       }
     }),
 
   /**
-   * Get exchange rate
+   * Get exchange rate. An observation the display estimate rule would not use
+   * answers as none: the labelled estimate (source "fallback").
    */
   getExchangeRate: publicProcedure
     .input(
@@ -360,7 +338,7 @@ export const pricingRouter = router({
     .output(responseContracts["getExchangeRate"])
     .query(async ({ input }) => {
       try {
-        const rate = await CurrencyService.getExchangeRate(
+        const rate = await CurrencyService.getExchangeRateWithDisplayRule(
           input.fromCurrency,
           input.toCurrency
         );
@@ -370,13 +348,7 @@ export const pricingRouter = router({
           data: rate,
         };
       } catch (error) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to get exchange rate",
-        });
+        throw pricingError(error, "Failed to get exchange rate", "BAD_REQUEST");
       }
     }),
 });

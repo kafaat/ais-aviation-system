@@ -2,10 +2,23 @@
  * Multi-Currency Support Service
  *
  * Provides currency conversion and management:
- * - Real-time exchange rates
+ * - Observed exchange rates (operator quotes, see operator-rates.service)
  * - Currency conversion
  * - Price formatting
  * - Rate caching
+ *
+ * Amounts are converted only with an observed, currently effective rate.
+ * The hard-coded fallback constants can label an estimate returned by
+ * getExchangeRate (source "fallback"); they never produce an amount. Every
+ * pricing route, and convertPriceForDisplay, further requires the display
+ * rule (an approved source, current, not superseded, observed less than 24
+ * hours ago): a SAR price shown in another currency and convertPriceForDisplay
+ * use the quote the display estimate would show (sarPriceConverter);
+ * pricing.convertCurrency and pricing.getExchangeRate apply the same rule to
+ * every observed leg (convertCurrencyWithDisplayRule,
+ * getExchangeRateWithDisplayRule). The display rule reads MySQL on every
+ * call: it never reads or writes a Redis snapshot, which is not re-checked
+ * for supersession.
  *
  * @module services/currency/currency.service
  */
@@ -13,11 +26,24 @@
 import { getDb } from "../../db";
 import { exchangeRates } from "../../../drizzle/schema";
 import {
+  DISPLAY_CURRENCIES,
   DISPLAY_RATE_MAX_AGE_MS,
   DISPLAY_RATE_SOURCES,
   type DisplayCurrency,
 } from "../../../shared/ibe-search";
-import { eq, and, asc, desc, gt, lte, inArray, isNull, or } from "drizzle-orm";
+import {
+  eq,
+  and,
+  asc,
+  desc,
+  gt,
+  lte,
+  inArray,
+  isNull,
+  notExists,
+  or,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { cacheService as CacheService } from "../cache.service";
 
 // ============================================================================
@@ -154,7 +180,9 @@ const BASE_CURRENCY = "SAR";
 // Cache TTL for exchange rates (1 hour)
 const RATE_CACHE_TTL = 60 * 60;
 
-// Fallback rates (updated periodically)
+// Label-only estimates. Module-private: reachable solely through
+// getExchangeRate and getExchangeRateWithDisplayRule, whose result names its
+// source "fallback". Never an amount.
 const FALLBACK_RATES: Record<string, number> = {
   SAR_USD: 0.2666,
   SAR_EUR: 0.245,
@@ -180,6 +208,37 @@ const FALLBACK_RATES: Record<string, number> = {
 // Main Currency Service
 // ============================================================================
 
+/** No observed, currently effective rate exists for the pair. */
+export class ExchangeRateUnavailableError extends Error {
+  constructor(
+    readonly fromCurrency: string,
+    readonly toCurrency: string
+  ) {
+    super(
+      `No current exchange rate observation: ${fromCurrency} to ${toCurrency}`
+    );
+    this.name = "ExchangeRateUnavailableError";
+  }
+}
+
+type Database = NonNullable<ReturnType<typeof getDb>>;
+
+/** A row stops being eligible once a correction that names it has started. */
+function notSuperseded(database: Database, now: Date) {
+  const correction = alias(exchangeRates, "exchange_rate_correction");
+  return notExists(
+    database
+      .select({ id: correction.id })
+      .from(correction)
+      .where(
+        and(
+          eq(correction.supersedesId, exchangeRates.id),
+          lte(correction.validFrom, now)
+        )
+      )
+  );
+}
+
 /** Exact decimal ratios remain JSON-safe without rounding through a JS number. */
 interface ExactRate {
   numerator: string;
@@ -196,6 +255,26 @@ interface RateSnapshot {
   validFrom: Date;
   expiresAt: Date;
 }
+
+/**
+ * How getRateSnapshot may answer. `estimate` admits the labelled fallback
+ * constants, never an amount. `display` admits only observations that pass
+ * the display rule, leg by leg (displaySnapshot), each read from MySQL on
+ * every call with no Redis snapshot.
+ */
+interface RateRule {
+  estimate: boolean;
+  display: boolean;
+}
+
+/** convertCurrency: any observed, currently effective rate. */
+const OBSERVED_RULE: RateRule = { estimate: false, display: false };
+/** getExchangeRate: as OBSERVED_RULE, else the labelled estimate. */
+const ESTIMATE_RULE: RateRule = { estimate: true, display: false };
+/** pricing.convertCurrency: observations the display rule accepts. */
+const DISPLAY_RULE: RateRule = { estimate: false, display: true };
+/** pricing.getExchangeRate: as DISPLAY_RULE, else the labelled estimate. */
+const DISPLAY_ESTIMATE_RULE: RateRule = { estimate: true, display: true };
 
 function exactRate(value: string | number): ExactRate {
   const [numerator, denominator] = decimalRatio(value);
@@ -279,6 +358,31 @@ function decodeRateSnapshot(
   };
 }
 
+function isDisplayRateSource(source: string): boolean {
+  return (DISPLAY_RATE_SOURCES as readonly string[]).includes(source);
+}
+
+/**
+ * The display rule for a direct observation just read from MySQL: the rule
+ * findCurrentDisplayQuote applies to a SAR quote, applied to every observed
+ * leg. It needs an approved source (DISPLAY_RATE_SOURCES) and an observation
+ * (validFrom) less than 24 hours old; getDbExchangeRate already requires it
+ * to be effective and not superseded. Returns the snapshot with its expiry
+ * capped at the end of that 24-hour use, or null.
+ */
+function displaySnapshot(
+  snapshot: RateSnapshot,
+  now: Date
+): RateSnapshot | null {
+  if (!isDisplayRateSource(snapshot.quote.source.toLowerCase())) return null;
+  const until = snapshot.validFrom.getTime() + DISPLAY_RATE_MAX_AGE_MS;
+  if (until <= now.getTime()) return null;
+  return {
+    ...snapshot,
+    expiresAt: new Date(Math.min(snapshot.expiresAt.getTime(), until)),
+  };
+}
+
 async function cacheRate(key: string, snapshot: RateSnapshot) {
   const remaining = snapshot.expiresAt.getTime() - Date.now();
   const ttl = Math.min(Math.floor(remaining / 1000), RATE_CACHE_TTL);
@@ -288,9 +392,18 @@ async function cacheRate(key: string, snapshot: RateSnapshot) {
   }
 }
 
+/**
+ * `rule.estimate` admits the labelled fallback constants. Only the quote
+ * functions pass it; every amount-producing caller resolves observed rates
+ * only. `rule.display` admits only observations that pass the display rule,
+ * and resolves each from MySQL on every call: a snapshot is never re-checked
+ * for supersession, so under that rule none is read from or written to Redis
+ * (a correction shows on the next call, whatever Redis holds).
+ */
 async function getRateSnapshot(
   from: string,
-  to: string
+  to: string,
+  rule: RateRule
 ): Promise<RateSnapshot> {
   getCurrencyInfo(from);
   getCurrencyInfo(to);
@@ -314,19 +427,26 @@ async function getRateSnapshot(
   // Older envelopes did not preserve the exact decimal cross product. Never
   // reconstruct that financial value from an imprecise legacy numeric quote.
   const key = `exchange_rate:v3:${from}_${to}`;
-  const value = await CacheService.get<unknown>(key);
-  const cached = decodeRateSnapshot(value, from, to, new Date());
-  if (cached) {
-    return cached;
+  const cache = !rule.display;
+  if (cache) {
+    const value = await CacheService.get<unknown>(key);
+    const cached = decodeRateSnapshot(value, from, to, new Date());
+    if (cached) {
+      return cached;
+    }
   }
   const observed = await getDbExchangeRate(from, to, new Date());
-  if (observed?.snapshot) {
-    await cacheRate(key, observed.snapshot);
-    return observed.snapshot;
+  // Under the display rule an observation the display would not use counts
+  // as none: the cross rate or the refusal below, never that rate.
+  let direct = observed?.snapshot ?? null;
+  if (direct && rule.display) direct = displaySnapshot(direct, new Date());
+  if (direct) {
+    if (cache) await cacheRate(key, direct);
+    return direct;
   }
   if (from !== BASE_CURRENCY && to !== BASE_CURRENCY) {
-    const first = await getRateSnapshot(from, BASE_CURRENCY);
-    const second = await getRateSnapshot(BASE_CURRENCY, to);
+    const first = await getRateSnapshot(from, BASE_CURRENCY, rule);
+    const second = await getRateSnapshot(BASE_CURRENCY, to, rule);
     const ratio: ExactRate = {
       numerator: (
         BigInt(first.exactRate.numerator) * BigInt(second.exactRate.numerator)
@@ -374,10 +494,13 @@ async function getRateSnapshot(
       throw new Error("Exchange rate expired during conversion");
     }
     // A failed direct lookup leaves its next effective boundary unknown.
-    if (!fallback && observed) {
+    if (cache && !fallback && observed) {
       await cacheRate(key, cross);
     }
     return cross;
+  }
+  if (!rule.estimate) {
+    throw new ExchangeRateUnavailableError(from, to);
   }
   // Constants remain explicitly labelled estimates, never cached observations.
   const rate = FALLBACK_RATES[`${from}_${to}`];
@@ -414,22 +537,56 @@ function requireCurrentRateSnapshot(
   return current;
 }
 
-/** Restore Date and recheck expiry after all database/cache awaits finish. */
+/**
+ * Restore Date and recheck expiry after all database/cache awaits finish.
+ * Without an observation this returns the labelled fallback estimate
+ * (source "fallback" or "cross_rate_fallback"); it is a label, not a price.
+ */
 export async function getExchangeRate(
   fromCurrency: string,
   toCurrency: string
 ): Promise<ExchangeRate> {
-  const snapshot = await getRateSnapshot(fromCurrency, toCurrency);
+  const snapshot = await getRateSnapshot(
+    fromCurrency,
+    toCurrency,
+    ESTIMATE_RULE
+  );
   return requireCurrentRateSnapshot(snapshot, fromCurrency, toCurrency).quote;
 }
 
-/** Public fare estimates read only direct, currently effective observations. */
-export async function getDisplayExchangeRate(currency: DisplayCurrency) {
-  const db = await getDb();
-  if (!db || currency === "SAR") return null;
-  const now = new Date();
-  const [quote] = await db
+/**
+ * The quote pricing.getExchangeRate returns: an observed rate only when
+ * every observed leg passes the display rule (an approved source, current,
+ * not superseded, observed less than 24 hours ago). A pair whose observation
+ * the display would not use answers as a pair without one, with the labelled
+ * estimate (source "fallback" or "cross_rate_fallback"), never that rate.
+ */
+export async function getExchangeRateWithDisplayRule(
+  fromCurrency: string,
+  toCurrency: string
+): Promise<ExchangeRate> {
+  const snapshot = await getRateSnapshot(
+    fromCurrency,
+    toCurrency,
+    DISPLAY_ESTIMATE_RULE
+  );
+  return requireCurrentRateSnapshot(snapshot, fromCurrency, toCurrency).quote;
+}
+
+/**
+ * The newest direct SAR quote a display estimate may use: an approved
+ * source, not superseded by a correction that has started, effective now and
+ * observed less than 24 hours ago. The staleness alarm uses the same rule.
+ */
+export async function findCurrentDisplayQuote(
+  database: Database,
+  currency: DisplayCurrency,
+  now: Date
+) {
+  if (currency === BASE_CURRENCY) return null;
+  const [quote] = await database
     .select({
+      id: exchangeRates.id,
       rate: exchangeRates.rate,
       source: exchangeRates.source,
       validFrom: exchangeRates.validFrom,
@@ -438,7 +595,7 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
     .from(exchangeRates)
     .where(
       and(
-        eq(exchangeRates.fromCurrency, "SAR"),
+        eq(exchangeRates.fromCurrency, BASE_CURRENCY),
         eq(exchangeRates.toCurrency, currency),
         inArray(exchangeRates.source, [...DISPLAY_RATE_SOURCES]),
         gt(exchangeRates.rate, "0"),
@@ -447,7 +604,8 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
           new Date(now.getTime() - DISPLAY_RATE_MAX_AGE_MS)
         ),
         lte(exchangeRates.validFrom, now),
-        or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now))
+        or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now)),
+        notSuperseded(database, now)
       )
     )
     .orderBy(desc(exchangeRates.validFrom), desc(exchangeRates.id))
@@ -455,14 +613,92 @@ export async function getDisplayExchangeRate(currency: DisplayCurrency) {
   if (!quote?.source) return null;
   const maxExpiry = quote.validFrom.getTime() + DISPLAY_RATE_MAX_AGE_MS;
   return {
-    fromCurrency: "SAR",
-    toCurrency: currency,
-    rate: Number(quote.rate),
+    ...quote,
     source: quote.source.toLowerCase(),
-    updatedAt: quote.validFrom,
     expiresAt: new Date(
       Math.min(maxExpiry, quote.validTo?.getTime() ?? maxExpiry)
     ),
+  };
+}
+
+/** Public fare estimates read only direct, currently effective observations. */
+export async function getDisplayExchangeRate(currency: DisplayCurrency) {
+  const db = await getDb();
+  if (!db || currency === BASE_CURRENCY) return null;
+  const quote = await findCurrentDisplayQuote(db, currency, new Date());
+  if (!quote) return null;
+  return {
+    fromCurrency: BASE_CURRENCY,
+    toCurrency: currency,
+    rate: Number(quote.rate),
+    source: quote.source,
+    updatedAt: quote.validFrom,
+    expiresAt: quote.expiresAt,
+  };
+}
+
+/** Converts a SAR amount, in major units, into the converter's currency. */
+export type SarPriceConverter = (amountInSar: number) => number;
+
+/**
+ * A converter for SAR prices quoted in another currency (pricing.calculate,
+ * getPriceRange and getForecast). It uses only the quote the display
+ * estimate would show, through the same findCurrentDisplayQuote rule: an
+ * approved source, effective now, not superseded and observed less than 24
+ * hours ago. A quote the display would not show converts no price either.
+ * Throws ExchangeRateUnavailableError when no such quote exists; YER and
+ * other unsupported codes stay "Unsupported currency".
+ */
+export async function sarPriceConverter(
+  targetCurrency: string
+): Promise<SarPriceConverter> {
+  getCurrencyInfo(targetCurrency);
+  if (targetCurrency === BASE_CURRENCY)
+    return amount =>
+      fromMinorUnits(
+        roundedMinor(amount, UNIT_RATE, BASE_CURRENCY),
+        BASE_CURRENCY
+      );
+  const displayCurrency = DISPLAY_CURRENCIES.find(
+    code => code === targetCurrency
+  );
+  let quote: Awaited<ReturnType<typeof findCurrentDisplayQuote>> = null;
+  try {
+    const database = await getDb();
+    if (database && displayCurrency)
+      quote = await findCurrentDisplayQuote(
+        database,
+        displayCurrency,
+        new Date()
+      );
+  } catch (error) {
+    // As for an observation: a failed query is no quote, never an estimate.
+    console.error(
+      JSON.stringify({
+        event: "exchange_rate_query_failed",
+        fromCurrency: BASE_CURRENCY,
+        toCurrency: targetCurrency,
+        error: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+  if (!quote)
+    throw new ExchangeRateUnavailableError(BASE_CURRENCY, targetCurrency);
+  const ratio = exactRate(quote.rate);
+  const rate = rateAsNumber(ratio);
+  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(1 / rate)) {
+    throw new Error("Invalid exchange rate observation");
+  }
+  const expiresAt = quote.expiresAt.getTime();
+  return amount => {
+    // Recheck synchronously at each use, after the caller's last await.
+    if (Date.now() >= expiresAt)
+      throw new ExchangeRateUnavailableError(BASE_CURRENCY, targetCurrency);
+    return fromMinorUnits(
+      roundedMinor(amount, ratio, targetCurrency),
+      targetCurrency
+    );
   };
 }
 
@@ -491,11 +727,13 @@ async function getDbExchangeRate(
           eq(exchangeRates.toCurrency, to),
           gt(exchangeRates.rate, "0"),
           lte(exchangeRates.validFrom, now),
-          or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now))
+          or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now)),
+          notSuperseded(database, now)
         )
       )
       .orderBy(desc(exchangeRates.validFrom), desc(exchangeRates.id))
       .limit(1);
+    // A scheduled row, including a correction, bounds the cached snapshot.
     [next] = await database
       .select({ validFrom: exchangeRates.validFrom })
       .from(exchangeRates)
@@ -633,17 +871,45 @@ export function fromMinorUnits(amount: number, currency: string): number {
 /**
  * Convert amount between currencies
  */
-export async function convertCurrency(
+export function convertCurrency(
   amount: number,
   fromCurrency: string,
   toCurrency: string
 ): Promise<ConversionResult> {
+  return convertWithRule(amount, fromCurrency, toCurrency, OBSERVED_RULE);
+}
+
+/**
+ * The conversion pricing.convertCurrency returns: an amount only from
+ * observations that pass the display rule, leg by leg (an approved source,
+ * current, not superseded, observed less than 24 hours ago). Otherwise
+ * ExchangeRateUnavailableError, naming the pair or leg without one.
+ */
+export function convertCurrencyWithDisplayRule(
+  amount: number,
+  fromCurrency: string,
+  toCurrency: string
+): Promise<ConversionResult> {
+  return convertWithRule(amount, fromCurrency, toCurrency, DISPLAY_RULE);
+}
+
+async function convertWithRule(
+  amount: number,
+  fromCurrency: string,
+  toCurrency: string,
+  rule: RateRule
+): Promise<ConversionResult> {
   const snapshot = requireCurrentRateSnapshot(
-    await getRateSnapshot(fromCurrency, toCurrency),
+    await getRateSnapshot(fromCurrency, toCurrency, rule),
     fromCurrency,
     toCurrency
   );
   const rate = snapshot.quote;
+  // An observed-only rule never builds a fallback; keep the invariant local
+  // to the only function that turns a rate into an amount.
+  if (rate.source.includes("fallback")) {
+    throw new ExchangeRateUnavailableError(fromCurrency, toCurrency);
+  }
   const convertedAmount = fromMinorUnits(
     roundedMinor(amount, snapshot.exactRate, toCurrency),
     toCurrency
@@ -665,7 +931,9 @@ export async function convertCurrency(
 }
 
 /**
- * Convert price for display in user's preferred currency
+ * Convert price for display in user's preferred currency. A non-SAR amount
+ * uses only the quote the display estimate would show (sarPriceConverter);
+ * without one it throws ExchangeRateUnavailableError.
  */
 export async function convertPriceForDisplay(
   priceInSAR: number,
@@ -681,14 +949,15 @@ export async function convertPriceForDisplay(
     };
   }
 
-  const conversion = await convertCurrency(priceInSAR, "SAR", targetCurrency);
+  const toTarget = await sarPriceConverter(targetCurrency);
+  const amount = toTarget(priceInSAR);
   const currencyInfo = getCurrencyInfo(targetCurrency);
 
   return {
-    amount: conversion.convertedAmount,
+    amount,
     currency: targetCurrency,
-    formatted: formatAmount(conversion.convertedAmount, currencyInfo),
-    formattedWithSymbol: `${currencyInfo.symbol} ${formatAmount(conversion.convertedAmount, currencyInfo)}`,
+    formatted: formatAmount(amount, currencyInfo),
+    formattedWithSymbol: `${currencyInfo.symbol} ${formatAmount(amount, currencyInfo)}`,
   };
 }
 
@@ -754,66 +1023,24 @@ export function parseAmount(formattedAmount: string): number {
 }
 
 // ============================================================================
-// Exchange Rate Updates
+// Exchange Rate Cache Invalidation
 // ============================================================================
 
 /**
- * Update exchange rates from external API
- * Should be called periodically (e.g., every hour)
+ * Drop cached snapshots that may contain the pair, directly or as a leg of a
+ * cross rate, after an operator records or corrects a quote.
  */
-export async function updateExchangeRates(): Promise<void> {
-  console.info(
-    JSON.stringify({
-      event: "exchange_rates_update_started",
-      timestamp: new Date().toISOString(),
-    })
-  );
-
-  try {
-    // In production, this would call an external API like:
-    // - Open Exchange Rates
-    // - Fixer.io
-    // - XE
-    // - Central Bank APIs
-
-    // For now, we'll use the fallback rates
-    for (const [key, _rate] of Object.entries(FALLBACK_RATES)) {
-      const [from, to] = key.split("_");
-
-      // Update database
-      // await db.insert(exchangeRates).values({
-      //   fromCurrency: from,
-      //   toCurrency: to,
-      //   rate: rate.toString(),
-      //   source: 'fallback',
-      //   updatedAt: new Date(),
-      // }).onDuplicateKeyUpdate({
-      //   set: { rate: rate.toString(), updatedAt: new Date() }
-      // });
-
-      // Invalidate cache
-      const cacheKey = `exchange_rate:${from}_${to}`;
-      await CacheService.del(cacheKey);
-      await CacheService.del(`exchange_rate:v2:${from}_${to}`);
-      await CacheService.del(`exchange_rate:v3:${from}_${to}`);
+export async function invalidateExchangeRateSnapshots(
+  fromCurrency: string,
+  toCurrency: string
+): Promise<void> {
+  const keys = new Set<string>();
+  for (const code of [fromCurrency, toCurrency])
+    for (const other of SUPPORTED_CURRENCIES) {
+      keys.add(`exchange_rate:v3:${code}_${other.code}`);
+      keys.add(`exchange_rate:v3:${other.code}_${code}`);
     }
-
-    console.info(
-      JSON.stringify({
-        event: "exchange_rates_update_completed",
-        ratesUpdated: Object.keys(FALLBACK_RATES).length,
-        timestamp: new Date().toISOString(),
-      })
-    );
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "exchange_rates_update_failed",
-        error: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
-      })
-    );
-  }
+  for (const key of keys) await CacheService.del(key);
 }
 
 /**
@@ -835,17 +1062,19 @@ export function getHistoricalRates(
 
 export const CurrencyService = {
   getExchangeRate,
+  getExchangeRateWithDisplayRule,
   toMinorUnits,
   fromMinorUnits,
   convertCurrency,
+  convertCurrencyWithDisplayRule,
   convertPriceForDisplay,
+  sarPriceConverter,
   getCurrencyInfo,
   getSupportedCurrencies,
   isCurrencySupported,
   formatAmount,
   formatPrice,
   parseAmount,
-  updateExchangeRates,
   getHistoricalRates,
 };
 

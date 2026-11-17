@@ -124,6 +124,8 @@
     "emergencyHotel.cancelBooking": "admin",
     "emergencyHotel.prepareProviderQuote": "admin",
     "emergencyHotel.updateHotel": "admin",
+    "exchangeRates.record": "admin",
+    "exchangeRates.refreshAlarms": "admin",
     "fareRules.createFareClass": "admin",
     "fareRules.createFareRule": "admin",
     "fareRules.updateFareClass": "admin",

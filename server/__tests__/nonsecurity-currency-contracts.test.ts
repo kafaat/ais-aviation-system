@@ -36,6 +36,7 @@ import { responseContracts } from "../contracts/pricing.router";
 import {
   convertCurrency,
   fromMinorUnits,
+  getDisplayExchangeRate,
   getExchangeRate,
   toMinorUnits,
 } from "../services/currency/currency.service";
@@ -63,6 +64,7 @@ function seed(
     validFrom?: string;
     validTo?: string | null;
     updatedAt?: string;
+    supersedesId?: number;
   } = {}
 ) {
   fixture.insert(exchangeRates, {
@@ -75,6 +77,7 @@ function seed(
     validTo:
       options.validTo === undefined ? "2026-11-05 13:00:00" : options.validTo,
     updatedAt: options.updatedAt ?? "2026-11-05 11:00:00",
+    supersedesId: options.supersedesId ?? null,
   });
 }
 
@@ -505,5 +508,65 @@ describe("currency precision and effective observation contracts", () => {
     expect(rate.rate).toBeCloseTo(0.3075);
     expect(rate.updatedAt).toEqual(new Date("2026-11-05T10:00:00Z"));
     expect(boundary.ttls.get(cachedPairKey("USD", "KWD"))).toBe(60);
+  });
+  // #319 Wave 1: operator rows are append-only; a correction names the row
+  // it supersedes instead of updating it.
+  it("fix: a started correction supersedes the row it names, even with an earlier validFrom", async () => {
+    seed(5, { rate: "0.090", validFrom: "2026-11-05 11:30:00" });
+    seed(6, { rate: "0.082", supersedesId: 5 });
+    expect((await getExchangeRate("SAR", "KWD")).rate).toBe(0.082);
+    expect((await convertCurrency(1000, "SAR", "KWD")).convertedAmount).toBe(
+      82
+    );
+  });
+
+  it("a scheduled correction leaves the corrected row effective until it starts", async () => {
+    seed(5, { rate: "0.090", validTo: null });
+    seed(6, {
+      rate: "0.082",
+      validFrom: "2026-11-05 12:05:00",
+      validTo: null,
+      supersedesId: 5,
+    });
+    expect((await getExchangeRate("SAR", "KWD")).rate).toBe(0.09);
+    // The warmed snapshot of row 5 expires at the correction's start.
+    expect(boundary.ttls.get(cachedPairKey())).toBe(300);
+    vi.setSystemTime(new Date("2026-11-05T12:05:00Z"));
+    expect((await getExchangeRate("SAR", "KWD")).rate).toBe(0.082);
+  });
+
+  it("fix: the display estimate ignores a superseded or withdrawn YER quote", async () => {
+    seed(7, {
+      to: "YER",
+      rate: "1405.00000000",
+      source: "cby_sanaa",
+      validFrom: "2026-11-05 11:30:00",
+    });
+    expect(await getDisplayExchangeRate("YER")).toMatchObject({
+      rate: 1405,
+      source: "cby_sanaa",
+    });
+    seed(8, {
+      to: "YER",
+      rate: "140.50000000",
+      source: "cby_sanaa",
+      supersedesId: 7,
+    });
+    expect(await getDisplayExchangeRate("YER")).toMatchObject({
+      fromCurrency: "SAR",
+      toCurrency: "YER",
+      rate: 140.5,
+      source: "cby_sanaa",
+      updatedAt: new Date("2026-11-05T11:00:00Z"),
+    });
+    // A correction that has already expired withdraws the quote.
+    seed(9, {
+      to: "YER",
+      rate: "140.50000000",
+      source: "cby_sanaa",
+      validTo: "2026-11-05 11:30:00",
+      supersedesId: 8,
+    });
+    expect(await getDisplayExchangeRate("YER")).toBeNull();
   });
 });

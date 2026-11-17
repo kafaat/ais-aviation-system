@@ -116,26 +116,24 @@ describe("Currency Service", () => {
       expect(result.exchangeRate).toBe(1);
     });
 
-    it("should convert SAR to USD correctly", async () => {
-      const { convertCurrency } =
+    // Wave 1 (#319): a fallback constant may label an estimate, never
+    // produce an amount. Without an observed rate there is no conversion.
+    it("fix: refuses SAR to USD without an observed rate", async () => {
+      const { convertCurrency, ExchangeRateUnavailableError } =
         await import("../../services/currency/currency.service");
 
-      const result = await convertCurrency(1000, "SAR", "USD");
-
-      // 1000 SAR * 0.2666 = ~266.60 USD
-      expect(result.convertedAmount).toBeCloseTo(266.6, 1);
-      expect(result.originalCurrency).toBe("SAR");
-      expect(result.targetCurrency).toBe("USD");
+      await expect(convertCurrency(1000, "SAR", "USD")).rejects.toBeInstanceOf(
+        ExchangeRateUnavailableError
+      );
     });
 
-    it("should convert USD to SAR correctly", async () => {
-      const { convertCurrency } =
+    it("fix: refuses USD to SAR without an observed rate", async () => {
+      const { convertCurrency, ExchangeRateUnavailableError } =
         await import("../../services/currency/currency.service");
 
-      const result = await convertCurrency(100, "USD", "SAR");
-
-      // 100 USD * 3.75 = 375 SAR
-      expect(result.convertedAmount).toBe(375);
+      await expect(convertCurrency(100, "USD", "SAR")).rejects.toBeInstanceOf(
+        ExchangeRateUnavailableError
+      );
     });
   });
 
@@ -151,14 +149,13 @@ describe("Currency Service", () => {
       expect(result.formatted).toContain("500");
     });
 
-    it("should convert to USD for display", async () => {
-      const { convertPriceForDisplay } =
+    it("fix: shows no USD amount without an observed rate", async () => {
+      const { convertPriceForDisplay, ExchangeRateUnavailableError } =
         await import("../../services/currency/currency.service");
 
-      const result = await convertPriceForDisplay(1000, "USD");
-
-      expect(result.currency).toBe("USD");
-      expect(result.amount).toBeCloseTo(266.6, 1);
+      await expect(convertPriceForDisplay(1000, "USD")).rejects.toBeInstanceOf(
+        ExchangeRateUnavailableError
+      );
     });
   });
 

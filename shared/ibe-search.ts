@@ -13,10 +13,13 @@ export const DISPLAY_CURRENCIES = [
   "YER",
 ] as const;
 // Direct quotes entered by an operator or ingested from a named provider.
+// `cby_sanaa` is the official rate of the Central Bank of Yemen in Sanaa, the
+// reference source for every YER quote (owner decision on #319, 2026-11-15).
 export const DISPLAY_RATE_SOURCES = [
   "manual",
   "bank",
   "openexchangerates",
+  "cby_sanaa",
 ] as const;
 export const DISPLAY_RATE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export type DisplayCurrency = (typeof DISPLAY_CURRENCIES)[number];
