@@ -52,6 +52,9 @@ export const PROVIDER_REFUND_FAILED = "provider_refund_failed";
 export const EARLIER_ATTEMPT_SUCCEEDED = "earlier_attempt_succeeded";
 /** A provider refund that has not failed arrived for a cancelled request. */
 export const REFUND_AFTER_CANCEL = "provider_refund_after_cancel";
+/** Reconcile closed a request reopened by such a refund that the receipt had
+ * already recorded: no second settlement. */
+export const SUCCEEDED_AFTER_CANCEL = "succeeded_after_cancel";
 const REVIEW_CODES = [
   "provider_history_limit",
   "duplicate_provider_refund",
@@ -396,6 +399,23 @@ export async function recordVerifiedOrderRefund(
   );
   return true;
 }
+/** This request's provider refunds that have not failed, by our metadata. */
+async function readLiveRequestRefunds(item: OrderServiceRefund) {
+  const live: Stripe.Refund[] = [];
+  let scanned = 0;
+  for await (const refund of stripe.refunds.list({
+    payment_intent: item.paymentIntentId,
+    limit: 100,
+  })) {
+    if (++scanned > 1000) throw new Error("provider_history_limit");
+    if (
+      refund.metadata?.orderServiceRefundId === item.id &&
+      !providerFailed(refund)
+    )
+      live.push(refund);
+  }
+  return live;
+}
 async function processOrderRefund(id: string) {
   const db = await getDb();
   if (!db) throw new Error("Refund storage unavailable");
@@ -405,6 +425,57 @@ async function processOrderRefund(id: string) {
     .where(eq(orderServiceRefunds.id, id))
     .limit(1);
   if (!hint) return;
+  // Issue #382: a retried request (attempt > 1, so it has an archived
+  // attempt) that was never sent is closed by a lost dispute's chargeback
+  // only after the provider's history, read outside any transaction, shows no
+  // refund of it that has not failed. Attempt 1 is unchanged.
+  let historyRead = false;
+  if (
+    hint.attempt > 1 &&
+    !hint.refundId &&
+    !hint.requestedAt &&
+    hint.status === "queued" &&
+    hint.nextAttemptAt <= new Date() &&
+    (await savedRefundDisputeGate(db, hint.bookingId, hint.paymentIntentId))
+      .state === "lost"
+  ) {
+    let live: Stripe.Refund[];
+    try {
+      live = await readLiveRequestRefunds(hint);
+    } catch (error) {
+      log.error(
+        { err: error, refundRequestId: id },
+        "Refund history read before a chargeback closure failed"
+      );
+      if (error instanceof Error && error.message === "provider_history_limit")
+        await db
+          .update(orderServiceRefunds)
+          .set({
+            status: "review_required",
+            errorCode: "provider_history_limit",
+          })
+          .where(
+            and(
+              eq(orderServiceRefunds.id, id),
+              eq(orderServiceRefunds.attempt, hint.attempt),
+              eq(orderServiceRefunds.status, "queued")
+            )
+          );
+      return;
+    }
+    const [found] = live;
+    if (found) {
+      await db.transaction(tx =>
+        recordVerifiedOrderRefund(
+          tx,
+          found,
+          `order_refund_reconcile:${found.id}`
+        )
+      );
+      return;
+    }
+    historyRead = true;
+  }
   const item = await db.transaction(async tx => {
     await tx
       .select()
@@ -433,6 +504,14 @@ async function processOrderRefund(id: string) {
       ? null
       : await savedRefundDisputeGate(tx, hint.bookingId, r.paymentIntentId);
     let cover: number | null = null;
+    // A retried request waits for its history read (above) first.
+    if (
+      gate?.state === "lost" &&
+      !r.requestedAt &&
+      r.attempt > 1 &&
+      !historyRead
+    )
+      return null;
     if (gate?.state === "lost" && !r.requestedAt) {
       cover = await lostDisputeCover(tx, hint.bookingId, r.paymentIntentId, {
         source: "order",
@@ -884,12 +963,56 @@ function resolutionView(item: OrderServiceRefund) {
   };
 }
 
+/** Reconcile leaves a row with the dispute flow while a dispute holds or has
+ * taken its collection's funds, and never rewrites a row a lost dispute
+ * partly covers: either would change the lost amount's allocation. */
+async function assertReconcileAllowed(
+  tx: SettlementTx,
+  item: OrderServiceRefund
+) {
+  if (item.errorCode === CHARGEBACK_PARTIAL_COVER)
+    throw refused(
+      "A servicing refund partly covered by a lost dispute stays with the dispute flow"
+    );
+  await assertNoDisputeOnCollection(tx, item);
+}
+
+const sameState = (a: OrderServiceRefund, b: OrderServiceRefund) =>
+  a.status === b.status &&
+  a.errorCode === b.errorCode &&
+  a.refundId === b.refundId &&
+  a.attempt === b.attempt &&
+  (a.completedAt?.getTime() ?? null) === (b.completedAt?.getTime() ?? null);
+
+function auditReconcile(
+  tx: SettlementTx,
+  actor: ServicingRefundActor,
+  before: OrderServiceRefund,
+  after: Pick<OrderServiceRefund, "status" | "errorCode" | "refundId">,
+  providerRefundId: string | null
+) {
+  return auditResolution(
+    tx,
+    actor,
+    before,
+    "ORDER_REFUND_RECONCILED",
+    {
+      status: after.status,
+      errorCode: after.errorCode,
+      refundId: after.refundId,
+      providerRefundId,
+    },
+    `Reconciled servicing refund ${before.id} from the provider: ${before.status} to ${after.status}`
+  );
+}
+
 /** Moves the request to review for a provider finding, if it is unchanged
  * since the provider was read. */
 function reviewFinding(
   db: SettlementTx,
   hint: OrderServiceRefund,
-  code: string
+  code: string,
+  actor: ServicingRefundActor
 ) {
   return db.transaction(async tx => {
     const { item } = await lockServicingRequest(tx, hint.id, hint.bookingId);
@@ -899,34 +1022,70 @@ function reviewFinding(
       item.refundId !== hint.refundId
     )
       throw raced();
-    if (item.status !== "review_required" || item.errorCode !== code)
+    await assertReconcileAllowed(tx, item);
+    const after = {
+      ...item,
+      status: "review_required" as const,
+      errorCode: code,
+    };
+    if (item.status !== "review_required" || item.errorCode !== code) {
       await tx
         .update(orderServiceRefunds)
         .set({ status: "review_required", errorCode: code })
         .where(eq(orderServiceRefunds.id, item.id));
-    return {
-      ...resolutionView({
-        ...item,
-        status: "review_required",
-        errorCode: code,
-      }),
-      outcome: "review_required" as const,
-    };
+      await auditReconcile(tx, actor, item, after, null);
+    }
+    return { ...resolutionView(after), outcome: "review_required" as const };
   });
 }
 
-/** The worker's recording step for a provider refund reconcile read. Its
- * refusals are a state the operator must look at, not a server fault. */
-async function recordReconciledRefund(db: SettlementTx, refund: Stripe.Refund) {
+class ReconcileNoChange extends Error {}
+
+/** The worker's recording step for a provider refund that reconcile read,
+ * under the booking lock. A recording that changes nothing is rolled back, so
+ * it leaves no event; one that changes the request is audited in the same
+ * transaction. Its refusals are a state the operator must look at, not a
+ * server fault. */
+async function recordReconciledRefund(
+  db: SettlementTx,
+  hint: OrderServiceRefund,
+  refund: Stripe.Refund,
+  actor: ServicingRefundActor
+): Promise<OrderServiceRefund> {
+  const read = (tx: SettlementTx) =>
+    tx
+      .select()
+      .from(orderServiceRefunds)
+      .where(eq(orderServiceRefunds.id, hint.id))
+      .for("update")
+      .then(([row]) => row);
   try {
-    await db.transaction(tx =>
-      recordVerifiedOrderRefund(
+    return await db.transaction(async tx => {
+      await tx
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(eq(bookings.id, hint.bookingId))
+        .for("update");
+      const before = await read(tx);
+      if (!before)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Servicing refund not found",
+        });
+      await assertReconcileAllowed(tx, before);
+      await recordVerifiedOrderRefund(
         tx,
         refund,
         `order_refund_reconcile:${refund.id}`
-      )
-    );
+      );
+      const after = await read(tx);
+      if (sameState(before, after)) throw new ReconcileNoChange();
+      await auditReconcile(tx, actor, before, after, refund.id);
+      return after;
+    });
   } catch (error) {
+    if (error instanceof ReconcileNoChange)
+      return readServicingRequest(db, hint.id);
     if (
       error instanceof Error &&
       /does not match the saved request|balance changed outside/.test(
@@ -942,20 +1101,124 @@ async function recordReconciledRefund(db: SettlementTx, refund: Stripe.Refund) {
   }
 }
 
+/** A provider refund that has not failed reopened a cancelled request
+ * (`provider_refund_after_cancel`). Reconcile closes it once from the
+ * provider: when the receipt already records the refund (a charge aggregate
+ * settled it after the cancel), the request is closed with no second
+ * settlement; when it does not yet, the refund settles once. */
+async function reconcileAfterCancel(
+  db: SettlementTx,
+  hint: OrderServiceRefund,
+  provider: ProviderRequestState,
+  archivedIds: Set<string>,
+  actor: ServicingRefundActor
+) {
+  const unchanged = {
+    ...resolutionView(hint),
+    outcome: "review_required" as const,
+  };
+  const live = provider.refunds.filter(refund => !providerFailed(refund));
+  const [success] = live;
+  if (
+    provider.historyLimit ||
+    live.length !== 1 ||
+    success.status !== "succeeded" ||
+    archivedIds.has(success.id) ||
+    refundAttempt(success) !== hint.attempt ||
+    (hint.refundId !== null && hint.refundId !== success.id)
+  )
+    return unchanged;
+  const intent =
+    typeof success.payment_intent === "string"
+      ? success.payment_intent
+      : success.payment_intent?.id;
+  if (
+    intent !== hint.paymentIntentId ||
+    success.amount !== hint.amount ||
+    success.currency.toUpperCase() !== "SAR"
+  )
+    throw refused("The provider refund does not match the saved request");
+  return await db.transaction(async tx => {
+    const { booking, item, receipt } = await lockServicingRequest(
+      tx,
+      hint.id,
+      hint.bookingId
+    );
+    if (
+      item.status !== hint.status ||
+      item.errorCode !== hint.errorCode ||
+      item.refundId !== hint.refundId ||
+      item.attempt !== hint.attempt
+    )
+      throw raced();
+    await assertReconcileAllowed(tx, item);
+    if (receipt.refundedAmount === item.baseRefundedAmount + item.amount) {
+      const after = {
+        ...item,
+        status: "succeeded" as const,
+        errorCode: SUCCEEDED_AFTER_CANCEL,
+        refundId: success.id,
+      };
+      await tx
+        .update(orderServiceRefunds)
+        .set({
+          status: "succeeded",
+          errorCode: SUCCEEDED_AFTER_CANCEL,
+          refundId: success.id,
+          completedAt: new Date(),
+        })
+        .where(eq(orderServiceRefunds.id, item.id));
+      await recordEvent(tx, {
+        aggregateType: "booking",
+        aggregateId: booking.id,
+        tenantId: booking.tenantId,
+        eventType: "order.refund_updated",
+        payload: refundEventPayload(item, "succeeded", success, {
+          errorCode: SUCCEEDED_AFTER_CANCEL,
+        }),
+      });
+      await auditReconcile(tx, actor, item, after, success.id);
+      return { ...resolutionView(after), outcome: "settled" as const };
+    }
+    if (receipt.refundedAmount !== item.baseRefundedAmount) return unchanged;
+    await recordVerifiedOrderRefund(
+      tx,
+      success,
+      `order_refund_reconcile:${success.id}`
+    );
+    const [after] = await tx
+      .select()
+      .from(orderServiceRefunds)
+      .where(eq(orderServiceRefunds.id, item.id));
+    await auditReconcile(tx, actor, item, after, success.id);
+    return { ...resolutionView(after), outcome: "settled" as const };
+  });
+}
+
 /** Re-reads the provider for one request and never creates a refund. */
 export async function reconcileServicingRefund(
   requestId: string,
-  _actor: ServicingRefundActor
+  actor: ServicingRefundActor
 ) {
   const db = servicingDb();
   const hint = await readServicingRequest(db, requestId);
   if (hint.status !== "failed" && hint.status !== "review_required")
     return { ...resolutionView(hint), outcome: "unchanged" as const };
+  await db.transaction(async tx => {
+    await tx
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(eq(bookings.id, hint.bookingId))
+      .for("update");
+    await assertReconcileAllowed(tx, hint);
+  });
   const archived = await archivedAttempts(db, hint.id);
   const archivedIds = new Set(archived.map(row => row.refundId));
   const provider = await readProviderRequest(hint, [...archivedIds]);
+  if (hint.errorCode === REFUND_AFTER_CANCEL)
+    return reconcileAfterCancel(db, hint, provider, archivedIds, actor);
   if (provider.historyLimit)
-    return reviewFinding(db, hint, "provider_history_limit");
+    return reviewFinding(db, hint, "provider_history_limit", actor);
   const current = provider.refunds.filter(
     refund =>
       !archivedIds.has(refund.id) && refundAttempt(refund) === hint.attempt
@@ -970,7 +1233,7 @@ export async function reconcileServicingRefund(
       refund => !providerFailed(refund) && refund.status !== "succeeded"
     )
   )
-    return reviewFinding(db, hint, "duplicate_provider_refund");
+    return reviewFinding(db, hint, "duplicate_provider_refund", actor);
   if (earlierSucceeded.length) {
     const [success] = earlierSucceeded;
     // The provider reports an earlier attempt's refund as succeeded. It
@@ -998,6 +1261,7 @@ export async function reconcileServicingRefund(
           item.completedAt
         )
           throw raced();
+        await assertReconcileAllowed(tx, item);
         const intent =
           typeof success.payment_intent === "string"
             ? success.payment_intent
@@ -1022,27 +1286,24 @@ export async function reconcileServicingRefund(
           `order_refund_reconcile:${success.id}`,
           false
         );
-        return {
-          ...resolutionView({
-            ...item,
-            status: "succeeded",
-            errorCode: null,
-            refundId: success.id,
-          }),
-          outcome: "settled" as const,
+        const after = {
+          ...item,
+          status: "succeeded" as const,
+          errorCode: null,
+          refundId: success.id,
         };
+        await auditReconcile(tx, actor, item, after, success.id);
+        return { ...resolutionView(after), outcome: "settled" as const };
       });
-    await recordReconciledRefund(db, success);
-    const after = await readServicingRequest(db, hint.id);
+    const after = await recordReconciledRefund(db, hint, success, actor);
     return { ...resolutionView(after), outcome: "review_required" as const };
   }
   if (provider.otherAmount !== hint.baseRefundedAmount)
-    return reviewFinding(db, hint, "provider_refund_balance_conflict");
+    return reviewFinding(db, hint, "provider_refund_balance_conflict", actor);
   const [refund] = current;
   if (!refund)
     return { ...resolutionView(hint), outcome: "no_provider_refund" as const };
-  await recordReconciledRefund(db, refund);
-  const after = await readServicingRequest(db, hint.id);
+  const after = await recordReconciledRefund(db, hint, refund, actor);
   const outcome: ReconcileOutcome =
     after.status === "succeeded"
       ? "settled"
