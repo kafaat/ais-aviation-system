@@ -107,6 +107,18 @@ describe("durable booking checkout", () => {
     expect(request.metadata.bookingId).toBe("7");
   });
 
+  it("returns from the provider with the trusted booking id beside the session id", async () => {
+    await createBookingCheckout(owner);
+    const request = state.create.mock.calls[0][0];
+    expect(request.success_url).toBe(
+      "https://example.test/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true&booking_id=7"
+    );
+    // The id is only a lookup key; the read still enforces ownership.
+    await expect(getBookingCheckoutState(7, 8)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
   it("reads a pending invoice without a claim, provider request or financial write", async () => {
     await expect(getBookingCheckoutState(7, 9)).resolves.toEqual({
       bookingId: 7,

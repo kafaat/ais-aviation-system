@@ -14,6 +14,7 @@ import { flightSearchPath } from "@/lib/search-context";
 import { trpc } from "@/lib/trpc";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
+import { SourceErrorAlert } from "@/components/SourceErrorAlert";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -165,9 +166,10 @@ function BookingForm({
     { id: string; row: number; column: string }[]
   >([]);
 
-  const { data: flight, isLoading } = trpc.flights.getById.useQuery({
+  const flightQuery = trpc.flights.getById.useQuery({
     id: flightId,
   });
+  const { data: flight, isLoading } = flightQuery;
   const utils = trpc.useUtils();
   const createBooking = trpc.bookings.create.useMutation({
     onError(error) {
@@ -548,6 +550,27 @@ function BookingForm({
             <Skeleton className="h-96 w-full rounded-xl" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (
+    !flight &&
+    flightQuery.error?.data?.code !== "NOT_FOUND" &&
+    flightQuery.error
+  ) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <SEO title={t("booking.title")} />
+        <Card className="p-8 max-w-md">
+          <SourceErrorAlert
+            error={flightQuery.error}
+            onRetry={flightQuery.refetch}
+          />
+          <Button asChild variant="ghost" className="mt-4">
+            <Link href="/">{t("common.back")}</Link>
+          </Button>
+        </Card>
       </div>
     );
   }
