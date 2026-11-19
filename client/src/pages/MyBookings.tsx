@@ -4,7 +4,13 @@ import { DisruptionHub } from "@/components/DisruptionHub";
 import SpecialServicesRequest from "@/components/SpecialServicesRequest";
 import { WalletBookingPayment } from "@/components/WalletBookingPayment";
 import { BookingCreditPayment } from "@/components/BookingCreditPayment";
-import { OperationalReadState } from "@/components/OperationalReadState";
+import {
+  OperationalReadState,
+  useOperationalLabels,
+} from "@/components/OperationalReadState";
+
+const PAYMENT_POLL_INTERVAL_MS = 5_000;
+const PAYMENT_POLL_WINDOW_MS = 120_000;
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -88,6 +94,7 @@ type SortOption = "dateDesc" | "dateAsc" | "priceDesc" | "priceAsc";
 
 export default function MyBookings() {
   const { t, i18n } = useTranslation();
+  const l = useOperationalLabels();
 
   const { user: _user, isAuthenticated, loading } = useAuth();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -106,9 +113,40 @@ export default function MyBookings() {
   // Sort state
   const [sortOption, setSortOption] = useState<SortOption>("dateDesc");
 
+  // Returning from the provider's checkout proves nothing about payment: the
+  // session id sits in the URL. The notice below only reflects the booking's
+  // paymentStatus as recorded by the server's webhook settlement, and polls
+  // that read for a bounded time while a booking is still pending.
+  const [paymentReturn] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    return q.get("success") === "true" && Boolean(q.get("session_id"));
+  });
+  const [pollExpired, setPollExpired] = useState(false);
+  useEffect(() => {
+    if (!paymentReturn) return;
+    const timer = setTimeout(
+      () => setPollExpired(true),
+      PAYMENT_POLL_WINDOW_MS
+    );
+    return () => clearTimeout(timer);
+  }, [paymentReturn]);
   const bookingsQuery = trpc.bookings.myBookings.useQuery(undefined, {
     enabled: isAuthenticated,
+    refetchInterval: query =>
+      paymentReturn &&
+      !pollExpired &&
+      query.state.data?.some(b => b.paymentStatus === "pending")
+        ? PAYMENT_POLL_INTERVAL_MS
+        : false,
   });
+  const returnNoticeState: "pending" | "timeout" | "settled" | null =
+    !paymentReturn || !bookingsQuery.data
+      ? null
+      : bookingsQuery.data.some(b => b.paymentStatus === "pending")
+        ? pollExpired
+          ? "timeout"
+          : "pending"
+        : "settled";
   const { data: bookings, isLoading } = bookingsQuery;
   type Booking = NonNullable<typeof bookings>[number];
 
@@ -348,6 +386,29 @@ export default function MyBookings() {
           </div>
         </div>
       </header>
+      {returnNoticeState && (
+        <div
+          role="status"
+          data-testid="payment-return-notice"
+          data-state={returnNoticeState}
+          className="container pt-4"
+        >
+          {returnNoticeState === "pending"
+            ? l(
+                "عدنا من صفحة الدفع. ننتظر إشعار مزود الدفع لخوادمنا، وتعرض شارة الدفع على كل حجز الحالة المسجلة.",
+                "You returned from the payment page. We are waiting for the payment provider to notify our servers; each booking's payment badge shows the status we have recorded."
+              )
+            : returnNoticeState === "timeout"
+              ? l(
+                  "ما زلنا ننتظر إشعار مزود الدفع. يمكنك إغلاق الصفحة؛ ستتحدث الحالة هنا عند وصوله.",
+                  "We are still waiting for the payment provider to notify us. You can close this page; the status here updates when it arrives."
+                )
+              : l(
+                  "لا يوجد حجز بانتظار الدفع. تعرض شارة الدفع على كل حجز الحالة المسجلة لدينا.",
+                  "No booking is waiting for payment. Each booking's payment badge shows the status we have recorded."
+                )}
+        </div>
+      )}
 
       <div className="container py-8">
         {Boolean(bookings?.length) && (
