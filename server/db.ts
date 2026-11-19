@@ -1042,14 +1042,14 @@ export async function getPaymentByIdempotencyKey(idempotencyKey: string) {
 // ============ Admin Functions ============
 export async function getAllAirlines() {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Database unavailable for airlines");
 
   return await db.select().from(airlines).where(eq(airlines.active, true));
 }
 
 export async function getAllAirports() {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Database unavailable for airports");
 
   return await db.select().from(airports);
 }
