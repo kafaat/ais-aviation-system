@@ -112,6 +112,18 @@ vi.mock("@/lib/trpc", () => ({
     },
   },
 }));
+const LEAKS = [
+  "/srv/tenant-7/internal/db.ts:42",
+  "tok_SYNTHETIC_SECRET_123",
+  "Failed to fetch",
+  '[{"code":"invalid_type","path":["tenantId"],"message":"Required"}]',
+];
+const leakMessage = LEAKS.join(" | ");
+function expectNoLeak() {
+  const text = document.body.textContent ?? "";
+  for (const leak of LEAKS) expect(text).not.toContain(leak);
+}
+
 function renderPage() {
   const { hook } = memoryLocation({ path: "/booking/42" });
   return render(
@@ -141,7 +153,8 @@ it("shows a load error with retry, not 'no flights', when the flight read fails"
     refetch: flightRead.refetch,
   };
   renderPage();
-  expect(screen.getByRole("alert")).toHaveTextContent(
+  expect(screen.getByRole("alert")).toHaveTextContent("Source unavailable");
+  expect(screen.getByRole("alert")).not.toHaveTextContent(
     "Synthetic flight outage"
   );
   expect(screen.queryByText("search.noFlights")).not.toBeInTheDocument();
@@ -160,4 +173,67 @@ it("still says the flight is missing for a verified NOT_FOUND", () => {
   renderPage();
   expect(screen.getByText("search.noFlights")).toBeVisible();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it.each(["INTERNAL_SERVER_ERROR", "BAD_REQUEST"])(
+  "never renders the raw message of a %s flight read, keeps Retry",
+  code => {
+    flightRead.state = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { message: leakMessage, data: { code } },
+      refetch: flightRead.refetch,
+    };
+    renderPage();
+    expect(screen.getByRole("alert")).toHaveTextContent("Source unavailable");
+    expectNoLeak();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(flightRead.refetch).toHaveBeenCalledOnce();
+  }
+);
+
+it("never renders a transport error message and still offers Retry", () => {
+  flightRead.state = {
+    data: undefined,
+    isLoading: false,
+    isError: true,
+    error: { message: "Failed to fetch", data: null },
+    refetch: flightRead.refetch,
+  };
+  renderPage();
+  expectNoLeak();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+});
+
+it.each(["UNAUTHORIZED", "FORBIDDEN"])(
+  "shows %s as access denied without raw reason or Retry",
+  code => {
+    flightRead.state = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { message: leakMessage, data: { code } },
+      refetch: flightRead.refetch,
+    };
+    renderPage();
+    expect(screen.getByRole("alert")).toHaveTextContent("Access denied");
+    expectNoLeak();
+    expect(
+      screen.queryByRole("button", { name: "Retry" })
+    ).not.toBeInTheDocument();
+  }
+);
+
+it("does not leak the raw message of a NOT_FOUND either", () => {
+  flightRead.state = {
+    data: undefined,
+    isLoading: false,
+    isError: true,
+    error: { message: leakMessage, data: { code: "NOT_FOUND" } },
+    refetch: flightRead.refetch,
+  };
+  renderPage();
+  expect(screen.getByText("search.noFlights")).toBeVisible();
+  expectNoLeak();
 });

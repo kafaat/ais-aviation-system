@@ -28,6 +28,18 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+const LEAKS = [
+  "/srv/tenant-7/internal/db.ts:42",
+  "tok_SYNTHETIC_SECRET_123",
+  "Failed to fetch",
+  '[{"code":"invalid_type","path":["tenantId"],"message":"Required"}]',
+];
+const leakMessage = LEAKS.join(" | ");
+function expectNoLeak() {
+  const text = document.body.textContent ?? "";
+  for (const leak of LEAKS) expect(text).not.toContain(leak);
+}
+
 const ok = { data: [], isError: false, error: null };
 beforeEach(() => {
   reads.retryAirlines.mockReset();
@@ -47,7 +59,8 @@ it("reports a failed airports read and retries only that read", () => {
     refetch: reads.retryAirports,
   };
   render(<AdminDashboard />);
-  expect(screen.getByRole("alert")).toHaveTextContent(
+  expect(screen.getByRole("alert")).toHaveTextContent("Source unavailable");
+  expect(screen.getByRole("alert")).not.toHaveTextContent(
     "Synthetic airports outage"
   );
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -66,7 +79,8 @@ it("reports a failed airlines read", () => {
     refetch: reads.retryAirlines,
   };
   render(<AdminDashboard />);
-  expect(screen.getByRole("alert")).toHaveTextContent(
+  expect(screen.getByRole("alert")).toHaveTextContent("Source unavailable");
+  expect(screen.getByRole("alert")).not.toHaveTextContent(
     "Synthetic airlines outage"
   );
 });
@@ -75,3 +89,50 @@ it("does not alert when both reads succeeded with empty lists", () => {
   render(<AdminDashboard />);
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
+
+it.each(["INTERNAL_SERVER_ERROR", "BAD_REQUEST"])(
+  "never renders the raw message of a %s reference read, keeps Retry",
+  code => {
+    reads.airlines = {
+      data: undefined,
+      isError: true,
+      error: { message: leakMessage, data: { code } },
+      refetch: reads.retryAirlines,
+    };
+    render(<AdminDashboard />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Source unavailable");
+    expectNoLeak();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(reads.retryAirlines).toHaveBeenCalledOnce();
+  }
+);
+
+it("never renders a transport error message", () => {
+  reads.airports = {
+    data: undefined,
+    isError: true,
+    error: { message: "Failed to fetch", data: null },
+    refetch: reads.retryAirports,
+  };
+  render(<AdminDashboard />);
+  expectNoLeak();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+});
+
+it.each(["UNAUTHORIZED", "FORBIDDEN"])(
+  "shows %s as access denied without raw reason or Retry",
+  code => {
+    reads.airlines = {
+      data: undefined,
+      isError: true,
+      error: { message: leakMessage, data: { code } },
+      refetch: reads.retryAirlines,
+    };
+    render(<AdminDashboard />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Access denied");
+    expectNoLeak();
+    expect(
+      screen.queryByRole("button", { name: "Retry" })
+    ).not.toBeInTheDocument();
+  }
+);

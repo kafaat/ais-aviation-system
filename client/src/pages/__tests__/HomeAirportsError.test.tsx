@@ -73,6 +73,18 @@ vi.mock("@/lib/trpc", () => ({
   trpc: { reference: { airports: { useQuery: () => airports.state } } },
 }));
 
+const LEAKS = [
+  "/srv/tenant-7/internal/db.ts:42",
+  "tok_SYNTHETIC_SECRET_123",
+  "Failed to fetch",
+  '[{"code":"invalid_type","path":["tenantId"],"message":"Required"}]',
+];
+const leakMessage = LEAKS.join(" | ");
+function expectNoLeak() {
+  const text = document.body.textContent ?? "";
+  for (const leak of LEAKS) expect(text).not.toContain(leak);
+}
+
 beforeEach(() => {
   airports.refetch.mockReset();
   airports.state = {};
@@ -89,7 +101,8 @@ it("says the airport list failed to load, and retries, instead of an empty city 
     refetch: airports.refetch,
   };
   render(<Home />);
-  expect(screen.getByRole("alert")).toHaveTextContent(
+  expect(screen.getByRole("alert")).toHaveTextContent("Source unavailable");
+  expect(screen.getByRole("alert")).not.toHaveTextContent(
     "Synthetic airports outage"
   );
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -120,3 +133,42 @@ it("shows no alert for a loaded airport list, empty or not", () => {
   render(<Home />);
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
+
+it.each([
+  ["INTERNAL_SERVER_ERROR", leakMessage],
+  ["BAD_REQUEST", leakMessage],
+  [undefined, "Failed to fetch"],
+])(
+  "never renders the raw message of a %s failure but keeps Retry",
+  (code, message) => {
+    airports.state = {
+      data: undefined,
+      isError: true,
+      error: { message, data: code ? { code } : null },
+      refetch: airports.refetch,
+    };
+    render(<Home />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Source unavailable");
+    expectNoLeak();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(airports.refetch).toHaveBeenCalledOnce();
+  }
+);
+
+it.each(["UNAUTHORIZED", "FORBIDDEN"])(
+  "shows %s as access denied without the raw reason and without Retry",
+  code => {
+    airports.state = {
+      data: undefined,
+      isError: true,
+      error: { message: leakMessage, data: { code } },
+      refetch: airports.refetch,
+    };
+    render(<Home />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Access denied");
+    expectNoLeak();
+    expect(
+      screen.queryByRole("button", { name: "Retry" })
+    ).not.toBeInTheDocument();
+  }
+);
