@@ -484,6 +484,7 @@ async function currenciesReport(db: Reader) {
       source: exchangeRates.source,
       validFrom: exchangeRates.validFrom,
       validTo: exchangeRates.validTo,
+      supersedesId: exchangeRates.supersedesId,
     })
     .from(exchangeRates)
     .orderBy(
@@ -494,15 +495,27 @@ async function currenciesReport(db: Reader) {
     )
     .limit(LIMIT);
   ensureCapacity(rates);
+  // A correction takes effect at its validFrom. Its predecessor must never
+  // become "current" again when that correction later expires. Future-dated
+  // corrections do not supersede a still-current quote prematurely.
+  const supersededIds = new Set(
+    rates.flatMap(rate =>
+      rate.supersedesId !== null && rate.validFrom <= now
+        ? [rate.supersedesId]
+        : []
+    )
+  );
   const rows: Row[] = rates.map(rate => ({
     ...rate,
     ...configurationFields(rate.toCurrency),
     status:
       rate.validFrom > now
         ? "future"
-        : rate.validTo && rate.validTo <= now
-          ? "expired"
-          : "current",
+        : supersededIds.has(rate.rateId)
+          ? "superseded"
+          : rate.validTo && rate.validTo <= now
+            ? "expired"
+            : "current",
   }));
   for (const currency of [...configurations.values()].sort((a, b) =>
     a.code.localeCompare(b.code)
@@ -524,6 +537,7 @@ async function currenciesReport(db: Reader) {
         rate =>
           rate.fromCurrency === "SAR" &&
           rate.toCurrency === currency.code &&
+          !supersededIds.has(rate.rateId) &&
           rate.validFrom <= now &&
           (!rate.validTo || rate.validTo > now)
       )
@@ -563,7 +577,7 @@ async function currenciesReport(db: Reader) {
     ],
     rows,
     [
-      "Currency configuration is shared across the platform. All persisted rate versions are shown; overlapping current records are not silently resolved.",
+      "Currency configuration is shared across the platform. All persisted rate versions are shown; an effective correction marks its predecessor superseded even if the correction later expires. Future-dated corrections do not take effect early. Other overlapping rate versions are not silently resolved.",
       "Persisted currency names, active flags and base flags take precedence over application catalog defaults. Application-only entries and rate-only currencies identify their source explicitly; a display-list entry does not establish an activation flag. SAR is the application's conversion base for missing-rate checks, independently of stored base flags.",
       `Validity is evaluated at ${now.toISOString()}. No fallback or calculated cross-rate is presented as a configured rate.`,
     ]
