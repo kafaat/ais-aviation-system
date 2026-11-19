@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    payments: {
+      getCheckoutState: { useQuery: () => ({ data: undefined, error: null }) },
+    },
     bookings: {
       getDepartureState: { useQuery: () => ({ data: [] }) },
       myBookings: {
