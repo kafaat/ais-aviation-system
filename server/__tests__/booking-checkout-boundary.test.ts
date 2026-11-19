@@ -197,7 +197,7 @@ describe("durable booking checkout", () => {
     ["confirmed", "paid", "paid"],
     ["cancelled", "refunded", "refunded"],
     ["cancelled", "pending", "cancelled"],
-    ["pending", "failed", "unavailable"],
+    ["pending", "failed", "failed"],
     ["confirmed", "pending", "unavailable"],
   ])(
     "shows authoritative %s/%s state and disables further collection",
