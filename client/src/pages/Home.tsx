@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
+import { SourceErrorAlert } from "@/components/SourceErrorAlert";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -100,7 +101,8 @@ export default function Home() {
     { originId: "", destinationId: "", departureDate: undefined },
   ]);
 
-  const { data: airports } = trpc.reference.airports.useQuery();
+  const airportsQuery = trpc.reference.airports.useQuery();
+  const { data: airports } = airportsQuery;
 
   const handleSearch = () => {
     if (
@@ -375,6 +377,12 @@ export default function Home() {
                   value={preferences}
                   onChange={setPreferences}
                 />
+                {airportsQuery.error && (
+                  <SourceErrorAlert
+                    error={airportsQuery.error}
+                    onRetry={airportsQuery.refetch}
+                  />
+                )}
                 <Tabs
                   value={searchType}
                   onValueChange={v =>

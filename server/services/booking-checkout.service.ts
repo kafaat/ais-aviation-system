@@ -226,7 +226,7 @@ function requestFor(
       },
     ],
     success_url: new URL(
-      "/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true",
+      `/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true&booking_id=${booking.id}`,
       base
     ).href.replace("%7BCHECKOUT_SESSION_ID%7D", "{CHECKOUT_SESSION_ID}"),
     cancel_url: new URL(`/checkout/${booking.id}?canceled=true`, base).href,

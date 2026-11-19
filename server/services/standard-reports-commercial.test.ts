@@ -326,6 +326,74 @@ describe("identity and currency configuration reports", () => {
     expect((await run(1, {}, globalScope)).rows).toHaveLength(2);
   });
 
+  it("does not relabel a superseded FX quote as current or hide a missing rate", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-02T12:00:00Z"));
+    insert(exchangeRates, {
+      id: 10,
+      fromCurrency: "SAR",
+      toCurrency: "USD",
+      rate: "0.30000000",
+      source: "bank",
+      version: 1,
+      validFrom: "2030-01-01 00:00:00",
+      validTo: "2030-01-04 00:00:00",
+    });
+    insert(exchangeRates, {
+      id: 11,
+      fromCurrency: "SAR",
+      toCurrency: "USD",
+      rate: "0.31000000",
+      source: "bank",
+      version: 2,
+      supersedesId: 10,
+      validFrom: "2030-01-02 10:00:00",
+      validTo: "2030-01-02 11:00:00",
+    });
+    insert(exchangeRates, {
+      id: 12,
+      fromCurrency: "SAR",
+      toCurrency: "EUR",
+      rate: "0.25000000",
+      source: "bank",
+      version: 1,
+      validFrom: "2030-01-01 00:00:00",
+      validTo: "2030-01-04 00:00:00",
+    });
+    insert(exchangeRates, {
+      id: 13,
+      fromCurrency: "SAR",
+      toCurrency: "EUR",
+      rate: "0.26000000",
+      source: "bank",
+      version: 2,
+      supersedesId: 12,
+      validFrom: "2030-01-03 00:00:00",
+      validTo: null,
+    });
+
+    const result = await run(4);
+    expect(result.rows.find(row => row.rateId === 10)?.status).toBe(
+      "superseded"
+    );
+    expect(result.rows.find(row => row.rateId === 11)?.status).toBe("expired");
+    expect(result.rows).toContainEqual(
+      expect.objectContaining({
+        rateId: null,
+        fromCurrency: "SAR",
+        toCurrency: "USD",
+        status: "missing_current_rate",
+      })
+    );
+    // A correction scheduled in the future must not invalidate today's quote.
+    expect(result.rows.find(row => row.rateId === 12)?.status).toBe("current");
+    expect(result.rows.find(row => row.rateId === 13)?.status).toBe("future");
+    const missingEur = result.rows.filter(
+      row => row.toCurrency === "EUR" && row.status === "missing_current_rate"
+    );
+    expect(missingEur).toHaveLength(0);
+  });
+
   it("retains exact configured rate versions and records absent current prices without fallback", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2030-01-02T12:00:00Z"));

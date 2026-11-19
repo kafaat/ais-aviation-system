@@ -4,7 +4,13 @@ import { DisruptionHub } from "@/components/DisruptionHub";
 import SpecialServicesRequest from "@/components/SpecialServicesRequest";
 import { WalletBookingPayment } from "@/components/WalletBookingPayment";
 import { BookingCreditPayment } from "@/components/BookingCreditPayment";
-import { OperationalReadState } from "@/components/OperationalReadState";
+import {
+  OperationalReadState,
+  useOperationalLabels,
+} from "@/components/OperationalReadState";
+
+const PAYMENT_POLL_INTERVAL_MS = 5_000;
+const PAYMENT_POLL_WINDOW_MS = 120_000;
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -88,6 +94,7 @@ type SortOption = "dateDesc" | "dateAsc" | "priceDesc" | "priceAsc";
 
 export default function MyBookings() {
   const { t, i18n } = useTranslation();
+  const l = useOperationalLabels();
 
   const { user: _user, isAuthenticated, loading } = useAuth();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -106,9 +113,64 @@ export default function MyBookings() {
   // Sort state
   const [sortOption, setSortOption] = useState<SortOption>("dateDesc");
 
+  // Returning from the provider's checkout proves nothing about payment: the
+  // session id sits in the URL and can be edited. The success URL also carries
+  // the booking id the server put there; it is only a lookup key. The notice
+  // shows what payments.getCheckoutState says for that one booking, which
+  // enforces ownership, and polls that read for a bounded time while it is
+  // pending. A missing or malformed id yields an "unknown" notice, never a
+  // verdict taken from other bookings.
+  const [paymentReturn] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("success") !== "true" || !q.get("session_id")) return null;
+    const raw = q.get("booking_id") ?? "";
+    const id = /^[1-9][0-9]{0,9}$/.test(raw) ? Number(raw) : NaN;
+    return {
+      bookingId: Number.isSafeInteger(id) && id <= 2147483647 ? id : null,
+    };
+  });
+  const [pollExpired, setPollExpired] = useState(false);
+  useEffect(() => {
+    if (!paymentReturn) return;
+    const timer = setTimeout(
+      () => setPollExpired(true),
+      PAYMENT_POLL_WINDOW_MS
+    );
+    return () => clearTimeout(timer);
+  }, [paymentReturn]);
   const bookingsQuery = trpc.bookings.myBookings.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+  const returnedBookingId = paymentReturn?.bookingId ?? null;
+  const returnCheckout = trpc.payments.getCheckoutState.useQuery(
+    { bookingId: returnedBookingId ?? 1 },
+    {
+      enabled: isAuthenticated && returnedBookingId !== null,
+      retry: false,
+      refetchInterval: query =>
+        !pollExpired && query.state.data?.state === "pending"
+          ? PAYMENT_POLL_INTERVAL_MS
+          : false,
+    }
+  );
+  const checkoutState = returnCheckout.data?.state;
+  const returnNoticeState:
+    "pending" | "timeout" | "paid" | "closed" | "attention" | "unknown" | null =
+    !paymentReturn
+      ? null
+      : returnedBookingId === null || returnCheckout.error
+        ? "unknown"
+        : !checkoutState
+          ? null
+          : checkoutState === "paid"
+            ? "paid"
+            : checkoutState === "refunded" || checkoutState === "cancelled"
+              ? "closed"
+              : checkoutState === "unavailable"
+                ? "attention"
+                : pollExpired
+                  ? "timeout"
+                  : "pending";
   const { data: bookings, isLoading } = bookingsQuery;
   type Booking = NonNullable<typeof bookings>[number];
 
@@ -348,6 +410,44 @@ export default function MyBookings() {
           </div>
         </div>
       </header>
+      {returnNoticeState && (
+        <div
+          role="status"
+          data-testid="payment-return-notice"
+          data-state={returnNoticeState}
+          className="container pt-4"
+        >
+          {returnNoticeState === "paid"
+            ? l(
+                `سجّلت خوادمنا الدفع للحجز ${returnCheckout.data?.bookingReference}.`,
+                `Our servers have recorded the payment for booking ${returnCheckout.data?.bookingReference}.`
+              )
+            : returnNoticeState === "pending"
+              ? l(
+                  `عدنا من صفحة الدفع. ننتظر إشعار مزود الدفع لخوادمنا بشأن الحجز ${returnCheckout.data?.bookingReference}.`,
+                  `You returned from the payment page. We are waiting for the payment provider to notify our servers about booking ${returnCheckout.data?.bookingReference}.`
+                )
+              : returnNoticeState === "timeout"
+                ? l(
+                    "ما زلنا ننتظر إشعار مزود الدفع. يمكنك إغلاق الصفحة؛ ستتحدث الحالة هنا عند وصوله.",
+                    "We are still waiting for the payment provider to notify us. You can close this page; the status here updates when it arrives."
+                  )
+                : returnNoticeState === "closed"
+                  ? l(
+                      `الحجز ${returnCheckout.data?.bookingReference} لم يعد بانتظار الدفع (ملغى أو مسترد).`,
+                      `Booking ${returnCheckout.data?.bookingReference} is no longer awaiting payment (cancelled or refunded).`
+                    )
+                  : returnNoticeState === "attention"
+                    ? l(
+                        `الحجز ${returnCheckout.data?.bookingReference} لم يؤكَّد دفعه ويحتاج إلى مراجعة. لا تكرر الدفع قبل التحقق من حالته.`,
+                        `Payment for booking ${returnCheckout.data?.bookingReference} is not confirmed and needs attention. Do not pay again until its status is checked.`
+                      )
+                    : l(
+                        "تعذّر التحقق من حالة الدفع لهذه العودة. تعرض شارة الدفع على كل حجز الحالة المسجلة لدينا.",
+                        "We could not verify the payment status for this return. Each booking's payment badge shows the status we have recorded."
+                      )}
+        </div>
+      )}
 
       <div className="container py-8">
         {Boolean(bookings?.length) && (

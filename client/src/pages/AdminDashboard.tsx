@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { SourceErrorAlert } from "@/components/SourceErrorAlert";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,8 +51,10 @@ export default function AdminDashboard() {
   const [economyPrice, setEconomyPrice] = useState("");
   const [businessPrice, setBusinessPrice] = useState("");
 
-  const { data: airlines } = trpc.reference.airlines.useQuery();
-  const { data: airports } = trpc.reference.airports.useQuery();
+  const airlinesQuery = trpc.reference.airlines.useQuery();
+  const airportsQuery = trpc.reference.airports.useQuery();
+  const { data: airlines } = airlinesQuery;
+  const { data: airports } = airportsQuery;
 
   const createFlightMutation = trpc.admin.createFlight.useMutation({
     onSuccess: () => {
@@ -174,6 +177,18 @@ export default function AdminDashboard() {
       </header>
 
       <div className="container py-8">
+        {airlinesQuery.error && (
+          <SourceErrorAlert
+            error={airlinesQuery.error}
+            onRetry={airlinesQuery.refetch}
+          />
+        )}
+        {airportsQuery.error && (
+          <SourceErrorAlert
+            error={airportsQuery.error}
+            onRetry={airportsQuery.refetch}
+          />
+        )}
         <Button
           variant="outline"
           className="mb-4"
