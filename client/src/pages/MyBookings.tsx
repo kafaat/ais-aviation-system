@@ -155,7 +155,14 @@ export default function MyBookings() {
   );
   const checkoutState = returnCheckout.data?.state;
   const returnNoticeState:
-    "pending" | "timeout" | "paid" | "closed" | "failed" | "attention" | "unknown" | null =
+    | "pending"
+    | "timeout"
+    | "paid"
+    | "closed"
+    | "failed"
+    | "attention"
+    | "unknown"
+    | null =
     !paymentReturn
       ? null
       : returnedBookingId === null || returnCheckout.error
@@ -169,10 +176,10 @@ export default function MyBookings() {
               : checkoutState === "failed"
                 ? "failed"
                 : checkoutState === "unavailable"
-                ? "attention"
-                : pollExpired
-                  ? "timeout"
-                  : "pending";
+                  ? "attention"
+                  : pollExpired
+                    ? "timeout"
+                    : "pending";
   const { data: bookings, isLoading } = bookingsQuery;
   type Booking = NonNullable<typeof bookings>[number];
 
