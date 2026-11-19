@@ -213,6 +213,18 @@ it("settled after the webhook: shows paid and stops polling", () => {
   expect(interval({ state: { data: checkout(5, "paid") } })).toBe(false);
 });
 
+it("shows a recorded failed payment without implying settlement or allowing a second checkout", () => {
+  state.checkout.data = checkout(5, "failed");
+  render(<MyBookings />);
+  expect(notice()).toHaveAttribute("data-state", "failed");
+  expect(notice()).toHaveTextContent("Payment for booking REF5 failed");
+  expect(notice()).not.toHaveTextContent(/recorded the payment|successful/i);
+  const interval = lastCall().options.refetchInterval as (
+    q: unknown
+  ) => unknown;
+  expect(interval({ state: { data: checkout(5, "failed") } })).toBe(false);
+});
+
 it("failed or action-required collection (server 'unavailable') is not called paid or pending", () => {
   state.checkout.data = checkout(5, "unavailable");
   render(<MyBookings />);
