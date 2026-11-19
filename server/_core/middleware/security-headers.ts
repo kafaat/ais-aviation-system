@@ -1,5 +1,8 @@
 import helmet from "helmet";
 import type { RequestHandler } from "express";
+import fs from "node:fs";
+import path from "node:path";
+import { buildReportOnlyPolicy } from "./csp-report-only";
 import { parseEmbedOrigins } from "../../services/ibe-public-config.service";
 
 function headerSet(
@@ -94,6 +97,8 @@ export function createSecurityHeaders(
   options: {
     isDevelopment?: boolean;
     embedAllowedOrigins?: string;
+    /** Directory holding the built client (index.html); defaults to the production layout. */
+    staticRoot?: string;
   } = {}
 ): RequestHandler {
   const isDevelopment =
@@ -103,12 +108,29 @@ export function createSecurityHeaders(
   );
   const ordinary = headerSet(isDevelopment, ["'self'"]);
   const embedded = headerSet(isDevelopment, ["'self'", ...origins], true);
+  const staticRoot =
+    options.staticRoot ?? path.resolve(import.meta.dirname, "public");
+  let indexHtml: string | undefined;
+  try {
+    indexHtml = fs.readFileSync(path.join(staticRoot, "index.html"), "utf8");
+  } catch {
+    indexHtml = undefined; // no build: policy carries no inline allowance
+  }
+  const reportOnly = isDevelopment
+    ? undefined
+    : buildReportOnlyPolicy(indexHtml, ["'self'"]);
+  const reportOnlyEmbedded = isDevelopment
+    ? undefined
+    : buildReportOnlyPolicy(indexHtml, ["'self'", ...origins]);
   return (req, res, next) => {
     const allowEmbed =
       origins.length > 0 &&
       req.path === "/embed/search" &&
       (req.method === "GET" || req.method === "HEAD");
     if (allowEmbed) res.removeHeader("X-Frame-Options");
+    // Non-enforcing observation stage; the enforcing header above is unchanged.
+    const ro = allowEmbed ? reportOnlyEmbedded : reportOnly;
+    if (ro) res.setHeader("Content-Security-Policy-Report-Only", ro);
     return (allowEmbed ? embedded : ordinary)(req, res, next);
   };
 }
