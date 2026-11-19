@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "../_core/context";
 import { referenceRouter } from "./reference";
 import * as db from "../db";
@@ -46,6 +46,8 @@ beforeEach(() => {
   vi.mocked(db.getAllAirports).mockResolvedValue([airport]);
   vi.mocked(db.getAllAirlines).mockResolvedValue([airline]);
 });
+afterEach(() => vi.unstubAllEnvs());
+
 for (const kind of ["airports", "airlines"] as const) {
   describe(`${kind} cache boundary`, () => {
     it("returns identical typed dates after the Redis JSON round trip", async () => {
@@ -80,6 +82,27 @@ for (const kind of ["airports", "airlines"] as const) {
       ];
       expect((await caller[kind]())[0]).not.toHaveProperty("internalSecret");
     });
+    it("rejects a cold read when the database handle is unavailable", async () => {
+      const actual = await vi.importActual<typeof db>("../db");
+      vi.stubEnv("DATABASE_URL", "");
+      vi.mocked(db.getAllAirports).mockImplementation(actual.getAllAirports);
+      vi.mocked(db.getAllAirlines).mockImplementation(actual.getAllAirlines);
+      await expect(caller[kind]()).rejects.toMatchObject({
+        code: "INTERNAL_SERVER_ERROR",
+      });
+      expect(cache.values[kind]).toBeUndefined();
+    });
+
+    it("caches an empty list returned by a successful database read", async () => {
+      vi.mocked(db.getAllAirports).mockResolvedValue([]);
+      vi.mocked(db.getAllAirlines).mockResolvedValue([]);
+      await expect(caller[kind]()).resolves.toEqual([]);
+      await expect(caller[kind]()).resolves.toEqual([]);
+      expect(
+        kind === "airports" ? db.getAllAirports : db.getAllAirlines
+      ).toHaveBeenCalledOnce();
+    });
+
     it("does not turn a source failure into empty reference data", async () => {
       cache.values[kind] = [{ createdAt: "broken" }];
       vi.mocked(db.getAllAirports).mockRejectedValue(
