@@ -1,5 +1,26 @@
 # Changelog
 
+## What's Changed in v1.43.1
+
+<!-- ais-release-source: 603bd8296ed9634aad2b799c5d4bdc149a2f8c19 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(reports): exclude superseded FX rates from current report state (1c03e0a4)
+
+### Other Changes
+
+- test(reports): reproduce superseded FX quote classified as current (6fff33e6)
+- style(tests): keep FX report assertion formatter-stable (707564e4)
+- Merge pull request #386 from kafaat/chatgpt/fix-report4-superseded-fx-20261117 (603bd829)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.43.0...v1.43.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.43.0
 
 <!-- ais-release-source: 9e7c7874b1c611d6b5f80ad4be72ccdec119305b -->
