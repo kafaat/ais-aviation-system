@@ -155,7 +155,7 @@ export default function MyBookings() {
   );
   const checkoutState = returnCheckout.data?.state;
   const returnNoticeState:
-    "pending" | "timeout" | "paid" | "closed" | "attention" | "unknown" | null =
+    "pending" | "timeout" | "paid" | "closed" | "failed" | "attention" | "unknown" | null =
     !paymentReturn
       ? null
       : returnedBookingId === null || returnCheckout.error
@@ -166,7 +166,9 @@ export default function MyBookings() {
             ? "paid"
             : checkoutState === "refunded" || checkoutState === "cancelled"
               ? "closed"
-              : checkoutState === "unavailable"
+              : checkoutState === "failed"
+                ? "failed"
+                : checkoutState === "unavailable"
                 ? "attention"
                 : pollExpired
                   ? "timeout"
@@ -437,6 +439,11 @@ export default function MyBookings() {
                       `الحجز ${returnCheckout.data?.bookingReference} لم يعد بانتظار الدفع (ملغى أو مسترد).`,
                       `Booking ${returnCheckout.data?.bookingReference} is no longer awaiting payment (cancelled or refunded).`
                     )
+                  : returnNoticeState === "failed"
+                    ? l(
+                        `فشل الدفع المسجل للحجز ${returnCheckout.data?.bookingReference}. لا تكرر الدفع قبل مراجعة الحالة مع الدعم.`,
+                        `Payment for booking ${returnCheckout.data?.bookingReference} failed. Do not pay again until support has reviewed the status.`
+                      )
                   : returnNoticeState === "attention"
                     ? l(
                         `الحجز ${returnCheckout.data?.bookingReference} لم يؤكَّد دفعه ويحتاج إلى مراجعة. لا تكرر الدفع قبل التحقق من حالته.`,
