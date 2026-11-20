@@ -243,6 +243,7 @@ type CheckoutResumeState =
   | "paid"
   | "refunded"
   | "cancelled"
+  | "failed"
   | "split"
   | "unavailable";
 
@@ -293,6 +294,9 @@ export async function getBookingCheckoutState(
     if (booking.paymentStatus === "refunded") return snapshot("refunded");
     if (booking.paymentStatus === "paid") return snapshot("paid");
     if (booking.status === "cancelled") return snapshot("cancelled");
+    // Persisted failure is authoritative, but never makes this invoice
+    // editable or permits a second collection without reconciliation.
+    if (booking.paymentStatus === "failed") return snapshot("failed");
 
     try {
       await assertPendingInvoice(tx, booking);
