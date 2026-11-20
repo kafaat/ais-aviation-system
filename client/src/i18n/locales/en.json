@@ -72,6 +72,10 @@
         "title": "Booking closed",
         "description": "This booking was cancelled or has expired. It is no longer available for payment."
       },
+      "failed": {
+        "title": "Payment failed",
+        "description": "A failed payment is recorded for this booking. Do not try to pay again until support confirms the provider and settlement status."
+      },
       "unavailable": {
         "title": "Payment needs attention",
         "description": "This invoice cannot be paid online right now. Review My bookings or contact support before trying another payment."

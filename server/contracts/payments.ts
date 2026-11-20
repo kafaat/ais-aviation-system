@@ -34,6 +34,7 @@ export const responseContracts = {
       "paid",
       "refunded",
       "cancelled",
+      "failed",
       "split",
       "unavailable",
     ]),
