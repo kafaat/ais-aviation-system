@@ -2420,6 +2420,38 @@ nativeDescribe.sequential(
         ]);
       }, 60000);
 
+      it("control (N3): reconcile of a reopened request is a conflict when only its refund id changed between the provider read and the lock", async () => {
+        await cancelledA();
+        const lateA = late(3000);
+        provider.refunds.push(lateA);
+        await deliverRefund(lateA);
+        provider.list.mockImplementationOnce(
+          (params: { payment_intent?: string }) => ({
+            async *[Symbol.asyncIterator]() {
+              // A concurrent writer records a refund id; status and code stay.
+              await fixture.db
+                .update(schema.orderServiceRefunds)
+                .set({ refundId: "re_r382_other_writer" })
+                .where(eq(schema.orderServiceRefunds.id, requestId));
+              for (const refund of provider.refunds)
+                if (refund.payment_intent === params.payment_intent)
+                  yield refund;
+            },
+          })
+        );
+        await expect(
+          caller().reconcileServicingRefund({ requestId })
+        ).rejects.toMatchObject({ code: "CONFLICT" });
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "provider_refund_after_cancel",
+          refundId: "re_r382_other_writer",
+          completedAt: null,
+        });
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 0 });
+        expect(await refundLedger()).toEqual([]);
+      }, 60000);
+
       it("control (N4): the general reconcile re-checks disputes under the lock before recording", async () => {
         await saveServicing({
           status: "review_required",
