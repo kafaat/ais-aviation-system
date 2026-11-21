@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
@@ -294,14 +294,17 @@ describe("release proposal version selection", () => {
     ).toThrow("Several unpublished");
   });
 
-  it("rejects an obsolete open version after main's package version advances", () => {
-    expect(() =>
+  it("ignores an obsolete open version after main's package version advances and names it", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(
       selectProposalVersion({
         candidate: "1.2.0",
         current: "1.1.0",
         remoteRefs: `${source}\trefs/heads/release/v1.0.1`,
       })
-    ).toThrow("does not advance");
+    ).toBe("1.2.0");
+    expect(warn.mock.calls[0][0]).toContain("release/v1.0.1");
+    warn.mockRestore();
   });
 });
 
