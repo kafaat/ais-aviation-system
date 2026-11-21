@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { selectProposalVersion } from "../../../scripts/ci/release-proposal.mjs";
 
 const sha = "a".repeat(40);
@@ -173,14 +173,39 @@ describe("open release proposal version selection", () => {
     ).toBe("1.38.0-rc.10");
   });
 
+  // A superseded proposal branch whose version no longer advances main can
+  // never be published; it is named in a warning and ignored, so it cannot
+  // block every later proposal (release/v1.43.1 after v1.44.0).
   it.each(["1.36.9", "1.37.0", "1.37.0-rc.1"])(
-    "rejects an outstanding version %s that no longer advances main",
+    "ignores a stale outstanding version %s that no longer advances main and names it",
     version => {
-      expect(() =>
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      expect(
         selectProposalVersion({ ...options, remoteRefs: branch(version) })
-      ).toThrow("does not advance");
+      ).toBe("1.37.1");
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls[0][0]).toContain(`release/v${version}`);
+      warn.mockRestore();
     }
   );
+
+  it("ignores a stale branch beside a live one instead of calling them ambiguous", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(
+      selectProposalVersion({
+        ...options,
+        remoteRefs: [branch("1.37.0"), branch("1.38.0")].join("\n"),
+      })
+    ).toBe("1.38.0");
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+
+  it("still rejects a malformed stale branch", () => {
+    expect(() =>
+      selectProposalVersion({ ...options, remoteRefs: branch("1.0.0;unsafe") })
+    ).toThrow("Expected a version");
+  });
 
   it("refuses ambiguous unpublished branches without silently ignoring either", () => {
     expect(() =>
@@ -257,11 +282,14 @@ describe("refresh without a new release classification", () => {
   });
 
   it.each(["1.36.9", "1.37.0", "1.37.0-rc.1"])(
-    "still rejects an outstanding version %s that no longer advances main",
+    "has nothing to refresh when the only outstanding version %s no longer advances main",
     version => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       expect(() =>
         selectProposalVersion({ ...reuseOptions, remoteRefs: branch(version) })
-      ).toThrow("does not advance");
+      ).toThrow("No unpublished release proposal remains");
+      expect(warn).toHaveBeenCalledOnce();
+      warn.mockRestore();
     }
   );
 });
