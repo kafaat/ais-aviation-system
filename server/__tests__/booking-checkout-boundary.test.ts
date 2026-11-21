@@ -198,6 +198,10 @@ describe("durable booking checkout", () => {
     ["cancelled", "refunded", "refunded"],
     ["cancelled", "pending", "cancelled"],
     ["pending", "failed", "failed"],
+    // A failed flag on a non-pending booking is an inconsistency, answered
+    // neutrally rather than as a failed payment (review of #392).
+    ["confirmed", "failed", "unavailable"],
+    ["completed", "failed", "unavailable"],
     ["confirmed", "pending", "unavailable"],
   ])(
     "shows authoritative %s/%s state and disables further collection",
@@ -259,6 +263,33 @@ describe("durable booking checkout", () => {
     );
     expect(state.create).toHaveBeenCalledOnce();
     expect(state.retrieve).not.toHaveBeenCalled();
+  });
+
+  it("answers a recorded failure as needing attention while a collected payment awaits review", async () => {
+    // Review of #392: money that may have been captured is never reported as
+    // "failed"; the review state wins and no collection is offered.
+    Object.assign(fixture.rows("bookings")[0], {
+      status: "pending",
+      paymentStatus: "failed",
+    });
+    // Without a receipt the recorded failure is answered as such.
+    await expect(getBookingCheckoutState(7, 9)).resolves.toMatchObject({
+      state: "failed",
+      invoiceEditable: false,
+    });
+    fixture.rows("payment_receipts").push({
+      bookingId: 7,
+      settlementStatus: "review_required",
+      paymentIntentId: "pi_review_failed",
+    });
+    await expect(getBookingCheckoutState(7, 9)).resolves.toMatchObject({
+      state: "unavailable",
+      invoiceEditable: false,
+    });
+    await expect(createBookingCheckout(owner)).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    expect(state.create).not.toHaveBeenCalled();
   });
 
   it("offers a new checkout only after provider-verified expiry while retaining the same booking", async () => {

@@ -63,8 +63,11 @@ function CheckoutInvoice({
   const invoice = query.error ? undefined : query.data;
   const canResume =
     invoice?.state === "pending" || invoice?.state === "expired";
+  // A recorded failure is terminal here too: no retry hint may appear under
+  // the "do not try to pay again" heading (independent review of #392).
   const terminal =
-    invoice && ["paid", "refunded", "cancelled"].includes(invoice.state);
+    invoice &&
+    ["paid", "refunded", "cancelled", "failed"].includes(invoice.state);
   const disabled = Boolean(busy) || query.isFetching;
   const money = (minor: number) =>
     new Intl.NumberFormat(i18n.language, {

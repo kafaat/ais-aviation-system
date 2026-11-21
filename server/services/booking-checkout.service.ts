@@ -295,8 +295,21 @@ export async function getBookingCheckoutState(
     if (booking.paymentStatus === "paid") return snapshot("paid");
     if (booking.status === "cancelled") return snapshot("cancelled");
     // Persisted failure is authoritative, but never makes this invoice
-    // editable or permits a second collection without reconciliation.
-    if (booking.paymentStatus === "failed") return snapshot("failed");
+    // editable or permits a second collection without reconciliation. It is
+    // answered only for a pending booking with no collected payment awaiting
+    // review: money that may have been captured is "needs attention", never
+    // "failed" (independent review of #392).
+    if (booking.paymentStatus === "failed") {
+      if (booking.status !== "pending") return snapshot("unavailable");
+      try {
+        await assertNoCollectionReview(tx, booking.id);
+      } catch (error) {
+        if (error instanceof TRPCError && error.code === "PRECONDITION_FAILED")
+          return snapshot("unavailable");
+        throw error;
+      }
+      return snapshot("failed");
+    }
 
     try {
       await assertPendingInvoice(tx, booking);
