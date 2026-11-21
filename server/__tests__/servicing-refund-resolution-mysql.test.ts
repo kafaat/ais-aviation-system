@@ -1672,6 +1672,67 @@ nativeDescribe.sequential(
         expect(provider.create).toHaveBeenCalledTimes(1);
       }, 60000);
 
+      it("fix (V1): a dispute lost after the worker's history check and before its transaction closes nothing until the history is read", async () => {
+        const refused = await failServicing();
+        await caller().retryServicingRefund({ requestId, attempt: 1 });
+        refused.status = "succeeded";
+        later(5);
+        const dispute = (type: string, status: string) => ({
+          id: `evt_r382_${++sequence}`,
+          type,
+          data: {
+            object: {
+              id: `dp_r382_${upgrade}`,
+              object: "dispute",
+              charge: `ch_${upgrade}`,
+              payment_intent: upgrade,
+              amount: 6000,
+              currency: "sar",
+              status,
+              reason: "fraudulent",
+            },
+          },
+        });
+        provider.list.mockClear();
+        let run: Promise<unknown> | undefined;
+        // The worker checks the collection while no dispute exists, then
+        // waits on the booking lock while the dispute is withdrawn and lost.
+        await fixture.db.transaction(async tx => {
+          await tx.execute(
+            sql`SELECT id FROM bookings WHERE id = 71 FOR UPDATE`
+          );
+          run = processPendingOrderRefunds();
+          await waitForWaiters(1);
+          await processStripeEvent(
+            tx as never,
+            dispute("charge.dispute.funds_withdrawn", "under_review") as never
+          );
+          await processStripeEvent(
+            tx as never,
+            dispute("charge.dispute.closed", "lost") as never
+          );
+        });
+        await run;
+        expect(provider.list).not.toHaveBeenCalled();
+        expect(await row()).toMatchObject({
+          status: "queued",
+          attempt: 2,
+          errorCode: null,
+          completedAt: null,
+        });
+        // The next run reads the history first and reviews the request.
+        later(10);
+        await processPendingOrderRefunds();
+        expect(provider.list).toHaveBeenCalled();
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "earlier_attempt_succeeded",
+          completedAt: null,
+        });
+        expect(provider.create).toHaveBeenCalledTimes(1);
+        expect(await refundLedger()).toEqual([]);
+      }, 60000);
+
       it("control (V1): an attempt-1 request is closed by a lost dispute's chargeback with no provider read, as on main", async () => {
         await saveServicing();
         await withdraw(upgrade, 6000);
