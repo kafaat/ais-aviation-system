@@ -191,16 +191,31 @@ function serverModules(directory = "server"): string[] {
 const isMoneyPath = (module: string) =>
   MONEY_PATH_SEGMENT.test(module.replace(/^server\//, ""));
 
+// Parsing and resolving every server module is the expensive part of the
+// graph and does not change between tests, so the real edges are computed
+// once per worker; each graph adds its own extra edges on top. Without this
+// cache the second graph build exceeded the default timeout on a loaded
+// runner (v1.44.0 main run).
+const realEdges = new Map<string, string[]>();
+let compilerOptions: ts.CompilerOptions | undefined;
+
 /** Static runtime import graph (type-only imports excluded), as the service
  * catalog builds it: static, re-export and dynamic imports inside the repo.
  * `extraEdges` adds imports to the real graph, to prove the guard fails. */
 function importGraph(extraEdges: Record<string, string[]> = {}) {
   const root = process.cwd();
-  const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
-  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
+  if (!compilerOptions) {
+    const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
+    compilerOptions = ts.parseJsonConfigFileContent(
+      config.config,
+      ts.sys,
+      root
+    ).options;
+  }
+  const options = compilerOptions;
   const edges = new Map<string, string[]>();
-  const dependencies = (file: string): string[] => {
-    const known = edges.get(file);
+  const realDependencies = (file: string): string[] => {
+    const known = realEdges.get(file);
     if (known) return known;
     const source = ts.createSourceFile(
       file,
@@ -232,7 +247,7 @@ function importGraph(extraEdges: Record<string, string[]> = {}) {
       )
         spec = node.arguments[0].text;
       if (spec) {
-        const target = ts.resolveModuleName(spec, file, parsed.options, ts.sys)
+        const target = ts.resolveModuleName(spec, file, options, ts.sys)
           .resolvedModule?.resolvedFileName;
         if (
           target &&
@@ -244,8 +259,16 @@ function importGraph(extraEdges: Record<string, string[]> = {}) {
       ts.forEachChild(node, visit);
     };
     visit(source);
-    for (const extra of extraEdges[relative(root, file)] ?? [])
-      found.push(resolve(extra));
+    realEdges.set(file, found);
+    return found;
+  };
+  const dependencies = (file: string): string[] => {
+    const known = edges.get(file);
+    if (known) return known;
+    const found = [
+      ...realDependencies(file),
+      ...(extraEdges[relative(root, file)] ?? []).map(extra => resolve(extra)),
+    ];
     edges.set(file, found);
     return found;
   };
@@ -329,7 +352,7 @@ describe("currency fallback guard", () => {
     expect(
       graph.chainTo("server/routers/ibe-public.ts", CURRENCY_SERVICE)
     ).toEqual(["server/routers/ibe-public.ts", CURRENCY_SERVICE]);
-  });
+  }, 120_000);
 
   it("control: only the allow-listed display-only modules import the currency module", () => {
     const graph = importGraph();
@@ -340,7 +363,7 @@ describe("currency fallback guard", () => {
     expect(Object.keys(DISPLAY_ONLY_IMPORTERS).filter(isMoneyPath)).toEqual([
       "server/routers/pricing.router.ts",
     ]);
-  });
+  }, 120_000);
 
   it("control: the rule flags a money path that gains a route to the currency module", () => {
     const added = {
@@ -361,7 +384,7 @@ describe("currency fallback guard", () => {
         "server/routers/revenue-accounting.ts",
       ])
     );
-  });
+  }, 120_000);
 
   it("fix: exposes no fallback constant and no stub that writes or caches them", () => {
     expect(Object.keys(currency)).not.toContain("FALLBACK_RATES");
