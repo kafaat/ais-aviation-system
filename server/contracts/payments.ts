@@ -74,6 +74,9 @@ export const responseContracts = {
       attempt: outputNumber,
       requestedAt: z.union([z.null(), z.date()]),
       createdAt: z.date(),
+      /** A prior operator cancel, kept when a late refund reopened the row. */
+      resolvedAt: z.union([z.null(), z.date()]),
+      resolutionReason: z.union([z.null(), z.string()]),
     })
   ),
   reconcileServicingRefund: z.object({
