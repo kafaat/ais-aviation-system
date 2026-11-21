@@ -63,10 +63,24 @@ export function selectProposalVersion({
       .filter(Boolean)
       .map(line => line.trim().split(/\s+/).reverse())
   );
-  const open = [...refs.keys()]
+  const unpublished = [...refs.keys()]
     .filter(ref => ref.startsWith("refs/heads/release/v"))
     .map(ref => ref.slice("refs/heads/release/v".length))
     .filter(version => !refs.has(`refs/tags/v${version}`));
+  // An unpublished branch whose version does not advance the package version
+  // can never be published (the proposal check requires an advance): it is a
+  // superseded proposal left behind, not a live one. It is named and ignored
+  // rather than allowed to block every future proposal until someone with
+  // delete rights removes it (release/v1.43.1 after v1.44.0, 21 November).
+  const stale = unpublished.filter(version => {
+    parseVersion(version);
+    return compareVersions(version, current) <= 0;
+  });
+  for (const version of stale)
+    console.warn(
+      `Ignoring stale unpublished release branch release/v${version}: it does not advance the current package version v${current}; delete it`
+    );
+  const open = unpublished.filter(version => !stale.includes(version));
   if (open.length > 1)
     throw new Error(
       "Several unpublished release branches exist; resolve them before proposing a release"
@@ -78,10 +92,6 @@ export function selectProposalVersion({
   }
   const version = open[0];
   const existing = parseVersion(version);
-  if (compareVersions(version, current) <= 0)
-    throw new Error(
-      "The open release version does not advance the current package version"
-    );
   if (reuseOnly) return version;
   const coreComparison = compareVersions(
     existing.core.join("."),
