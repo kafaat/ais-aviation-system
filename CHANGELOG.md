@@ -1,5 +1,28 @@
 # Changelog
 
+## What's Changed in v1.44.1
+
+<!-- ais-release-source: fabda722d6b46f4885f63fbfa724d36c21f32520 -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(payments): answer a recorded failed payment only when nothing awaits review (#393) (38abb0d0)
+
+### Maintenance
+
+- ci: ignore a stale unpublished release branch instead of blocking proposals (#395) (fabda722)
+
+### Other Changes
+
+- test(currency): build the import graph's real edges once per worker (#394) (6d95958b)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.44.0...v1.44.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.44.0
 
 <!-- ais-release-source: b4f1ce4bbe508e7e0a13dadc234607484a1233a2 -->
