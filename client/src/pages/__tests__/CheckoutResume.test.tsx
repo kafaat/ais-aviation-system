@@ -172,6 +172,7 @@ it.each([
   ["paid", "Payment received"],
   ["refunded", "Payment refunded"],
   ["cancelled", "Booking closed"],
+  ["failed", "Payment failed"],
   ["unavailable", "Payment needs attention"],
 ])(
   "uses server %s state even on a cancellation return and offers no collection",
