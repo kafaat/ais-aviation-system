@@ -150,7 +150,16 @@ to what it still holds.
     Concurrent retries give one attempt. A lost dispute can close a retried
     request by its chargeback. Before that, the worker reads the provider's
     history outside any transaction. A refund of the request that has not
-    failed sends the row to review instead. Attempt 1 is unchanged.
+    failed sends the row to review instead. Attempt 1 is unchanged. If the
+    worker cannot record a refund that this read found, it handles that row
+    alone, so the rest of the batch still runs:
+    - a refund that names the request but does not match it becomes
+      `duplicate_provider_refund`;
+    - a receipt changed outside the request becomes
+      `provider_refund_balance_conflict`.
+
+    Retry never applies to a row an operator cancelled, even if a late refund
+    later reopened it.
 
   - _Late events:_ an event for an archived attempt that failed, was
     canceled or is pending changes nothing, because those provider states
@@ -185,10 +194,27 @@ to what it still holds.
       no second settlement;
     - otherwise the refund settles once.
 
+    Both paths first require the provider's other refunds of the collection
+    to match the saved balance. Otherwise the receipt could count another
+    refund of the same amount as this one, and the row stays
+    `review_required` (`provider_refund_balance_conflict`). If the late
+    refund fails or is canceled, the row returns to `cancelled` and keeps its
+    resolution. This happens whether the failure arrives as an event or a
+    reconcile reads it from the provider. The servicing refund list shows
+    `resolvedAt` and `resolutionReason`, so an operator sees a prior cancel.
+
   - _Follow-ups:_ a client screen (this change ships the API and OpenAPI
     only), and resolution of rows that stay with the dispute flow. A
     `review_required` flight-cancellation job is never recomputed, so the
     operations dashboard keeps listing a booking whose refunds an operator
-    has since resolved.
+    has since resolved. One more case has no in-app exit yet:
+    - a cancel, then another refund on the same intent, then the late
+      refund's charge aggregate arriving before its refund event;
+    - the receipt then holds both refunds, and the row stays
+      `review_required` (`provider_refund_balance_conflict`);
+    - cancel refuses, because the provider holds a success.
+
+    The case is safe and visible: no money moves, and the dispute or manual
+    flow resolves it.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
   rounds, then integrator test hardening; the PR lists the evidence.

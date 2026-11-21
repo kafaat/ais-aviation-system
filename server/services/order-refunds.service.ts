@@ -380,6 +380,30 @@ export async function recordVerifiedOrderRefund(
     await reviewProviderRefund(tx, booking, item, refund, REFUND_AFTER_CANCEL);
     return true;
   }
+  // An operator's cancel never turns back into a retryable row: a request
+  // reopened by a late refund returns to cancelled, with its resolution kept,
+  // when that refund fails or is canceled.
+  if (
+    item.status === "review_required" &&
+    item.errorCode === REFUND_AFTER_CANCEL &&
+    providerFailed(refund)
+  ) {
+    await tx
+      .update(orderServiceRefunds)
+      .set({ status: "cancelled", refundId: refund.id })
+      .where(eq(orderServiceRefunds.id, item.id));
+    await recordEvent(tx, {
+      aggregateType: "booking",
+      aggregateId: booking.id,
+      tenantId: booking.tenantId,
+      eventType: "order.refund_updated",
+      payload: refundEventPayload(item, "cancelled", refund, {
+        errorCode: REFUND_AFTER_CANCEL,
+        providerStatus: refund.status,
+      }),
+    });
+    return true;
+  }
   const [receipt] = await tx
     .select()
     .from(paymentReceipts)
@@ -399,6 +423,44 @@ export async function recordVerifiedOrderRefund(
   );
   return true;
 }
+/** A provider refund the history read found but recording refused is handled
+ * per row, as the worker's own catch does, so the rest of the batch runs. A
+ * refund that names this request but does not match it is
+ * `duplicate_provider_refund`; a receipt balance changed outside the request
+ * is `provider_refund_balance_conflict`; anything else is retried. */
+async function markRefusedHistoryRecording(
+  db: SettlementTx,
+  hint: OrderServiceRefund,
+  error: unknown
+) {
+  log.error(
+    { err: error, refundRequestId: hint.id },
+    "Refund history recording before a chargeback closure failed"
+  );
+  const message = error instanceof Error ? error.message : "";
+  const code = /does not match the saved request|Unknown order refund/.test(
+    message
+  )
+    ? "duplicate_provider_refund"
+    : /balance changed outside/.test(message)
+      ? "provider_refund_balance_conflict"
+      : null;
+  await db
+    .update(orderServiceRefunds)
+    .set(
+      code
+        ? { status: "review_required", errorCode: code }
+        : { errorCode: "transport_or_reconciliation_error" }
+    )
+    .where(
+      and(
+        eq(orderServiceRefunds.id, hint.id),
+        eq(orderServiceRefunds.attempt, hint.attempt),
+        eq(orderServiceRefunds.status, "queued")
+      )
+    );
+}
+
 /** This request's provider refunds that have not failed, by our metadata. */
 async function readLiveRequestRefunds(item: OrderServiceRefund) {
   const live: Stripe.Refund[] = [];
@@ -465,13 +527,17 @@ async function processOrderRefund(id: string) {
     }
     const [found] = live;
     if (found) {
-      await db.transaction(tx =>
-        recordVerifiedOrderRefund(
-          tx,
-          found,
-          `order_refund_reconcile:${found.id}`
-        )
-      );
+      try {
+        await db.transaction(tx =>
+          recordVerifiedOrderRefund(
+            tx,
+            found,
+            `order_refund_reconcile:${found.id}`
+          )
+        );
+      } catch (error) {
+        await markRefusedHistoryRecording(db, hint, error);
+      }
       return;
     }
     historyRead = true;
@@ -770,6 +836,8 @@ export async function listServicingRefundReviews(limit: number) {
     attempt: request.attempt,
     requestedAt: request.requestedAt,
     createdAt: request.createdAt,
+    resolvedAt: request.resolvedAt,
+    resolutionReason: request.resolutionReason,
   }));
 }
 
@@ -1028,15 +1096,30 @@ function reviewFinding(
       status: "review_required" as const,
       errorCode: code,
     };
-    if (item.status !== "review_required" || item.errorCode !== code) {
-      await tx
-        .update(orderServiceRefunds)
-        .set({ status: "review_required", errorCode: code })
-        .where(eq(orderServiceRefunds.id, item.id));
-      await auditReconcile(tx, actor, item, after, null);
-    }
+    await markReviewFinding(tx, item, code, actor);
     return { ...resolutionView(after), outcome: "review_required" as const };
   });
+}
+
+/** Sets a review finding on a locked request, audited when it changes. */
+async function markReviewFinding(
+  tx: SettlementTx,
+  item: OrderServiceRefund,
+  code: string,
+  actor: ServicingRefundActor
+) {
+  if (item.status === "review_required" && item.errorCode === code) return;
+  await tx
+    .update(orderServiceRefunds)
+    .set({ status: "review_required", errorCode: code })
+    .where(eq(orderServiceRefunds.id, item.id));
+  await auditReconcile(
+    tx,
+    actor,
+    item,
+    { ...item, status: "review_required", errorCode: code },
+    null
+  );
 }
 
 class ReconcileNoChange extends Error {}
@@ -1117,7 +1200,27 @@ async function reconcileAfterCancel(
     ...resolutionView(hint),
     outcome: "review_required" as const,
   };
+  // The provider's other refunds of the collection must match the saved
+  // balance, as on the general reconcile path; otherwise the receipt could
+  // record another refund as this one.
+  if (
+    !provider.historyLimit &&
+    provider.otherAmount !== hint.baseRefundedAmount
+  )
+    return reviewFinding(db, hint, "provider_refund_balance_conflict", actor);
   const live = provider.refunds.filter(refund => !providerFailed(refund));
+  // The late refund that reopened the request has since failed: it returns
+  // to cancelled through the recording step.
+  const failedLate = provider.refunds.find(
+    refund =>
+      providerFailed(refund) &&
+      !archivedIds.has(refund.id) &&
+      refundAttempt(refund) === hint.attempt
+  );
+  if (!provider.historyLimit && live.length === 0 && failedLate) {
+    const after = await recordReconciledRefund(db, hint, failedLate, actor);
+    return { ...resolutionView(after), outcome: "provider_failed" as const };
+  }
   const [success] = live;
   if (
     provider.historyLimit ||
@@ -1144,6 +1247,23 @@ async function reconcileAfterCancel(
       hint.id,
       hint.bookingId
     );
+    // The same balance check, against the locked request.
+    if (provider.otherAmount !== item.baseRefundedAmount) {
+      await markReviewFinding(
+        tx,
+        item,
+        "provider_refund_balance_conflict",
+        actor
+      );
+      return {
+        ...resolutionView({
+          ...item,
+          status: "review_required",
+          errorCode: "provider_refund_balance_conflict",
+        }),
+        outcome: "review_required" as const,
+      };
+    }
     if (
       item.status !== hint.status ||
       item.errorCode !== hint.errorCode ||
@@ -1318,7 +1438,9 @@ export async function reconcileServicingRefund(
 const retryable = (item: OrderServiceRefund) =>
   item.status === "failed" &&
   item.errorCode === PROVIDER_REFUND_FAILED &&
-  Boolean(item.refundId);
+  Boolean(item.refundId) &&
+  // An operator's cancel is final, even if a late refund reopened the row.
+  item.resolvedAt === null;
 
 /** Queues the next attempt of a request whose provider refund definitively
  * failed. The worker then sends it under `order-refund:<id>:a<n>`. */

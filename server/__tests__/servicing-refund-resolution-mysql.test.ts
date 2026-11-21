@@ -492,7 +492,7 @@ nativeDescribe.sequential(
         const refused = await failServicing();
         const listed = await caller().servicingRefundReviews({ limit: 50 });
         expect(listed).toEqual([
-          {
+          expect.objectContaining({
             id: requestId,
             origin: "exchange",
             status: "failed",
@@ -508,7 +508,7 @@ nativeDescribe.sequential(
             attempt: 1,
             requestedAt: expect.any(Date),
             createdAt: expect.any(Date),
-          },
+          }),
         ]);
       }, 60000);
 
@@ -2046,6 +2046,490 @@ nativeDescribe.sequential(
           refundId: "re_r382_raced",
         });
         expect(await resolutionAudits()).toEqual([]);
+      }, 60000);
+    });
+
+    // Fix round 2 (#382, verifier findings F1, F3 and F4, and the surviving
+    // weakenings N1 to N16). "fix" cases fail on 30b25e62; "control" cases
+    // pass there too and each kills a named weakening.
+    describe("fix round 2", () => {
+      const B = "00000000-0000-4000-8000-0000000003b2";
+      const providerRefunded = (paymentIntentId: string) =>
+        provider.refunds
+          .filter(
+            r =>
+              r.payment_intent === paymentIntentId && r.status === "succeeded"
+          )
+          .reduce((sum, r) => sum + r.amount, 0);
+      const late = (amount: number, extra: Record<string, unknown> = {}) => ({
+        id: "re_r382_after_cancel",
+        object: "refund",
+        status: "succeeded",
+        amount,
+        currency: "sar",
+        payment_intent: upgrade,
+        charge: `ch_${upgrade}`,
+        metadata: { orderServiceRefundId: requestId, modificationId: "9001" },
+        ...extra,
+      });
+      const reconciledAudits = async () =>
+        (await resolutionAudits())
+          .filter(a => a.eventType === "ORDER_REFUND_RECONCILED")
+          .map(a => JSON.parse(a.newValue ?? "null"));
+      // A, 3000 on the upgrade intent, has an unknown outcome; the operator
+      // cancels it because the customer was refunded another way.
+      async function cancelledA(amount = 3000) {
+        await saveServicing({
+          amount,
+          status: "review_required",
+          errorCode: "unknown_provider_outcome",
+          requestedAt: new Date(now.getTime() - 24 * 3600_000),
+        });
+        expect(
+          await caller().cancelServicingRefund({
+            requestId,
+            attempt: 1,
+            reason,
+          })
+        ).toMatchObject({ status: "cancelled" });
+      }
+      // A synthetic reopened request (a late refund reopened it after a cancel).
+      async function reopenedA(
+        refund: Record<string, unknown>,
+        receiptRefunded: number
+      ) {
+        await saveServicing({
+          amount: 3000,
+          status: "review_required",
+          errorCode: "provider_refund_after_cancel",
+          requestedAt: new Date(now.getTime() - 24 * 3600_000),
+          resolvedBy: 20,
+          resolvedAt: now,
+          resolutionReason: reason,
+        });
+        provider.refunds.push(refund);
+        await fixture.db
+          .update(schema.paymentReceipts)
+          .set({ refundedAmount: receiptRefunded })
+          .where(eq(schema.paymentReceipts.paymentIntentId, upgrade));
+        return row();
+      }
+      async function expectBalanceConflictKept(ledger: unknown) {
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "provider_refund_balance_conflict",
+          completedAt: null,
+        });
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 3000 });
+        expect(await refundLedger()).toEqual(ledger);
+        expect(await liabilityOpen()).toBe(true);
+        expect(providerRefunded(upgrade)).toBe(6000);
+      }
+
+      it("fix (F1a): another refund of the same amount on the intent keeps a reopened request in review instead of closing it", async () => {
+        await cancelledA();
+        // The customer was refunded 3000 in the provider dashboard.
+        provider.refunds.push({
+          id: "re_r382_dashboard",
+          object: "refund",
+          status: "succeeded",
+          amount: 3000,
+          currency: "sar",
+          payment_intent: upgrade,
+          charge: `ch_${upgrade}`,
+          metadata: {},
+        });
+        await chargeRefunded(upgrade, providerRefunded(upgrade));
+        const ledger = await refundLedger();
+        expect(ledger).toEqual([
+          { type: "partial_refund", amount: "30.00", paymentIntentId: upgrade },
+        ]);
+        // A's own refund then lands late, succeeded.
+        const lateA = late(3000);
+        provider.refunds.push(lateA);
+        await deliverRefund(lateA);
+        await chargeRefunded(upgrade, providerRefunded(upgrade));
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({
+          outcome: "review_required",
+          status: "review_required",
+          errorCode: "provider_refund_balance_conflict",
+        });
+        await expectBalanceConflictKept(ledger);
+        expect(await reconciledAudits()).toEqual([
+          expect.objectContaining({
+            status: "review_required",
+            errorCode: "provider_refund_balance_conflict",
+          }),
+        ]);
+        // Repeated, nothing more changes.
+        await caller().reconcileServicingRefund({ requestId });
+        await expectBalanceConflictKept(ledger);
+        expect(await reconciledAudits()).toHaveLength(1);
+      }, 60000);
+
+      it("fix (F1b): a second servicing request of the same amount keeps a reopened request in review instead of closing it", async () => {
+        await cancelledA();
+        await saveServicing({
+          id: B,
+          modificationId: 9002,
+          amount: 3000,
+          createdAt: now,
+        });
+        await processPendingOrderRefunds();
+        expect(await row(B)).toMatchObject({ status: "succeeded" });
+        await chargeRefunded(upgrade, providerRefunded(upgrade));
+        const ledger = await refundLedger();
+        expect(ledger).toEqual([
+          { type: "partial_refund", amount: "30.00", paymentIntentId: upgrade },
+        ]);
+        const lateA = late(3000);
+        provider.refunds.push(lateA);
+        await deliverRefund(lateA);
+        await chargeRefunded(upgrade, providerRefunded(upgrade));
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({
+          outcome: "review_required",
+          errorCode: "provider_refund_balance_conflict",
+        });
+        await expectBalanceConflictKept(ledger);
+      }, 60000);
+
+      it("fix (F3): a cancelled request reopened by a pending late refund returns to cancelled when that refund fails, and is never retried", async () => {
+        await cancelledA(6000);
+        const cancelled = await row();
+        const lateA = late(6000, { status: "pending" });
+        provider.refunds.push(lateA);
+        await deliverRefund(lateA);
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "provider_refund_after_cancel",
+        });
+        // An operator sees the prior cancel in the list, which carries
+        // exactly these fields.
+        const [listed] = await caller().servicingRefundReviews({ limit: 50 });
+        expect(Object.keys(listed).sort()).toEqual(
+          [
+            "amount",
+            "attempt",
+            "bookingId",
+            "bookingReference",
+            "cancellationFlightId",
+            "createdAt",
+            "currency",
+            "errorCode",
+            "id",
+            "modificationId",
+            "origin",
+            "paymentIntentId",
+            "refundId",
+            "requestedAt",
+            "resolutionReason",
+            "resolvedAt",
+            "status",
+          ].sort()
+        );
+        expect(
+          (await caller().servicingRefundReviews({ limit: 50 })).map(r => [
+            r.id,
+            r.resolutionReason,
+            r.resolvedAt instanceof Date,
+          ])
+        ).toEqual([[requestId, reason, true]]);
+        const eventsBefore = (await events("order.refund_updated")).length;
+        lateA.status = "failed";
+        await deliverRefund(lateA);
+        expect(await row()).toMatchObject({
+          status: "cancelled",
+          errorCode: "provider_refund_after_cancel",
+          refundId: lateA.id,
+          resolvedBy: 20,
+          resolvedAt: cancelled.resolvedAt,
+          resolutionReason: reason,
+        });
+        const updates = await events("order.refund_updated");
+        expect(updates).toHaveLength(eventsBefore + 1);
+        expect(updates.at(-1)).toMatchObject({
+          status: "cancelled",
+          refundId: lateA.id,
+        });
+        expect(await liabilityOpen()).toBe(false);
+        // A replayed failure changes nothing; retry is refused; nothing is sent.
+        await deliverRefund(lateA);
+        expect(await events("order.refund_updated")).toHaveLength(
+          eventsBefore + 1
+        );
+        await expect(
+          caller().retryServicingRefund({ requestId, attempt: 1 })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        later(5);
+        await processPendingOrderRefunds();
+        expect(provider.create).not.toHaveBeenCalled();
+        expect(await attempts()).toEqual([]);
+        expect(await refundLedger()).toEqual([]);
+        expect(await caller().servicingRefundReviews({ limit: 50 })).toEqual(
+          []
+        );
+      }, 60000);
+
+      it("fix (F3): reconcile returns a reopened request to cancelled when its late refund failed and the event never arrived", async () => {
+        await cancelledA(6000);
+        const lateA = late(6000, { status: "pending" });
+        provider.refunds.push(lateA);
+        await deliverRefund(lateA);
+        lateA.status = "failed";
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({
+          outcome: "provider_failed",
+          status: "cancelled",
+          refundId: lateA.id,
+        });
+        expect(await row()).toMatchObject({
+          status: "cancelled",
+          resolutionReason: reason,
+        });
+        expect(await reconciledAudits()).toEqual([
+          expect.objectContaining({ status: "cancelled", refundId: lateA.id }),
+        ]);
+        await expect(
+          caller().retryServicingRefund({ requestId, attempt: 1 })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+      }, 60000);
+
+      it("fix (F3): retry refuses any request an operator resolved, with the row unchanged", async () => {
+        await failServicing();
+        // A failed request that still carries an operator's cancel, as a
+        // reopened request on 30b25e62 could.
+        await fixture.db
+          .update(schema.orderServiceRefunds)
+          .set({ resolvedBy: 20, resolvedAt: now, resolutionReason: reason })
+          .where(eq(schema.orderServiceRefunds.id, requestId));
+        const before = await row();
+        await expect(
+          caller().retryServicingRefund({ requestId, attempt: 1 })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+        expect(await row()).toEqual(before);
+        expect(await attempts()).toEqual([]);
+        expect(provider.create).toHaveBeenCalledTimes(1);
+      }, 60000);
+
+      it("fix (F4): a refund the history read finds but recording refuses sends that request to review, and the rest of the batch runs", async () => {
+        await failServicing();
+        await caller().retryServicingRefund({ requestId, attempt: 1 });
+        await withdraw(upgrade, 6000);
+        await lose(upgrade, 6000);
+        // A provider refund carrying this request's id, of another amount.
+        provider.refunds.push({
+          ...late(5000),
+          id: "re_r382_odd",
+          status: "pending",
+        });
+        await saveServicing({
+          id: B,
+          modificationId: 9002,
+          paymentIntentId: original,
+          amount: 1000,
+          createdAt: now,
+        });
+        later(5);
+        await expect(processPendingOrderRefunds()).resolves.toMatchObject({
+          scanned: 2,
+        });
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "duplicate_provider_refund",
+          attempt: 2,
+          completedAt: null,
+        });
+        expect(await row(B)).toMatchObject({ status: "succeeded" });
+        expect(provider.create).toHaveBeenCalledTimes(2);
+        expect(await refundLedger()).toEqual([
+          {
+            type: "partial_refund",
+            amount: "10.00",
+            paymentIntentId: original,
+          },
+        ]);
+      }, 60000);
+
+      it("control (N1): a reopened request with a second live refund of its own is not closed or settled", async () => {
+        await cancelledA();
+        const lateA = late(3000);
+        provider.refunds.push(lateA);
+        await deliverRefund(lateA);
+        provider.refunds.push({
+          ...late(3000),
+          id: "re_r382_dup",
+          status: "pending",
+        });
+        const before = await row();
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "review_required" });
+        expect(await row()).toEqual(before);
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 0 });
+        expect(await refundLedger()).toEqual([]);
+      }, 60000);
+
+      it("control (N2): a reopened request is not closed by a refund that names another attempt", async () => {
+        const before = await reopenedA(
+          late(3000, {
+            metadata: {
+              orderServiceRefundId: requestId,
+              modificationId: "9001",
+              attempt: "2",
+            },
+          }),
+          3000
+        );
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "review_required" });
+        expect(await row()).toEqual(before);
+      }, 60000);
+
+      it("control (N3): reconcile of a reopened request is a conflict when its refund settled between the provider read and the lock", async () => {
+        await cancelledA();
+        const lateA = late(3000);
+        provider.refunds.push(lateA);
+        await deliverRefund(lateA);
+        provider.list.mockImplementationOnce(
+          (params: { payment_intent?: string }) => ({
+            async *[Symbol.asyncIterator]() {
+              // The success event is delivered again meanwhile and settles it.
+              await deliverRefund(lateA);
+              for (const refund of provider.refunds)
+                if (refund.payment_intent === params.payment_intent)
+                  yield refund;
+            },
+          })
+        );
+        await expect(
+          caller().reconcileServicingRefund({ requestId })
+        ).rejects.toMatchObject({ code: "CONFLICT" });
+        expect(await row()).toMatchObject({
+          status: "succeeded",
+          errorCode: null,
+          refundId: lateA.id,
+        });
+        expect(await refundLedger()).toEqual([
+          { type: "partial_refund", amount: "30.00", paymentIntentId: upgrade },
+        ]);
+      }, 60000);
+
+      it("control (N4): the general reconcile re-checks disputes under the lock before recording", async () => {
+        await saveServicing({
+          status: "review_required",
+          errorCode: "unknown_provider_outcome",
+          requestedAt: new Date(now.getTime() - 24 * 3600_000),
+        });
+        provider.refunds.push(late(6000));
+        provider.list.mockImplementationOnce(
+          (params: { payment_intent?: string }) => ({
+            async *[Symbol.asyncIterator]() {
+              await withdraw(upgrade, 6000);
+              for (const refund of provider.refunds)
+                if (refund.payment_intent === params.payment_intent)
+                  yield refund;
+            },
+          })
+        );
+        const before = await row();
+        await expect(
+          caller().reconcileServicingRefund({ requestId })
+        ).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: expect.stringMatching(/stays with the dispute flow/),
+        });
+        expect(await row()).toEqual(before);
+        expect(await refundLedger()).toEqual([]);
+      }, 60000);
+
+      it("control (N10): a receipt that records more than this refund on top of its base does not close the reopened request", async () => {
+        const before = await reopenedA(late(3000), 4000);
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "review_required" });
+        expect(await row()).toEqual(before);
+      }, 60000);
+
+      it("control (N11): a history read over the provider's limit sends the retried request to review", async () => {
+        await failServicing();
+        await caller().retryServicingRefund({ requestId, attempt: 1 });
+        await withdraw(upgrade, 6000);
+        await lose(upgrade, 6000);
+        provider.list.mockImplementation(() => ({
+          async *[Symbol.asyncIterator]() {
+            for (let i = 0; i < 1001; i++)
+              yield {
+                id: `re_r382_old_${i}`,
+                object: "refund",
+                status: "failed",
+                amount: 1,
+                currency: "sar",
+                payment_intent: upgrade,
+                metadata: {},
+              };
+          },
+        }));
+        later(5);
+        await processPendingOrderRefunds();
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "provider_history_limit",
+          attempt: 2,
+          completedAt: null,
+        });
+      }, 60000);
+
+      it("control (N12): a reopened request is not closed by its refund when the amount differs", async () => {
+        const before = await reopenedA(late(2000), 3000);
+        await expect(
+          caller().reconcileServicingRefund({ requestId })
+        ).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: "The provider refund does not match the saved request",
+        });
+        expect(await row()).toEqual(before);
+      }, 60000);
+
+      it("control (N15): a reopened request whose receipt holds neither its base nor base plus amount stays in review", async () => {
+        const before = await reopenedA(late(3000), 1000);
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "review_required" });
+        expect(await row()).toEqual(before);
+        expect(await refundLedger()).toEqual([]);
+      }, 60000);
+
+      it("control (N16): reconcile of a reopened request re-checks disputes under the lock", async () => {
+        await cancelledA();
+        const lateA = late(3000);
+        provider.refunds.push(lateA);
+        await deliverRefund(lateA);
+        provider.list.mockImplementationOnce(
+          (params: { payment_intent?: string }) => ({
+            async *[Symbol.asyncIterator]() {
+              await withdraw(upgrade, 6000);
+              for (const refund of provider.refunds)
+                if (refund.payment_intent === params.payment_intent)
+                  yield refund;
+            },
+          })
+        );
+        const before = await row();
+        await expect(
+          caller().reconcileServicingRefund({ requestId })
+        ).rejects.toMatchObject({
+          code: "PRECONDITION_FAILED",
+          message: expect.stringMatching(/stays with the dispute flow/),
+        });
+        expect(await row()).toEqual(before);
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 0 });
+        expect(await refundLedger()).toEqual([]);
       }, 60000);
     });
 
