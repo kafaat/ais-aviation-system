@@ -1,5 +1,39 @@
 # Changelog
 
+## What's Changed in v1.44.0
+
+<!-- ais-release-source: b4f1ce4bbe508e7e0a13dadc234607484a1233a2 -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(security): ship Content-Security-Policy-Report-Only bound to the client build (#355) (76288ac)
+
+### Bug Fixes
+
+- fix(reports): exclude superseded FX rates from current report state (1c03e0a)
+- fix(ui): payment-return notice from server state and error states for airports, booking and admin reads (review R4, R6) (14ee18b)
+- fix(ui): correlate payment-return notice to the returned booking via server checkout state (review R4) (8564b41)
+- fix(ui): never render raw error.message in SourceErrorAlert (R6) (82ab850)
+- fix(reference): report unavailable airport and airline data sources (d705e19)
+
+### Other Changes
+
+- test(reports): reproduce superseded FX quote classified as current (6fff33e)
+- style(tests): keep FX report assertion formatter-stable (707564e)
+- Merge pull request #386 from kafaat/chatgpt/fix-report4-superseded-fx-20261117 (603bd82)
+- Merge branch 'main' into claude/ui-r4-r6-error-and-payment-return (e5f19e5)
+- Merge pull request #387 from kafaat/claude/ui-r4-r6-error-and-payment-return (85d2931)
+- Merge branch 'main' into fix/csp-report-only-20261119 (040ab90)
+- Merge pull request #388 from kafaat/fix/csp-report-only-20261119 (400a6b8)
+- Merge pull request #390 from kafaat/fix/reference-data-source-unavailable-355 (b4f1ce4)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.43.0...v1.44.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.43.0
 
 <!-- ais-release-source: 9e7c7874b1c611d6b5f80ad4be72ccdec119305b -->
