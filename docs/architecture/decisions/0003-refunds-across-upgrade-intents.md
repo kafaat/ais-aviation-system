@@ -242,8 +242,13 @@ to what it still holds.
     - cancel refuses, because the provider holds a success.
 
     The case is safe and visible: no money moves, and the dispute or manual
-    flow resolves it.
+    flow resolves it. So is a second one: reconcile of a cancelled request
+    takes only its current attempt, so an earlier attempt's success on it
+    stays listed under review, with the liability open, and goes to the
+    manual or dispute flow. A per-row change counter would let every
+    under-lock comparison see refund events that leave the row's fields
+    unchanged; it needs a schema change.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
-  rounds, then integrator test hardening. After that, fix rounds 1 to 3 on
-  the PR, each followed by a fresh-context verifier and an adversarial
-  review. The PR lists the evidence for each head.
+  rounds, then integrator test hardening. After that, fix rounds 1 to 4 on
+  the PR. Each head gets a fresh-context verifier and an adversarial review
+  before merge, and the PR lists each verdict and its evidence.
