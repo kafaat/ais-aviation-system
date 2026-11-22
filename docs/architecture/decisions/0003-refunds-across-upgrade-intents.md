@@ -235,4 +235,6 @@ to what it still holds.
     The case is safe and visible: no money moves, and the dispute or manual
     flow resolves it.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
-  rounds, then integrator test hardening; the PR lists the evidence.
+  rounds, then integrator test hardening. After that, fix rounds 1 to 3 on
+  the PR, each followed by a fresh-context verifier and an adversarial
+  review. The PR lists the evidence for each head.
