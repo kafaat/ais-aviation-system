@@ -201,8 +201,11 @@ to what it still holds.
       duplicate, an earlier attempt's success (`earlier_attempt_succeeded`)
       and any code added later. A balance finding does not relabel such a
       code. The row stays under review even after the reopening refund
-      settles. Only a reconcile that read the provider closes it, and only
-      once it shows no live refund of the request;
+      settles. Only a reconcile that read the provider closes it. That read
+      must show no live refund of the request, and under the lock the row
+      must still match the row it was taken against. A refund that names a
+      future or malformed attempt is refused on every event, so it never
+      holds the row, as before these rules;
     - a row back in `cancelled` that receives another live refund of its
       attempt reopens again, with that refund recorded.
 
@@ -245,9 +248,10 @@ to what it still holds.
     flow resolves it. So is a second one: reconcile of a cancelled request
     takes only its current attempt, so an earlier attempt's success on it
     stays listed under review, with the liability open, and goes to the
-    manual or dispute flow. A per-row change counter would let every
-    under-lock comparison see refund events that leave the row's fields
-    unchanged; it needs a schema change.
+    manual or dispute flow. The under-lock comparisons cannot yet see a
+    refund event that leaves the row's fields unchanged. A follow-up adds a
+    change marker so that they do: a column, the outbox, or a provider
+    re-read after commit.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
   rounds, then integrator test hardening. After that, fix rounds 1 to 4 on
   the PR. Each head gets a fresh-context verifier and an adversarial review
