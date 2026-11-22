@@ -192,13 +192,17 @@ to what it still holds.
     clears it, so it marks the cancel even after the error code carries a
     later finding. Only the reopening refund decides the row:
     - if it fails or is canceled, the row returns to `cancelled`, keeps its
-      resolution and stays out of retry, even after a balance finding;
+      resolution and stays out of retry. This holds only under an explicit
+      allow-list of codes: the reopen marker and the balance finding;
     - any other refund naming the request and attempt sends the row to
       `review_required` (`duplicate_provider_refund`), changes nothing else,
-      and keeps it listed. The duplicate then holds the row open: a balance
-      finding does not relabel it, and a later failure of the reopening
-      refund closes the row only through a reconcile that shows no live
-      refund of the request;
+      and keeps it listed;
+    - every code outside the allow-list holds the row open. That includes a
+      duplicate, an earlier attempt's success (`earlier_attempt_succeeded`)
+      and any code added later. A balance finding does not relabel such a
+      code. The row stays under review even after the reopening refund
+      settles. Only a reconcile that read the provider closes it, and only
+      once it shows no live refund of the request;
     - a row back in `cancelled` that receives another live refund of its
       attempt reopens again, with that refund recorded.
 
@@ -218,6 +222,11 @@ to what it still holds.
     any other refund stays on the receipt, or with the provider until the
     charge aggregate books it. The row returns to `cancelled` whether the
     failure arrives as an event or a reconcile reads it from the provider.
+    Reconcile acts on its provider read only for the row the read was taken
+    against. Under the lock, the row's status, error code, refund and attempt
+    must still match. Otherwise reconcile is a conflict and leaves the row
+    unchanged. This covers the read that shows no live refund, and every
+    review finding.
     The servicing refund list shows `resolvedAt` and `resolutionReason`, null
     for a row never cancelled, so an operator sees a prior cancel.
 

@@ -291,6 +291,18 @@ async function applyVerifiedRefund(
 const operatorCancelled = (item: OrderServiceRefund) =>
   Boolean(item.resolvedAt);
 
+/** On an operator-cancelled request, the codes under which a refund event may
+ * return it to cancelled: the reopen marker, and the balance finding a
+ * reconcile records on it. Any other code, including one added later, holds
+ * the request until a reconcile that read the provider closes or settles it,
+ * and a balance finding never relabels it. */
+const REOPEN_RELEASE_CODES: ReadonlySet<string> = new Set([
+  REFUND_AFTER_CANCEL,
+  "provider_refund_balance_conflict",
+]);
+const holdsReopenedRequest = (item: OrderServiceRefund) =>
+  !REOPEN_RELEASE_CODES.has(item.errorCode ?? "");
+
 /** A cancelled request, or one a late refund reopened after its cancel. The
  * caller holds the booking and request locks and has matched the refund to
  * the request's live attempt.
@@ -301,8 +313,9 @@ const operatorCancelled = (item: OrderServiceRefund) =>
  *   the request returns to cancelled with its resolution kept; if it
  *   succeeds, it settles once; while it is pending, nothing changes. Any other
  *   refund of the request is `duplicate_provider_refund`, visible in the
- *   list. A duplicate keeps the request under review after its reopening
- *   refund settles or fails, until a reconcile shows no live refund of it. */
+ *   list. A hold code (see `holdsReopenedRequest`) keeps the request under
+ *   review after its reopening refund settles or fails, until a reconcile
+ *   that read the provider closes it. */
 async function recordAfterOperatorCancel(
   tx: SettlementTx,
   booking: Booking,
@@ -346,13 +359,9 @@ async function recordAfterOperatorCancel(
     return true;
   }
   if (providerFailed(refund)) {
-    // A duplicate seen on the request may still be live, and an event cannot
-    // tell. Only a reconcile that read the provider closes the row then.
-    if (
-      item.errorCode === "duplicate_provider_refund" &&
-      !providerShowsNoLiveRefund
-    )
-      return true;
+    // Fail closed: a hold code may stand for a live refund the event cannot
+    // see. Only a reconcile that read the provider closes the row then.
+    if (holdsReopenedRequest(item) && !providerShowsNoLiveRefund) return true;
     await tx
       .update(orderServiceRefunds)
       .set({ status: "cancelled", errorCode: REFUND_AFTER_CANCEL })
@@ -369,13 +378,10 @@ async function recordAfterOperatorCancel(
   if (!receipt || receipt.refundedAmount !== item.baseRefundedAmount)
     throw new Error("Refund balance changed outside this servicing request");
   await applyVerifiedRefund(tx, booking, item, receipt, refund, eventId, false);
-  if (item.errorCode === "duplicate_provider_refund")
+  if (holdsReopenedRequest(item))
     await tx
       .update(orderServiceRefunds)
-      .set({
-        status: "review_required",
-        errorCode: "duplicate_provider_refund",
-      })
+      .set({ status: "review_required", errorCode: item.errorCode })
       .where(eq(orderServiceRefunds.id, item.id));
   return true;
 }
@@ -1163,6 +1169,7 @@ function reviewFinding(
     const { item } = await lockServicingRequest(tx, hint.id, hint.bookingId);
     if (
       item.status !== hint.status ||
+      item.errorCode !== hint.errorCode ||
       item.attempt !== hint.attempt ||
       item.refundId !== hint.refundId
     )
@@ -1233,6 +1240,15 @@ async function recordReconciledRefund(
           code: "NOT_FOUND",
           message: "Servicing refund not found",
         });
+      // A "no live refund" read holds only for the row it was taken against.
+      if (
+        providerShowsNoLiveRefund &&
+        (before.status !== hint.status ||
+          before.errorCode !== hint.errorCode ||
+          before.refundId !== hint.refundId ||
+          before.attempt !== hint.attempt)
+      )
+        throw raced();
       await assertReconcileAllowed(tx, before);
       await recordVerifiedOrderRefund(
         tx,
@@ -1303,13 +1319,13 @@ async function reconcileAfterCancel(
   }
   // The provider's other refunds of the collection must match the saved
   // balance, as on the general reconcile path; otherwise the receipt could
-  // record another refund as this one. A duplicate keeps its code: it is what
-  // stops a later failure of the reopening refund from closing the row.
+  // record another refund as this one. A hold code is kept: it is what stops
+  // a later failure of the reopening refund from closing the row.
   if (
     !provider.historyLimit &&
     provider.otherAmount !== hint.baseRefundedAmount
   )
-    return hint.errorCode === "duplicate_provider_refund"
+    return holdsReopenedRequest(hint)
       ? unchanged
       : reviewFinding(db, hint, "provider_refund_balance_conflict", actor);
   const [success] = live;
