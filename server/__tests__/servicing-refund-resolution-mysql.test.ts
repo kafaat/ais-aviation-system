@@ -2678,6 +2678,67 @@ nativeDescribe.sequential(
         expect(provider.create).not.toHaveBeenCalled();
       }, 60000);
 
+      it("fix (G1): a duplicate seen on a reopened request keeps it listed when the reopening refund then fails, and a balance finding does not relabel it", async () => {
+        await cancelledA(2000);
+        const x = refundOf("re_r382_X", 2000, "pending");
+        provider.refunds.push(x);
+        await deliverRefund(x);
+        const y = refundOf("re_r382_Y", 2000, "succeeded");
+        provider.refunds.push(y);
+        await deliverRefund(y);
+        const duplicate = {
+          status: "review_required",
+          errorCode: "duplicate_provider_refund",
+          refundId: x.id,
+        };
+        expect(await row()).toMatchObject(duplicate);
+        // A dashboard refund the receipt does not hold puts the balance off.
+        provider.refunds.push(
+          refundOf("re_r382_dashboard", 2000, "succeeded", {})
+        );
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "review_required", ...duplicate });
+        x.status = "failed";
+        await deliverRefund(x);
+        expect(await row()).toMatchObject({ ...duplicate, completedAt: null });
+        expect(await listedIds()).toEqual([
+          [requestId, "duplicate_provider_refund"],
+        ]);
+        expect(await liabilityOpen()).toBe(true);
+        // Y succeeded at the provider, so reconcile keeps the request open.
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({ outcome: "review_required", ...duplicate });
+        expect(await receipts()).toEqual({ [original]: 0, [upgrade]: 0 });
+      }, 60000);
+
+      it("fix (G1): reconcile returns a reopened request in duplicate review to cancelled once the provider shows every refund of it failed", async () => {
+        const cancelled = await cancelledA(6000);
+        const x = refundOf("re_r382_X", 6000, "pending");
+        provider.refunds.push(x);
+        await deliverRefund(x);
+        const y = refundOf("re_r382_Y", 6000, "failed");
+        provider.refunds.push(y);
+        await deliverRefund(y);
+        x.status = "failed";
+        await deliverRefund(x);
+        expect(await row()).toMatchObject({
+          status: "review_required",
+          errorCode: "duplicate_provider_refund",
+          refundId: x.id,
+        });
+        expect(
+          await caller().reconcileServicingRefund({ requestId })
+        ).toMatchObject({
+          outcome: "provider_failed",
+          status: "cancelled",
+          errorCode: "provider_refund_after_cancel",
+          refundId: x.id,
+        });
+        await expectStillCancelled(cancelled);
+      }, 60000);
+
       it("fix (G1, Q7): a request returned to cancelled that then receives another live refund of its attempt is reopened and listed, and settles once", async () => {
         await cancelledA(6000);
         const a = refundOf("re_r382_after_cancel", 6000, "pending");

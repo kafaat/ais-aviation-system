@@ -192,10 +192,13 @@ to what it still holds.
     clears it, so it marks the cancel even after the error code carries a
     later finding. Only the reopening refund decides the row:
     - if it fails or is canceled, the row returns to `cancelled`, keeps its
-      resolution and stays out of retry, whatever finding it carried;
+      resolution and stays out of retry, even after a balance finding;
     - any other refund naming the request and attempt sends the row to
       `review_required` (`duplicate_provider_refund`), changes nothing else,
-      and keeps it listed;
+      and keeps it listed. The duplicate then holds the row open: a balance
+      finding does not relabel it, and a later failure of the reopening
+      refund closes the row only through a reconcile that shows no live
+      refund of the request;
     - a row back in `cancelled` that receives another live refund of its
       attempt reopens again, with that refund recorded.
 

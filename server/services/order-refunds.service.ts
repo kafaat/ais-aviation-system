@@ -296,14 +296,15 @@ async function applyVerifiedRefund(
  *   the request returns to cancelled with its resolution kept; if it
  *   succeeds, it settles once; while it is pending, nothing changes. Any other
  *   refund of the request is `duplicate_provider_refund`, visible in the
- *   list, and a duplicate keeps the request under review even after its
- *   reopening refund settles. */
+ *   list. A duplicate keeps the request under review after its reopening
+ *   refund settles or fails, until a reconcile shows no live refund of it. */
 async function recordAfterOperatorCancel(
   tx: SettlementTx,
   booking: Booking,
   item: OrderServiceRefund,
   refund: Stripe.Refund,
-  eventId: string
+  eventId: string,
+  providerShowsNoLiveRefund: boolean
 ) {
   const event = (status: string, extra: Record<string, unknown>) =>
     recordEvent(tx, {
@@ -340,6 +341,13 @@ async function recordAfterOperatorCancel(
     return true;
   }
   if (providerFailed(refund)) {
+    // A duplicate seen on the request may still be live, and an event cannot
+    // tell. Only a reconcile that read the provider closes the row then.
+    if (
+      item.errorCode === "duplicate_provider_refund" &&
+      !providerShowsNoLiveRefund
+    )
+      return true;
     await tx
       .update(orderServiceRefunds)
       .set({ status: "cancelled", errorCode: REFUND_AFTER_CANCEL })
@@ -371,7 +379,9 @@ async function recordAfterOperatorCancel(
 export async function recordVerifiedOrderRefund(
   tx: SettlementTx,
   refund: Stripe.Refund,
-  eventId: string
+  eventId: string,
+  // Set only by reconcile, after the provider showed no live refund of the request.
+  providerShowsNoLiveRefund = false
 ) {
   const requestId = refund.metadata?.orderServiceRefundId;
   if (!requestId) return false;
@@ -452,7 +462,14 @@ export async function recordVerifiedOrderRefund(
   // A request an operator cancelled (resolvedAt is set by cancel and never
   // cleared) follows its own rules until it settles.
   if (item.resolvedAt !== null && item.status !== "succeeded")
-    return recordAfterOperatorCancel(tx, booking, item, refund, eventId);
+    return recordAfterOperatorCancel(
+      tx,
+      booking,
+      item,
+      refund,
+      eventId,
+      providerShowsNoLiveRefund
+    );
   if (item.refundId && item.refundId !== refund.id)
     throw new Error("Verified refund does not match the saved request");
   if (
@@ -1189,7 +1206,8 @@ async function recordReconciledRefund(
   db: SettlementTx,
   hint: OrderServiceRefund,
   refund: Stripe.Refund,
-  actor: ServicingRefundActor
+  actor: ServicingRefundActor,
+  providerShowsNoLiveRefund = false
 ): Promise<OrderServiceRefund> {
   const read = (tx: SettlementTx) =>
     tx
@@ -1215,7 +1233,8 @@ async function recordReconciledRefund(
       await recordVerifiedOrderRefund(
         tx,
         refund,
-        `order_refund_reconcile:${refund.id}`
+        `order_refund_reconcile:${refund.id}`,
+        providerShowsNoLiveRefund
       );
       const after = await read(tx);
       if (sameState(before, after)) throw new ReconcileNoChange();
@@ -1269,17 +1288,26 @@ async function reconcileAfterCancel(
       refund.id === hint.refundId
   );
   if (!provider.historyLimit && live.length === 0 && failedLate) {
-    const after = await recordReconciledRefund(db, hint, failedLate, actor);
+    const after = await recordReconciledRefund(
+      db,
+      hint,
+      failedLate,
+      actor,
+      true
+    );
     return { ...resolutionView(after), outcome: "provider_failed" as const };
   }
   // The provider's other refunds of the collection must match the saved
   // balance, as on the general reconcile path; otherwise the receipt could
-  // record another refund as this one.
+  // record another refund as this one. A duplicate keeps its code: it is what
+  // stops a later failure of the reopening refund from closing the row.
   if (
     !provider.historyLimit &&
     provider.otherAmount !== hint.baseRefundedAmount
   )
-    return reviewFinding(db, hint, "provider_refund_balance_conflict", actor);
+    return hint.errorCode === "duplicate_provider_refund"
+      ? unchanged
+      : reviewFinding(db, hint, "provider_refund_balance_conflict", actor);
   const [success] = live;
   if (
     provider.historyLimit ||
