@@ -187,8 +187,20 @@ to what it still holds.
     intent that still holds money goes to settlement review. There
     `listSettlementReviews` shows it and `requestSettlementReviewRefund`
     refunds it once. A provider refund that has not failed and arrives after
-    a cancel reopens the row as `provider_refund_after_cancel`. Reconcile
-    retrieves that refund and closes the row once, by one of two paths:
+    a cancel reopens the row as `provider_refund_after_cancel` and records
+    it as the row's `refundId`. Only a cancel sets `resolvedAt` and nothing
+    clears it, so it marks the cancel even after the error code carries a
+    later finding. Only the reopening refund decides the row:
+    - if it fails or is canceled, the row returns to `cancelled`, keeps its
+      resolution and stays out of retry, whatever finding it carried;
+    - any other refund naming the request and attempt sends the row to
+      `review_required` (`duplicate_provider_refund`), changes nothing else,
+      and keeps it listed;
+    - a row back in `cancelled` that receives another live refund of its
+      attempt reopens again, with that refund recorded.
+
+    Reconcile retrieves the reopening refund and closes the row once, by one
+    of two paths:
     - if the receipt already records it, because the charge aggregate came
       first, the row closes as `succeeded` (`succeeded_after_cancel`) with
       no second settlement;
@@ -197,11 +209,14 @@ to what it still holds.
     Both paths first require the provider's other refunds of the collection
     to match the saved balance. Otherwise the receipt could count another
     refund of the same amount as this one, and the row stays
-    `review_required` (`provider_refund_balance_conflict`). If the late
-    refund fails or is canceled, the row returns to `cancelled` and keeps its
-    resolution. This happens whether the failure arrives as an event or a
-    reconcile reads it from the provider. The servicing refund list shows
-    `resolvedAt` and `resolutionReason`, so an operator sees a prior cancel.
+    `review_required` (`provider_refund_balance_conflict`). A failure of the
+    reopening refund is read before that check, and only while the provider
+    shows no live refund of the request: a failed refund moved no money, and
+    any other refund stays on the receipt, or with the provider until the
+    charge aggregate books it. The row returns to `cancelled` whether the
+    failure arrives as an event or a reconcile reads it from the provider.
+    The servicing refund list shows `resolvedAt` and `resolutionReason`, null
+    for a row never cancelled, so an operator sees a prior cancel.
 
   - _Follow-ups:_ a client screen (this change ships the API and OpenAPI
     only), and resolution of rows that stay with the dispute flow. A

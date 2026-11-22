@@ -286,6 +286,87 @@ async function applyVerifiedRefund(
   });
 }
 
+/** A cancelled request, or one a late refund reopened after its cancel. The
+ * caller holds the booking and request locks and has matched the refund to
+ * the request's live attempt.
+ * - Cancelled: a refund that failed or was canceled moved no money and
+ *   changes nothing; one that has not failed reopens the request and is
+ *   recorded in `refundId` as the reopening refund.
+ * - Reopened: only the reopening refund decides. If it fails or is canceled,
+ *   the request returns to cancelled with its resolution kept; if it
+ *   succeeds, it settles once; while it is pending, nothing changes. Any other
+ *   refund of the request is `duplicate_provider_refund`, visible in the
+ *   list, and a duplicate keeps the request under review even after its
+ *   reopening refund settles. */
+async function recordAfterOperatorCancel(
+  tx: SettlementTx,
+  booking: Booking,
+  item: OrderServiceRefund,
+  refund: Stripe.Refund,
+  eventId: string
+) {
+  const event = (status: string, extra: Record<string, unknown>) =>
+    recordEvent(tx, {
+      aggregateType: "booking",
+      aggregateId: booking.id,
+      tenantId: booking.tenantId,
+      eventType: "order.refund_updated",
+      payload: refundEventPayload(item, status, refund, {
+        providerStatus: refund.status,
+        ...extra,
+      }),
+    });
+  if (item.status === "cancelled") {
+    if (providerFailed(refund)) return true;
+    await tx
+      .update(orderServiceRefunds)
+      .set({
+        status: "review_required",
+        errorCode: REFUND_AFTER_CANCEL,
+        refundId: refund.id,
+      })
+      .where(eq(orderServiceRefunds.id, item.id));
+    await event("review_required", { errorCode: REFUND_AFTER_CANCEL });
+    return true;
+  }
+  if (item.refundId !== refund.id) {
+    await reviewProviderRefund(
+      tx,
+      booking,
+      item,
+      refund,
+      "duplicate_provider_refund"
+    );
+    return true;
+  }
+  if (providerFailed(refund)) {
+    await tx
+      .update(orderServiceRefunds)
+      .set({ status: "cancelled", errorCode: REFUND_AFTER_CANCEL })
+      .where(eq(orderServiceRefunds.id, item.id));
+    await event("cancelled", { errorCode: REFUND_AFTER_CANCEL });
+    return true;
+  }
+  if (refund.status !== "succeeded" || item.completedAt) return true;
+  const [receipt] = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, item.paymentIntentId))
+    .for("update");
+  if (!receipt || receipt.refundedAmount !== item.baseRefundedAmount)
+    throw new Error("Refund balance changed outside this servicing request");
+  await applyVerifiedRefund(tx, booking, item, receipt, refund, eventId, false);
+  if (item.errorCode === "duplicate_provider_refund")
+    await tx
+      .update(orderServiceRefunds)
+      .set({
+        status: "review_required",
+        errorCode: "duplicate_provider_refund",
+      })
+      .where(eq(orderServiceRefunds.id, item.id));
+  return true;
+}
+
 /** Only a verified webhook or a directly retrieved provider object may call this. */
 export async function recordVerifiedOrderRefund(
   tx: SettlementTx,
@@ -368,6 +449,10 @@ export async function recordVerifiedOrderRefund(
     );
     return true;
   }
+  // A request an operator cancelled (resolvedAt is set by cancel and never
+  // cleared) follows its own rules until it settles.
+  if (item.resolvedAt !== null && item.status !== "succeeded")
+    return recordAfterOperatorCancel(tx, booking, item, refund, eventId);
   if (item.refundId && item.refundId !== refund.id)
     throw new Error("Verified refund does not match the saved request");
   if (
@@ -375,35 +460,6 @@ export async function recordVerifiedOrderRefund(
     (item.completedAt && item.refundId === refund.id)
   )
     return true;
-  if (item.status === "cancelled") {
-    if (providerFailed(refund)) return true;
-    await reviewProviderRefund(tx, booking, item, refund, REFUND_AFTER_CANCEL);
-    return true;
-  }
-  // An operator's cancel never turns back into a retryable row: a request
-  // reopened by a late refund returns to cancelled, with its resolution kept,
-  // when that refund fails or is canceled.
-  if (
-    item.status === "review_required" &&
-    item.errorCode === REFUND_AFTER_CANCEL &&
-    providerFailed(refund)
-  ) {
-    await tx
-      .update(orderServiceRefunds)
-      .set({ status: "cancelled", refundId: refund.id })
-      .where(eq(orderServiceRefunds.id, item.id));
-    await recordEvent(tx, {
-      aggregateType: "booking",
-      aggregateId: booking.id,
-      tenantId: booking.tenantId,
-      eventType: "order.refund_updated",
-      payload: refundEventPayload(item, "cancelled", refund, {
-        errorCode: REFUND_AFTER_CANCEL,
-        providerStatus: refund.status,
-      }),
-    });
-    return true;
-  }
   const [receipt] = await tx
     .select()
     .from(paymentReceipts)
@@ -1200,6 +1256,22 @@ async function reconcileAfterCancel(
     ...resolutionView(hint),
     outcome: "review_required" as const,
   };
+  const live = provider.refunds.filter(refund => !providerFailed(refund));
+  // The refund that reopened the request has since failed, and no refund of
+  // the request is live: it returns to cancelled through the recording step,
+  // with the first cancel's resolution kept. This comes before the balance
+  // check: a failed refund moved no money, and any other refund of the
+  // collection stays where it is recorded.
+  const failedLate = provider.refunds.find(
+    refund =>
+      providerFailed(refund) &&
+      hint.refundId !== null &&
+      refund.id === hint.refundId
+  );
+  if (!provider.historyLimit && live.length === 0 && failedLate) {
+    const after = await recordReconciledRefund(db, hint, failedLate, actor);
+    return { ...resolutionView(after), outcome: "provider_failed" as const };
+  }
   // The provider's other refunds of the collection must match the saved
   // balance, as on the general reconcile path; otherwise the receipt could
   // record another refund as this one.
@@ -1208,19 +1280,6 @@ async function reconcileAfterCancel(
     provider.otherAmount !== hint.baseRefundedAmount
   )
     return reviewFinding(db, hint, "provider_refund_balance_conflict", actor);
-  const live = provider.refunds.filter(refund => !providerFailed(refund));
-  // The late refund that reopened the request has since failed: it returns
-  // to cancelled through the recording step.
-  const failedLate = provider.refunds.find(
-    refund =>
-      providerFailed(refund) &&
-      !archivedIds.has(refund.id) &&
-      refundAttempt(refund) === hint.attempt
-  );
-  if (!provider.historyLimit && live.length === 0 && failedLate) {
-    const after = await recordReconciledRefund(db, hint, failedLate, actor);
-    return { ...resolutionView(after), outcome: "provider_failed" as const };
-  }
   const [success] = live;
   if (
     provider.historyLimit ||
@@ -1247,23 +1306,6 @@ async function reconcileAfterCancel(
       hint.id,
       hint.bookingId
     );
-    // The same balance check, against the locked request.
-    if (provider.otherAmount !== item.baseRefundedAmount) {
-      await markReviewFinding(
-        tx,
-        item,
-        "provider_refund_balance_conflict",
-        actor
-      );
-      return {
-        ...resolutionView({
-          ...item,
-          status: "review_required",
-          errorCode: "provider_refund_balance_conflict",
-        }),
-        outcome: "review_required" as const,
-      };
-    }
     if (
       item.status !== hint.status ||
       item.errorCode !== hint.errorCode ||
@@ -1335,7 +1377,9 @@ export async function reconcileServicingRefund(
   const archived = await archivedAttempts(db, hint.id);
   const archivedIds = new Set(archived.map(row => row.refundId));
   const provider = await readProviderRequest(hint, [...archivedIds]);
-  if (hint.errorCode === REFUND_AFTER_CANCEL)
+  // Decided by the cancel itself, not the error code: a review finding (a
+  // balance conflict, a duplicate) relabels the code but keeps the reopen.
+  if (hint.resolvedAt !== null)
     return reconcileAfterCancel(db, hint, provider, archivedIds, actor);
   if (provider.historyLimit)
     return reviewFinding(db, hint, "provider_history_limit", actor);
