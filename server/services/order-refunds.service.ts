@@ -286,6 +286,11 @@ async function applyVerifiedRefund(
   });
 }
 
+/** Only an operator's cancel sets `resolvedAt`, and nothing clears it. A row
+ * without one, whether the value is null or absent, was never cancelled. */
+const operatorCancelled = (item: OrderServiceRefund) =>
+  Boolean(item.resolvedAt);
+
 /** A cancelled request, or one a late refund reopened after its cancel. The
  * caller holds the booking and request locks and has matched the refund to
  * the request's live attempt.
@@ -459,9 +464,8 @@ export async function recordVerifiedOrderRefund(
     );
     return true;
   }
-  // A request an operator cancelled (resolvedAt is set by cancel and never
-  // cleared) follows its own rules until it settles.
-  if (item.resolvedAt !== null && item.status !== "succeeded")
+  // A request an operator cancelled follows its own rules until it settles.
+  if (operatorCancelled(item) && item.status !== "succeeded")
     return recordAfterOperatorCancel(
       tx,
       booking,
@@ -1407,7 +1411,7 @@ export async function reconcileServicingRefund(
   const provider = await readProviderRequest(hint, [...archivedIds]);
   // Decided by the cancel itself, not the error code: a review finding (a
   // balance conflict, a duplicate) relabels the code but keeps the reopen.
-  if (hint.resolvedAt !== null)
+  if (operatorCancelled(hint))
     return reconcileAfterCancel(db, hint, provider, archivedIds, actor);
   if (provider.historyLimit)
     return reviewFinding(db, hint, "provider_history_limit", actor);
@@ -1512,7 +1516,7 @@ const retryable = (item: OrderServiceRefund) =>
   item.errorCode === PROVIDER_REFUND_FAILED &&
   Boolean(item.refundId) &&
   // An operator's cancel is final, even if a late refund reopened the row.
-  item.resolvedAt === null;
+  !operatorCancelled(item);
 
 /** Queues the next attempt of a request whose provider refund definitively
  * failed. The worker then sends it under `order-refund:<id>:a<n>`. */
