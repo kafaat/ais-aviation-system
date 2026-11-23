@@ -6809,6 +6809,7 @@ export const orderServiceRefunds = mysqlTable(
       "succeeded",
       "failed",
       "review_required",
+      "cancelled",
     ])
       .default("queued")
       .notNull(),
@@ -6818,6 +6819,14 @@ export const orderServiceRefunds = mysqlTable(
     errorCode: varchar("errorCode", { length: 100 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     completedAt: timestamp("completedAt"),
+    /** The live provider attempt. Attempt 1 sends `order-refund:<id>`; an
+     * operator retry after a definitive provider failure archives the failed
+     * refund in order_service_refund_attempts and sends `order-refund:<id>:a<n>`. */
+    attempt: int("attempt").default(1).notNull(),
+    /** Operator cancellation with a reason (status `cancelled`). */
+    resolvedBy: int("resolvedBy"),
+    resolvedAt: timestamp("resolvedAt"),
+    resolutionReason: varchar("resolutionReason", { length: 500 }),
   },
   t => ({
     modificationPayment: uniqueIndex("order_refund_mod_payment_unique").on(
@@ -6826,6 +6835,30 @@ export const orderServiceRefunds = mysqlTable(
     ),
     pending: index("order_refund_pending_idx").on(t.status, t.nextAttemptAt),
     booking: index("order_refund_booking_idx").on(t.bookingId),
+  })
+);
+
+/** Earlier provider attempts of an order_service_refunds row. A row is archived
+ * here only after a definitive provider failure, so the schema itself allows
+ * one liability at most one refund that has not failed: the live attempt on
+ * the request row. */
+export const orderServiceRefundAttempts = mysqlTable(
+  "order_service_refund_attempts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    requestId: varchar("requestId", { length: 36 }).notNull(),
+    attempt: int("attempt").notNull(),
+    refundId: varchar("refundId", { length: 255 }).notNull(),
+    status: mysqlEnum("status", ["failed", "canceled"]).notNull(),
+    errorCode: varchar("errorCode", { length: 100 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    requestAttempt: uniqueIndex("order_refund_attempt_unique").on(
+      t.requestId,
+      t.attempt
+    ),
+    refund: uniqueIndex("order_refund_attempt_refund_unique").on(t.refundId),
   })
 );
 

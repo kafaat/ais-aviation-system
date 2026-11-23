@@ -100,10 +100,159 @@ to what it still holds.
   booking can still be `refunded` with an `applied` upgrade that holds money.
   An older release left some before deploy. This change also leaves one while
   a covering servicing refund is open, and keeps it when that servicing
-  refund fails. A failed flight-cancellation refund is listed on the
-  operations dashboard; a failed exchange servicing refund has no operator
-  list and no in-app resolution yet, which is a follow-up.
-  `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a read-only query that
-  lists all of them, for reconciliation.
+  refund fails, until an operator resolves the servicing refund as described
+  in the next item. `scripts/sql/decision7-legacy-upgrade-refunds.sql` is a
+  read-only query that lists all of them, for reconciliation.
+- **Operator resolution of failed servicing refunds (issue #382).** Failed
+  and `review_required` servicing refunds of both origins, exchange and
+  flight cancellation, are listed and resolved in-app. Each action is an
+  admin-only privileged mutation. It re-reads the provider outside any
+  transaction: a retrieve of every refund id the request recorded, and the
+  intent's refunds matched by `orderServiceRefundId`. It then decides under
+  the booking lock, in the worker's lock order. No action creates a provider
+  refund.
+  - _List:_ `payments.servicingRefundReviews`
+    (`GET /admin/payments/servicing-refunds`), newest first, limit 1 to 100.
+    Each row has its origin, booking id and reference, intent, amount (minor
+    units, SAR), error code, provider refund id, attempt, and request and
+    creation times.
+  - _Reconcile_ (`POST …/{requestId}/reconcile`) records what the provider
+    holds through `recordVerifiedOrderRefund`: a success settles once, a
+    pending refund goes back to the worker, and none found leaves the row
+    unchanged with the answer `no_provider_refund`. A duplicate, a balance
+    conflict or an unverifiable history stays `review_required`. A provider
+    outage changes nothing. Reconcile refuses a row that a lost dispute
+    partly covers (`chargeback_partial_cover`), and any row whose collection
+    has funds held or taken by a dispute: either would change the lost
+    amount's allocation. A reconcile that changes the row writes an
+    `audit_logs` row in the same transaction, naming the actor, the request,
+    the status before and after, and the provider refund. A repeat that
+    changes nothing records no event and no audit row.
+  - _Retry_ (`POST …/retry`, naming the attempt reviewed) only follows a
+    definitive provider failure (`failed`, `provider_refund_failed`). A
+    `review_required` row with an uncertain outcome is never retried; its
+    resolutions are reconcile or cancel. Retry is also refused in these
+    cases:
+    - the provider holds a refund for the request that has not failed;
+    - the collection's other provider refunds differ from the saved base;
+    - the receipt no longer holds the amount at that base;
+    - a dispute holds or has taken the collection's funds. A retry clears the
+      request time, so the row would re-enter the lost-dispute allocation.
+
+    Under the lock, retry archives the refused refund in
+    `order_service_refund_attempts`. That table accepts only `failed` or
+    `canceled`, one row per attempt and per provider refund, so the schema
+    allows a liability at most one refund that has not failed. Retry then
+    queues attempt _n_+1. The worker sends it with the key
+    `order-refund:<id>:a<n>` and an `attempt` metadata entry. A new key is
+    needed because the provider replays a saved response for a key for 24
+    hours. Attempt 1 keeps `order-refund:<id>` and its exact request.
+    Concurrent retries give one attempt. A lost dispute can close a retried
+    request by its chargeback. Before that, the worker reads the provider's
+    history outside any transaction. A refund of the request that has not
+    failed sends the row to review instead. Attempt 1 is unchanged. If the
+    worker cannot record a refund that this read found, it handles that row
+    alone, so the rest of the batch still runs:
+    - a refund that names the request but does not match it becomes
+      `duplicate_provider_refund`;
+    - a receipt changed outside the request becomes
+      `provider_refund_balance_conflict`.
+
+    Retry never applies to a row an operator cancelled, even if a late refund
+    later reopened it.
+
+  - _Late events:_ an event for an archived attempt that failed, was
+    canceled or is pending changes nothing, because those provider states
+    are terminal. A success from an earlier attempt never settles from the
+    event. The row goes to `review_required` (`earlier_attempt_succeeded`)
+    with an event, and a queued attempt is not sent. Reconcile then reads
+    that refund from the provider and settles it once, only if the live
+    attempt was never requested and nothing else settled. Whatever the event
+    order, a liability settles once.
+  - _Cancel_ (`POST …/cancel`, naming the attempt and giving a reason of 10
+    to 500 characters) applies to a `failed` or `review_required` row when
+    the provider shows no refund for the request that has not failed. It is
+    refused in three cases:
+    - a row only partly covered by a lost dispute
+      (`chargeback_partial_cover`);
+    - a held or lost dispute on the collection;
+    - a flight-cancellation refund whose job still counts it as planned.
+
+    Cancel sets `cancelled` with `resolvedBy`, `resolvedAt` and
+    `resolutionReason`, and writes an `audit_logs` row in the same
+    transaction. A cancelled refund is closed everywhere it was counted as
+    open: in `assertNoOrderRefundPending`, in the covering check above, in
+    the settlement gate on its intent, and in the customer's exchange status,
+    which shows `review`. On a refunded booking, an applied upgrade on that
+    intent that still holds money goes to settlement review. There
+    `listSettlementReviews` shows it and `requestSettlementReviewRefund`
+    refunds it once. A provider refund that has not failed and arrives after
+    a cancel reopens the row as `provider_refund_after_cancel` and records
+    it as the row's `refundId`. Only a cancel sets `resolvedAt` and nothing
+    clears it, so it marks the cancel even after the error code carries a
+    later finding. Only the reopening refund decides the row:
+    - if it fails or is canceled, the row returns to `cancelled`, keeps its
+      resolution and stays out of retry. This holds only under an explicit
+      allow-list of codes: the reopen marker and the balance finding;
+    - any other refund naming the request and attempt sends the row to
+      `review_required` (`duplicate_provider_refund`), changes nothing else,
+      and keeps it listed;
+    - every code outside the allow-list holds the row open. That includes a
+      duplicate, an earlier attempt's success (`earlier_attempt_succeeded`)
+      and any code added later. A balance finding does not relabel such a
+      code. The row stays under review even after the reopening refund
+      settles. Only a reconcile that read the provider closes it. That read
+      must show no live refund of the request, and under the lock the row
+      must still match the row it was taken against. A refund that names a
+      future or malformed attempt is refused on every event, so it never
+      holds the row, as before these rules;
+    - a row back in `cancelled` that receives another live refund of its
+      attempt reopens again, with that refund recorded.
+
+    Reconcile retrieves the reopening refund and closes the row once, by one
+    of two paths:
+    - if the receipt already records it, because the charge aggregate came
+      first, the row closes as `succeeded` (`succeeded_after_cancel`) with
+      no second settlement;
+    - otherwise the refund settles once.
+
+    Both paths first require the provider's other refunds of the collection
+    to match the saved balance. Otherwise the receipt could count another
+    refund of the same amount as this one, and the row stays
+    `review_required` (`provider_refund_balance_conflict`). A failure of the
+    reopening refund is read before that check, and only while the provider
+    shows no live refund of the request: a failed refund moved no money, and
+    any other refund stays on the receipt, or with the provider until the
+    charge aggregate books it. The row returns to `cancelled` whether the
+    failure arrives as an event or a reconcile reads it from the provider.
+    Reconcile acts on its provider read only for the row the read was taken
+    against. Under the lock, the row's status, error code, refund and attempt
+    must still match. Otherwise reconcile is a conflict and leaves the row
+    unchanged. This covers the read that shows no live refund, and every
+    review finding.
+    The servicing refund list shows `resolvedAt` and `resolutionReason`, null
+    for a row never cancelled, so an operator sees a prior cancel.
+
+  - _Follow-ups:_ a client screen (this change ships the API and OpenAPI
+    only), and resolution of rows that stay with the dispute flow. A
+    `review_required` flight-cancellation job is never recomputed, so the
+    operations dashboard keeps listing a booking whose refunds an operator
+    has since resolved. One more case has no in-app exit yet:
+    - a cancel, then another refund on the same intent, then the late
+      refund's charge aggregate arriving before its refund event;
+    - the receipt then holds both refunds, and the row stays
+      `review_required` (`provider_refund_balance_conflict`);
+    - cancel refuses, because the provider holds a success.
+
+    The case is safe and visible: no money moves, and the dispute or manual
+    flow resolves it. So is a second one: reconcile of a cancelled request
+    takes only its current attempt, so an earlier attempt's success on it
+    stays listed under review, with the liability open, and goes to the
+    manual or dispute flow. The under-lock comparisons cannot yet see a
+    refund event that leaves the row's fields unchanged. A follow-up adds a
+    change marker so that they do: a column, the outbox, or a provider
+    re-read after commit.
 - Verification: three fresh-context verifiers (fail, fail, pass) with two fix
-  rounds, then integrator test hardening; the PR lists the evidence.
+  rounds, then integrator test hardening. After that, fix rounds 1 to 4 on
+  the PR. Each head gets a fresh-context verifier and an adversarial review
+  before merge, and the PR lists each verdict and its evidence.
