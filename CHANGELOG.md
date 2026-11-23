@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.45.0
+
+<!-- ais-release-source: a7daef05f1fd77daa64de5e2ca9a19ce465b6328 -->
+<!-- ais-release-notes:start -->
+
+### Features
+
+- feat(refunds): operator list and in-app resolution for failed servicing refunds (#382, part A) (#396) (a7daef05)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.44.1...v1.45.0
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.44.1
 
 <!-- ais-release-source: fabda722d6b46f4885f63fbfa724d36c21f32520 -->
