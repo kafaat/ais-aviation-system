@@ -5,8 +5,8 @@ charset-normalizer==3.5.2
 click==8.5.1
 docker==7.2.0
 graphql-core==3.3.2
-harfile==0.6.0
-hypothesis==6.170.15
+harfile==0.7.0
+hypothesis==6.170.16
 hypothesis-graphql==0.13.6
 idna==3.20
 iniconfig==2.3.1
