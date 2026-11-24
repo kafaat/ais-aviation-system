@@ -152,10 +152,13 @@ jobs:
             # version can never be published (the selector ignores it for the
             # same reason), so it is not a proposal to refresh either.
             current="$(jq -r '.version' package.json)"
+            test -f scripts/ci/release-version.mjs
             for ref in $(git ls-remote --heads origin 'refs/heads/release/v*' | awk '{print $2}'); do
               tag="${ref#refs/heads/release/}"
               if [ -z "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
-                if node --input-type=module -e "import { compareVersions } from './scripts/ci/release-version.mjs'; process.exit(compareVersions(process.argv[1], process.argv[2]) > 0 ? 0 : 1)" "${tag#v}" "$current"; then
+                # A failed comparison aborts the job (set -e); it never counts as stale.
+                advances="$(node --input-type=module -e "import { compareVersions } from './scripts/ci/release-version.mjs'; console.log(compareVersions(process.argv[1], process.argv[2]) > 0 ? 'yes' : 'no')" "${tag#v}" "$current")"
+                if [ "$advances" = "yes" ]; then
                   emit mode propose
                   emit release_type existing
                   exit 0
