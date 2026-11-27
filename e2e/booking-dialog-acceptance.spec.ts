@@ -1,4 +1,5 @@
 import type { Page, Request } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import superjson from "superjson";
 import { test, expect } from "./fixtures/base-test";
@@ -19,6 +20,103 @@ function mutationInput<T>(request: Request): T {
   const body = request.postDataJSON();
   return superjson.deserialize<T>(batch ? body["0"] : body);
 }
+
+test("saved passport expiry survives profile reload, booking selection and native invoice persistence", async ({
+  page,
+}, testInfo) => {
+  await useBrowserSession(page, "regular");
+  const client = rpc(page);
+  const user = await client.auth.me.query();
+  if (!user) throw new Error("Authenticated passenger missing");
+  const firstName = `Audit${randomUUID()
+    .replace(/[^a-f]/g, "")
+    .slice(0, 8)}`;
+  const lastName = "Passport";
+  const passportNumber = `A${randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`;
+  const passportExpiry = "2032-12-31";
+  let savedId: number | undefined;
+  try {
+    await page.goto("/saved-passengers");
+    await page
+      .getByRole("button", { name: "Add Passenger", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Add New Passenger" });
+    await dialog.locator("#firstName").fill(firstName);
+    await dialog.locator("#lastName").fill(lastName);
+    await dialog.locator("#dateOfBirth").fill("1990-01-01");
+    await dialog.locator("#nationality").fill("SA");
+    await dialog.locator("#passportNumber").fill(passportNumber);
+    await dialog.locator("#passportExpiry").fill(passportExpiry);
+    await dialog
+      .getByRole("button", { name: "Save Passenger", exact: true })
+      .click();
+    await expect(dialog).not.toBeVisible();
+    await page.reload();
+    const card = page
+      .locator('[data-slot="card"]')
+      .filter({ hasText: firstName });
+    await expect(card).toContainText("31 Dec 2032");
+    const saved = (await client.savedPassengers.getAll.query()).find(
+      p => p.firstName === firstName && p.passportNumber === passportNumber
+    );
+    expect(saved?.passportExpiry?.toISOString().slice(0, 10)).toBe(
+      passportExpiry
+    );
+    if (!saved) throw new Error("Saved passenger was not persisted");
+    savedId = saved.id;
+
+    // Only inventory is a SQL fixture. The passenger and booking writes below
+    // use the visible forms and the real application, with no provider calls.
+    const flightId = await fixtureFlight(user.tenantId);
+    await page.goto(`/booking/${flightId}`);
+    await page
+      .getByRole("combobox")
+      .filter({ hasText: "Select Saved Passenger" })
+      .click();
+    await page.getByRole("option", { name: new RegExp(firstName) }).click();
+    await expect(page.locator("#pax-passport-expiry-0")).toHaveValue(
+      passportExpiry
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("saved-passport-booking.png"),
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "Refresh fare offer", exact: true })
+      .click();
+    const pay = page.getByRole("button", {
+      name: "Pay with wallet",
+      exact: true,
+    });
+    await expect(pay).toBeEnabled();
+    await pay.click();
+    await expect(page).toHaveURL(/\/checkout\/\d+.*method=wallet/);
+    const bookingId = Number(new URL(page.url()).pathname.split("/").at(-1));
+    const rows = await sqlRows<RowDataPacket>(
+      "SELECT p.firstName,p.lastName,p.passportNumber,DATE_FORMAT(p.passportExpiry,'%Y-%m-%d') AS passportExpiry,b.userId,b.paymentStatus FROM passengers p JOIN bookings b ON b.id=p.bookingId WHERE p.bookingId=?",
+      [bookingId]
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({
+        firstName,
+        lastName,
+        passportNumber,
+        passportExpiry,
+        userId: user.id,
+        paymentStatus: "pending",
+      }),
+    ]);
+    await page.reload();
+    await expect(page.getByTestId("checkout-total")).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath("saved-passport-invoice.png"),
+      fullPage: true,
+    });
+  } finally {
+    if (savedId !== undefined)
+      await client.savedPassengers.delete.mutate({ id: savedId });
+  }
+});
 
 for (const [method, button] of [
   ["wallet", "Pay with wallet"],
