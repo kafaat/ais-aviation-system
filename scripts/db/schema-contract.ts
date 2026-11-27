@@ -3,6 +3,12 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type { Connection, RowDataPacket } from "mysql2/promise";
 
+import {
+  applyTriggerDDL,
+  triggerBodyHash,
+  type Trigger,
+} from "./trigger-contract";
+
 export interface Column {
   name: string;
   type: string;
@@ -25,6 +31,7 @@ export interface Snapshot {
   version: string;
   dialect: string;
   views?: Record<string, unknown>;
+  triggers?: Record<string, Trigger>;
   tables: Record<
     string,
     {
@@ -46,6 +53,7 @@ export interface Migration {
   snapshot: Snapshot;
 }
 export interface TableContract {
+  triggers?: Record<string, Trigger>;
   columns: Record<
     string,
     {
@@ -83,6 +91,7 @@ export function readHistory(root = "drizzle"): Migration[] {
   }
   let previousId = "00000000-0000-0000-0000-000000000000";
   let previousTime = -1;
+  const triggers: Record<string, Trigger> = {};
   return journal.entries.map((e, i) => {
     if (
       e.idx !== i ||
@@ -109,12 +118,13 @@ export function readHistory(root = "drizzle"): Migration[] {
     }
     previousId = snapshot.id;
     previousTime = e.when;
+    const file = readFileSync(join(root, `${e.tag}.sql`));
+    applyTriggerDDL(triggers, file.toString("utf8"));
+    snapshot.triggers = { ...triggers };
     return {
       ...e,
       snapshot,
-      hash: createHash("sha256")
-        .update(readFileSync(join(root, `${e.tag}.sql`)))
-        .digest("hex"),
+      hash: createHash("sha256").update(file).digest("hex"),
     };
   });
 }
@@ -202,6 +212,11 @@ export function snapshotContract(snapshot: Snapshot): Contract {
       };
     result[name] = out;
   }
+  for (const [name, trigger] of Object.entries(snapshot.triggers ?? {})) {
+    if (!result[trigger.table])
+      throw new Error(`UNKNOWN_TRIGGER_TABLE: ${name}`);
+    (result[trigger.table].triggers ??= {})[name] = trigger;
+  }
   return result;
 }
 
@@ -261,6 +276,20 @@ export async function readDatabaseContract(
       using: i.INDEX_TYPE,
     });
     index.columns.push(i.COLUMN_NAME);
+  }
+  const [triggers] = await connection.query<RowDataPacket[]>(
+    "SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_STATEMENT FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() ORDER BY TRIGGER_NAME"
+  );
+  for (const row of triggers) {
+    const table = result[row.EVENT_OBJECT_TABLE];
+    if (!table)
+      throw new Error(`UNSUPPORTED_DATABASE_TRIGGER: ${row.TRIGGER_NAME}`);
+    (table.triggers ??= {})[row.TRIGGER_NAME] = {
+      table: row.EVENT_OBJECT_TABLE,
+      timing: row.ACTION_TIMING,
+      event: row.EVENT_MANIPULATION,
+      bodyHash: triggerBodyHash(row.ACTION_STATEMENT),
+    };
   }
   const [constraints] = await connection.query<RowDataPacket[]>(
     "SELECT TABLE_NAME, CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_TYPE IN ('FOREIGN KEY', 'CHECK')"

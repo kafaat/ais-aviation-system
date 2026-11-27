@@ -47,7 +47,7 @@ function scopeHash(prefix: string, namespace: string | null): string {
 }
 
 /**
- * One primary-key lookup for both the global and namespace generations. A
+ * One indexed lookup for the global, namespace and optional source generations. A
  * successful empty read denotes the initial generation; failed/unmigrated DB
  * reads must throw and may never be interpreted as an initial generation.
  * Tokens are deliberately not cached or coalesced across requests: a read that
@@ -55,24 +55,24 @@ function scopeHash(prefix: string, namespace: string | null): string {
  */
 export function readCacheGeneration(
   prefix: string,
-  namespace: string
+  namespace: string,
+  dependencies: readonly string[] = []
 ): Promise<string> {
   return bounded(async () => {
     const db = await getDb();
     if (!db) throw new Error("Cache generation database is unavailable");
-    const globalKey = scopeHash(prefix, null);
-    const namespaceKey = scopeHash(prefix, namespace);
+    const keys = [null, namespace, ...dependencies].map(scope =>
+      scopeHash(prefix, scope)
+    );
     const rows = await db
       .select({
         key: cacheNamespaceGenerations.scopeHash,
         generation: cacheNamespaceGenerations.generation,
       })
       .from(cacheNamespaceGenerations)
-      .where(
-        inArray(cacheNamespaceGenerations.scopeHash, [globalKey, namespaceKey])
-      );
+      .where(inArray(cacheNamespaceGenerations.scopeHash, keys));
     const generations = new Map(rows.map(row => [row.key, row.generation]));
-    return `${generations.get(globalKey) ?? "0"}.${generations.get(namespaceKey) ?? "0"}`;
+    return keys.map(key => generations.get(key) ?? "0").join(".");
   }, READ_TIMEOUT_MS);
 }
 

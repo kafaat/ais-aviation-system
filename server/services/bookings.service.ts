@@ -1,3 +1,4 @@
+import type { BookingHistoryPage } from "../contracts/booking-history-page";
 import { quoteCancellationPolicy } from "./cancellation-policy.service";
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import {
@@ -593,6 +594,26 @@ export async function getUserBookings(
       message: "Failed to get bookings",
     });
   }
+}
+
+export async function getUserBookingsPage(
+  userId: number,
+  tenantId: number | null | undefined,
+  input: BookingHistoryPage
+) {
+  const rows = await db.getBookingsByUserId(userId, tenantId, input);
+  const items = rows.slice(0, input.limit);
+  const last = items[items.length - 1];
+  const nextCursor =
+    rows.length > input.limit && last
+      ? {
+          id: last.id,
+          value: input.sort.startsWith("price")
+            ? last.totalAmount
+            : last.flight.departureTime.getTime(),
+        }
+      : null;
+  return { items, nextCursor };
 }
 
 export async function getBookingById(
