@@ -289,7 +289,7 @@ export async function issueBoardingPass(
 ): Promise<{ token: string; payload: BoardingPassPayload; bcbp: string }> {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
-  return db.transaction(async tx => {
+  return await db.transaction(async tx => {
     const support = ctx.role !== undefined && isAdmin(ctx.role);
     const active = await activePayload(tx, input, support ? undefined : ctx);
     // A personal buyer may travel across airlines. Issuance still requires

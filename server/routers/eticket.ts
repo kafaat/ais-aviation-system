@@ -52,7 +52,6 @@ export const eticketRouter = router({
       await assertBookingOwnership(input.bookingId, ctx.user.id);
       const issued = await issueBoardingPass(input, {
         userId: ctx.user.id,
-        role: ctx.user.role,
         tenantId: ctx.tenantId,
       });
       const document = await readTicketDocument(

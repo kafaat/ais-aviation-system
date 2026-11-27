@@ -17,7 +17,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
@@ -38,7 +38,7 @@ export function purchaserBookingCondition(
   const owner = eq(bookings.userId, userId);
   return tenantId == null
     ? owner
-    : and(owner, eq(bookings.tenantId, tenantId))!;
+    : sql`(${owner} and ${eq(bookings.tenantId, tenantId)})`;
 }
 
 export const purchaserScope = (tenantId: number | null | undefined) =>

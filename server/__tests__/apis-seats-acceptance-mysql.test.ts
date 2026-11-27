@@ -1154,10 +1154,12 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
     ["bookings", "release"],
     ["users", "release"],
     ["users", "issue"],
+    ["bookings", "pdf"],
+    ["bookings", "reader"],
   ] as const)(
     "waits for a competing transfer on %s and reauthorizes %s",
     async (table, action) => {
-      if (action === "issue") await checkedInPassenger();
+      if (action !== "release") await checkedInPassenger();
       else {
         await adminSeats().initializeFlightSeats({
           flightId: 41,
@@ -1170,6 +1172,11 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
           passengerId: 81,
         });
       }
+      if (action === "pdf" || action === "reader")
+        await db
+          .update(schema.users)
+          .set({ role: "admin" })
+          .where(eq(schema.users.id, 9));
       const beforeSeats = await db.select().from(schema.seatInventory);
       const beforePassengers = await db.select().from(schema.passengers);
       const connection = await pool!.getConnection();
@@ -1182,10 +1189,19 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
           : /^select .* from `users`.* for update$/i
       );
       state.db = releaserDb;
-      const releasing =
-        action === "issue"
-          ? passes().issue({ bookingId: 71, passengerId: 81, flightId: 41 })
-          : seats().releaseSeat({ flightId: 41, seatNumber: "1A" });
+      const key = { bookingId: 71, passengerId: 81, flightId: 41 };
+      const owningAdmin = context(9, 3, "admin");
+      const requests = {
+        pdf: () =>
+          eticketRouter.createCaller(owningAdmin).generateBoardingPass(key),
+        reader: () =>
+          seatMapRouter
+            .createCaller(owningAdmin)
+            .getBoardingPass({ passengerId: 81, flightId: 41 }),
+        issue: () => passes().issue(key),
+        release: () => seats().releaseSeat({ flightId: 41, seatNumber: "1A" }),
+      };
+      const releasing = requests[action]();
       let settled = false;
       const outcome = releasing.then(
         value => {

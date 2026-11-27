@@ -1,5 +1,7 @@
-import { lockPurchaserFlight } from "./inventory-capacity.service";
-import { withInventoryTransaction } from "./inventory-capacity.service";
+import {
+  lockPurchaserFlight,
+  withInventoryTransaction,
+} from "./inventory-capacity.service";
 import {
   createInventoryLock,
   releaseInventoryLock,
