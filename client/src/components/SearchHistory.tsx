@@ -22,7 +22,11 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { isCivilDay } from "@shared/ibe-search";
+import {
+  historyTravelerCounts,
+  isCivilDay,
+  type TravelerCounts,
+} from "@shared/ibe-search";
 
 interface SearchEntry {
   id: string;
@@ -35,6 +39,7 @@ interface SearchEntry {
   departureDate: string;
   cabinClass: "economy" | "business";
   passengers: number;
+  party?: TravelerCounts;
   timestamp: number;
 }
 
@@ -65,13 +70,19 @@ export function saveSearchToHistory(
   try {
     const history = getSearchHistory();
 
-    // Check for duplicate (same route and date)
-    const isDuplicate = history.some(
-      entry =>
+    const party = historyTravelerCounts(search);
+    // Keep different traveler rosters independently replayable.
+    const isDuplicate = history.some(entry => {
+      const previous = historyTravelerCounts(entry);
+      return (
         entry.originCode === search.originCode &&
         entry.destinationCode === search.destinationCode &&
-        entry.departureDate === search.departureDate
-    );
+        entry.departureDate === search.departureDate &&
+        previous.adults === party.adults &&
+        previous.children === party.children &&
+        previous.infants === party.infants
+      );
+    });
 
     if (isDuplicate) return;
 
@@ -147,12 +158,15 @@ export function SearchHistory({
         toast.error(t("common.error"));
         return;
       }
+      const party = historyTravelerCounts(entry);
       const params = new URLSearchParams({
         origin: String(originId),
         destination: String(destinationId),
         date: entry.departureDate,
         cabin: entry.cabinClass,
-        passengers: entry.passengers.toString(),
+        adults: String(party.adults),
+        children: String(party.children),
+        infants: String(party.infants),
       });
       setLocation(`/search?${params.toString()}`);
     }

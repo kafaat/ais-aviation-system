@@ -206,9 +206,14 @@ function SearchResultsContent({ search }: { search: string }) {
         departureDate: civilDay(params.departureDate),
         cabinClass: "economy",
         passengers: passengerCount,
+        party: {
+          adults: preferences.adults,
+          children: preferences.children,
+          infants: preferences.infants,
+        },
       });
     }
-  }, [flights, params, passengerCount]);
+  }, [flights, params, passengerCount, preferences]);
 
   // Filter and sort flights based on selected filters
   const filteredFlights = useMemo(() => {

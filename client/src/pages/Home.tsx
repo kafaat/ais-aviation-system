@@ -39,6 +39,8 @@ import {
   isCivilDay,
   preferenceParams,
   validTravelerCounts,
+  historyTravelerCounts,
+  type TravelerCounts,
 } from "@shared/ibe-search";
 import {
   Plane,
@@ -174,8 +176,15 @@ export default function Home() {
       originCode: string;
       destinationCode: string;
       departureDate: string;
+      passengers: number;
+      party?: TravelerCounts;
     }) => {
       if (!airports) return;
+      setPreferences(current => ({
+        ...current,
+        ...historyTravelerCounts(search),
+      }));
+      setSearchType("oneWay");
 
       // Find airport IDs from codes
       const originAirport = airports.find(a => a.code === search.originCode);

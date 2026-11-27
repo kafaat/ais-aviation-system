@@ -67,6 +67,18 @@ export function validTravelerCounts(value: TravelerCounts): boolean {
   );
 }
 
+/** Older search history stored only a total, with no traveler breakdown. */
+export function historyTravelerCounts(entry: {
+  party?: TravelerCounts;
+  passengers: number;
+}): TravelerCounts {
+  if (entry.party && validTravelerCounts(entry.party)) return entry.party;
+  const legacy = { adults: entry.passengers, children: 0, infants: 0 };
+  return validTravelerCounts(legacy)
+    ? legacy
+    : { adults: 1, children: 0, infants: 0 };
+}
+
 export function searchPreferences(search: string): SearchPreferences {
   const outer = new URLSearchParams(search);
   // Flight selection carries the original search through authentication/back.
