@@ -1,3 +1,4 @@
+import { lockBookingUserTenants } from "./access-control.service";
 import { setCouponCheckIn } from "./ticket-coupons.service";
 import { manifestBookingCondition } from "./flight-state.service";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -926,7 +927,7 @@ export async function selectSeat(
  * The transaction revalidates both; this is not a user-supplied bypass.
  */
 export interface SeatReleaseAuthorization {
-  actor: { userId: number; tenantId: number | null };
+  actor: { userId: number };
   expected: { bookingId: number; passengerId: number | null };
 }
 
@@ -944,7 +945,7 @@ export async function releaseSeat(
       message: "Seat assignment changed; refresh and retry",
     });
   return database.transaction(async db => {
-    // Match seat selection and departure operations: booking, flight,
+    // Match seat selection and departure operations: booking, purchaser, flight,
     // passenger, then seat. Lock the expected booking, never a replacement's.
     const [booking] = await db
       .select({
@@ -959,16 +960,9 @@ export async function releaseSeat(
       )
       .limit(1)
       .for("update");
-    if (!booking)
+    if (!booking || booking.userId !== actor.userId)
       throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-    if (
-      booking.userId !== actor.userId ||
-      (booking.tenantId != null && booking.tenantId !== actor.tenantId)
-    )
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Booking not found",
-      });
+    await lockBookingUserTenants(db, booking.tenantId, [actor.userId]);
 
     const [flight] = await db
       .select({ id: flights.id, dcsClosedAt: flights.dcsClosedAt })

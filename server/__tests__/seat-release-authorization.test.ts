@@ -18,7 +18,7 @@ import {
 // This rollback-capable boundary double exercises authorization and state
 // transitions. The native acceptance suite separately exercises MySQL races.
 const authorization: SeatReleaseAuthorization = {
-  actor: { userId: 7, tenantId: 1 },
+  actor: { userId: 7 },
   expected: { bookingId: 3, passengerId: 4 },
 };
 let fixture: ReturnType<typeof transactionMemory>;
@@ -42,6 +42,10 @@ const snapshot = () =>
 
 beforeEach(() => {
   fixture = transactionMemory({
+    users: [
+      { id: 7, tenantId: 1 },
+      { id: 8, tenantId: 1 },
+    ],
     bookings: [
       { id: 3, userId: 7, tenantId: 1, flightId: 11, deletedAt: null },
       { id: 9, userId: 8, tenantId: 1, flightId: 11, deletedAt: null },
@@ -86,29 +90,36 @@ describe("transaction-bound seat release authorization", () => {
     expect(passenger().seatNumber).toBeNull();
     expect(fixture.lockedTables).toEqual([
       "bookings",
+      "users",
       "flights",
       "passengers",
       "seat_inventory",
     ]);
   });
 
-  it.each([
-    ["another owner", 8, 1],
-    ["another tenant", 7, 2],
-    ["a missing tenant", 7, null],
-  ] as const)(
-    "rejects %s without changing state",
-    async (_, userId, tenantId) => {
+  it.each(["another owner", "reassigned buyer", "deleted buyer"])(
+    "refuses %s using current database identity",
+    async scenario => {
+      if (scenario === "reassigned buyer")
+        fixture.rows("users")[0].tenantId = 2;
+      if (scenario === "deleted buyer") fixture.rows("users").splice(0, 1);
       const before = snapshot();
       await expect(
         releaseSeat(11, "1A", {
           ...authorization,
-          actor: { userId, tenantId },
+          actor: { userId: scenario === "another owner" ? 8 : 7 },
         })
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(snapshot()).toEqual(before);
     }
   );
+
+  it("allows a personal buyer's exact owned assignment without an airline assignment", async () => {
+    fixture.rows("users")[0].tenantId = null;
+    await expect(
+      caller(7, null).releaseSeat({ flightId: 11, seatNumber: "1A" })
+    ).resolves.toMatchObject({ success: true });
+  });
 
   it.each([
     ["another booking", 9, 6],

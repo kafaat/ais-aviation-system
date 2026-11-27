@@ -327,7 +327,7 @@ export const seatMapRouter = router({
         input.flightId,
         input.seatNumber,
         {
-          actor: { userId: ctx.user.id, tenantId: ctx.tenantId },
+          actor: { userId: ctx.user.id },
           expected,
         }
       );
