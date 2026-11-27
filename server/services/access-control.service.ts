@@ -49,7 +49,8 @@ export const purchaserScope = (tenantId: number | null | undefined) =>
 export async function lockBookingUserTenants(
   tx: SettlementTx,
   bookingTenantId: number | null,
-  userIds: readonly number[]
+  userIds: readonly number[],
+  requestTenantId?: number | null
 ) {
   const ids = [...new Set(userIds)];
   const actors = await tx
@@ -61,7 +62,10 @@ export async function lockBookingUserTenants(
   if (
     actors.length !== ids.length ||
     actors.some(
-      actor => actor.tenantId != null && actor.tenantId !== bookingTenantId
+      actor =>
+        actor.tenantId != null &&
+        (actor.tenantId !== bookingTenantId ||
+          (requestTenantId !== undefined && actor.tenantId !== requestTenantId))
     )
   )
     throw new TRPCError({

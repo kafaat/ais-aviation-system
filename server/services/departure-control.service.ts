@@ -61,7 +61,8 @@ export async function lockDepartureContext(
   tx: SettlementTx,
   bookingId: number,
   requestedFlightId?: number,
-  purchaserId?: number
+  purchaserId?: number,
+  requestTenantId?: number | null
 ) {
   const [booking] = await tx
     .select()
@@ -73,7 +74,12 @@ export async function lockDepartureContext(
   if (purchaserId !== undefined) {
     if (booking.userId !== purchaserId)
       throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-    await lockBookingUserTenants(tx, booking.tenantId, [purchaserId]);
+    await lockBookingUserTenants(
+      tx,
+      booking.tenantId,
+      [purchaserId],
+      requestTenantId
+    );
   }
   const ordinaryRefundHold = await ordinaryRefundRequiresDepartureHold(
     tx,

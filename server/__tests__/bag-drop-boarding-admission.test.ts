@@ -20,6 +20,7 @@ const anonymous = () =>
 function itinerary() {
   const flightIds = [11, 12];
   const fixture = transactionMemory({
+    users: [{ id: 7, tenantId: 1 }],
     bookings: [
       {
         id: 3,

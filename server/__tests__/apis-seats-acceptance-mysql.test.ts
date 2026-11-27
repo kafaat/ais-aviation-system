@@ -1150,16 +1150,26 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
     }
   });
 
-  it.each(["bookings", "users"] as const)(
-    "waits for a competing transfer on %s and reauthorizes seat release",
-    async table => {
-      await adminSeats().initializeFlightSeats({ flightId: 41, seatMapId: 51 });
-      await seats().selectSeat({
-        flightId: 41,
-        seatNumber: "1A",
-        bookingId: 71,
-        passengerId: 81,
-      });
+  it.each([
+    ["bookings", "release"],
+    ["users", "release"],
+    ["users", "issue"],
+  ] as const)(
+    "waits for a competing transfer on %s and reauthorizes %s",
+    async (table, action) => {
+      if (action === "issue") await checkedInPassenger();
+      else {
+        await adminSeats().initializeFlightSeats({
+          flightId: 41,
+          seatMapId: 51,
+        });
+        await seats().selectSeat({
+          flightId: 41,
+          seatNumber: "1A",
+          bookingId: 71,
+          passengerId: 81,
+        });
+      }
       const beforeSeats = await db.select().from(schema.seatInventory);
       const beforePassengers = await db.select().from(schema.passengers);
       const connection = await pool!.getConnection();
@@ -1172,7 +1182,10 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
           : /^select .* from `users`.* for update$/i
       );
       state.db = releaserDb;
-      const releasing = seats().releaseSeat({ flightId: 41, seatNumber: "1A" });
+      const releasing =
+        action === "issue"
+          ? passes().issue({ bookingId: 71, passengerId: 81, flightId: 41 })
+          : seats().releaseSeat({ flightId: 41, seatNumber: "1A" });
       let settled = false;
       const outcome = releasing.then(
         value => {
@@ -1376,6 +1389,31 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
       expect((await assignedSeat()).boardingPassIssued).toBe(false);
     }
   );
+
+  it("issues checked-in credentials to the actual unassigned purchaser on an airline booking", async () => {
+    await checkedInPassenger();
+    await db
+      .update(schema.users)
+      .set({ tenantId: null })
+      .where(eq(schema.users.id, 9));
+    const personal = boardingPassRouter.createCaller(context(9, null));
+    expect(
+      await personal.issue({ bookingId: 71, passengerId: 81, flightId: 41 })
+    ).toMatchObject({ token: expect.any(String), bcbp: expect.any(String) });
+    expect((await assignedSeat()).boardingPassIssued).toBe(true);
+  });
+
+  it("checks the current buyer before issuing credentials from an earlier request context", async () => {
+    await checkedInPassenger();
+    await db
+      .update(schema.users)
+      .set({ tenantId: 4 })
+      .where(eq(schema.users.id, 9));
+    await expect(
+      passes().issue({ bookingId: 71, passengerId: 81, flightId: 41 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await assignedSeat()).boardingPassIssued).toBe(false);
+  });
 
   it("rejects an absent airline context on an assigned booking", async () => {
     await checkedInPassenger();

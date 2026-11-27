@@ -20,7 +20,8 @@ import {
   seatInventory,
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
-import { assertBookingOwnership, assertTenant } from "./access-control.service";
+import { isAdmin } from "./rbac.service";
+import { assertTenant } from "./access-control.service";
 import {
   assertDepartureOpen,
   lockDepartureContext,
@@ -139,9 +140,16 @@ export function verifyBoardingPass(
 }
 async function activePayload(
   tx: SettlementTx,
-  input: { bookingId: number; passengerId: number; flightId?: number }
+  input: { bookingId: number; passengerId: number; flightId?: number },
+  purchaser?: BoardingPassActor
 ) {
-  const c = await lockDepartureContext(tx, input.bookingId, input.flightId);
+  const c = await lockDepartureContext(
+    tx,
+    input.bookingId,
+    input.flightId,
+    purchaser?.userId,
+    purchaser?.tenantId
+  );
   assertDepartureOpen(c, "boarding");
   const [p] = await tx
     .select()
@@ -281,16 +289,14 @@ export async function issueBoardingPass(
 ): Promise<{ token: string; payload: BoardingPassPayload; bcbp: string }> {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
-  await assertBookingOwnership(input.bookingId, ctx.userId, ctx.role, {
-    tenantId: ctx.tenantId,
-  });
   return db.transaction(async tx => {
-    const active = await activePayload(tx, input);
-    // Bind every locked resource to the caller's current airline. Ownership
-    // alone is insufficient after an account or passenger changes tenant.
-    assertTenant(active.context.booking.tenantId, ctx.tenantId, ctx.role);
-    assertTenant(active.passenger.tenantId, ctx.tenantId, ctx.role);
-    assertTenant(active.context.flight.tenantId, ctx.tenantId, ctx.role);
+    const support = ctx.role !== undefined && isAdmin(ctx.role);
+    const active = await activePayload(tx, input, support ? undefined : ctx);
+    // A personal buyer may travel across airlines. Issuance still requires
+    // the passenger and flight to belong to the booked airline.
+    const bookedTenant = active.context.booking.tenantId;
+    assertTenant(active.passenger.tenantId, bookedTenant, ctx.role);
+    assertTenant(active.context.flight.tenantId, bookedTenant, ctx.role);
     const { payload, seat } = active;
     const secondsToDeparture = Math.floor(
       (Date.parse(payload.departureTime) - Date.now()) / 1000
