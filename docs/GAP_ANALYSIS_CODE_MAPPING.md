@@ -384,18 +384,18 @@ logger.info("Booking created", {
 
 ### ملفات جديدة مطلوبة
 
-| الملف                              | الوصف                          | Sprint |
-| ---------------------------------- | ------------------------------ | ------ |
-| `server/_core/errors.ts`           | Error contract موحد            | 3      |
+| الملف                              | الوصف                         | Sprint |
+| ---------------------------------- | ----------------------------- | ------ |
+| `server/_core/errors.ts`           | Error contract موحد           | 3      |
 | `server/_core/logger.ts`           | Logger محسّن مع correlation ID | 4      |
-| `server/_core/redis.ts`            | Redis client                   | 5      |
-| `server/services/cache.service.ts` | Caching service                | 5      |
-| `server/services/queue.service.ts` | Queue service                  | 5      |
-| `server/jobs/*.job.ts`             | Background jobs                | 5      |
-| `docker-compose.production.yml`    | Production setup               | 6      |
-| `nginx.conf`                       | Nginx config                   | 6      |
-| `tests/load/*.js`                  | Load tests                     | 6      |
-| `docs/GO_LIVE_RUNBOOK.md`          | Go-live guide                  | 6      |
+| `server/_core/redis.ts`            | Redis client                  | 5      |
+| `server/services/cache.service.ts` | Caching service               | 5      |
+| `server/services/queue.service.ts` | Queue service                 | 5      |
+| `server/jobs/*.job.ts`             | Background jobs               | 5      |
+| `docker-compose.production.yml`    | Production setup              | 6      |
+| `nginx.conf`                       | Nginx config                  | 6      |
+| `tests/load/*.js`                  | Load tests                    | 6      |
+| `docs/GO_LIVE_RUNBOOK.md`          | Go-live guide                 | 6      |
 
 ---
 

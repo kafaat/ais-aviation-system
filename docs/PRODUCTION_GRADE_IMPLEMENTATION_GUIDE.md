@@ -41,7 +41,7 @@
 | 10  | Background Queue       | ❌ لا يوجد     | ✅ Email + Retry + Recon   | P1       |
 | 11  | Observability          | ⚠️ جزئي        | ✅ Correlation ID + Sentry | P1       |
 | 12  | Health Checks          | ⚠️ جزئي        | ✅ DB + Redis + Queue      | P1       |
-| 13  | Backup/Restore Testing | ❌ لا يوجد     | ✅ مجرّب مرة               | P1       |
+| 13  | Backup/Restore Testing | ❌ لا يوجد     | ✅ مجرّب مرة                | P1       |
 
 ---
 

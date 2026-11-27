@@ -565,18 +565,18 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"];
 
 ### 12.1 النسب المئوية للجاهزية
 
-| المكون                   | النسبة | الحالة      |
-| ------------------------ | ------ | ----------- |
-| **Backend API**          | 90%    | ✅ ممتاز    |
+| المكون                   | النسبة | الحالة     |
+| ------------------------ | ------ | ---------- |
+| **Backend API**          | 90%    | ✅ ممتاز   |
 | **Frontend UI**          | 85%    | ✅ جيد جداً |
-| **Database Schema**      | 95%    | ✅ ممتاز    |
+| **Database Schema**      | 95%    | ✅ ممتاز   |
 | **Payment Integration**  | 85%    | ✅ جيد جداً |
-| **Security**             | 75%    | ⚠️ جيد      |
-| **Testing**              | 70%    | ⚠️ جيد      |
-| **Documentation**        | 65%    | ⚠️ مقبول    |
-| **Performance**          | 70%    | ⚠️ جيد      |
-| **Scalability**          | 60%    | ⚠️ مقبول    |
-| **Internationalization** | 50%    | ⚠️ محدود    |
+| **Security**             | 75%    | ⚠️ جيد     |
+| **Testing**              | 70%    | ⚠️ جيد     |
+| **Documentation**        | 65%    | ⚠️ مقبول   |
+| **Performance**          | 70%    | ⚠️ جيد     |
+| **Scalability**          | 60%    | ⚠️ مقبول   |
+| **Internationalization** | 50%    | ⚠️ محدود   |
 
 ### 12.2 التقييم الإجمالي
 

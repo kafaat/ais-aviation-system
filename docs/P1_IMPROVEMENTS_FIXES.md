@@ -354,7 +354,7 @@ async delPattern(pattern: string): Promise<void> {
 | 1   | Bug في idempotency error handling | P0    | ✅ مصلح |
 | 2   | Cleanup خاطئ (eq بدل lt)          | P0    | ✅ مصلح |
 | 3   | Recursion بدون حد أقصى            | P0    | ✅ مصلح |
-| 4   | Migration SQL محسّن               | P0    | ✅ مصلح |
+| 4   | Migration SQL محسّن                | P0    | ✅ مصلح |
 | 5   | Correlation header به مسافة       | P1    | ✅ مصلح |
 | 6   | enterWith قد يسبب تسريب           | P1    | ✅ مصلح |
 | 7   | Cache invalidation لا يعمل        | P1    | ✅ مصلح |

@@ -297,8 +297,7 @@ export default function OperationsControl() {
               {data.data.ownership.map(d => (
                 <p key={d.domain}>
                   {d.domain}:{" "}
-                  {d.accountableOwner ??
-                    l("لم يُعيّن مسؤول", "Owner unassigned")}{" "}
+                  {d.accountableOwner ?? l("لم يُعيّن مسؤول", "Owner unassigned")}{" "}
                   · {d.onCall ?? l("لم تُعيّن مناوبة", "On-call unassigned")}
                 </p>
               ))}
@@ -392,10 +391,7 @@ export default function OperationsControl() {
             />
           </Label>
           <Label>
-            {l(
-              "معرّفات الحجوزات مفصولة بفاصلة",
-              "Booking IDs, comma separated"
-            )}
+            {l("معرّفات الحجوزات مفصولة بفاصلة", "Booking IDs, comma separated")}
             <Input
               value={bookingIds}
               onChange={e => setBookingIds(e.target.value)}
