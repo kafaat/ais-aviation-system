@@ -13,8 +13,20 @@ vi.mock("../../db", () => ({
 // Mock the redis cache service
 vi.mock("../../services/redis-cache.service", () => ({
   redisCacheService: {
-    getRaw: vi.fn().mockResolvedValue(null),
-    setRaw: vi.fn().mockResolvedValue(undefined),
+    captureGeneration: vi.fn().mockResolvedValue({
+      namespace: "pricing",
+      version: 0,
+      epoch: 0,
+      durable: "0.0.0.0.0",
+    }),
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(undefined),
+  },
+  CacheNamespace: {
+    PRICING: "pricing",
+    SEARCH: "search",
+    FLIGHT: "flight",
+    AIRPORTS: "airports",
   },
   CacheTTL: {
     FLIGHT_SEARCH: 300,

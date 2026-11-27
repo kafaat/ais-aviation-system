@@ -1,3 +1,4 @@
+import { bookingHistoryPage } from "../contracts/booking-history-page";
 import { isAdmin } from "../services/rbac.service";
 import { initialAncillarySchema } from "../services/initial-booking-ancillaries";
 import { checkInPassengers } from "../services/departure-control.service";
@@ -155,6 +156,18 @@ export const bookingsRouter = router({
     .query(async ({ ctx }) => {
       return await bookingsService.getUserBookings(ctx.user.id, ctx.tenantId);
     }),
+
+  myBookingsPage: protectedProcedure
+    .input(bookingHistoryPage)
+    .output(
+      z.object({
+        items: responseContracts.myBookings,
+        nextCursor: z.object({ id: z.number(), value: z.number() }).nullable(),
+      })
+    )
+    .query(({ ctx, input }) =>
+      bookingsService.getUserBookingsPage(ctx.user.id, ctx.tenantId, input)
+    ),
 
   getByPNR: protectedProcedure
     .meta({

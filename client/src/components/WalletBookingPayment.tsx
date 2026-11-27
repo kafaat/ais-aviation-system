@@ -26,13 +26,19 @@ export function WalletBookingPayment({
   const wallet = trpc.wallet.balance.useQuery(undefined, { enabled: review });
   const payment = trpc.wallet.pay.useMutation({
     onSuccess: () => {
-      void utils.bookings.myBookings.invalidate();
+      void Promise.all([
+        utils.bookings.myBookings.invalidate(),
+        utils.bookings.myBookingsPage.invalidate(),
+      ]);
       void utils.wallet.balance.invalidate();
       void utils.wallet.transactions.invalidate();
       navigate("/payment-history?wallet=history");
     },
     onError: () => {
-      void utils.bookings.myBookings.invalidate();
+      void Promise.all([
+        utils.bookings.myBookings.invalidate(),
+        utils.bookings.myBookingsPage.invalidate(),
+      ]);
       void wallet.refetch();
     },
     onSettled: () => onPaymentSettled?.(),

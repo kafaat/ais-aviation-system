@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { createConnection } from "mysql2/promise";
+import {
+  createConnection,
+  type ResultSetHeader,
+  type RowDataPacket,
+} from "mysql2/promise";
 import { eq, inArray } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import {
@@ -14,6 +18,54 @@ export async function verifyDataAudit(
   ownerId: number,
   check: (name: string, run: () => Promise<void>) => Promise<void>
 ) {
+  await check(
+    "coupon audit detects missing parents and a passenger from another booking",
+    async () => {
+      const connection = await createConnection(process.env.DATABASE_URL!);
+      try {
+        await connection.beginTransaction();
+        const [passenger] = await connection.execute<ResultSetHeader>(
+          "INSERT INTO passengers (bookingId, firstName, lastName) VALUES (?, 'Audit', 'Fixture')",
+          [ownerId]
+        );
+        const parent = [ownerId, passenger.insertId, ownerId];
+        const dangling = 2147483647;
+        const fixtures = [
+          parent,
+          [dangling, passenger.insertId, ownerId],
+          [ownerId, dangling, ownerId],
+          [ownerId, passenger.insertId, dangling],
+          [ownerId + 1, passenger.insertId, ownerId],
+        ];
+        const ids: number[] = [];
+        for (const [index, keys] of fixtures.entries()) {
+          const [coupon] = await connection.execute<ResultSetHeader>(
+            "INSERT INTO ticket_coupons (bookingId, passengerId, flightId, ticketNumber, couponNumber, status) VALUES (?, ?, ?, '9990000004999', ?, 'unverified')",
+            [...keys, index + 1]
+          );
+          ids.push(coupon.insertId);
+        }
+        const finding = forensicFindings.find(
+          f => f.id === "coupon_reference_mismatch"
+        );
+        assert(finding);
+        const [rows] = await connection.query<RowDataPacket[]>(
+          `SELECT recordId FROM (${finding.sql}) findings WHERE recordId IN (?) ORDER BY recordId`,
+          [ids]
+        );
+        assert.deepEqual(
+          rows.map(row => row.recordId),
+          ids.slice(1)
+        );
+      } finally {
+        try {
+          await connection.rollback();
+        } finally {
+          await connection.end();
+        }
+      }
+    }
+  );
   await check(
     "forensic audit counts corrupt identities without writes or passenger disclosure",
     async () => {

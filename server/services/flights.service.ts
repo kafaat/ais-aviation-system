@@ -14,7 +14,7 @@ import {
   type RbdAvailability,
 } from "./rbd-inventory.service";
 import { getDb } from "../db";
-import { countActiveHolds } from "./inventory-capacity.service";
+import { readCabinHoldTotals } from "./inventory-capacity.service";
 
 // Only known cache date fields are restored. Public contracts remain strict.
 const cachedDate = z.union([
@@ -69,50 +69,36 @@ export async function attachRbdAvailability<
   // cabin contract. Production search already requires the database, while an
   // omitted field tells clients that no RBD inventory was supplied.
   if (!database) return rows;
+  const now = new Date();
   const availability = await getFlightRbdAvailability(
     database,
-    rows.map(row => row.id)
+    rows.map(row => row.id),
+    now
   );
-  return await Promise.all(
-    rows.map(async row => {
-      const physical = {
-        economy: Math.max(
-          0,
-          row.economyAvailable -
-            (await countActiveHolds(
-              database,
-              row.id,
-              "economy",
-              undefined,
-              false
-            ))
-        ),
-        business: Math.max(
-          0,
-          row.businessAvailable -
-            (await countActiveHolds(
-              database,
-              row.id,
-              "business",
-              undefined,
-              false
-            ))
-        ),
-      };
-      const classes = availability.get(row.id);
-      if (!classes?.length) return row;
-      return {
-        ...row,
-        fareClassAvailability: classes.map(item => ({
-          ...item,
-          availableSeats: Math.min(
-            item.availableSeats,
-            physical[item.cabinClass]
-          ),
-        })),
-      };
-    })
+  const holds = await readCabinHoldTotals(
+    database,
+    [...availability.keys()],
+    now
   );
+  return rows.map(row => {
+    const classes = availability.get(row.id);
+    if (!classes?.length) return row;
+    const held = holds.get(row.id);
+    const physical = {
+      economy: Math.max(0, row.economyAvailable - (held?.economy ?? 0)),
+      business: Math.max(0, row.businessAvailable - (held?.business ?? 0)),
+    };
+    return {
+      ...row,
+      fareClassAvailability: classes.map(item => ({
+        ...item,
+        availableSeats: Math.min(
+          item.availableSeats,
+          physical[item.cabinClass]
+        ),
+      })),
+    };
+  });
 }
 
 /** Overlay the live seat counts and status onto cached rows. With
@@ -173,7 +159,10 @@ export async function searchFlights(
     const parsed = cachedSearch.safeParse(cached);
     if (parsed.success)
       return attachRbdAvailability(
-        await overlayLiveState(parsed.data, { sellable: true })
+        await overlayLiveState(
+          parsed.data.map(({ fareClassAvailability: _cached, ...row }) => row),
+          { sellable: true }
+        )
       );
 
     // Fetch from database
@@ -183,7 +172,7 @@ export async function searchFlights(
     // Cache the results
     await redisCacheService.cacheFlightSearch(
       cacheParams,
-      results,
+      rows,
       CacheTTL.FLIGHT_SEARCH,
       generation
     );

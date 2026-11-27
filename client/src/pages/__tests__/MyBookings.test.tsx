@@ -4,6 +4,8 @@ import MyBookings from "../MyBookings";
 
 const state = vi.hoisted(() => ({
   failed: false,
+  next: false,
+  fetchNextPage: vi.fn(),
   data: [] as Array<Record<string, unknown>> | undefined,
   targets: vi.fn(),
   fileClaim: vi.fn(),
@@ -18,9 +20,12 @@ vi.mock("@/lib/trpc", () => ({
     },
     bookings: {
       getDepartureState: { useQuery: () => ({ data: [] }) },
-      myBookings: {
-        useQuery: () => ({
-          data: state.data,
+      myBookingsPage: {
+        useQuery: () => ({ data: undefined }),
+        useInfiniteQuery: () => ({
+          hasNextPage: state.next,
+          fetchNextPage: state.fetchNextPage,
+          data: state.data ? { pages: [{ items: state.data }] } : undefined,
           isLoading: false,
           error: state.failed ? new Error("Synthetic source failure") : null,
           refetch: state.retry,
@@ -56,6 +61,8 @@ vi.mock("react-i18next", () => ({
 }));
 beforeEach(() => {
   state.failed = false;
+  state.next = false;
+  state.fetchNextPage.mockClear();
   state.data = [];
   state.retry.mockClear();
 });
@@ -169,4 +176,16 @@ it("shows the recorded booking date without assigning it to a later cancellation
   );
   expect(screen.getByText("bookingTimeline.bookingCancelled")).toBeVisible();
   expect(screen.getAllByText(/ago$/)).toHaveLength(1);
+});
+
+it("requests another page only when the API supplies a continuation", () => {
+  state.next = true;
+  const view = render(<MyBookings />);
+  fireEvent.click(screen.getByRole("button", { name: "Load more bookings" }));
+  expect(state.fetchNextPage).toHaveBeenCalledOnce();
+  state.next = false;
+  view.rerender(<MyBookings />);
+  expect(
+    screen.queryByRole("button", { name: "Load more bookings" })
+  ).toBeNull();
 });

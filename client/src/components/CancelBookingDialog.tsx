@@ -78,7 +78,10 @@ export function CancelBookingDialog({
   );
   const refreshAfterSuccess = () => {
     setAcceptedZeroQuote(null);
-    void utils.bookings.myBookings.invalidate();
+    void Promise.all([
+      utils.bookings.myBookings.invalidate(),
+      utils.bookings.myBookingsPage.invalidate(),
+    ]);
     void savedReceipt.refetch();
     onSuccess();
   };
@@ -225,7 +228,10 @@ export function CancelBookingDialog({
             data={splitCancellation.data}
             onRefresh={() => {
               void splitCancellation.refetch();
-              void utils.bookings.myBookings.invalidate();
+              void Promise.all([
+                utils.bookings.myBookings.invalidate(),
+                utils.bookings.myBookingsPage.invalidate(),
+              ]);
             }}
           />
         ) : (

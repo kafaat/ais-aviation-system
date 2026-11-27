@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { inventoryLocks, seatHolds } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -62,6 +62,53 @@ export function availableSeatsExpression(
        where ${canonicalHoldCondition(flightId, cabin, now)})
     - (select coalesce(sum(${seatHolds.seats}), 0) from ${seatHolds}
        where ${legacyHoldCondition(flightId, cabin, now)}))`.mapWith(Number);
+}
+
+/** Aggregate cabin holds for read-only search; writers use the locking path below. */
+export async function readCabinHoldTotals(
+  tx: SettlementTx,
+  flightIds: number[],
+  now: Date
+) {
+  const totals = new Map<number, { economy: number; business: number }>();
+  if (!flightIds.length) return totals;
+  const canonical = await tx
+    .select({
+      flightId: inventoryLocks.flightId,
+      cabin: inventoryLocks.cabinClass,
+      seats: sql<number>`SUM(${inventoryLocks.numberOfSeats})`.mapWith(Number),
+    })
+    .from(inventoryLocks)
+    .where(
+      and(
+        inArray(inventoryLocks.flightId, flightIds),
+        eq(inventoryLocks.status, "active"),
+        gt(inventoryLocks.expiresAt, now)
+      )
+    )
+    .groupBy(inventoryLocks.flightId, inventoryLocks.cabinClass);
+  const legacy = await tx
+    .select({
+      flightId: seatHolds.flightId,
+      cabin: seatHolds.cabinClass,
+      seats: sql<number>`SUM(${seatHolds.seats})`.mapWith(Number),
+    })
+    .from(seatHolds)
+    .where(
+      and(
+        inArray(seatHolds.flightId, flightIds),
+        eq(seatHolds.status, "active"),
+        gt(seatHolds.expiresAt, now),
+        isNull(seatHolds.inventoryLockId)
+      )
+    )
+    .groupBy(seatHolds.flightId, seatHolds.cabinClass);
+  for (const row of [...canonical, ...legacy]) {
+    const cabins = totals.get(row.flightId) ?? { economy: 0, business: 0 };
+    cabins[row.cabin] += row.seats;
+    totals.set(row.flightId, cabins);
+  }
+  return totals;
 }
 
 /** All writers lock the flight before counting or creating holds. Legacy,

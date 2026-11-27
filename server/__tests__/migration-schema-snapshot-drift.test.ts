@@ -38,6 +38,7 @@ describe("Drizzle schema/snapshot authority", () => {
             ]);
           if (
             sql.includes("information_schema.STATISTICS ") ||
+            sql.includes("information_schema.TRIGGERS ") ||
             sql.includes("information_schema.TABLE_CONSTRAINTS ")
           )
             return Promise.resolve([[]]);
@@ -50,6 +51,29 @@ describe("Drizzle schema/snapshot authority", () => {
     expect(differences(before, after)).toEqual([]);
     expect(JSON.stringify(after)).toBe(JSON.stringify(before));
     expect(after.bookings.columns.id.type).toBe("int");
+  });
+
+  it("carries SQL-defined triggers only from their journal boundary onwards", () => {
+    const history = readHistory();
+    const index = history.findIndex(
+      m => m.tag === "0058_supplier_finance_control"
+    );
+    expect(index).toBeGreaterThan(0);
+    expect(
+      Object.keys(history[index - 1].snapshot.triggers ?? {})
+    ).toHaveLength(0);
+    const introduced = history[index].snapshot.triggers ?? {};
+    expect(Object.keys(introduced)).toHaveLength(6);
+    expect(introduced.supplier_finance_no_update).toMatchObject({
+      table: "supplier_finance_events",
+      timing: "BEFORE",
+      event: "UPDATE",
+    });
+    const atIntroduction = snapshotContract(history[index].snapshot);
+    expect(
+      atIntroduction.supplier_finance_events.triggers
+        ?.supplier_finance_no_update
+    ).toEqual(introduced.supplier_finance_no_update);
   });
 
   it("matches the complete generated schema including re-exports, columns, indexes and constraints", async () => {

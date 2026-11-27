@@ -1,11 +1,11 @@
 import { TRPCError } from "@trpc/server";
 export function calculateModificationFee(
   originalAmount: number,
-  departureTime: Date
+  departureTime: Date,
+  asOf = new Date()
 ): number {
-  const now = new Date();
   const hoursUntilDeparture =
-    (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    (departureTime.getTime() - asOf.getTime()) / (1000 * 60 * 60);
 
   let feePercentage: number;
 

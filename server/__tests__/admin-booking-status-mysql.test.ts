@@ -178,6 +178,55 @@ nativeDescribe.sequential(
       expect(await bookingRow()).toMatchObject({ status: "completed" });
     });
 
+    it("rolls back completion when its audit cannot be persisted, then records one transition across retries", async () => {
+      await markPaidConfirmed();
+      await fixture.pool.query(
+        "UPDATE flights SET status='completed' WHERE id=41"
+      );
+      const complete = () =>
+        admin().admin.updateBookingStatus({
+          bookingId: 71,
+          status: "completed",
+        });
+      const changes = async () =>
+        (await fixture.db.select().from(schema.auditLogs)).filter(
+          row => row.eventType === "BOOKING_MODIFIED"
+        );
+      const before = await bookingRow();
+      await fixture.pool
+        .query(`CREATE TRIGGER reject_completion_audit BEFORE INSERT ON audit_logs
+        FOR EACH ROW BEGIN IF NEW.eventType='BOOKING_MODIFIED' THEN
+          SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Synthetic completion audit failure';
+        END IF; END`);
+      try {
+        await expect(complete()).rejects.toThrow();
+        expect(await bookingRow()).toEqual(before);
+        expect(await changes()).toHaveLength(0);
+      } finally {
+        await fixture.pool.query("DROP TRIGGER reject_completion_audit");
+      }
+      await expect(complete()).resolves.toEqual({ success: true });
+      await expect(complete()).resolves.toEqual({ success: true });
+      expect(await bookingRow()).toMatchObject({ status: "completed" });
+      expect(await changes()).toEqual([
+        expect.objectContaining({
+          eventCategory: "booking",
+          outcome: "success",
+          severity: "low",
+          userId: 20,
+          userRole: "admin",
+          actorType: "user",
+          sourceIp: "198.51.100.3",
+          requestId: "req-native-r3",
+          resourceType: "booking",
+          resourceId: "NM0071",
+          previousValue: JSON.stringify({ status: "confirmed" }),
+          newValue: JSON.stringify({ status: "completed" }),
+          changeDescription: "Booking NM0071 modified",
+        }),
+      ]);
+    });
+
     it("answers an unknown booking with NOT_FOUND", async () => {
       await expect(
         admin().admin.updateBookingStatus({

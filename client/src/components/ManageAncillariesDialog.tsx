@@ -291,7 +291,10 @@ export function ManageAncillariesDialog({
       utils.bookings.getDepartureState.invalidate({ bookingId });
       utils.seatMap.getFlightSeatMap.invalidate();
       utils.ancillary.getBookingAncillaries.invalidate({ bookingId });
-      utils.bookings.myBookings.invalidate();
+      Promise.all([
+        utils.bookings.myBookings.invalidate(),
+        utils.bookings.myBookingsPage.invalidate(),
+      ]);
       toast.success(t("manageAncillaries.addSuccess"));
     },
     onError: error => {
@@ -310,7 +313,10 @@ export function ManageAncillariesDialog({
       utils.bookings.getDepartureState.invalidate({ bookingId });
       utils.seatMap.getFlightSeatMap.invalidate();
       utils.ancillary.getBookingAncillaries.invalidate({ bookingId });
-      utils.bookings.myBookings.invalidate();
+      Promise.all([
+        utils.bookings.myBookings.invalidate(),
+        utils.bookings.myBookingsPage.invalidate(),
+      ]);
       toast.success(t("manageAncillaries.removeSuccess"));
     },
     onError: error => {

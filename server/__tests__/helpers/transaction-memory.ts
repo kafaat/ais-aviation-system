@@ -61,6 +61,7 @@ export function transactionMemory(seed: Record<string, any[]>) {
       let table: any;
       let predicate: any;
       let limit = Infinity;
+      let groupColumns: string[] = [];
       let ordering: Array<{ column: string; descending: boolean }> = [];
       const result = () => {
         const found = rows(table)
@@ -84,22 +85,37 @@ export function transactionMemory(seed: Record<string, any[]>) {
         if (!projection) return structuredClone(found);
         const entries = Object.entries(projection);
         if (entries.some(([, v]) => v instanceof SQL)) {
-          return [
+          const partitions = new Map<string, typeof found>();
+          for (const row of found) {
+            const key = JSON.stringify(groupColumns.map(c => row[c]));
+            const group = partitions.get(key);
+            if (group) group.push(row);
+            else partitions.set(key, [row]);
+          }
+          // An ungrouped aggregate emits a row even over empty input.
+          const groups = groupColumns.length
+            ? [...partitions.values()]
+            : [found];
+          return groups.map(group =>
             Object.fromEntries(
               entries.map(([key, value]) => {
-                if (!(value instanceof SQL))
+                if (!(value instanceof SQL)) {
+                  const column = (value as { name: string }).name;
+                  if (groupColumns.includes(column))
+                    return [key, group[0][column]];
                   throw new Error(
                     "Mixed aggregate projection requires a grouped fixture"
                   );
+                }
                 const query = dialect.sqlToQuery(value).sql;
-                if (/count\(\*\)/i.test(query)) return [key, found.length];
+                if (/count\(\*\)/i.test(query)) return [key, group.length];
                 const aggregate = query.match(
                   /(SUM|MAX|MIN)\(`[^`]+`\.`([^`]+)`\)/i
                 );
                 if (!aggregate)
                   throw new Error(`Unsupported aggregate: ${query}`);
                 const [, fn, column] = aggregate;
-                const values = found.map(row => Number(row[column] ?? 0));
+                const values = group.map(row => Number(row[column] ?? 0));
                 if (fn.toUpperCase() === "SUM")
                   return [key, values.reduce((sum, v) => sum + v, 0)];
                 if (!values.length) return [key, null];
@@ -110,8 +126,8 @@ export function transactionMemory(seed: Record<string, any[]>) {
                     : Math.min(...values),
                 ];
               })
-            ),
-          ];
+            )
+          );
         }
         return found.map(row =>
           Object.fromEntries(
@@ -129,6 +145,10 @@ export function transactionMemory(seed: Record<string, any[]>) {
         },
         where(p: any) {
           predicate = p;
+          return chain;
+        },
+        groupBy(...columns: { name: string }[]) {
+          groupColumns = columns.map(column => column.name);
           return chain;
         },
         limit(n: number) {

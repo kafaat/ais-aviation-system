@@ -13,7 +13,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { currentTrace, runWithTrace } from "./trace";
+import { currentTrace, runWithTrace } from "./trace-storage";
 import {
   formatTraceparent,
   type TraceContext,

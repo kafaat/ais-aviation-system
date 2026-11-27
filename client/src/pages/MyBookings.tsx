@@ -138,9 +138,33 @@ export default function MyBookings() {
     );
     return () => clearTimeout(timer);
   }, [paymentReturn]);
-  const bookingsQuery = trpc.bookings.myBookings.useQuery(undefined, {
-    enabled: isAuthenticated,
+  const endExclusive = endDate ? new Date(endDate + "T00:00:00") : undefined;
+  endExclusive?.setDate(endExclusive.getDate() + 1);
+  const bookingsQuery = trpc.bookings.myBookingsPage.useInfiniteQuery(
+    {
+      sort: sortOption,
+      status: statusFilter === "all" ? undefined : statusFilter,
+      afterDate: startDate ? new Date(startDate + "T00:00:00") : undefined,
+      beforeDate: endExclusive,
+    },
+    {
+      enabled: isAuthenticated,
+      getNextPageParam: page => page.nextCursor ?? undefined,
+    }
+  );
+  const [exchangeId] = useState(() => {
+    const raw =
+      new URLSearchParams(window.location.search).get("exchange") ?? "";
+    return /^[1-9]\d{0,9}$/.test(raw) && Number(raw) <= 2147483647
+      ? Number(raw)
+      : undefined;
   });
+  const exchange = trpc.bookings.myBookingsPage.useQuery(
+    { bookingId: exchangeId, limit: 1 },
+    {
+      enabled: isAuthenticated && exchangeId !== undefined,
+    }
+  );
   const returnedBookingId = paymentReturn?.bookingId ?? null;
   const returnCheckout = trpc.payments.getCheckoutState.useQuery(
     { bookingId: returnedBookingId ?? 1 },
@@ -179,24 +203,28 @@ export default function MyBookings() {
                 : pollExpired
                   ? "timeout"
                   : "pending";
-  const { data: bookings, isLoading } = bookingsQuery;
+  const { isLoading } = bookingsQuery;
+  const bookings = useMemo(
+    () => bookingsQuery.data?.pages.flatMap(page => page.items),
+    [bookingsQuery.data]
+  );
   type Booking = NonNullable<typeof bookings>[number];
 
   // Both the agent handoff and a provider return open the owner's booking.
   // Payment and exchange status always come from the server.
   useEffect(() => {
-    if (!bookings) return;
+    if (!exchange.data) return;
     const url = new URL(window.location.href);
     const id = url.searchParams.get("exchange");
     if (!id) return;
-    const owned = bookings.find(b => String(b.id) === id);
+    const owned = exchange.data.items.find(b => String(b.id) === id);
     if (owned?.canExchange) {
       setSelectedBooking(owned);
       setModifyDialogOpen(true);
     }
     url.searchParams.delete("exchange");
     window.history.replaceState(window.history.state, "", url);
-  }, [bookings]);
+  }, [exchange.data]);
 
   // Get flight IDs for WebSocket subscription
   const flightIds = useMemo<number[]>(
@@ -216,56 +244,7 @@ export default function MyBookings() {
       enabled: isAuthenticated && flightIds.length > 0,
     });
 
-  // Filter and sort bookings
-  const filteredAndSortedBookings = useMemo(() => {
-    if (!bookings) return [];
-
-    let filtered = [...bookings];
-
-    // Apply status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(booking => booking.status === statusFilter);
-    }
-
-    // Apply date range filter
-    if (startDate) {
-      const start = new Date(startDate);
-      filtered = filtered.filter(
-        booking => new Date(booking.flight.departureTime) >= start
-      );
-    }
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(
-        booking => new Date(booking.flight.departureTime) <= end
-      );
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortOption) {
-        case "dateDesc":
-          return (
-            new Date(b.flight.departureTime).getTime() -
-            new Date(a.flight.departureTime).getTime()
-          );
-        case "dateAsc":
-          return (
-            new Date(a.flight.departureTime).getTime() -
-            new Date(b.flight.departureTime).getTime()
-          );
-        case "priceDesc":
-          return b.totalAmount - a.totalAmount;
-        case "priceAsc":
-          return a.totalAmount - b.totalAmount;
-        default:
-          return 0;
-      }
-    });
-
-    return filtered;
-  }, [bookings, statusFilter, startDate, endDate, sortOption]);
+  const filteredAndSortedBookings = bookings ?? [];
 
   const hasActiveFilters =
     statusFilter !== "all" || startDate !== "" || endDate !== "";
@@ -589,7 +568,7 @@ export default function MyBookings() {
         </div>
 
         {/* Bookings List */}
-        {!bookings || bookings.length === 0 ? (
+        {(!bookings || bookings.length === 0) && !hasActiveFilters ? (
           // Empty state - no bookings at all
           <Empty className="border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 rounded-2xl py-16">
             <EmptyMedia>
@@ -1095,6 +1074,14 @@ export default function MyBookings() {
               );
             })}
           </div>
+        )}
+        {bookingsQuery.hasNextPage && (
+          <Button
+            disabled={bookingsQuery.isFetchingNextPage}
+            onClick={() => void bookingsQuery.fetchNextPage()}
+          >
+            {l("عرض المزيد من الحجوزات", "Load more bookings")}
+          </Button>
         )}
       </div>
 

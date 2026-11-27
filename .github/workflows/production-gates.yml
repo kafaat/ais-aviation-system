@@ -142,6 +142,9 @@ jobs:
           server/__tests__/cache-recovery-mysql.test.ts
           server/__tests__/cache-rate-limit-native.test.ts
           server/services/redis-cache-native.test.ts
+          server/services/price-calendar-cache-native.test.ts
+          server/services/flight-search-holds-mysql.test.ts
+          server/__tests__/booking-history-page-mysql.test.ts
           server/__tests__/booking-purge-mysql.test.ts
           server/__tests__/compensation-purge-mysql.test.ts
           server/__tests__/expired-hold-sweeper-lock-order-mysql.test.ts

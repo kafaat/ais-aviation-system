@@ -2,7 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { asc, eq, inArray } from "drizzle-orm";
 import { bookingSegments, bookings, flights } from "../../drizzle/schema";
 import { getDb } from "../db";
-import { auditBookingChange } from "./audit.service";
+import {
+  auditBookingChange,
+  bookingChangeAuditEvent,
+  persistAuditLog,
+} from "./audit.service";
 import {
   BookingNotPendingError,
   cancelBookingResources,
@@ -127,17 +131,30 @@ export async function administerBookingStatus(
     return {
       previousStatus,
       changed: true,
-      reference: booking.bookingReference,
+      announceCompletion: await persistAuditLog(
+        tx,
+        bookingChangeAuditEvent(
+          booking.bookingReference,
+          actor.id,
+          actor.role,
+          "modified",
+          { status: previousStatus },
+          { status },
+          actor.sourceIp,
+          actor.requestId
+        )
+      ),
     };
   });
 
-  if (result.changed)
+  if (result.announceCompletion) result.announceCompletion();
+  else if (result.changed && status === "cancelled")
     await auditBookingChange(
       bookingId,
-      result.reference ?? String(bookingId),
+      String(bookingId),
       actor.id,
       actor.role,
-      status === "cancelled" ? "cancelled" : "modified",
+      "cancelled",
       { status: result.previousStatus },
       { status },
       actor.sourceIp,
