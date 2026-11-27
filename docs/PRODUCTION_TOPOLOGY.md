@@ -17,15 +17,15 @@ flowchart TD
   Worker --> Providers
 ```
 
-| Component             | Committed authority                                         | Runtime contract                                                                                                       |
-| --------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Web/API               | `server/_core/index.ts`, `server/routers.ts`                | Node 24; authenticated tenant context; no scheduler on each API replica                                                |
-| Authentication        | `auth-service/`, `AUTH_SERVICE_URL`                         | Python service using the same migrated MySQL database (`mysql+pymysql://`) and configured JWT contract                 |
-| Database              | `drizzle/schema.ts`, `scripts/db/migrate.ts`                | MySQL 8, not PostgreSQL; run committed migrations once before API/auth/worker rollout                                  |
-| Cache                 | `REDIS_URL`                                                 | Cache availability is not evidence that queue workers are processing                                                   |
-| Queue                 | `QUEUE_REDIS_URL`                                           | Explicit production queue endpoint; `maxmemory-policy noeviction`; BullMQ and scheduled work run in `server/worker.ts` |
-| Deployment            | `docker-compose.production.yml`, `k8s/base/`                | Shared database and queue across replicas; backup images and actions pinned by repository policy                       |
-| External integrations | `AVIATION_SOURCE_REGISTRY` and configured provider adapters | Scoped signed sources, effective evidence, original collection/refund identity and provider acceptance                 |
+| Component             | Committed authority                                             | Runtime contract                                                                                                       |
+| --------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Web/API               | `server/_core/index.ts`, `server/routers.ts`, `Dockerfile.prod` | Node 22 Alpine in the production image; Node 24 in CI. Authenticated tenant context; no scheduler on each API replica  |
+| Authentication        | `auth-service/`, `AUTH_SERVICE_URL`                             | Python service using the same migrated MySQL database (`mysql+pymysql://`) and configured JWT contract                 |
+| Database              | `drizzle/schema.ts`, `scripts/db/migrate.ts`                    | MySQL 8, not PostgreSQL; run committed migrations once before API/auth/worker rollout                                  |
+| Cache                 | `REDIS_URL`                                                     | Cache availability is not evidence that queue workers are processing                                                   |
+| Queue                 | `QUEUE_REDIS_URL`                                               | Explicit production queue endpoint; `maxmemory-policy noeviction`; BullMQ and scheduled work run in `server/worker.ts` |
+| Deployment            | `docker-compose.production.yml`, `k8s/base/`                    | Shared database and queue across replicas; backup images and actions pinned by repository policy                       |
+| External integrations | `AVIATION_SOURCE_REGISTRY` and configured provider adapters     | Scoped signed sources, effective evidence, original collection/refund identity and provider acceptance                 |
 
 Booking and flight writes use shared database transactions. `outbox` belongs to
 the producing transaction. `event_inbox` stores immutable envelopes;
