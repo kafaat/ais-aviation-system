@@ -160,7 +160,10 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
     ]);
     setUnknown(!!result.error || !!owner.error);
     if (result.data?.latest?.status === "completed")
-      await utils.bookings.myBookings.invalidate();
+      await Promise.all([
+        utils.bookings.myBookings.invalidate(),
+        utils.bookings.myBookingsPage.invalidate(),
+      ]);
   };
   const execute = async (work: () => Promise<void>) => {
     if (busy) return;

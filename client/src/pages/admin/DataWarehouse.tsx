@@ -74,6 +74,7 @@ interface CreateExportForm {
   endDate: string;
   format: ExportFormat;
   incremental: boolean;
+  lastExportTimestamp: string;
 }
 
 interface CreateScheduleForm {
@@ -115,6 +116,7 @@ const initialExportForm: CreateExportForm = {
   endDate: new Date().toISOString().split("T")[0],
   format: "csv",
   incremental: false,
+  lastExportTimestamp: "",
 };
 
 const initialScheduleForm: CreateScheduleForm = {
@@ -395,13 +397,24 @@ export default function DataWarehouse() {
 
   // ---------- Handlers ----------
 
+  const supportsIncremental =
+    exportForm.exportType === "bookings" || exportForm.exportType === "flights";
+  const cursor =
+    exportForm.incremental && supportsIncremental
+      ? new Date(exportForm.lastExportTimestamp)
+      : undefined;
+  const invalidCursor =
+    cursor !== undefined && !Number.isFinite(cursor.getTime());
+
   function handleCreateExport() {
+    if (invalidCursor) return;
     createExportMutation.mutate({
       exportType: exportForm.exportType,
       startDate: new Date(exportForm.startDate),
       endDate: new Date(exportForm.endDate),
       format: exportForm.format,
-      incremental: exportForm.incremental,
+      incremental: cursor !== undefined,
+      lastExportTimestamp: cursor,
     });
   }
 
@@ -976,6 +989,9 @@ export default function DataWarehouse() {
                   setExportForm(prev => ({
                     ...prev,
                     exportType: val as ExportType,
+                    incremental:
+                      (val === "flights" || val === "bookings") &&
+                      prev.incremental,
                   }))
                 }
               >
@@ -1048,15 +1064,41 @@ export default function DataWarehouse() {
             <div className="flex items-center gap-2">
               <Switch
                 id="incremental"
+                disabled={!supportsIncremental}
                 checked={exportForm.incremental}
                 onCheckedChange={val =>
                   setExportForm(prev => ({ ...prev, incremental: val }))
                 }
               />
               <Label htmlFor="incremental">
-                Incremental export (only changed records)
+                {l(
+                  "التغييرات في الحجوزات أو الرحلات ضمن الفترة المحددة",
+                  "Changed bookings or flights within the selected period"
+                )}
               </Label>
             </div>
+            {exportForm.incremental && supportsIncremental && (
+              <div className="space-y-2">
+                <Label htmlFor="export-cursor">
+                  {l(
+                    "وقت آخر تصدير (التوقيت المحلي)",
+                    "Last export timestamp (local time)"
+                  )}
+                </Label>
+                <Input
+                  id="export-cursor"
+                  type="datetime-local"
+                  step="0.001"
+                  value={exportForm.lastExportTimestamp}
+                  onChange={e =>
+                    setExportForm(prev => ({
+                      ...prev,
+                      lastExportTimestamp: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -1068,7 +1110,7 @@ export default function DataWarehouse() {
             </Button>
             <Button
               onClick={handleCreateExport}
-              disabled={createExportMutation.isPending}
+              disabled={createExportMutation.isPending || invalidCursor}
             >
               {createExportMutation.isPending ? (
                 <>

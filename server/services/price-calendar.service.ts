@@ -11,10 +11,24 @@ import {
 
 import { getDb } from "../db";
 import { airports, flights } from "../../drizzle/schema";
-import { redisCacheService, CacheTTL } from "./redis-cache.service";
+import {
+  redisCacheService,
+  CacheTTL,
+  CacheNamespace,
+} from "./redis-cache.service";
 import { createServiceLogger } from "../_core/logger";
 
 const log = createServiceLogger("price-calendar");
+
+// Public route aggregates depend on flight membership, status, fares and the
+// origin timezone. Capture all source generations before reading either store.
+function captureCalendarGeneration() {
+  return redisCacheService.captureGeneration(CacheNamespace.PRICING, [
+    CacheNamespace.SEARCH,
+    CacheNamespace.FLIGHT,
+    CacheNamespace.AIRPORTS,
+  ]);
+}
 
 /** Calendar days are the origin airport's days. A day's price bucket and
  * its boundaries used to mix the server's zone, the MySQL session zone and
@@ -110,9 +124,14 @@ export async function getMonthlyPrices(
   // Create cache key
   const cacheKey = `price-calendar:monthly:${input.originId}:${input.destinationId}:${input.year}-${input.month}:${cabinClass}`;
 
+  const generation = await captureCalendarGeneration();
   try {
     // Try to get from cache
-    const cached = await redisCacheService.getRaw<MonthlyPriceResult>(cacheKey);
+    const cached = await redisCacheService.get<MonthlyPriceResult>(
+      CacheNamespace.PRICING,
+      cacheKey,
+      generation
+    );
     if (cached) {
       return cached;
     }
@@ -236,9 +255,14 @@ export async function getMonthlyPrices(
       cheapestDay,
     };
 
-    // Cache the result for 5 minutes
     try {
-      await redisCacheService.setRaw(cacheKey, result, CacheTTL.FLIGHT_SEARCH);
+      await redisCacheService.set(
+        CacheNamespace.PRICING,
+        cacheKey,
+        result,
+        CacheTTL.FLIGHT_SEARCH,
+        generation
+      );
     } catch (error) {
       log.warn({ error }, "Failed to cache monthly prices");
     }
@@ -267,10 +291,14 @@ export async function getFlexiblePrices(
   const centerDateStr = civilDateOf(input.date);
   const cacheKey = `price-calendar:flexible:${input.originId}:${input.destinationId}:${centerDateStr}:${flexDays}:${cabinClass}`;
 
+  const generation = await captureCalendarGeneration();
   try {
     // Try to get from cache
-    const cached =
-      await redisCacheService.getRaw<FlexiblePriceResult>(cacheKey);
+    const cached = await redisCacheService.get<FlexiblePriceResult>(
+      CacheNamespace.PRICING,
+      cacheKey,
+      generation
+    );
     if (cached) {
       return cached;
     }
@@ -399,9 +427,14 @@ export async function getFlexiblePrices(
       },
     };
 
-    // Cache the result for 5 minutes
     try {
-      await redisCacheService.setRaw(cacheKey, result, CacheTTL.FLIGHT_SEARCH);
+      await redisCacheService.set(
+        CacheNamespace.PRICING,
+        cacheKey,
+        result,
+        CacheTTL.FLIGHT_SEARCH,
+        generation
+      );
     } catch (error) {
       log.warn({ error }, "Failed to cache flexible prices");
     }

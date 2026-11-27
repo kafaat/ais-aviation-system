@@ -65,44 +65,42 @@ export interface AuditLogData {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Create an audit log entry
- */
-export async function createAuditLog(data: AuditLogData): Promise<void> {
-  try {
-    const eventId = nanoid(32);
+type AuditWriter = Pick<
+  NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  "insert"
+>;
 
-    const auditLogEntry: InsertAuditLog = {
-      eventId,
-      eventType: data.eventType,
-      eventCategory: data.eventCategory,
-      outcome: data.outcome,
-      severity: data.severity || "low",
-      userId: data.userId || null,
-      userRole: data.userRole || null,
-      actorType: data.actorType || "system",
-      sourceIp: data.sourceIp || null,
-      userAgent: data.userAgent || null,
-      requestId: data.requestId || null,
-      resourceType: data.resourceType || null,
-      resourceId: data.resourceId || null,
-      previousValue: data.previousValue
-        ? JSON.stringify(data.previousValue)
-        : null,
-      newValue: data.newValue ? JSON.stringify(data.newValue) : null,
-      changeDescription: data.changeDescription || null,
-      metadata: data.metadata ? JSON.stringify(data.metadata) : null,
-    };
+/** Persist with the supplied writer. Transaction owners announce success after commit. */
+export async function persistAuditLog(
+  database: AuditWriter,
+  data: AuditLogData
+) {
+  const eventId = nanoid(32);
 
-    const database = await getDb();
-    if (!database) {
-      logger.error({}, "Database not available for audit log");
-      return;
-    }
+  const auditLogEntry: InsertAuditLog = {
+    eventId,
+    eventType: data.eventType,
+    eventCategory: data.eventCategory,
+    outcome: data.outcome,
+    severity: data.severity || "low",
+    userId: data.userId || null,
+    userRole: data.userRole || null,
+    actorType: data.actorType || "system",
+    sourceIp: data.sourceIp || null,
+    userAgent: data.userAgent || null,
+    requestId: data.requestId || null,
+    resourceType: data.resourceType || null,
+    resourceId: data.resourceId || null,
+    previousValue: data.previousValue
+      ? JSON.stringify(data.previousValue)
+      : null,
+    newValue: data.newValue ? JSON.stringify(data.newValue) : null,
+    changeDescription: data.changeDescription || null,
+    metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+  };
 
-    await database.insert(auditLogs).values(auditLogEntry);
-
-    // Also log to structured logger for immediate monitoring
+  await database.insert(auditLogs).values(auditLogEntry);
+  return () => {
     logger.info(
       {
         eventId,
@@ -116,6 +114,19 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
       },
       `Audit: ${data.eventType}`
     );
+  };
+}
+
+/** Best-effort audit for callers outside a business transaction. */
+export async function createAuditLog(data: AuditLogData): Promise<void> {
+  try {
+    const database = await getDb();
+    if (!database) {
+      logger.error({}, "Database not available for audit log");
+      return;
+    }
+    const announce = await persistAuditLog(database, data);
+    announce();
   } catch (error) {
     // Critical: audit logging should never fail silently
     logger.error(
@@ -173,13 +184,37 @@ export async function auditBookingChange(
   sourceIp?: string,
   requestId?: string
 ): Promise<void> {
+  await createAuditLog(
+    bookingChangeAuditEvent(
+      bookingReference,
+      userId,
+      userRole,
+      changeType,
+      previousValue,
+      newValue,
+      sourceIp,
+      requestId
+    )
+  );
+}
+
+export function bookingChangeAuditEvent(
+  bookingReference: string,
+  userId: number,
+  userRole: string,
+  changeType: "created" | "modified" | "cancelled",
+  previousValue?: unknown,
+  newValue?: unknown,
+  sourceIp?: string,
+  requestId?: string
+): AuditLogData {
   const eventTypeMap = {
     created: "BOOKING_CREATED" as AuditEventType,
     modified: "BOOKING_MODIFIED" as AuditEventType,
     cancelled: "BOOKING_CANCELLED" as AuditEventType,
   };
 
-  await createAuditLog({
+  return {
     eventType: eventTypeMap[changeType],
     eventCategory: "booking",
     outcome: "success",
@@ -194,7 +229,7 @@ export async function auditBookingChange(
     previousValue,
     newValue,
     changeDescription: `Booking ${bookingReference} ${changeType}`,
-  });
+  };
 }
 
 /**

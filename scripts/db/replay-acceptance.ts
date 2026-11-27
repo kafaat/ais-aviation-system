@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   mkdirSync,
   copyFileSync,
+  readFileSync,
   writeFileSync,
   rmSync,
 } from "node:fs";
@@ -213,6 +214,40 @@ try {
     "PASS: preservation CLI verifies fresh data after 0014 on a no-op upgrade"
   );
 
+  // Change only the diagnostic text, preserving the trigger's rejection policy.
+  // This tests body drift independently of a missing trigger or journal change.
+  const triggerName = "supplier_finance_no_update";
+  const originalTrigger = readFileSync(
+    "drizzle/0058_supplier_finance_control.sql",
+    "utf8"
+  )
+    .split("--> statement-breakpoint")
+    .map(sql => sql.trim())
+    .find(sql => sql.startsWith(`CREATE TRIGGER ${triggerName} `));
+  assert.ok(originalTrigger);
+  await connection.query(`DROP TRIGGER ${triggerName}`);
+  await assert.rejects(
+    runMigration("verify", testUrl.href),
+    /supplier_finance_events.triggers.supplier_finance_no_update/
+  );
+  await connection.query(
+    originalTrigger.replace(
+      "evidence is append-only",
+      "evidence must remain append-only"
+    )
+  );
+  for (const command of ["preflight", "verify", "migrate"] as const)
+    await assert.rejects(
+      runMigration(command, testUrl.href),
+      /supplier_finance_no_update.bodyHash/
+    );
+  await connection.query(`DROP TRIGGER ${triggerName}`);
+  await connection.query(originalTrigger);
+  await runMigration("verify", testUrl.href);
+  console.info(
+    "PASS: missing and modified triggers rejected; original trigger verified"
+  );
+
   await connection.query("DROP INDEX user_flight_unique ON flight_reviews");
   await connection.query(
     "CREATE INDEX user_flight_unique ON flight_reviews (userId, flightId)"
@@ -262,6 +297,19 @@ try {
   }
 
   const adopt = await createConnection(scratchUrl(`${database}_adopt`));
+  await adopt.query(`DROP TRIGGER ${triggerName}`);
+  await assert.rejects(
+    runMigration("baseline", scratchUrl(`${database}_adopt`)),
+    /supplier_finance_events.triggers.supplier_finance_no_update/
+  );
+  const [absentJournal] = await adopt.query<RowDataPacket[]>(
+    "SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '__drizzle_migrations'"
+  );
+  assert.equal(Number(absentJournal[0].n), 0);
+  await adopt.query(originalTrigger);
+  console.info(
+    "PASS: incomplete trigger set refused before baseline journal creation"
+  );
   const beforeAdopt = JSON.stringify(await readDatabaseContract(adopt));
   await runMigration("baseline", scratchUrl(`${database}_adopt`));
   assert.equal(

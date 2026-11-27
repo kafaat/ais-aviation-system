@@ -23,7 +23,12 @@ vi.mock("@/lib/trpc", () => {
   });
   return {
     trpc: {
-      useUtils: () => ({ bookings: { myBookings: { invalidate: vi.fn() } } }),
+      useUtils: () => ({
+        bookings: {
+          myBookings: { invalidate: vi.fn() },
+          myBookingsPage: { invalidate: vi.fn() },
+        },
+      }),
       auth: {
         me: {
           useQuery: () => ({

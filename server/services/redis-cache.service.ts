@@ -430,13 +430,16 @@ class RedisCacheService {
     }
   }
 
-  async captureGeneration(namespace: string): Promise<CacheGeneration> {
+  async captureGeneration(
+    namespace: string,
+    dependencies: readonly string[] = []
+  ): Promise<CacheGeneration> {
     // Capture before awaiting Redis: a connection change during this lookup
     // makes the token stale and prevents read-through or source publication.
     const epoch = this.generationEpoch;
     try {
       const [durable, version] = await Promise.all([
-        readCacheGeneration(CACHE_PREFIX, namespace),
+        readCacheGeneration(CACHE_PREFIX, namespace, dependencies),
         this.getNamespaceVersion(namespace),
       ]);
       return { namespace, durable, version, epoch };

@@ -79,7 +79,8 @@ export async function checkTicketRevalidation(
     amount: number | null;
   },
   instances: (typeof flights.$inferSelect)[],
-  replacementOfferId: string
+  replacementOfferId: string,
+  asOf = new Date()
 ) {
   const from = instances.find(f => f.id === booking.flightId);
   const to = instances.find(f => f.id !== booking.flightId);
@@ -106,7 +107,8 @@ export async function checkTicketRevalidation(
     from.airlineId !== to.airlineId ||
     from.originId !== to.originId ||
     from.destinationId !== to.destinationId ||
-    calculateModificationFee(booking.totalAmount, from.departureTime) !== 0
+    calculateModificationFee(booking.totalAmount, from.departureTime, asOf) !==
+      0
   )
     refuse();
 

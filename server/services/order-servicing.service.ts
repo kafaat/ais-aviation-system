@@ -700,9 +700,11 @@ export async function quotePaidOrderService(
                 : heldFlights.get(input.replaceFlightId);
             if (!originalChanged)
               throw unavailable("Original sector not found");
+            const feeAsOf = new Date();
             modificationFee = calculateModificationFee(
               booking.totalAmount,
-              originalChanged.departureTime
+              originalChanged.departureTime,
+              feeAsOf
             );
             if (input.intent === "revalidate") {
               if (
@@ -719,7 +721,8 @@ export async function quotePaidOrderService(
                 booking,
                 old[0],
                 [...heldFlights.values()],
-                input.offerIds[0]
+                input.offerIds[0],
+                feeAsOf
               );
             }
             newAmount = fareAmount + modificationFee;

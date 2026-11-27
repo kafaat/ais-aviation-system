@@ -83,6 +83,12 @@ export const forensicFindings = [
     sql: "SELECT p.id AS recordId FROM passengers p LEFT JOIN bookings b ON b.id = p.bookingId WHERE b.id IS NULL",
   },
   {
+    id: "coupon_reference_mismatch",
+    severity: "error",
+    owner: "ticket-coupon",
+    sql: "SELECT c.id AS recordId FROM ticket_coupons c LEFT JOIN bookings b ON b.id = c.bookingId LEFT JOIN passengers p ON p.id = c.passengerId LEFT JOIN flights f ON f.id = c.flightId WHERE b.id IS NULL OR p.id IS NULL OR f.id IS NULL OR p.bookingId <> c.bookingId",
+  },
+  {
     id: "segment_reservation_mismatch",
     severity: "error",
     owner: "booking-settlement",

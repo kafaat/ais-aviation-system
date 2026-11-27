@@ -189,7 +189,8 @@ export async function restoreRbdSeats(
 
 export async function getFlightRbdAvailability(
   tx: SettlementTx,
-  flightIds: number[]
+  flightIds: number[],
+  now = new Date()
 ): Promise<Map<number, RbdAvailability[]>> {
   const result = new Map<number, RbdAvailability[]>();
   if (!flightIds.length) return result;
@@ -204,6 +205,25 @@ export async function getFlightRbdAvailability(
     .from(fareClasses)
     .where(inArray(fareClasses.id, ids));
   const byId = new Map(classes.map(fareClass => [fareClass.id, fareClass]));
+  const holds = await tx
+    .select({
+      flightId: inventoryLocks.flightId,
+      fareClassId: inventoryLocks.fareClassId,
+      held: sql<number>`SUM(${inventoryLocks.numberOfSeats})`.mapWith(Number),
+    })
+    .from(inventoryLocks)
+    .where(
+      and(
+        inArray(inventoryLocks.flightId, flightIds),
+        inArray(inventoryLocks.fareClassId, ids),
+        eq(inventoryLocks.status, "active"),
+        gt(inventoryLocks.expiresAt, now)
+      )
+    )
+    .groupBy(inventoryLocks.flightId, inventoryLocks.fareClassId);
+  const heldByBucket = new Map(
+    holds.map(row => [`${row.flightId}:${row.fareClassId}`, row.held])
+  );
   for (const row of rows) {
     const fareClass = byId.get(row.fareClassId);
     if (
@@ -212,13 +232,7 @@ export async function getFlightRbdAvailability(
         fareClass.cabinClass !== "business")
     )
       continue;
-    const held = await countActiveRbdHolds(
-      tx,
-      row.flightId,
-      row.fareClassId,
-      undefined,
-      false
-    );
+    const held = heldByBucket.get(`${row.flightId}:${row.fareClassId}`) ?? 0;
     const item: RbdAvailability = {
       fareClassId: fareClass.id,
       code: fareClass.code,
@@ -229,7 +243,9 @@ export async function getFlightRbdAvailability(
       totalAllocated: row.capacity,
       availableSeats: Math.max(0, row.availableSeats - held),
     };
-    result.set(row.flightId, [...(result.get(row.flightId) ?? []), item]);
+    const items = result.get(row.flightId);
+    if (items) items.push(item);
+    else result.set(row.flightId, [item]);
   }
   for (const items of result.values())
     items.sort(

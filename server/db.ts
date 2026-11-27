@@ -1,3 +1,4 @@
+import type { BookingHistoryPage } from "./contracts/booking-history-page";
 import { randomInt } from "node:crypto";
 import { canServiceOrder } from "./services/ndc-capabilities";
 import {
@@ -6,6 +7,7 @@ import {
   desc,
   eq,
   gte,
+  or,
   inArray,
   sql,
   gt,
@@ -816,7 +818,8 @@ export async function createBooking(data: InsertBooking) {
 
 export async function getBookingsByUserId(
   userId: number,
-  tenantId?: number | null
+  tenantId?: number | null,
+  page?: BookingHistoryPage
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable for booking history");
@@ -830,7 +833,29 @@ export async function getBookingsByUserId(
           isNull(bookings.deletedAt)
         );
 
-  const result = await db
+  const ascending = page?.sort === "dateAsc" || page?.sort === "priceAsc";
+  const byPrice = page?.sort === "priceAsc" || page?.sort === "priceDesc";
+  const direction = ascending ? asc : desc;
+  const beyond = ascending ? gt : lt;
+  const cursor = page?.cursor;
+  const boundary =
+    cursor &&
+    (byPrice
+      ? or(
+          beyond(bookings.totalAmount, cursor.value),
+          and(
+            eq(bookings.totalAmount, cursor.value),
+            beyond(bookings.id, cursor.id)
+          )
+        )
+      : or(
+          beyond(flights.departureTime, new Date(cursor.value)),
+          and(
+            eq(flights.departureTime, new Date(cursor.value)),
+            beyond(bookings.id, cursor.id)
+          )
+        ));
+  const query = db
     .select({
       seatsReserved: bookings.seatsReserved,
       partnerIssued: sql<number>`${bookings.codeshareAllotmentId} IS NOT NULL OR EXISTS (SELECT 1 FROM ${agentBookings} WHERE ${agentBookings.bookingId} = ${bookings.id}) OR EXISTS (SELECT 1 FROM ${corporateBookings} WHERE ${corporateBookings.bookingId} = ${bookings.id})`,
@@ -867,8 +892,25 @@ export async function getBookingsByUserId(
     .innerJoin(flights, eq(bookings.flightId, flights.id))
     .innerJoin(airports, eq(flights.originId, airports.id))
     .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
-    .where(bookingWhere)
-    .orderBy(desc(bookings.createdAt));
+    .where(
+      and(
+        bookingWhere,
+        boundary ?? undefined,
+        page?.bookingId ? eq(bookings.id, page.bookingId) : undefined,
+        page?.status && eq(bookings.status, page.status),
+        page?.afterDate && gte(flights.departureTime, page.afterDate),
+        page?.beforeDate && lt(flights.departureTime, page.beforeDate)
+      )
+    )
+    .orderBy(
+      ...(page
+        ? [
+            direction(byPrice ? bookings.totalAmount : flights.departureTime),
+            direction(bookings.id),
+          ]
+        : [desc(bookings.createdAt)])
+    );
+  const result = await (page ? query.limit(page.limit + 1) : query);
 
   // Fetch all passengers for all bookings in a single query
   if (result.length === 0) {

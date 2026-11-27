@@ -121,7 +121,26 @@ async function warehouseDb() {
   if (!db) throw new Error("Database not available");
   return db;
 }
+const MAX_EXPORT_ROWS = 50_000;
 const MAX_EXPORT_BYTES = 8 * 1024 * 1024;
+
+function validateIncrementalExport(
+  type: ExportType,
+  incremental?: boolean,
+  cursor?: Date
+) {
+  if (!incremental) return;
+  if (type !== "flights" && type !== "bookings")
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Incremental export is not supported for ${type}`,
+    });
+  if (!cursor || !Number.isFinite(cursor.getTime()))
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Incremental export requires a valid last export timestamp",
+    });
+}
 
 // ============================================================================
 // Export: Bookings Data
@@ -134,6 +153,11 @@ const MAX_EXPORT_BYTES = 8 * 1024 * 1024;
 export async function exportBookingsData(
   options: ExportOptions
 ): Promise<ExportResult> {
+  validateIncrementalExport(
+    "bookings",
+    options.incremental,
+    options.lastExportTimestamp
+  );
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -195,12 +219,12 @@ export async function exportBookingsData(
     .where(and(...conditions))
     .orderBy(desc(bookings.createdAt))
     // Hard limit to prevent excessive memory usage in export queries
-    .limit(50000);
+    .limit(MAX_EXPORT_ROWS + 1);
 
-  if (results.length === 50000) {
+  if (results.length > MAX_EXPORT_ROWS) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Export reached its row limit; narrow the date range",
+      message: "Export exceeds the 50,000-row limit; narrow the date range",
     });
   }
 
@@ -280,6 +304,11 @@ export async function exportBookingsData(
 export async function exportFlightsData(
   options: ExportOptions
 ): Promise<ExportResult> {
+  validateIncrementalExport(
+    "flights",
+    options.incremental,
+    options.lastExportTimestamp
+  );
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -337,12 +366,12 @@ export async function exportFlightsData(
     .where(and(...conditions))
     .orderBy(desc(flights.departureTime))
     // Hard limit to prevent excessive memory usage in export queries
-    .limit(50000);
+    .limit(MAX_EXPORT_ROWS + 1);
 
-  if (results.length === 50000) {
+  if (results.length > MAX_EXPORT_ROWS) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Export reached its row limit; narrow the date range",
+      message: "Export exceeds the 50,000-row limit; narrow the date range",
     });
   }
 
@@ -503,6 +532,11 @@ export async function exportRevenueData(
 export async function exportCustomerData(
   options: ExportOptions
 ): Promise<ExportResult> {
+  validateIncrementalExport(
+    "customers",
+    options.incremental,
+    options.lastExportTimestamp
+  );
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -542,12 +576,13 @@ export async function exportCustomerData(
     .groupBy(users.id, users.role, users.createdAt, users.lastSignedIn)
     .orderBy(desc(sql`COUNT(DISTINCT ${bookings.id})`))
     // Hard limit to prevent excessive memory usage in export queries
-    .limit(50000);
+    .limit(MAX_EXPORT_ROWS + 1);
 
-  if (results.length === 50000) {
+  if (results.length > MAX_EXPORT_ROWS) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Export reached its row limit; narrow the date range",
+      message:
+        "Customer export exceeds 50,000 users. The date range filters booking metrics and includes all users.",
     });
   }
 
@@ -598,6 +633,11 @@ export async function exportCustomerData(
 export async function exportOperationalData(
   options: ExportOptions
 ): Promise<ExportResult> {
+  validateIncrementalExport(
+    "operational",
+    options.incremental,
+    options.lastExportTimestamp
+  );
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -793,6 +833,7 @@ export async function createExportJob(
   lastExportTimestamp?: Date,
   requestKey?: string
 ): Promise<DataWarehouseExport> {
+  validateIncrementalExport(exportType, incremental, lastExportTimestamp);
   const db = await warehouseDb();
   if (
     !Number.isFinite(dateRange.startDate.getTime()) ||

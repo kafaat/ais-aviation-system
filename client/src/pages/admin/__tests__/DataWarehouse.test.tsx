@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   exports: [] as Record<string, unknown>[],
   retry: vi.fn(),
   success: vi.fn(),
+  submit: vi.fn(),
   error: vi.fn(),
   completeExport: undefined as
     | ((data: {
@@ -62,7 +63,10 @@ vi.mock("@/lib/trpc", () => ({
             }) => {
               if (name === "createExport")
                 state.completeExport = options.onSuccess;
-              return { mutate: vi.fn(), isPending: false };
+              return {
+                mutate: name === "createExport" ? state.submit : vi.fn(),
+                isPending: false,
+              };
             },
           };
         },
@@ -74,6 +78,7 @@ beforeEach(() => {
   state.failed.clear();
   state.exports = [];
   state.success.mockClear();
+  state.submit.mockClear();
   state.error.mockClear();
 });
 
@@ -152,4 +157,25 @@ it("connects only completed stored reports to the authenticated download route",
   expect(links).toHaveLength(1);
   expect(links[0]).toHaveAttribute("href", "/api/data-warehouse/download/17");
   expect(links[0]).toHaveAttribute("download");
+});
+
+it("requires an explicit local-time cursor for an incremental booking export", () => {
+  render(<DataWarehouse />);
+  fireEvent.click(screen.getByRole("button", { name: "New Export" }));
+  fireEvent.click(screen.getByRole("switch", { name: /Changed bookings/ }));
+  const submit = screen.getByRole("button", { name: "Start Export" });
+  expect(submit).toBeDisabled();
+  const value = "2026-11-01T12:30:15.125";
+  fireEvent.change(
+    screen.getByLabelText("Last export timestamp (local time)"),
+    { target: { value } }
+  );
+  fireEvent.click(submit);
+  expect(state.submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      exportType: "bookings",
+      incremental: true,
+      lastExportTimestamp: new Date(value),
+    })
+  );
 });

@@ -21,6 +21,7 @@ export function BookingCreditPayment({
     onSuccess: async () => {
       await Promise.all([
         utils.bookings.myBookings.invalidate(),
+        utils.bookings.myBookingsPage.invalidate(),
         utils.vouchers.myCredits.invalidate(),
       ]);
     },

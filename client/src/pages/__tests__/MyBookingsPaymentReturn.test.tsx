@@ -29,14 +29,15 @@ vi.mock("@/lib/trpc", () => ({
     },
     bookings: {
       getDepartureState: { useQuery: () => ({ data: [] }) },
-      myBookings: {
-        useQuery: (
+      myBookingsPage: {
+        useQuery: () => ({ data: undefined }),
+        useInfiniteQuery: (
           _input: unknown,
           options?: { refetchInterval?: unknown }
         ) => {
           state.options = options;
           return {
-            data: state.data,
+            data: state.data ? { pages: [{ items: state.data }] } : undefined,
             isLoading: false,
             error: state.failed ? new Error("Synthetic source failure") : null,
             refetch: state.retry,
