@@ -15,6 +15,7 @@ import BookingPage from "../BookingPage";
 const calls = vi.hoisted(() => ({
   create: vi.fn(),
   offer: vi.fn(),
+  savePassenger: vi.fn(),
   allocation: undefined as
     undefined | { passengers: number; totalAmount: number },
 }));
@@ -30,7 +31,27 @@ vi.mock("@/components/DisplayCurrencyEstimate", () => ({
   DisplayCurrencyEstimate: () => null,
 }));
 vi.mock("@/components/SavedPassengerSelect", () => ({
-  SavedPassengerSelect: () => null,
+  SavedPassengerSelect: ({
+    onSelect,
+  }: {
+    onSelect: (
+      data: import("@/components/SavedPassengerSelect").PassengerData
+    ) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onSelect({
+          firstName: "Aisha",
+          lastName: "Journey",
+          passportNumber: "A12345678",
+          passportExpiry: new Date("2026-05-10T00:00:00Z"),
+        })
+      }
+    >
+      Use saved traveler
+    </button>
+  ),
 }));
 vi.mock("@/components/TravelRequirements", () => ({
   TravelRequirements: () => null,
@@ -75,7 +96,9 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     priceLock: { checkLock: { useQuery: () => ({ data: { lock: null } }) } },
-    savedPassengers: { add: { useMutation: () => ({ mutateAsync: vi.fn() }) } },
+    savedPassengers: {
+      add: { useMutation: () => ({ mutateAsync: calls.savePassenger }) },
+    },
     userPreferences: { getMyPreferences: { useQuery: () => ({}) } },
     rebooking: { getRebookData: { useQuery: () => ({}) } },
     favorites: {
@@ -553,5 +576,31 @@ it.each(["waitlistId", "groupBookingId"])(
         { passengerIndex: 1, quantity: 1, unitPrice: 1500, totalPrice: 1500 },
       ],
     });
+  }
+);
+
+it.each([
+  "booking.completeBooking",
+  "Pay with wallet",
+  "splitPayment.splitWithOthers",
+])(
+  "preserves the saved passport expiry for booking and optional saving with %s",
+  async buttonName => {
+    prepare("/booking/42", []);
+    fireEvent.click(screen.getByRole("button", { name: "Use saved traveler" }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh fare offer" }));
+    const pay = screen.getByRole("button", { name: buttonName });
+    await waitFor(() => expect(pay).toBeEnabled());
+    fireEvent.click(pay);
+    await screen.findByText("Owned checkout");
+    const document = {
+      passportNumber: "A12345678",
+      passportExpiry: new Date("2026-05-10T00:00:00Z"),
+    };
+    expect(calls.create.mock.calls[0][0].passengers[0]).toMatchObject(document);
+    expect(calls.savePassenger).toHaveBeenCalledWith(
+      expect.objectContaining(document)
+    );
   }
 );
