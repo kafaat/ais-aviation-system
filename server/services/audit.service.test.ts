@@ -1,12 +1,65 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import { auditLogs, type InsertAuditLog } from "../../drizzle/schema";
+import { getDb } from "../db";
 import {
   createAuditLog,
+  persistAuditLog,
   auditLogin,
   auditBookingChange,
   auditPayment,
   auditRoleChange,
   auditAdminAccess,
 } from "./audit.service";
+
+const sink = vi.hoisted(() => ({
+  getDb: vi.fn(),
+  insert: vi.fn(),
+  values: vi.fn<(row: InsertAuditLog) => Promise<void>>(),
+  info: vi.fn(),
+  error: vi.fn(),
+}));
+vi.mock("../db", () => ({ getDb: sink.getDb }));
+vi.mock("../_core/logger", () => ({
+  logger: { info: sink.info, error: sink.error },
+}));
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  sink.getDb.mockReturnValue({ insert: sink.insert });
+  sink.insert.mockReturnValue({ values: sink.values });
+  sink.values.mockResolvedValue(undefined);
+});
+
+type ExpectedAuditFields = Partial<
+  Omit<InsertAuditLog, "previousValue" | "newValue" | "metadata">
+> & {
+  previousValue?: unknown;
+  newValue?: unknown;
+  metadata?: unknown;
+};
+
+function readSnapshot(serialized: string | null | undefined): unknown {
+  return serialized == null ? serialized : JSON.parse(serialized);
+}
+
+function expectAuditInsert(fields: ExpectedAuditFields) {
+  expect(sink.insert).toHaveBeenCalledExactlyOnceWith(auditLogs);
+  expect(sink.values).toHaveBeenCalledTimes(1);
+  const [row] = sink.values.mock.calls[0];
+  expect({
+    ...row,
+    previousValue: readSnapshot(row.previousValue),
+    newValue: readSnapshot(row.newValue),
+    metadata: readSnapshot(row.metadata),
+  }).toMatchObject(fields);
+  return row;
+}
+
+const event = {
+  eventType: "BOOKING_CREATED",
+  eventCategory: "booking",
+  outcome: "success",
+} as const;
 
 describe("Audit Service", () => {
   describe("createAuditLog", () => {
@@ -24,9 +77,27 @@ describe("Audit Service", () => {
         resourceId: "test@example.com",
       });
 
-      // Verify log was created (we can't easily query it in this test setup)
-      // In a real test, you'd query the database to verify
-      expect(true).toBe(true);
+      const row = expectAuditInsert({
+        eventType: "LOGIN_SUCCESS",
+        eventCategory: "auth",
+        outcome: "success",
+        severity: "low",
+        userId: 1,
+        userRole: "user",
+        actorType: "user",
+        sourceIp: "192.168.1.1",
+        resourceType: "user",
+        resourceId: "test@example.com",
+      });
+      expect(row.eventId).toMatch(/^[\w-]{32}$/);
+      expect(sink.info).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          eventId: row.eventId,
+          eventType: "LOGIN_SUCCESS",
+          outcome: "success",
+        }),
+        "Audit: LOGIN_SUCCESS"
+      );
     });
 
     it("should handle missing optional fields", async () => {
@@ -36,7 +107,22 @@ describe("Audit Service", () => {
         outcome: "success",
       });
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        ...event,
+        actorType: "system",
+        severity: "low",
+        userId: null,
+        userRole: null,
+        sourceIp: null,
+        userAgent: null,
+        requestId: null,
+        resourceType: null,
+        resourceId: null,
+        previousValue: null,
+        newValue: null,
+        changeDescription: null,
+        metadata: null,
+      });
     });
 
     it("should serialize previousValue and newValue as JSON", async () => {
@@ -48,7 +134,60 @@ describe("Audit Service", () => {
         newValue: { status: "confirmed" },
       });
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "BOOKING_MODIFIED",
+        eventCategory: "booking",
+        outcome: "success",
+        previousValue: { status: "pending" },
+        newValue: { status: "confirmed" },
+      });
+    });
+  });
+
+  describe("storage boundaries", () => {
+    it("reports an unavailable database without failing the caller", async () => {
+      sink.getDb.mockReturnValue(null);
+      await expect(createAuditLog(event)).resolves.toBeUndefined();
+      expect(sink.error).toHaveBeenCalledExactlyOnceWith(
+        {},
+        "Database not available for audit log"
+      );
+      expect(sink.insert).not.toHaveBeenCalled();
+      expect(sink.info).not.toHaveBeenCalled();
+    });
+
+    it("reports a rejected best-effort write without announcing success", async () => {
+      const error = new Error("Synthetic audit write failed");
+      sink.values.mockRejectedValue(error);
+      await expect(createAuditLog(event)).resolves.toBeUndefined();
+      expectAuditInsert(event);
+      expect(sink.error).toHaveBeenCalledExactlyOnceWith(
+        { error, eventType: "BOOKING_CREATED" },
+        "Failed to create audit log"
+      );
+      expect(sink.info).not.toHaveBeenCalled();
+    });
+
+    it("leaves a mandatory write's announcement to its transaction owner", async () => {
+      const writer = getDb()!;
+      sink.getDb.mockClear();
+      const announce = await persistAuditLog(writer, event);
+      const row = expectAuditInsert(event);
+      expect(sink.getDb).not.toHaveBeenCalled();
+      expect(sink.info).not.toHaveBeenCalled();
+      announce();
+      expect(sink.info).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ eventId: row.eventId, outcome: "success" }),
+        "Audit: BOOKING_CREATED"
+      );
+    });
+
+    it("propagates a mandatory write failure to its transaction owner", async () => {
+      const error = new Error("Synthetic transaction write failed");
+      sink.values.mockRejectedValue(error);
+      await expect(persistAuditLog(getDb()!, event)).rejects.toBe(error);
+      expectAuditInsert(event);
+      expect(sink.info).not.toHaveBeenCalled();
     });
   });
 
@@ -63,7 +202,19 @@ describe("Audit Service", () => {
         "req-123"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "LOGIN_SUCCESS",
+        eventCategory: "auth",
+        outcome: "success",
+        severity: "low",
+        actorType: "user",
+        userId: 1,
+        resourceType: "user",
+        resourceId: "user@example.com",
+        sourceIp: "192.168.1.1",
+        userAgent: "Mozilla/5.0",
+        requestId: "req-123",
+      });
     });
 
     it("should audit failed login with severity medium", async () => {
@@ -76,7 +227,18 @@ describe("Audit Service", () => {
         "req-124"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "LOGIN_FAILED",
+        eventCategory: "auth",
+        outcome: "failure",
+        severity: "medium",
+        actorType: "user",
+        userId: null,
+        resourceType: "user",
+        resourceId: "attacker@example.com",
+        sourceIp: "192.168.1.100",
+        requestId: "req-124",
+      });
     });
   });
 
@@ -94,7 +256,20 @@ describe("Audit Service", () => {
         "req-125"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "BOOKING_CREATED",
+        eventCategory: "booking",
+        outcome: "success",
+        severity: "low",
+        userId: 1,
+        userRole: "user",
+        actorType: "user",
+        resourceType: "booking",
+        resourceId: "ABC123",
+        previousValue: null,
+        newValue: { status: "pending", amount: 50000 },
+        requestId: "req-125",
+      });
     });
 
     it("should audit booking modification with previous and new values", async () => {
@@ -110,7 +285,18 @@ describe("Audit Service", () => {
         "req-126"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "BOOKING_MODIFIED",
+        eventCategory: "booking",
+        outcome: "success",
+        userId: 1,
+        userRole: "user",
+        resourceType: "booking",
+        resourceId: "ABC123",
+        previousValue: { status: "pending" },
+        newValue: { status: "confirmed" },
+        requestId: "req-126",
+      });
     });
 
     it("should audit booking cancellation with medium severity", async () => {
@@ -126,7 +312,19 @@ describe("Audit Service", () => {
         "req-127"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "BOOKING_CANCELLED",
+        eventCategory: "booking",
+        outcome: "success",
+        severity: "medium",
+        userId: 1,
+        userRole: "admin",
+        resourceType: "booking",
+        resourceId: "ABC123",
+        previousValue: { status: "confirmed" },
+        newValue: { status: "cancelled" },
+        requestId: "req-127",
+      });
     });
   });
 
@@ -143,7 +341,23 @@ describe("Audit Service", () => {
         "req-128"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "PAYMENT_SUCCESS",
+        eventCategory: "payment",
+        outcome: "success",
+        severity: "medium",
+        actorType: "user",
+        userId: 1,
+        resourceType: "payment",
+        resourceId: "pi_123456",
+        newValue: {
+          bookingId: 1,
+          bookingReference: "ABC123",
+          amount: 50000,
+          paymentIntentId: "pi_123456",
+        },
+        requestId: "req-128",
+      });
     });
 
     it("should audit failed payment with high severity", async () => {
@@ -158,7 +372,23 @@ describe("Audit Service", () => {
         "req-129"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "PAYMENT_FAILED",
+        eventCategory: "payment",
+        outcome: "failure",
+        severity: "high",
+        actorType: "user",
+        userId: 1,
+        resourceType: "payment",
+        resourceId: "pi_123457",
+        newValue: {
+          bookingId: 1,
+          bookingReference: "ABC123",
+          amount: 50000,
+          paymentIntentId: "pi_123457",
+        },
+        requestId: "req-129",
+      });
     });
   });
 
@@ -175,7 +405,20 @@ describe("Audit Service", () => {
         "req-130"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "USER_ROLE_CHANGED",
+        eventCategory: "user_management",
+        outcome: "success",
+        severity: "high",
+        actorType: "admin",
+        userId: 1,
+        userRole: "super_admin",
+        resourceType: "user",
+        resourceId: "user@example.com",
+        previousValue: { role: "user" },
+        newValue: { role: "admin" },
+        requestId: "req-130",
+      });
     });
 
     it("should include metadata for tracking", async () => {
@@ -190,7 +433,18 @@ describe("Audit Service", () => {
         "req-131"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "USER_ROLE_CHANGED",
+        actorType: "admin",
+        userId: 1,
+        userRole: "super_admin",
+        resourceType: "user",
+        resourceId: "staff@example.com",
+        previousValue: { role: "support" },
+        newValue: { role: "ops" },
+        metadata: { targetUserId: 3, performedBy: 1 },
+        requestId: "req-131",
+      });
     });
   });
 
@@ -206,7 +460,19 @@ describe("Audit Service", () => {
         "req-132"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "ADMIN_ACCESS",
+        eventCategory: "access",
+        outcome: "success",
+        severity: "medium",
+        actorType: "admin",
+        userId: 1,
+        userRole: "admin",
+        resourceType: "booking",
+        resourceId: "ABC123",
+        changeDescription: "Admin viewed on booking (ABC123)",
+        requestId: "req-132",
+      });
     });
 
     it("should audit admin deletion", async () => {
@@ -220,7 +486,19 @@ describe("Audit Service", () => {
         "req-133"
       );
 
-      expect(true).toBe(true);
+      expectAuditInsert({
+        eventType: "ADMIN_ACCESS",
+        eventCategory: "access",
+        outcome: "success",
+        severity: "medium",
+        actorType: "admin",
+        userId: 1,
+        userRole: "super_admin",
+        resourceType: "user",
+        resourceId: "2",
+        changeDescription: "Admin deleted on user (2)",
+        requestId: "req-133",
+      });
     });
   });
 });
