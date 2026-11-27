@@ -69,6 +69,7 @@ nativeDescribe.sequential(
     let databaseName = "";
     let created = false;
     const tables = [
+      schema.users,
       schema.bookings,
       schema.passengers,
       schema.bookingSegments,
@@ -136,6 +137,9 @@ nativeDescribe.sequential(
       state.db = claimDb;
       for (const table of [...tables].reverse())
         await claimant!.query(`DELETE FROM \`${getTableName(table)}\``);
+      await claimDb
+        .insert(schema.users)
+        .values({ id: 101, openId: "disposable-claimant" });
       await claimDb.insert(schema.bookings).values({
         id: 1,
         userId: 101,
