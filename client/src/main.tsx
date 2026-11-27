@@ -11,7 +11,10 @@ initWebVitals({
 });
 
 import { createBrowserTRPCClient, trpc } from "@/lib/trpc";
-import { redirectToLoginIfUnauthorized } from "@/lib/auth-navigation";
+import {
+  redirectToLoginIfUnauthorized,
+  watchSessionChanges,
+} from "@/lib/auth-navigation";
 import i18n from "./i18n/config";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -67,11 +70,9 @@ if (!rootElement) {
 
 // Keep the allowed iframe document isolated from the account SPA router and
 // its navigation. Search submission opens the normal application at the top.
-const page = isEmbeddedSearchDocument(window.location.pathname) ? (
-  <EmbedSearch />
-) : (
-  <App />
-);
+const embedded = isEmbeddedSearchDocument(window.location.pathname);
+if (!embedded) watchSessionChanges(rootElement);
+const page = embedded ? <EmbedSearch /> : <App />;
 
 createRoot(rootElement).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>

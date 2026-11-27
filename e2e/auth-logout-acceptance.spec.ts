@@ -35,6 +35,17 @@ for (const outcome of ["success", "UNAUTHORIZED", "lost response"] as const) {
       .getByRole("tab", { name: "Personal Information", exact: true })
       .click();
     await expect(page.locator("#emergencyContact")).toHaveValue(privateMarker);
+    const sibling =
+      outcome === "success" ? await page.context().newPage() : null;
+    if (sibling) {
+      await sibling.goto("/profile");
+      await sibling
+        .getByRole("tab", { name: "Personal Information", exact: true })
+        .click();
+      await expect(sibling.locator("#emergencyContact")).toHaveValue(
+        privateMarker
+      );
+    }
     // Keep the profile query in this document's real React Query cache while
     // opening the layout that owns the actual logout control.
     await page.evaluate(() => {
@@ -104,6 +115,15 @@ for (const outcome of ["success", "UNAUTHORIZED", "lost response"] as const) {
     await page.getByRole("menuitem", { name: "Logout", exact: true }).click();
     await expect(page.getByTestId("login-submit")).toBeVisible();
     expect(await client.auth.me.query()).toBeNull();
+    if (sibling) {
+      // This tab never invoked logout or navigated after the account form opened.
+      await expect(sibling.getByTestId("login-submit")).toBeVisible();
+      await expect(sibling.locator("#emergencyContact")).toHaveCount(0);
+      await expect(
+        sibling.getByText(testUsers.regular.email, { exact: true })
+      ).toHaveCount(0);
+      await sibling.close();
+    }
     await expect
       .poll(() => page.evaluate(name => caches.has(name), cacheName))
       .toBe(false);
