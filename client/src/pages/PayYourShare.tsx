@@ -242,7 +242,7 @@ export function PayYourShare() {
   if (paymentDetails?.cancellation) {
     const cancellation = paymentDetails.cancellation;
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-lg">
           <CardContent className="p-6 space-y-4">
             <h1 className="text-xl font-bold">
@@ -263,32 +263,32 @@ export function PayYourShare() {
             </p>
           </CardContent>
         </Card>
-      </div>
+      </main>
     );
   }
   // "success" in the URL only means the provider redirected back; the
   // payment is confirmed only once the server has verified it.
   if (successStatus && sessionId && paymentDetails?.status === "paid") {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
         <PaymentSuccess bookingReference={paymentDetails.bookingReference} />
-      </div>
+      </main>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
         <LoadingSkeleton />
-      </div>
+      </main>
     );
   }
 
   if (!paymentDetails) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
         <PaymentNotFound />
-      </div>
+      </main>
     );
   }
 
@@ -299,25 +299,25 @@ export function PayYourShare() {
       new Date(paymentDetails.expiresAt) < new Date())
   ) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
         <PaymentExpired />
-      </div>
+      </main>
     );
   }
 
   // Check if already paid
   if (paymentDetails.status === "paid") {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
         <AlreadyPaid payerName={paymentDetails.payerName} />
-      </div>
+      </main>
     );
   }
 
   // Check if cancelled
   if (paymentDetails.status === "cancelled") {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-lg mx-auto text-center">
           <CardContent className="pt-12 pb-8 space-y-6">
             <div className="flex justify-center">
@@ -335,14 +335,14 @@ export function PayYourShare() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </main>
     );
   }
 
   // Resolve cancellation and expiry before the transient provider-return view.
   if (successStatus && sessionId && unpaidStatuses.has(paymentDetails.status)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
         <div
           className="max-w-md w-full rounded-lg border bg-card p-8 text-center"
           role="status"
@@ -355,7 +355,7 @@ export function PayYourShare() {
             {t("splitPayment.verifyingPaymentHint")}
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -382,7 +382,7 @@ export function PayYourShare() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <main className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-lg mx-auto">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
@@ -486,7 +486,7 @@ export function PayYourShare() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }
 
