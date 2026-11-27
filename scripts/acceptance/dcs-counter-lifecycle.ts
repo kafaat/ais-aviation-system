@@ -968,7 +968,7 @@ export async function verifyDcsCounterLifecycle(
         actor
       );
       await releaseSeat(flightId, "1B", {
-        actor: { userId: ownerId, tenantId },
+        actor: { userId: ownerId },
         expected: { bookingId: j.bookingId, passengerId },
       });
       const current = await getDcsDesk(flightId, actor);
