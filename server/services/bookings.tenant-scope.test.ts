@@ -14,11 +14,19 @@ describe("my bookings tenant isolation contract", () => {
       "utf8"
     );
     const db = readFileSync(join(root, "server/db.ts"), "utf8");
+    const bookingHistory = db.slice(
+      db.indexOf("export async function getBookingsByUserId("),
+      db.indexOf("export async function getBookingByPNR(")
+    );
     expect(router).toContain("ctx.tenantId");
     expect(service).toContain("db.getBookingsByUserId(userId, tenantId)");
-    expect(db).toContain("eq(bookings.tenantId, tenantId)");
-    expect(db).toContain("eq(passengers.tenantId, tenantId)");
-    expect(db).toContain(".where(bookingWhere)");
-    expect(db).toContain(".where(passengerWhere)");
+    expect(bookingHistory).toContain("eq(bookings.tenantId, tenantId)");
+    expect(bookingHistory).toContain("eq(passengers.tenantId, tenantId)");
+    // Pagination can compose additional filters, but account scope must remain
+    // in WHERE; its declaration alone does not prove that it is applied.
+    expect(bookingHistory).toMatch(
+      /\.where\(\s*(?:bookingWhere\s*\)|and\(\s*bookingWhere\s*,)/
+    );
+    expect(bookingHistory).toContain(".where(passengerWhere)");
   });
 });
