@@ -1,5 +1,51 @@
 # Changelog
 
+## What's Changed in v1.45.1
+
+<!-- ais-release-source: 97f5fbf3375102fff420a2e8f404bd2e9f742fbf -->
+<!-- ais-release-notes:start -->
+
+### Bug Fixes
+
+- fix(deps): reconcile npm updates with main and formatter (bcae1b4e)
+
+### Maintenance
+
+- chore(deps): bump the auth-compatible group (4569d3e2)
+- chore(deps): bump the contracts-compatible group (39ed33c6)
+- chore(ci): bump actions/dependency-review-action (bafc6c84)
+- chore(deps): bump the npm-compatible group with 20 updates (a69e15e0)
+- chore(deps): bump i18next from 25.10.10 to 26.3.4 (7deb5d51)
+- ci: do not treat a stale unpublished release branch as a proposal to refresh (#404) (0897f738)
+
+### Other Changes
+
+- Merge pull request #399 from kafaat/dependabot/pip/auth-service/auth-compatible-e9133e4828 (fa101a0d)
+- Merge branch 'main' into dependabot/pip/scripts/contracts/contracts-compatible-0ac459a531 (749554af)
+- Merge branch 'main' into dependabot/github_actions/actions-compatible-a5963559a0 (b45d096c)
+- Merge branch 'main' into dependabot/npm_and_yarn/npm-compatible-283e460a14 (e2eb7241)
+- Merge pull request #400 from kafaat/dependabot/pip/scripts/contracts/contracts-compatible-0ac459a531 (ba1e4204)
+- Merge branch 'main' into dependabot/github_actions/actions-compatible-a5963559a0 (4c372387)
+- Merge branch 'main' into dependabot/npm_and_yarn/npm-compatible-283e460a14 (645ead8a)
+- Merge branch 'main' into dependabot/github_actions/actions-compatible-a5963559a0 (aa453e7a)
+- Merge branch 'main' into dependabot/npm_and_yarn/i18next-26.3.4 (43953aaa)
+- Merge branch 'main' into dependabot/npm_and_yarn/npm-compatible-283e460a14 (0fed400f)
+- Merge pull request #401 from kafaat/dependabot/github_actions/actions-compatible-a5963559a0 (fa0c13d0)
+- Merge branch 'main' into dependabot/npm_and_yarn/i18next-26.3.4 (686a7783)
+- Batch flight availability reads and enforce database integrity checks (992b9e25)
+- Merge pull request #403 from kafaat/dependabot/npm_and_yarn/i18next-26.3.4 (c3b769fc)
+- Merge branch 'main' into codex/ais-data-integrity-search-pagination-20261127 (85d75e9d)
+- test: preserve booking tenant scope checks with pagination (6ce498e9)
+- Merge pull request #405 from kafaat/codex/ais-data-integrity-search-pagination-20261127 (14924821)
+- Merge branch 'main' into dependabot/npm_and_yarn/npm-compatible-283e460a14 (4dc198b1)
+- Merge pull request #402 from kafaat/dependabot/npm_and_yarn/npm-compatible-283e460a14 (97f5fbf3)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.45.0...v1.45.1
+
+<!-- ais-release-notes:end -->
+
+---
+
 ## What's Changed in v1.45.0
 
 <!-- ais-release-source: a7daef05f1fd77daa64de5e2ca9a19ce465b6328 -->
