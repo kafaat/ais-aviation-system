@@ -142,9 +142,13 @@ nativeDescribe("inventory promises on isolated native MySQL", () => {
   beforeEach(async () => {
     for (const table of tables)
       await pool!.query(`TRUNCATE TABLE \`${getTableName(table)}\``);
-    await db
-      .insert(schema.users)
-      .values({ id: 9, tenantId: 3, openId: "disposable-inventory-owner" });
+    await db.insert(schema.users).values(
+      [9, 10].map(id => ({
+        id,
+        tenantId: 3,
+        openId: "synthetic-inventory-owner-" + id,
+      }))
+    );
     await db.insert(schema.flights).values(
       [41, 42].map(id => ({
         id,
