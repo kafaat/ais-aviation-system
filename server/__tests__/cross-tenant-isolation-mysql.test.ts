@@ -478,6 +478,12 @@ nativeDescribe.sequential(
       const input = { bookingId: 71 };
       const before = await checksums();
       const rails = [
+        () =>
+          c.loyalty.redeemMiles({
+            bookingId: 71,
+            milesToRedeem: 100,
+            idempotencyKey: "disposable-linked-redemption",
+          }),
         () => c.payments.getCheckoutState(input),
         () => c.payments.createCheckoutSession(input),
         () => c.wallet.pay(input),
@@ -740,6 +746,58 @@ nativeDescribe.sequential(
       ])
         await expect(invoke()).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(await checksums()).toEqual(before);
+    });
+
+    it("withholds a former-airline booking as review proof and personalized history", async () => {
+      const current = callerFor({ id: 9, role: "user", tenantId: 3 });
+      await fixture.pool.query(
+        "UPDATE bookings SET status='completed' WHERE id=71"
+      );
+      expect(await current.reviews.canReview({ flightId: 41 })).toMatchObject({
+        bookingId: 71,
+      });
+      expect(
+        (await current.suggestions.forUser({ limit: 6 })).some(
+          f => f.reason === "history"
+        )
+      ).toBe(true);
+      await fixture.pool.query("UPDATE users SET tenantId=4 WHERE id=9");
+      const moved = callerFor({ id: 9, role: "user", tenantId: 4 });
+      expect(await moved.reviews.canReview({ flightId: 41 })).toEqual({
+        canReview: false,
+        reason: "no_completed_booking",
+      });
+      const suggestions = await moved.suggestions.forUser({ limit: 6 });
+      expect(suggestions.every(f => f.reason !== "history")).toBe(true);
+      const before = await checksums();
+      await expect(
+        moved.reviews.create({ flightId: 41, bookingId: 71, rating: 4 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("keeps purchase references private in public reviews and the author's former-airline reviews", async () => {
+      const owner = callerFor({ id: 9, role: "user", tenantId: 3 });
+      await fixture.pool.query(
+        "UPDATE bookings SET status='completed' WHERE id=71"
+      );
+      await owner.reviews.create({ flightId: 41, bookingId: 71, rating: 4 });
+      expect((await owner.reviews.getUserReviews({}))[0].review.bookingId).toBe(
+        71
+      );
+      const flight = await owner.reviews.getFlightReviews({ flightId: 41 });
+      expect(flight[0]).toMatchObject({ bookingId: null, isVerified: true });
+      const airline = await owner.reviews.getAirlineReviews({ airlineId: 3 });
+      expect(airline[0].review).toMatchObject({
+        bookingId: null,
+        isVerified: true,
+      });
+      await fixture.pool.query("UPDATE users SET tenantId=4 WHERE id=9");
+      const moved = callerFor({ id: 9, role: "user", tenantId: 4 });
+      expect((await moved.reviews.getUserReviews({}))[0].review).toMatchObject({
+        bookingId: null,
+        isVerified: true,
+      });
     });
 
     it("still serves the owner of tenant A the same resources", async () => {

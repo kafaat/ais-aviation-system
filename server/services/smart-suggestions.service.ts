@@ -1,3 +1,4 @@
+import { purchaserBookingCondition } from "./access-control.service";
 /**
  * Smart Flight Suggestions Service
  *
@@ -41,7 +42,8 @@ export interface SuggestedFlight {
  */
 export async function getUserSuggestions(
   userId: number,
-  limit: number = 6
+  limit: number = 6,
+  tenantId?: number | null
 ): Promise<SuggestedFlight[]> {
   const db = await getDb();
   if (!db) return [];
@@ -56,7 +58,12 @@ export async function getUserSuggestions(
       })
       .from(bookings)
       .innerJoin(flights, eq(bookings.flightId, flights.id))
-      .where(and(eq(bookings.userId, userId), isNull(bookings.deletedAt)))
+      .where(
+        and(
+          purchaserBookingCondition(userId, tenantId),
+          isNull(bookings.deletedAt)
+        )
+      )
       .groupBy(flights.destinationId, flights.originId)
       .orderBy(desc(sql`COUNT(*)`))
       .limit(5);
