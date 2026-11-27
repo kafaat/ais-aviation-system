@@ -23,6 +23,7 @@ export interface RebookPassenger {
   lastName: string;
   dateOfBirth: Date | null;
   passportNumber: string | null;
+  passportExpiry: Date | null;
   nationality: string | null;
 }
 
@@ -116,6 +117,7 @@ export async function getRebookData(
       lastName: passengers.lastName,
       dateOfBirth: passengers.dateOfBirth,
       passportNumber: passengers.passportNumber,
+      passportExpiry: passengers.passportExpiry,
       nationality: passengers.nationality,
     })
     .from(passengers)
@@ -180,6 +182,7 @@ export async function getRebookData(
       lastName: p.lastName,
       dateOfBirth: p.dateOfBirth,
       passportNumber: p.passportNumber,
+      passportExpiry: p.passportExpiry,
       nationality: p.nationality,
     })),
     ancillaries: ancillaryResult.map(a => ({
@@ -296,6 +299,7 @@ export async function quickRebook(
       title: p.title ?? undefined,
       dateOfBirth: p.dateOfBirth ?? undefined,
       passportNumber: p.passportNumber ?? undefined,
+      passportExpiry: p.passportExpiry ?? undefined,
       nationality: p.nationality ?? undefined,
     })),
     ancillaries: rebookData.ancillaries.map(a => ({

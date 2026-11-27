@@ -250,6 +250,7 @@ function BookingForm({
         lastName: p.lastName,
         dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : undefined,
         passportNumber: p.passportNumber ?? undefined,
+        passportExpiry: p.passportExpiry ?? undefined,
         nationality: p.nationality ?? undefined,
       }));
       if (prefilled.length > 0) {

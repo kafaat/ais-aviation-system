@@ -14,6 +14,7 @@ export const responseContracts = {
         lastName: z.string(),
         dateOfBirth: z.union([z.null(), z.date()]),
         passportNumber: z.union([z.null(), z.string()]),
+        passportExpiry: z.date().nullable(),
         nationality: z.union([z.null(), z.string()]),
       })
     ),

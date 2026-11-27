@@ -16,6 +16,17 @@ const calls = vi.hoisted(() => ({
   create: vi.fn(),
   offer: vi.fn(),
   savePassenger: vi.fn(),
+  rebook: undefined as
+    | undefined
+    | {
+        passengers: Array<{
+          type: string;
+          firstName: string;
+          lastName: string;
+          passportNumber: string;
+          passportExpiry: Date;
+        }>;
+      },
   allocation: undefined as
     undefined | { passengers: number; totalAmount: number },
 }));
@@ -100,7 +111,7 @@ vi.mock("@/lib/trpc", () => ({
       add: { useMutation: () => ({ mutateAsync: calls.savePassenger }) },
     },
     userPreferences: { getMyPreferences: { useQuery: () => ({}) } },
-    rebooking: { getRebookData: { useQuery: () => ({}) } },
+    rebooking: { getRebookData: { useQuery: () => ({ data: calls.rebook }) } },
     favorites: {
       getAll: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
       add: { useMutation: () => ({ mutate: vi.fn() }) },
@@ -167,6 +178,7 @@ vi.mock("@/lib/trpc", () => ({
 
 beforeEach(() => {
   calls.allocation = undefined;
+  calls.rebook = undefined;
   calls.create.mockReset().mockResolvedValue({ bookingId: 700 });
   calls.offer.mockReset().mockResolvedValue({
     offerId: "synthetic-offer",
@@ -604,3 +616,22 @@ it.each([
     );
   }
 );
+
+it("carries the original document date through editable rebooking", async () => {
+  const expiry = new Date("2029-05-10T00:00:00Z");
+  calls.rebook = {
+    passengers: [
+      {
+        type: "adult",
+        firstName: "Test",
+        lastName: "Passenger",
+        passportNumber: "X12345678",
+        passportExpiry: expiry,
+      },
+    ],
+  };
+  prepare("/booking/42?rebook=3", []);
+  expect(await submit()).toMatchObject([
+    { passportNumber: "X12345678", passportExpiry: expiry },
+  ]);
+});
