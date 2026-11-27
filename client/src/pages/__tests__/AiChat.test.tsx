@@ -155,6 +155,44 @@ it("discards an old answer after a new conversation starts", async () => {
   expect(log).not.toHaveTextContent("Stale response");
 });
 
+it("discloses that stopping the wait hides the pending reply without claiming server cancellation", async () => {
+  current.language = "en";
+  Element.prototype.scrollIntoView = vi.fn();
+  let finish!: (value: { message: string }) => void;
+  current.pending = new Promise(resolve => {
+    finish = resolve;
+  });
+  try {
+    render(<AiChat />);
+    fireEvent.click(
+      screen.getByRole("button", { name: en.aiChat.startConversation })
+    );
+    const input = await screen.findByRole("textbox", {
+      name: en.aiChat.messageLabel,
+    });
+    fireEvent.change(input, { target: { value: "Find a flight" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: en.aiChat.sendMessage })
+    );
+    const stop = await screen.findByRole("button", { name: "Stop waiting" });
+    expect(
+      screen.getByText(
+        /The request may still finish and be saved to this conversation/
+      )
+    ).toBeVisible();
+    fireEvent.click(stop);
+    expect(input).toBeEnabled();
+    await act(async () =>
+      finish({ message: "Completed after the wait stopped" })
+    );
+    expect(screen.getByRole("log")).not.toHaveTextContent(
+      "Completed after the wait stopped"
+    );
+  } finally {
+    current.pending = null;
+  }
+});
+
 it.each([
   "",
   "javascript:alert(1)",

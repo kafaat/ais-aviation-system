@@ -140,7 +140,7 @@ export default function AiChat() {
     setIsGenerating(true);
     setSuggestions([]);
 
-    // Create abort controller for stop generation
+    // Suppress a late reply locally. This does not cancel server processing.
     const request = new AbortController();
     abortControllerRef.current = request;
 
@@ -186,7 +186,7 @@ export default function AiChat() {
     }
   };
 
-  const handleStopGeneration = () => {
+  const handleStopWaiting = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setIsGenerating(false);
@@ -201,7 +201,7 @@ export default function AiChat() {
   };
 
   const handleNewConversation = () => {
-    handleStopGeneration();
+    handleStopWaiting();
     setConversationId(null);
     setMessages([]);
     setSuggestions([]);
@@ -560,9 +560,10 @@ export default function AiChat() {
               <Button
                 size="icon"
                 variant="destructive"
-                onClick={handleStopGeneration}
+                onClick={handleStopWaiting}
                 className="h-11 w-11 rounded-xl flex-shrink-0"
-                title={t("aiChat.stopGeneration")}
+                title={t("aiChat.stopWaiting")}
+                aria-label={t("aiChat.stopWaiting")}
               >
                 <Square className="w-4 h-4" />
               </Button>
@@ -578,6 +579,11 @@ export default function AiChat() {
               </Button>
             )}
           </div>
+          {isGenerating && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t("aiChat.stopWaitingNote")}
+            </p>
+          )}
           <div className="text-center mt-2">
             <ChatDisclosure />
           </div>
