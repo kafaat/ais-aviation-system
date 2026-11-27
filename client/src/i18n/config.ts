@@ -12,6 +12,7 @@ i18n
       ar: { translation: ar },
       en: { translation: en },
     },
+    supportedLngs: ["ar", "en"],
     fallbackLng: "ar",
     interpolation: {
       escapeValue: false,
