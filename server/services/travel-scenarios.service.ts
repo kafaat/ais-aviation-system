@@ -1,4 +1,5 @@
 import { flightBookingCondition } from "./flight-state.service";
+import { purchaserBookingCondition } from "./access-control.service";
 import {
   sourcedCarbon,
   sourcedTravelRequirements,
@@ -145,7 +146,11 @@ export async function processAutoCheckIns() {
 /**
  * Generate a shareable itinerary summary (no payment/private info)
  */
-export async function getShareableItinerary(bookingId: number, userId: number) {
+export async function getShareableItinerary(
+  bookingId: number,
+  userId: number,
+  tenantId?: number | null
+) {
   const database = await getDb();
   if (!database) {
     throw new TRPCError({
@@ -157,7 +162,12 @@ export async function getShareableItinerary(bookingId: number, userId: number) {
   const [booking] = await database
     .select()
     .from(bookings)
-    .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)));
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        purchaserBookingCondition(userId, tenantId)
+      )
+    );
   if (!booking)
     throw new TRPCError({
       code: "NOT_FOUND",

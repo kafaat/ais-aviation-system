@@ -466,12 +466,15 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
     });
 
     it("should report baggage as lost", async () => {
-      const result = await baggageService.reportLostBaggage({
-        tagNumber: lostTagNumber,
-        description: "Last seen at carousel 5",
-        contactEmail: "test@example.com",
-        contactPhone: "+1234567890",
-      });
+      const result = await baggageService.reportLostBaggage(
+        {
+          tagNumber: lostTagNumber,
+          description: "Last seen at carousel 5",
+          contactEmail: "test@example.com",
+          contactPhone: "+1234567890",
+        },
+        { id: testUserId, role: "user" }
+      );
 
       expect(result.success).toBe(true);
       expect(result.baggage.status).toBe("lost");
@@ -484,19 +487,25 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
 
     it("should reject reporting already lost baggage", async () => {
       await expect(
-        baggageService.reportLostBaggage({
-          tagNumber: lostTagNumber,
-          description: "Trying to report again",
-        })
+        baggageService.reportLostBaggage(
+          {
+            tagNumber: lostTagNumber,
+            description: "Trying to report again",
+          },
+          { id: testUserId, role: "user" }
+        )
       ).rejects.toThrow("already been reported as lost");
     });
 
     it("should reject reporting non-existent baggage", async () => {
       await expect(
-        baggageService.reportLostBaggage({
-          tagNumber: "NONEXISTENT",
-          description: "Test description",
-        })
+        baggageService.reportLostBaggage(
+          {
+            tagNumber: "NONEXISTENT",
+            description: "Test description",
+          },
+          { id: testUserId, role: "user" }
+        )
       ).rejects.toThrow("Baggage not found");
     });
   });
@@ -511,10 +520,13 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
       foundBaggageId = baggage.id;
       foundTagNumber = baggage.tagNumber;
 
-      await baggageService.reportLostBaggage({
-        tagNumber: foundTagNumber,
-        description: "Lost at terminal",
-      });
+      await baggageService.reportLostBaggage(
+        {
+          tagNumber: foundTagNumber,
+          description: "Lost at terminal",
+        },
+        { id: testUserId, role: "user" }
+      );
     });
 
     afterAll(async () => {

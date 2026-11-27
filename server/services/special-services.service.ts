@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { eq, and, inArray } from "drizzle-orm";
 import { getDb } from "../db";
+import { lockBookingUserTenants } from "./access-control.service";
+import { isAdmin } from "./rbac.service";
 import {
   specialServices,
   bookings,
@@ -131,6 +133,7 @@ type ServiceRequestData = {
   serviceCode: string;
   details?: Record<string, unknown>;
 };
+type ServiceRequestActor = { id: number; role: string };
 
 type ServiceTransaction = Parameters<
   Parameters<NonNullable<Awaited<ReturnType<typeof getDb>>>["transaction"]>[0]
@@ -142,7 +145,8 @@ async function requireEligibleServiceSector(
   tx: ServiceTransaction,
   data: ServiceRequestData,
   excludeServiceId?: number,
-  expectedSegmentId?: number | null
+  expectedSegmentId?: number | null,
+  actor?: ServiceRequestActor
 ) {
   // Validate booking exists
   const [booking] = await tx
@@ -153,6 +157,13 @@ async function requireEligibleServiceSector(
 
   if (!booking) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  }
+  // A request context can precede a concurrent tenant reassignment. Serialize
+  // the authority check with that update before locking any service resources.
+  if (actor && !isAdmin(actor.role)) {
+    if (booking.userId !== actor.id || booking.deletedAt)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    await lockBookingUserTenants(tx, booking.tenantId, [actor.id]);
   }
 
   // Validate passenger belongs to booking
@@ -284,8 +295,14 @@ async function requireEligibleServiceSector(
 }
 
 export async function requestService(
-  data: ServiceRequestData
+  data: ServiceRequestData,
+  actor: ServiceRequestActor
 ): Promise<SpecialService> {
+  if (!actor)
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Request actor required",
+    });
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -294,7 +311,13 @@ export async function requestService(
     });
 
   return db.transaction(async tx => {
-    const sector = await requireEligibleServiceSector(tx, data);
+    const sector = await requireEligibleServiceSector(
+      tx,
+      data,
+      undefined,
+      undefined,
+      actor
+    );
 
     // Create the service request
     const serviceData: InsertSpecialService = {
@@ -412,51 +435,53 @@ export async function cancelService(
       message: "Database not available",
     });
 
-  // Get the service
-  const service = await getServiceById(serviceId);
-  if (!service) {
+  // The initial read only resolves the parent. Re-read the service after the
+  // booking/current-owner locks, in the same order as creation and admin edits.
+  const initial = await getServiceById(serviceId);
+  if (!initial) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Special service request not found",
     });
   }
-
-  // Check if the service is in a cancellable state
-  if (service.status === "cancelled") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Service request is already cancelled",
-    });
-  }
-
-  // Get the booking to verify ownership
-  const booking = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, service.bookingId))
-    .limit(1);
-
-  if (booking.length === 0) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-  }
-
-  if (booking[0].userId !== userId) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You are not authorized to cancel this service request",
-    });
-  }
-
-  // Update the service status to cancelled
-  await db
-    .update(specialServices)
-    .set({ status: "cancelled", updatedAt: new Date() })
-    .where(eq(specialServices.id, serviceId));
-
-  return {
-    success: true,
-    message: "Special service request cancelled successfully",
-  };
+  return db.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, initial.bookingId))
+      .for("update");
+    if (!booking || booking.userId !== userId || booking.deletedAt)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    await lockBookingUserTenants(tx, booking.tenantId, [userId]);
+    const [service] = await tx
+      .select()
+      .from(specialServices)
+      .where(
+        and(
+          eq(specialServices.id, serviceId),
+          eq(specialServices.bookingId, booking.id)
+        )
+      )
+      .for("update");
+    if (!service)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Special service request not found",
+      });
+    if (service.status === "cancelled")
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Service request is already cancelled",
+      });
+    await tx
+      .update(specialServices)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(eq(specialServices.id, serviceId));
+    return {
+      success: true,
+      message: "Special service request cancelled successfully",
+    };
+  });
 }
 
 /**

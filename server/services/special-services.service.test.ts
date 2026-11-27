@@ -160,13 +160,16 @@ describe.skipIf(!dbAvailable)("Special Services Service", () => {
 
   describe("requestService", () => {
     it("should create a special service request for a passenger", async () => {
-      const service = await specialServicesService.requestService({
-        bookingId: testBookingId,
-        passengerId: testPassengerId,
-        serviceType: "meal",
-        serviceCode: "VGML",
-        details: { notes: "No onions please" },
-      });
+      const service = await specialServicesService.requestService(
+        {
+          bookingId: testBookingId,
+          passengerId: testPassengerId,
+          serviceType: "meal",
+          serviceCode: "VGML",
+          details: { notes: "No onions please" },
+        },
+        { id: testUserId, role: "user" }
+      );
 
       testServiceId = service.id;
 
@@ -181,55 +184,70 @@ describe.skipIf(!dbAvailable)("Special Services Service", () => {
 
     it("should reject invalid booking ID", async () => {
       await expect(
-        specialServicesService.requestService({
-          bookingId: 999999,
-          passengerId: testPassengerId,
-          serviceType: "meal",
-          serviceCode: "VGML",
-        })
+        specialServicesService.requestService(
+          {
+            bookingId: 999999,
+            passengerId: testPassengerId,
+            serviceType: "meal",
+            serviceCode: "VGML",
+          },
+          { id: testUserId, role: "user" }
+        )
       ).rejects.toThrow("Booking not found");
     });
 
     it("should reject invalid passenger ID", async () => {
       await expect(
-        specialServicesService.requestService({
-          bookingId: testBookingId,
-          passengerId: 999999,
-          serviceType: "meal",
-          serviceCode: "VGML",
-        })
+        specialServicesService.requestService(
+          {
+            bookingId: testBookingId,
+            passengerId: 999999,
+            serviceType: "meal",
+            serviceCode: "VGML",
+          },
+          { id: testUserId, role: "user" }
+        )
       ).rejects.toThrow("Passenger not found");
     });
 
     it("should reject invalid service code for service type", async () => {
       await expect(
-        specialServicesService.requestService({
-          bookingId: testBookingId,
-          passengerId: testPassengerId,
-          serviceType: "meal",
-          serviceCode: "WCHR", // Wheelchair code for meal type
-        })
+        specialServicesService.requestService(
+          {
+            bookingId: testBookingId,
+            passengerId: testPassengerId,
+            serviceType: "meal",
+            serviceCode: "WCHR", // Wheelchair code for meal type
+          },
+          { id: testUserId, role: "user" }
+        )
       ).rejects.toThrow("Invalid service code");
     });
 
     it("should reject duplicate service request for same type", async () => {
       await expect(
-        specialServicesService.requestService({
-          bookingId: testBookingId,
-          passengerId: testPassengerId,
-          serviceType: "meal", // Already requested
-          serviceCode: "MOML",
-        })
+        specialServicesService.requestService(
+          {
+            bookingId: testBookingId,
+            passengerId: testPassengerId,
+            serviceType: "meal", // Already requested
+            serviceCode: "MOML",
+          },
+          { id: testUserId, role: "user" }
+        )
       ).rejects.toThrow("already exists");
     });
 
     it("should allow different service types for same passenger", async () => {
-      const wheelchairService = await specialServicesService.requestService({
-        bookingId: testBookingId,
-        passengerId: testPassengerId,
-        serviceType: "wheelchair",
-        serviceCode: "WCHR",
-      });
+      const wheelchairService = await specialServicesService.requestService(
+        {
+          bookingId: testBookingId,
+          passengerId: testPassengerId,
+          serviceType: "wheelchair",
+          serviceCode: "WCHR",
+        },
+        { id: testUserId, role: "user" }
+      );
 
       expect(wheelchairService).toBeDefined();
       expect(wheelchairService.serviceType).toBe("wheelchair");
@@ -295,12 +313,15 @@ describe.skipIf(!dbAvailable)("Special Services Service", () => {
   describe("cancelService", () => {
     it("should cancel a service request", async () => {
       // Create a service to cancel
-      const newService = await specialServicesService.requestService({
-        bookingId: testBookingId,
-        passengerId: testPassengerId,
-        serviceType: "medical_assistance",
-        serviceCode: "MEDA",
-      });
+      const newService = await specialServicesService.requestService(
+        {
+          bookingId: testBookingId,
+          passengerId: testPassengerId,
+          serviceType: "medical_assistance",
+          serviceCode: "MEDA",
+        },
+        { id: testUserId, role: "user" }
+      );
 
       const result = await specialServicesService.cancelService(
         newService.id,
@@ -318,12 +339,15 @@ describe.skipIf(!dbAvailable)("Special Services Service", () => {
 
     it("should reject cancellation for already cancelled service", async () => {
       // Create and cancel a service
-      const newService = await specialServicesService.requestService({
-        bookingId: testBookingId,
-        passengerId: testPassengerId,
-        serviceType: "pet_in_cabin",
-        serviceCode: "PETC",
-      });
+      const newService = await specialServicesService.requestService(
+        {
+          bookingId: testBookingId,
+          passengerId: testPassengerId,
+          serviceType: "pet_in_cabin",
+          serviceCode: "PETC",
+        },
+        { id: testUserId, role: "user" }
+      );
 
       await specialServicesService.cancelService(newService.id, testUserId);
 
@@ -343,19 +367,22 @@ describe.skipIf(!dbAvailable)("Special Services Service", () => {
         role: "user",
       });
 
-      const medicalService = await specialServicesService.requestService({
-        bookingId: testBookingId,
-        passengerId: testPassengerId,
-        serviceType: "medical_assistance",
-        serviceCode: "MEDA",
-      });
+      const medicalService = await specialServicesService.requestService(
+        {
+          bookingId: testBookingId,
+          passengerId: testPassengerId,
+          serviceType: "medical_assistance",
+          serviceCode: "MEDA",
+        },
+        { id: testUserId, role: "user" }
+      );
 
       await expect(
         specialServicesService.cancelService(
           medicalService.id,
           otherUserResult.insertId
         )
-      ).rejects.toThrow("not authorized");
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
       // Cleanup
       await db.delete(users).where(eq(users.id, otherUserResult.insertId));
@@ -407,12 +434,15 @@ describe.skipIf(!dbAvailable)("Special Services Service", () => {
         lastName: "Doe",
       });
 
-      const pendingService = await specialServicesService.requestService({
-        bookingId: testBookingId,
-        passengerId: passengerResult.insertId,
-        serviceType: "meal",
-        serviceCode: "MOML",
-      });
+      const pendingService = await specialServicesService.requestService(
+        {
+          bookingId: testBookingId,
+          passengerId: passengerResult.insertId,
+          serviceType: "meal",
+          serviceCode: "MOML",
+        },
+        { id: testUserId, role: "user" }
+      );
 
       const pendingServices = await specialServicesService.getPendingServices();
 
@@ -448,19 +478,25 @@ describe.skipIf(!dbAvailable)("Special Services Service", () => {
         lastName: "Bulk2",
       });
 
-      const service1 = await specialServicesService.requestService({
-        bookingId: testBookingId,
-        passengerId: passenger1Result.insertId,
-        serviceType: "meal",
-        serviceCode: "KSML",
-      });
+      const service1 = await specialServicesService.requestService(
+        {
+          bookingId: testBookingId,
+          passengerId: passenger1Result.insertId,
+          serviceType: "meal",
+          serviceCode: "KSML",
+        },
+        { id: testUserId, role: "user" }
+      );
 
-      const service2 = await specialServicesService.requestService({
-        bookingId: testBookingId,
-        passengerId: passenger2Result.insertId,
-        serviceType: "meal",
-        serviceCode: "GFML",
-      });
+      const service2 = await specialServicesService.requestService(
+        {
+          bookingId: testBookingId,
+          passengerId: passenger2Result.insertId,
+          serviceType: "meal",
+          serviceCode: "GFML",
+        },
+        { id: testUserId, role: "user" }
+      );
 
       const result = await specialServicesService.bulkUpdateServiceStatus(
         [service1.id, service2.id],

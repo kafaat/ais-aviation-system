@@ -43,6 +43,7 @@ const tables = [
   "flights",
   "special_services",
   "apis_data",
+  "users",
 ];
 
 /** Real InnoDB transaction acceptance. Tables retain the migration-verified
@@ -123,10 +124,13 @@ nativeDescribe.sequential(
         before: "checked_in" as const,
         after: "lost",
         run: () =>
-          reportLostBaggage({
-            tagNumber: "0650000001",
-            description: "Synthetic missing baggage",
-          }),
+          reportLostBaggage(
+            {
+              tagNumber: "0650000001",
+              description: "Synthetic missing baggage",
+            },
+            { id: 4, role: "user" }
+          ),
       },
       {
         name: "found report",
@@ -136,8 +140,26 @@ nativeDescribe.sequential(
           markBaggageFound({ tagNumber: "0650000001", foundLocation: "Store" }),
       },
     ];
+    async function seedBaggageOwner() {
+      await state.db!.insert(schema.users).values({
+        id: 4,
+        openId: "native-baggage-owner",
+        role: "user",
+      });
+      await state.db!.insert(schema.bookings).values({
+        id: 1,
+        userId: 4,
+        flightId: 3,
+        bookingReference: "OP0001",
+        pnr: "OP0001",
+        cabinClass: "economy",
+        totalAmount: 10000,
+        numberOfPassengers: 1,
+      });
+    }
     for (const command of baggageCommands) {
       it(`rolls back ${command.name} when native history insertion fails, then retries once`, async () => {
+        await seedBaggageOwner();
         await state.db!.insert(schema.baggageItems).values({
           id: 1,
           bookingId: 1,
@@ -171,6 +193,7 @@ nativeDescribe.sequential(
         });
       });
       it(`keeps signed handback unchanged during ${command.name}`, async () => {
+        await seedBaggageOwner();
         await state.db!.insert(schema.baggageItems).values({
           id: 1,
           bookingId: 1,

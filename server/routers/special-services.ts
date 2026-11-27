@@ -1,4 +1,3 @@
-import { isAdmin } from "../services/rbac.service";
 import { responseContracts } from "../contracts/special-services";
 import { z } from "zod";
 import {
@@ -9,9 +8,11 @@ import {
 } from "../_core/trpc";
 import * as specialServicesService from "../services/special-services.service";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
-import { bookings, passengers } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import {
+  assertBookingOwnership,
+  assertPassengerOwnership,
+  purchaserScope,
+} from "../services/access-control.service";
 
 /**
  * Special Services Router
@@ -57,42 +58,10 @@ export const specialServicesRouter = router({
     )
     .output(responseContracts["requestService"])
     .mutation(async ({ input, ctx }) => {
-      // Verify booking ownership
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You are not authorized to modify this booking",
-        });
-      }
-
       try {
-        const service = await specialServicesService.requestService({
-          bookingId: input.bookingId,
-          passengerId: input.passengerId,
-          flightId: input.flightId,
-          serviceType: input.serviceType,
-          serviceCode: input.serviceCode,
-          details: input.details,
+        const service = await specialServicesService.requestService(input, {
+          id: ctx.user.id,
+          role: ctx.user.role,
         });
 
         return {
@@ -122,33 +91,12 @@ export const specialServicesRouter = router({
     )
     .output(responseContracts["getBookingServices"])
     .query(async ({ input, ctx }) => {
-      // Verify booking ownership
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      if (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
 
       try {
         const services = await specialServicesService.getBookingServices(
@@ -185,6 +133,7 @@ export const specialServicesRouter = router({
         );
         return result;
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         const message =
           error instanceof Error ? error.message : "Failed to cancel service";
         throw new TRPCError({
@@ -217,29 +166,12 @@ export const specialServicesRouter = router({
         });
       }
 
-      // Verify booking ownership
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, service.bookingId))
-        .limit(1);
-
-      if (
-        !booking ||
-        (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role))
-      ) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Special service not found",
-        });
-      }
+      await assertBookingOwnership(
+        service.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
 
       return service;
     }),
@@ -256,42 +188,12 @@ export const specialServicesRouter = router({
     )
     .output(responseContracts["getPassengerServices"])
     .query(async ({ input, ctx }) => {
-      // Verify passenger belongs to a booking owned by the user
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      const [passenger] = await db
-        .select({ bookingId: passengers.bookingId })
-        .from(passengers)
-        .where(eq(passengers.id, input.passengerId))
-        .limit(1);
-
-      if (!passenger) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Passenger not found",
-        });
-      }
-
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, passenger.bookingId))
-        .limit(1);
-
-      if (
-        !booking ||
-        (booking.userId !== ctx.user.id && !isAdmin(ctx.user.role))
-      ) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Passenger not found",
-        });
-      }
+      await assertPassengerOwnership(
+        input.passengerId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
 
       try {
         const services = await specialServicesService.getPassengerServices(

@@ -53,7 +53,11 @@ export const travelScenariosRouter = router({
     )
     .output(responseContracts["getShareableItinerary"])
     .query(async ({ ctx, input }) => {
-      return await getShareableItinerary(input.bookingId, ctx.user.id);
+      return await getShareableItinerary(
+        input.bookingId,
+        ctx.user.id,
+        ctx.tenantId
+      );
     }),
 
   // ============ Carbon Offset ============

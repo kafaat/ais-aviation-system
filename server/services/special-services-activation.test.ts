@@ -20,6 +20,7 @@ const service = {
 };
 beforeEach(() => {
   fixture = transactionMemory({
+    users: [{ id: 4, tenantId: null }],
     bookings: [
       { id: 1, userId: 4, flightId: 3, tenantId: null, status: "confirmed" },
     ],
@@ -48,13 +49,16 @@ beforeEach(() => {
 describe("SSR activation preserves sector uniqueness", () => {
   for (const target of ["pending", "confirmed"] as const) {
     it(`cannot restore a cancelled service to ${target} after its replacement was requested`, async () => {
-      await requestService({
-        bookingId: 1,
-        passengerId: 5,
-        flightId: 3,
-        serviceType: "meal",
-        serviceCode: "VGML",
-      });
+      await requestService(
+        {
+          bookingId: 1,
+          passengerId: 5,
+          flightId: 3,
+          serviceType: "meal",
+          serviceCode: "VGML",
+        },
+        { id: 4, role: "user" }
+      );
       await expect(updateServiceStatus(6, target)).rejects.toMatchObject({
         code: "BAD_REQUEST",
       });
