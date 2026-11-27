@@ -1,3 +1,4 @@
+import { purchaserBookingCondition } from "./access-control.service";
 import { extraNeedsRecoveryReview } from "./recovery-extra-scope";
 import { transitionFlight } from "./flight-state.service";
 import { resolveIROPSEvent } from "./irops.service";
@@ -126,7 +127,10 @@ export async function createDisruption(input: {
 /**
  * Get disruptions for a user's bookings
  */
-export async function getUserDisruptions(userId: number) {
+export async function getUserDisruptions(
+  userId: number,
+  tenantId?: number | null
+) {
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -144,7 +148,12 @@ export async function getUserDisruptions(userId: number) {
       status: bookings.status,
     })
     .from(bookings)
-    .where(and(eq(bookings.userId, userId), ne(bookings.status, "cancelled")));
+    .where(
+      and(
+        purchaserBookingCondition(userId, tenantId),
+        ne(bookings.status, "cancelled")
+      )
+    );
 
   if (userBookings.length === 0) return [];
 

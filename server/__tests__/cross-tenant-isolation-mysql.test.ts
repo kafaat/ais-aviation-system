@@ -463,15 +463,13 @@ nativeDescribe.sequential(
           seatsReserved: false,
         })
         .where(eq(schema.bookings.id, 71));
-      await fixture.db
-        .insert(schema.payments)
-        .values({
-          bookingId: 71,
-          amount: 20000,
-          currency: "SAR",
-          method: "card",
-          status: "completed",
-        });
+      await fixture.db.insert(schema.payments).values({
+        bookingId: 71,
+        amount: 20000,
+        currency: "SAR",
+        method: "card",
+        status: "completed",
+      });
       await fixture.db
         .update(schema.users)
         .set({ tenantId: 4 })
@@ -520,31 +518,27 @@ nativeDescribe.sequential(
           seatsReserved: false,
         })
         .where(eq(schema.bookings.id, 71));
-      await fixture.db
-        .insert(schema.corporateAccounts)
-        .values({
-          id: 1,
-          companyName: "Fixture company",
-          taxId: "SYNTH-1",
-          contactName: "Admin",
-          contactEmail: "corp@example.test",
-          creditLimit: 60000,
-          discountPercent: "10",
-          status: "active",
-        });
+      await fixture.db.insert(schema.corporateAccounts).values({
+        id: 1,
+        companyName: "Fixture company",
+        taxId: "SYNTH-1",
+        contactName: "Admin",
+        contactEmail: "corp@example.test",
+        creditLimit: 60000,
+        discountPercent: "10",
+        status: "active",
+      });
       await fixture.db.insert(schema.corporateUsers).values([
         { userId: 9, corporateAccountId: 1, role: "traveler" },
         { userId: 10, corporateAccountId: 1, role: "admin" },
       ]);
-      await fixture.db
-        .insert(schema.corporateBookings)
-        .values({
-          id: 1,
-          bookingId: 71,
-          bookedByUserId: 9,
-          corporateAccountId: 1,
-          approvalStatus: "pending",
-        });
+      await fixture.db.insert(schema.corporateBookings).values({
+        id: 1,
+        bookingId: 71,
+        bookedByUserId: 9,
+        corporateAccountId: 1,
+        approvalStatus: "pending",
+      });
       const foreign = callerFor({ id: 10, role: "user", tenantId: 4 });
       const before = await checksums();
       await expect(
@@ -577,6 +571,101 @@ nativeDescribe.sequential(
         current.corporate.payInvoice({ bookingId: 71 })
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(await checksums()).toEqual(after);
+    });
+
+    it("removes claim, disruption and seat access after the purchaser moves airlines", async () => {
+      const beforeMove = callerFor({ id: 9, role: "user", tenantId: 3 });
+      const bookingId = 71;
+      const passengerId = 81;
+      const flightId = 41;
+      const claim = {
+        bookingId,
+        passengerId,
+        flightId,
+        regulationType: "local" as const,
+        claimType: "delay" as const,
+      };
+      const filed = await beforeMove.compensation.fileClaim(claim);
+      expect(
+        (await beforeMove.compensation.claimTargets({ bookingId })).passengers
+      ).toHaveLength(2);
+      await fixture.db
+        .insert(schema.flightDisruptions)
+        .values({
+          flightId,
+          type: "delay",
+          reason: "Synthetic delay",
+          severity: "minor",
+        });
+      expect(await beforeMove.disruptions.myDisruptions()).toHaveLength(1);
+      await fixture.db
+        .insert(schema.seatInventory)
+        .values(
+          ["A", "B"].map(column => ({
+            flightId,
+            seatMapId: 1,
+            seatNumber: "1" + column,
+            row: 1,
+            column,
+            cabinClass: "economy" as const,
+            seatType: "window" as const,
+          }))
+        );
+      await beforeMove.seatMap.selectSeat({
+        bookingId,
+        passengerId,
+        flightId,
+        seatNumber: "1A",
+      });
+      const { selectSeat, changeSeat } =
+        await import("../services/seat-map.service");
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 4 })
+        .where(eq(schema.users.id, 9));
+      const c = callerFor({ id: 9, role: "user", tenantId: 4 });
+      const before = await checksums();
+      expect(await c.disruptions.myDisruptions()).toEqual([]);
+      expect(await c.compensation.getMyClaims()).toEqual([]);
+      const refused = [
+        () => c.compensation.claimTargets({ bookingId }),
+        () => c.compensation.fileClaim(claim),
+        () => c.compensation.getClaimDetail({ claimId: filed.id }),
+        () =>
+          c.compensation.checkEligibility({
+            bookingId,
+            flightId,
+            disruptionType: "delay",
+          }),
+        () => c.seatMap.getPassengerSeat({ bookingId, passengerId, flightId }),
+        () =>
+          c.seatMap.selectSeat({
+            bookingId,
+            passengerId,
+            flightId,
+            seatNumber: "1B",
+          }),
+        () =>
+          c.seatMap.changeSeat({
+            bookingId,
+            passengerId,
+            flightId,
+            oldSeatNumber: "1A",
+            newSeatNumber: "1B",
+          }),
+        () =>
+          c.seatMap.checkIn({
+            bookingId,
+            passengerId,
+            flightId,
+            seatNumber: "1A",
+          }),
+        () => selectSeat(flightId, "1B", bookingId, passengerId, undefined, 9),
+        () => changeSeat(flightId, "1A", "1B", bookingId, passengerId, 9),
+      ];
+      for (const action of refused)
+        await expect(action()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
     });
 
     it("still serves the owner of tenant A the same resources", async () => {

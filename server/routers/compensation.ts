@@ -103,7 +103,9 @@ export const compensationRouter = router({
         ),
       })
     )
-    .query(({ ctx, input }) => getClaimTargets(input.bookingId, ctx.user.id)),
+    .query(({ ctx, input }) =>
+      getClaimTargets(input.bookingId, ctx.user.id, ctx.tenantId)
+    ),
   /**
    * File a new compensation claim (authenticated user)
    */
@@ -134,6 +136,7 @@ export const compensationRouter = router({
           claimType: input.claimType,
           reason: input.reason,
           userId: ctx.user.id,
+          tenantId: ctx.tenantId,
         });
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -153,7 +156,7 @@ export const compensationRouter = router({
   getMyClaims: protectedProcedure
     .output(responseContracts["getMyClaims"])
     .query(async ({ ctx }) => {
-      return await getClaimsByUser(ctx.user.id);
+      return await getClaimsByUser(ctx.user.id, ctx.tenantId);
     }),
 
   /**
@@ -163,7 +166,7 @@ export const compensationRouter = router({
     .input(z.object({ claimId: z.number() }))
     .output(responseContracts["getClaimDetail"])
     .query(async ({ ctx, input }) => {
-      return await getClaimById(input.claimId, ctx.user.id);
+      return await getClaimById(input.claimId, ctx.user.id, ctx.tenantId);
     }),
 
   /**
@@ -188,7 +191,8 @@ export const compensationRouter = router({
         input.bookingId,
         input.disruptionType,
         ctx.user.id,
-        input.flightId
+        input.flightId,
+        ctx.tenantId
       );
     }),
 

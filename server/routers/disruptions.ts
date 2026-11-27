@@ -21,7 +21,7 @@ export const disruptionsRouter = router({
   myDisruptions: protectedProcedure
     .output(responseContracts["myDisruptions"])
     .query(async ({ ctx }) => {
-      return await getUserDisruptions(ctx.user.id);
+      return await getUserDisruptions(ctx.user.id, ctx.tenantId);
     }),
 
   /**

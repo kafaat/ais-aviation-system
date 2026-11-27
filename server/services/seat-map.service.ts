@@ -800,11 +800,12 @@ export async function selectSeat(
   seatNumber: string,
   bookingId: number,
   passengerId: number,
-  transaction?: SettlementTx
+  transaction?: SettlementTx,
+  purchaserId?: number
 ): Promise<SeatInventoryItem> {
   const database = await requireDb();
   const assign = async (db: SettlementTx) => {
-    const c = await lockDepartureContext(db, bookingId, flightId);
+    const c = await lockDepartureContext(db, bookingId, flightId, purchaserId);
     const { booking } = c;
     await assertSeatSelectionContext(db, c);
     await assertDcsPassengerMutable(db, { bookingId, passengerId, flightId });
@@ -1101,11 +1102,12 @@ export async function changeSeat(
   oldSeatNumber: string,
   newSeatNumber: string,
   bookingId: number,
-  passengerId: number
+  passengerId: number,
+  purchaserId?: number
 ): Promise<SeatInventoryItem> {
   const database = await requireDb();
   return database.transaction(async db => {
-    const c = await lockDepartureContext(db, bookingId, flightId);
+    const c = await lockDepartureContext(db, bookingId, flightId, purchaserId);
     const { booking } = c;
     await assertSeatSelectionContext(db, c);
     await assertDcsPassengerMutable(db, { bookingId, passengerId, flightId });
@@ -1394,7 +1396,8 @@ export async function checkIn(
   flightId: number,
   bookingId: number,
   passengerId: number,
-  seatNumber?: string
+  seatNumber?: string,
+  owner?: { userId: number; tenantId: number | null }
 ): Promise<{
   seat: SeatInventoryItem;
   boardingGroup: string;
@@ -1402,6 +1405,7 @@ export async function checkIn(
 }> {
   const [result] = await checkInPassengers({
     flightId,
+    owner,
     bookingId,
     assignments: [{ passengerId, seatNumber }],
   });
