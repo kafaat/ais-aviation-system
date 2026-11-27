@@ -3,6 +3,7 @@ import {
   confirmNoChargeService,
   quotePaidOrderService,
   stationServicingAcceptance,
+  stationServicingAuthority,
 } from "./order-servicing.service";
 import { getFlightBaggageCloseout } from "./baggage-custody.service";
 import { TRPCError } from "@trpc/server";
@@ -858,7 +859,8 @@ export function quoteDeskDowngrade(
         },
         c.booking.userId,
         stationTenant(actor),
-        tx
+        tx,
+        stationServicingAuthority(c.booking, actor)
       );
       if (quote.requiresPayment)
         reject("This change requires a paid commercial exchange");
@@ -940,7 +942,8 @@ export function confirmDeskDowngrade(
           reason: input.reason,
           reference: `dcs-operation-event:${quote.id}`,
           expectedRefund: input.expectedRefund,
-        })
+        }),
+        stationServicingAuthority(c.booking, actor)
       );
       if (result.refundDue !== input.expectedRefund)
         reject("Downgrade terms have changed");

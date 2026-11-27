@@ -1,3 +1,5 @@
+import { lockBookingUserTenants } from "./access-control.service";
+import { isAdmin } from "./rbac.service";
 import { persistInitialFareComponents } from "./fare-components.service";
 import { canServiceOrder, type NdcAction } from "./ndc-capabilities";
 import { withInventoryTransaction } from "./inventory-capacity.service";
@@ -161,7 +163,7 @@ export const planSchema = z.object({
 export class OrderServicingUnavailable extends Error {}
 /** Same outward message as a missing record; the caller learns nothing about
  * another family's booking. The outer, non-transactional layer audits it. */
-export class ServicingAccessDenied extends OrderServicingUnavailable {
+export class ServicingAccessDenied extends TRPCError {
   constructor(
     message: string,
     readonly scope: {
@@ -172,8 +174,70 @@ export class ServicingAccessDenied extends OrderServicingUnavailable {
       action: string;
     }
   ) {
-    super(message);
+    super({ code: "NOT_FOUND", message });
   }
+}
+
+/** Customer authorization is checked under the booking lock and before replay. */
+export async function lockServicingPurchaser(
+  tx: SettlementTx,
+  booking: Booking,
+  scope: ServicingAccessDenied["scope"]
+) {
+  try {
+    await lockBookingUserTenants(tx, booking.tenantId, [scope.userId]);
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === "NOT_FOUND")
+      throw new ServicingAccessDenied("Owned booking not found", scope);
+    throw error;
+  }
+}
+
+const stationAuthorityKey = Symbol("validated-station-servicing");
+type StationServicingAuthority = {
+  readonly [stationAuthorityKey]: number;
+  readonly tenantId: number;
+  readonly actorId: number;
+};
+/** Internal DCS adapter only. The station already validates flight/passenger
+ * scope through passengerContext. Its carrier authority is independent of the
+ * purchaser's later assignment; never infer this authority from a transaction
+ * or accept an equivalent flag from a customer request. */
+export function stationServicingAuthority(
+  booking: Pick<Booking, "id" | "tenantId">,
+  actor: { userId: number; role: string; tenantId: number | null }
+): StationServicingAuthority {
+  if (
+    !Number.isSafeInteger(actor.userId) ||
+    actor.userId <= 0 ||
+    (!isAdmin(actor.role) && !["ops", "airline_admin"].includes(actor.role)) ||
+    actor.tenantId == null ||
+    actor.tenantId !== booking.tenantId
+  )
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Station servicing authority required",
+    });
+  return {
+    [stationAuthorityKey]: booking.id,
+    tenantId: actor.tenantId,
+    actorId: actor.userId,
+  };
+}
+function assertStationAuthority(
+  authority: StationServicingAuthority,
+  booking: Booking,
+  transaction?: SettlementTx
+) {
+  if (
+    !transaction ||
+    authority[stationAuthorityKey] !== booking.id ||
+    authority.tenantId !== booking.tenantId
+  )
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Station servicing authority required",
+    });
 }
 const unavailable = (message: string) => new OrderServicingUnavailable(message);
 export const UNSUPPORTED_QUOTE_VERSION =
@@ -369,7 +433,8 @@ export async function quotePaidOrderService(
   raw: z.infer<typeof paidServiceInput>,
   userId: number,
   tenantId: number | null,
-  transaction?: SettlementTx
+  transaction?: SettlementTx,
+  station?: StationServicingAuthority
 ) {
   const input = paidServiceInput.parse(raw);
   const db = await getDb();
@@ -386,6 +451,14 @@ export async function quotePaidOrderService(
       (tenantId !== null && booking.tenantId !== tenantId)
     )
       throw new ServicingAccessDenied("Owned booking not found", {
+        userId,
+        tenantId,
+        bookingId: input.bookingId,
+        action: "order.servicing.quote",
+      });
+    if (station) assertStationAuthority(station, booking, transaction);
+    else
+      await lockServicingPurchaser(tx, booking, {
         userId,
         tenantId,
         bookingId: input.bookingId,
@@ -1399,7 +1472,8 @@ export async function confirmNoChargeService(
   userId: number,
   tenantId: number | null = null,
   transaction?: SettlementTx,
-  consent?: ServicingAcceptance
+  consent?: ServicingAcceptance,
+  station?: StationServicingAuthority
 ) {
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
@@ -1430,6 +1504,18 @@ export async function confirmNoChargeService(
       (tenantId !== null && booking.tenantId !== tenantId)
     )
       throw denied(hint.bookingId);
+    if (station) {
+      assertStationAuthority(station, booking, transaction);
+      if (
+        consent?.acceptedBy?.kind !== "station_agent" ||
+        consent.acceptedBy.actorId !== station.actorId
+      )
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Station acceptance required",
+        });
+    } else
+      await lockServicingPurchaser(tx, booking, denied(hint.bookingId).scope);
     const [change] = await tx
       .select()
       .from(bookingModifications)

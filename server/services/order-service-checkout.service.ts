@@ -14,6 +14,7 @@ import {
 import {
   assertServicingConsent,
   loggedServicing,
+  lockServicingPurchaser,
   parseServicingPlan,
   ServicingAccessDenied,
   validatePaidServiceQuote,
@@ -70,6 +71,7 @@ export async function createOrderServiceCheckout(
         (tenantId !== null && tenantId !== booking.tenantId)
       )
         throw denied(hint.bookingId);
+      await lockServicingPurchaser(tx, booking, denied(hint.bookingId).scope);
       const [change] = await tx
         .select()
         .from(bookingModifications)
@@ -384,17 +386,34 @@ export async function cancelOrderServiceQuote(
     );
   if (!hint || hint.userId !== userId || !hint.servicingPayload)
     return denied();
-  const [owner] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, hint.bookingId))
-    .limit(1);
-  if (
-    !owner ||
-    owner.userId !== userId ||
-    (tenantId !== null && owner.tenantId !== tenantId)
-  )
-    return denied();
+  // Authorize the provider expiry from the current stored identity, not only
+  // the request's earlier tenant snapshot. Recheck when committing local state.
+  await loggedServicing(() =>
+    db.transaction(async tx => {
+      const [owner] = await tx
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, hint.bookingId))
+        .for("update");
+      const scope = {
+        userId,
+        tenantId,
+        bookingId: hint.bookingId,
+        modificationId,
+        action: "order.servicing.cancel",
+      };
+      if (
+        !owner ||
+        owner.userId !== userId ||
+        (tenantId !== null && owner.tenantId !== tenantId)
+      )
+        throw new ServicingAccessDenied(
+          "Owned servicing request not found",
+          scope
+        );
+      await lockServicingPurchaser(tx, owner, scope);
+    })
+  );
   if (hint.checkoutRequestId && !hint.checkoutSessionId)
     throw new Error("Checkout outcome must be reconciled before cancellation");
   if (hint.checkoutSessionId) {
@@ -415,31 +434,52 @@ export async function cancelOrderServiceQuote(
         throw new Error("Unpaid session expiry was not confirmed");
     }
   }
-  return db.transaction(async tx => {
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, hint.bookingId))
-      .for("update");
-    const [change] = await tx
-      .select()
-      .from(bookingModifications)
-      .where(eq(bookingModifications.id, modificationId))
-      .for("update");
-    if (
-      !booking ||
-      booking.userId !== userId ||
-      (tenantId !== null && booking.tenantId !== tenantId) ||
-      !change ||
-      change.userId !== userId ||
-      change.bookingId !== booking.id ||
-      change.status === "completed" ||
-      change.checkoutRequestId !== hint.checkoutRequestId
-    )
-      throw new Error("Servicing request changed");
-    if (change.status === "rejected") return { cancelled: true };
-    await assertNoCollectionReview(tx, booking.id);
-    await releasePendingQuote(tx, change);
-    return { cancelled: true };
-  });
+  return loggedServicing(() =>
+    db.transaction(async tx => {
+      const [booking] = await tx
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, hint.bookingId))
+        .for("update");
+      if (
+        !booking ||
+        booking.userId !== userId ||
+        (tenantId !== null && booking.tenantId !== tenantId)
+      )
+        throw new ServicingAccessDenied("Owned servicing request not found", {
+          userId,
+          tenantId,
+          bookingId: hint.bookingId,
+          modificationId,
+          action: "order.servicing.cancel",
+        });
+      await lockServicingPurchaser(tx, booking, {
+        userId,
+        tenantId,
+        bookingId: hint.bookingId,
+        modificationId,
+        action: "order.servicing.cancel",
+      });
+      const [change] = await tx
+        .select()
+        .from(bookingModifications)
+        .where(eq(bookingModifications.id, modificationId))
+        .for("update");
+      if (
+        !booking ||
+        booking.userId !== userId ||
+        (tenantId !== null && booking.tenantId !== tenantId) ||
+        !change ||
+        change.userId !== userId ||
+        change.bookingId !== booking.id ||
+        change.status === "completed" ||
+        change.checkoutRequestId !== hint.checkoutRequestId
+      )
+        throw new Error("Servicing request changed");
+      if (change.status === "rejected") return { cancelled: true };
+      await assertNoCollectionReview(tx, booking.id);
+      await releasePendingQuote(tx, change);
+      return { cancelled: true };
+    })
+  );
 }

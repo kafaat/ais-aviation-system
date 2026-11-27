@@ -24,7 +24,7 @@ export const rebookingRouter = router({
     )
     .output(responseContracts["getRebookData"])
     .query(async ({ ctx, input }) => {
-      return await getRebookData(input.bookingId, ctx.user.id);
+      return await getRebookData(input.bookingId, ctx.user.id, ctx.tenantId);
     }),
 
   /**

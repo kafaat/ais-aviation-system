@@ -259,6 +259,7 @@ describe("order-service checkout collected while the airline tenant is suspended
       agent_bookings: [],
       corporate_bookings: [],
       tenants: [{ id: 3, status: "active" }],
+      users: [{ id: 1, tenantId: 3 }],
       bookings: [
         {
           id: 7,

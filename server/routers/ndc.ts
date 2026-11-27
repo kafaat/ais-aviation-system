@@ -398,20 +398,18 @@ export const ndcRouter = router({
     .output(responseContracts["retrieveOrder"])
     .query(async ({ ctx, input }) => {
       try {
-        const order = await ndcService.getOrder(input.orderId);
+        const order = await ndcService.getOrder(
+          input.orderId,
+          undefined,
+          isAdmin(ctx.user.role)
+            ? undefined
+            : { userId: ctx.user.id, tenantId: ctx.tenantId }
+        );
 
         if (!order) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: `Order not found: ${input.orderId}`,
-          });
-        }
-
-        // Verify ownership: user must own the order or be an admin
-        if (order.userId !== ctx.user.id && !isAdmin(ctx.user.role)) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "You do not have permission to view this order",
           });
         }
 
@@ -740,7 +738,10 @@ export const ndcRouter = router({
     .output(responseContracts["getOrderHistory"])
     .query(async ({ ctx }) => {
       try {
-        const orders = await ndcService.getOwnedOrderHistory(ctx.user.id);
+        const orders = await ndcService.getOwnedOrderHistory(
+          ctx.user.id,
+          ctx.tenantId
+        );
 
         return {
           success: true,

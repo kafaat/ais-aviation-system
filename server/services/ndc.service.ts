@@ -1,3 +1,5 @@
+import { lockPurchaserBooking } from "./booking-checkout.service";
+import { purchaserBookingCondition } from "./access-control.service";
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { requireLocalNdcOrigin } from "./distribution-readiness.service";
 import { LOCAL_NDC_VERSION as NDC_VERSION } from "./ndc-capabilities";
@@ -1301,7 +1303,8 @@ export async function createOrder(
  */
 export async function getOrder(
   orderId: string,
-  transaction?: SettlementTx
+  transaction?: SettlementTx,
+  purchaser?: { userId: number; tenantId: number | null }
 ): Promise<NdcOrderResponse> {
   const db = transaction ?? getDb();
   if (!db)
@@ -1313,7 +1316,25 @@ export async function getOrder(
   const results = await db
     .select()
     .from(ndcOrders)
-    .where(eq(ndcOrders.orderId, orderId))
+    .where(
+      and(
+        eq(ndcOrders.orderId, orderId),
+        purchaser
+          ? inArray(
+              ndcOrders.bookingId,
+              db
+                .select({ id: bookings.id })
+                .from(bookings)
+                .where(
+                  purchaserBookingCondition(
+                    purchaser.userId,
+                    purchaser.tenantId
+                  )
+                )
+            )
+          : undefined
+      )
+    )
     .limit(1);
 
   const order = results[0];
@@ -1419,16 +1440,7 @@ export async function cancelOrder(
         message: "Owned NDC booking not found",
       });
     // Match collection/refund lock order: booking before NDC order.
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, identity.bookingId))
-      .for("update");
-    if (!booking || booking.userId !== actorId)
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Owned NDC booking not found",
-      });
+    const booking = await lockPurchaserBooking(tx, identity.bookingId, actorId);
     const [order] = await tx
       .select()
       .from(ndcOrders)
@@ -1607,7 +1619,7 @@ export async function getOrderHistory(
     .select()
     .from(ndcOrders)
     .where(and(...conditions))
-    .orderBy(desc(ndcOrders.createdAt))
+    .orderBy(desc(ndcOrders.createdAt), desc(ndcOrders.id))
     .limit(limit)
     .offset(offset);
 
@@ -1666,7 +1678,8 @@ export async function getOrderHistory(
  */
 export async function listOrders(
   filters: OrderHistoryFilters,
-  ownerUserId?: number
+  ownerUserId?: number,
+  ownerTenantId?: number | null
 ): Promise<{ orders: NdcOrderResponse[]; total: number }> {
   const db = await getDb();
   if (!db)
@@ -1685,7 +1698,7 @@ export async function listOrders(
         db
           .select({ id: bookings.id })
           .from(bookings)
-          .where(eq(bookings.userId, ownerUserId))
+          .where(purchaserBookingCondition(ownerUserId, ownerTenantId))
       )
     );
   }
@@ -1727,7 +1740,7 @@ export async function listOrders(
     .select()
     .from(ndcOrders)
     .where(whereClause)
-    .orderBy(desc(ndcOrders.createdAt))
+    .orderBy(desc(ndcOrders.createdAt), desc(ndcOrders.id))
     .limit(limit)
     .offset(offset);
 
@@ -2248,6 +2261,6 @@ export function validateNdcRequest(request: {
 }
 
 /** Customer history is scoped by booking ownership, never by an airline ID. */
-export function getOwnedOrderHistory(userId: number) {
-  return listOrders({}, userId);
+export function getOwnedOrderHistory(userId: number, tenantId?: number | null) {
+  return listOrders({}, userId, tenantId);
 }

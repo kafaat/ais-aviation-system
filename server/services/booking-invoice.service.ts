@@ -20,6 +20,7 @@ import {
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
 import { assertInvoiceEditable } from "./booking-checkout.service";
+import { lockBookingUserTenants } from "./access-control.service";
 import { assertTenantOperational } from "./tenant.service";
 import { allocateProportional } from "./seat-economics.service";
 import { recordEvent } from "./outbox.service";
@@ -65,7 +66,7 @@ export async function issuerMustService(
   return Boolean(agency || corporate);
 }
 
-/** Shared lock order: booking -> checkout -> NDC -> segments -> flights. */
+/** Shared lock order: booking -> purchaser -> checkout -> NDC -> segments -> flights. */
 export async function lockEditableInvoice(
   tx: SettlementTx,
   bookingId: number,
@@ -88,6 +89,8 @@ export async function lockEditableInvoice(
       code: "NOT_FOUND",
       message: "Owned booking not found",
     });
+  if (!actor.admin)
+    await lockBookingUserTenants(tx, booking.tenantId, [actor.userId]);
   await assertTenantOperational(tx, booking.tenantId);
   await assertInvoiceEditable(tx, booking);
   if (action && (await issuerMustService(tx, booking, action)))

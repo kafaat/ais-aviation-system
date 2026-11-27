@@ -29,11 +29,13 @@ beforeEach(() => {
         id: 3,
         bookingReference: "REBOOK",
         userId: 7,
+        tenantId: 2,
         flightId: 1,
         cabinClass: "economy",
         status: "completed",
       },
     ],
+    users: [{ id: 7, tenantId: 2 }],
     passengers: [oldPassenger, { ...oldPassenger, passportExpiry: null }],
     flights: [
       {
@@ -49,7 +51,8 @@ beforeEach(() => {
       },
     ],
   };
-  fixture.getDb.mockReturnValue({
+  const database = {
+    transaction: async <T>(run: (tx: unknown) => Promise<T>) => run(database),
     select: (projection?: Record<string, unknown>) => ({
       from: (table: Table) => {
         const rows = (tables[getTableName(table)] ?? []).map(row =>
@@ -62,6 +65,8 @@ beforeEach(() => {
         const query = {
           where: () => query,
           innerJoin: () => query,
+          for: () => query,
+          orderBy: () => query,
           limit: () => Promise.resolve(rows),
           then: (resolve: (value: typeof rows) => unknown) =>
             Promise.resolve(rows).then(resolve),
@@ -69,7 +74,8 @@ beforeEach(() => {
         return query;
       },
     }),
-  });
+  };
+  fixture.getDb.mockReturnValue(database);
   fixture.getFlightById.mockResolvedValue({
     departureTime: new Date("2030-06-01T12:00:00Z"),
   });

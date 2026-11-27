@@ -20,6 +20,7 @@ beforeEach(() => {
   };
   fixture = transactionMemory({
     tenants: [{ id: 3, status: "active" }],
+    users: [{ id: 9, tenantId: 3 }],
     bookings: [
       {
         id: 7,

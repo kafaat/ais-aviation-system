@@ -6,7 +6,10 @@ import { responseContracts } from "../contracts/modifications";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import * as modificationService from "../services/booking-modification.service";
-import { assertModificationOwnership } from "../services/access-control.service";
+import {
+  assertModificationOwnership,
+  purchaserScope,
+} from "../services/access-control.service";
 
 /**
  * Booking Modifications Router
@@ -81,7 +84,8 @@ export const modificationsRouter = router({
       await assertModificationOwnership(
         input.modificationId,
         ctx.user.id,
-        ctx.user.role
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
       );
       return await modificationService.getModificationDetails(
         input.modificationId
@@ -94,6 +98,9 @@ export const modificationsRouter = router({
   myModifications: protectedProcedure
     .output(responseContracts["myModifications"])
     .query(async ({ ctx }) => {
-      return await modificationService.getUserModifications(ctx.user.id);
+      return await modificationService.getUserModifications(
+        ctx.user.id,
+        ctx.tenantId
+      );
     }),
 });

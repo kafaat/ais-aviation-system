@@ -1,5 +1,7 @@
 import { type NdcAction } from "./ndc-capabilities";
-import { inventoryTransactionConfig } from "./inventory-capacity.service";
+import { withInventoryTransaction } from "./inventory-capacity.service";
+import { getDb } from "../db";
+import { lockPurchaserBooking } from "./booking-checkout.service";
 import { lockRetailOffer, consumeRetailOffer } from "./retail-offer.service";
 import { z } from "zod";
 import { and, asc, eq } from "drizzle-orm";
@@ -45,6 +47,39 @@ import { recordEvent } from "./outbox.service";
 import { assertBookingCapability } from "./ndc-capability-matrix";
 
 type Command = { orderId: string; userId: number; idempotencyKey: string };
+/** Ownership is rechecked before even a completed response is replayed. Keep
+ * booking and current-user locks until the command and its response commit. */
+async function withOwnedOrderCommand<T>(
+  input: Command,
+  command: { scope: string; run: (tx: SettlementTx) => Promise<T> }
+) {
+  const db = getDb();
+  if (!db) throw new Error("Servicing storage unavailable");
+  return await withInventoryTransaction(db, async tx => {
+    const [identity] = await tx
+      .select({ bookingId: ndcOrders.bookingId })
+      .from(ndcOrders)
+      .where(eq(ndcOrders.orderId, input.orderId))
+      .limit(1);
+    if (!identity?.bookingId)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Owned NDC booking not found",
+      });
+    await lockPurchaserBooking(tx, identity.bookingId, input.userId);
+    return withTransactionalIdempotency(
+      {
+        scope: command.scope,
+        key: input.idempotencyKey,
+        userId: input.userId,
+        request: input,
+        run: command.run,
+      },
+      tx
+    );
+  });
+}
+
 async function lockOrder(tx: SettlementTx, input: Command, action: NdcAction) {
   const [identity] = await tx
     .select()
@@ -426,12 +461,8 @@ export async function changeUnpaidOrder(
       code: "BAD_REQUEST",
       message: "No changes requested",
     });
-  return await withTransactionalIdempotency({
-    transactionConfig: inventoryTransactionConfig,
+  return await withOwnedOrderCommand(input, {
     scope: "ndc.order.change",
-    key: input.idempotencyKey,
-    userId: input.userId,
-    request: input,
     run: async tx => {
       const context = await lockOrder(
         tx,
@@ -560,11 +591,8 @@ export async function serviceUnpaidOrder(
       code: "BAD_REQUEST",
       message: "Request 1 to 20 ancillary items",
     });
-  return await withTransactionalIdempotency({
+  return await withOwnedOrderCommand(input, {
     scope: "ndc.order.services",
-    key: input.idempotencyKey,
-    userId: input.userId,
-    request: input,
     run: async tx => {
       const context = await lockOrder(tx, input, "addAncillary");
       await assertBookingCapability(
