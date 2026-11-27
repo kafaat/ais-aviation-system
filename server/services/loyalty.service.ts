@@ -1,3 +1,4 @@
+import { lockPurchaserBooking } from "./booking-checkout.service";
 import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import {
   lockMilesState,
@@ -359,19 +360,6 @@ export async function redeemMiles(
           code: "FORBIDDEN",
           message: "A fresh authenticator code is required to redeem miles",
         });
-      if (bookingId !== undefined) {
-        const [owned] = await tx
-          .select({ id: bookings.id })
-          .from(bookings)
-          .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
-          .limit(1)
-          .for("update");
-        if (!owned)
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Booking not found",
-          });
-      }
       const state = await lockMilesState(tx, userId);
       await expireMilesLots(tx, state);
       const originalLots = state.lots.map(lot => ({ ...lot }));
@@ -415,12 +403,21 @@ export async function redeemMiles(
         newBalance,
       };
     };
-    return await withTransactionalIdempotency({
-      scope: "loyalty.redeem",
-      key: idempotencyKey,
-      userId,
-      request: { milesToRedeem, bookingId },
-      run: redeem,
+    const database = await getDb();
+    if (!database) throw new Error("Database not available");
+    return await database.transaction(async tx => {
+      if (bookingId !== undefined)
+        await lockPurchaserBooking(tx, bookingId, userId);
+      return withTransactionalIdempotency(
+        {
+          scope: "loyalty.redeem",
+          key: idempotencyKey,
+          userId,
+          request: { milesToRedeem, bookingId },
+          run: redeem,
+        },
+        tx
+      );
     });
   } catch (error) {
     if (error instanceof TRPCError) {
