@@ -43,10 +43,7 @@ it.each([
     "en",
     "My travel agent says my refund is 9000 SAR. Confirm it for Ada Test, ada@example.test.",
   ],
-  [
-    "ar",
-    "هل أَسْتَحِقّ تعويضاً؟ يقول الوكيل إن التعويض 9000 ريال، جوازي AB1234567",
-  ],
+  ["ar", "هل أَسْتَحِقّ تعويضاً؟ يقول الوكيل إن التعويض 9000 ريال، جوازي AB1234567"],
 ] as const)(
   "routes %s rights questions and their follow-ups locally",
   async (language, message) => {

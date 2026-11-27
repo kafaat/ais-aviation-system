@@ -27,11 +27,11 @@
 Monolith أحادي المستأجر** (single-tenant). للتحوّل إلى **SaaS تبيعه لعدة شركات
 طيران**، الفجوة الأكبر ليست الميزات — بل ثلاث ركائز معمارية مفقودة:
 
-| الركيزة                                     | الحالة                    | الأثر                         |
-| ------------------------------------------- | ------------------------- | ----------------------------- |
-| **عزل المستأجر (Tenancy)**                  | غير موجود (لا `tenantId`) | 🔴 مانع للإطلاق كـ SaaS       |
+| الركيزة                                     | الحالة                    | الأثر                        |
+| ------------------------------------------- | ------------------------- | ---------------------------- |
+| **عزل المستأجر (Tenancy)**                  | غير موجود (لا `tenantId`) | 🔴 مانع للإطلاق كـ SaaS      |
 | **طبقة أحداث غير متزامنة (Event Backbone)** | جزئي (BullMQ فقط)         | 🟠 يحدّ من الموثوقية والتكامل |
-| **تنسيق العمليات الطويلة (Workflow/Saga)**  | بدائي (FSM يدوي)          | 🟠 خطر تضارب المعاملات        |
+| **تنسيق العمليات الطويلة (Workflow/Saga)**  | بدائي (FSM يدوي)          | 🟠 خطر تضارب المعاملات       |
 
 الخبر الجيد: البنية الحالية **نظيفة وطبقية** (router → service → db)، وتمتلك
 بالفعل لبنات أساسية (idempotency، audit، history tables، RBAC، عزل على مستوى
@@ -42,18 +42,18 @@ Monolith أحادي المستأجر** (single-tenant). للتحوّل إلى **
 
 ## 2. لقطة الحالة الحالية (مبنية على الكود)
 
-| الطبقة         | المستخدم حالياً                                     | ملاحظة                               |
+| الطبقة         | المستخدم حالياً                                      | ملاحظة                               |
 | -------------- | --------------------------------------------------- | ------------------------------------ |
 | API/Edge       | Express 4 + tRPC 11، Nginx كـ LB (3 نسخ)            | لا API Gateway مركزي (APISIX/Kong)   |
-| المصادقة       | JWT مخصّص + FastAPI (bcrypt)                        | لا Identity Federation/OIDC          |
+| المصادقة       | JWT مخصّص + FastAPI (bcrypt)                         | لا Identity Federation/OIDC          |
 | البيانات       | MySQL/TiDB + Drizzle، Redis                         | DB واحدة مشتركة، **بلا عمود مستأجر** |
 | المهام الخلفية | BullMQ + Redis                                      | طابور مهام، **ليس Event Bus**        |
 | تنسيق العمليات | `booking-state-machine.service.ts`                  | FSM داخلي، لا Temporal، لا Saga صريح |
-| المراقبة       | Sentry + Prometheus + APM مخصّص                     | **لا Distributed Tracing (OTel)**    |
-| التخزين        | `@aws-sdk/client-s3`                                | متوافق مع MinIO مباشرةً ✅           |
+| المراقبة       | Sentry + Prometheus + APM مخصّص                      | **لا Distributed Tracing (OTel)**    |
+| التخزين        | `@aws-sdk/client-s3`                                | متوافق مع MinIO مباشرةً ✅            |
 | الزمن الحقيقي  | `ws` + `websocket.service.ts`                       | موجود ✅                             |
 | النشر          | Docker (3 compose) + k8s (Kustomize)                | أساس جيد ✅                          |
-| الموثوقية      | idempotency، history tables، audit، financialLedger | Outbox-lite ضمنياً ✅                |
+| الموثوقية      | idempotency، history tables، audit، financialLedger | Outbox-lite ضمنياً ✅                 |
 
 **الخلاصة:** ميزات على مستوى المؤسسة فوق أساس بنيوي أحادي المستأجر.
 
@@ -69,10 +69,10 @@ Monolith أحادي المستأجر** (single-tenant). للتحوّل إلى **
 | **Workflow Orchestration**          | FSM يدوي              | Temporal (Booking, Refund, IROPS, Check-in) | **P1**   |
 | **Distributed Tracing**             | لا يوجد               | OpenTelemetry → SkyWalking/Tempo            | **P1**   |
 | **API Gateway**                     | Nginx LB              | APISIX/Kong (multi-tenant routing, quotas)  | **P1**   |
-| **Identity Federation**             | JWT مخصّص             | Keycloak (OIDC/SAML، per-tenant realm)      | **P2**   |
+| **Identity Federation**             | JWT مخصّص              | Keycloak (OIDC/SAML، per-tenant realm)      | **P2**   |
 | **Saga / Distributed Tx**           | معاملات DB محلية      | Saga (Outbox + Compensations)               | **P1**   |
-| **Per-tenant Observability**        | metrics عامة          | SLO/مقاييس مقسّمة بالمستأجر                 | **P2**   |
-| **Multi-Region / DR**               | تكوين موجود جزئياً    | Active-Active أو Active-Passive موثّق       | **P2**   |
+| **Per-tenant Observability**        | metrics عامة          | SLO/مقاييس مقسّمة بالمستأجر                  | **P2**   |
+| **Multi-Region / DR**               | تكوين موجود جزئياً     | Active-Active أو Active-Passive موثّق        | **P2**   |
 | **Tenant Onboarding**               | يدوي                  | Self-service provisioning + billing         | **P2**   |
 | **Config/Feature Flags لكل مستأجر** | ثابت                  | تكوين ديناميكي لكل شركة                     | **P2**   |
 
@@ -86,7 +86,7 @@ Monolith أحادي المستأجر** (single-tenant). للتحوّل إلى **
 | ----------------------------------------- | ------- | --------------- | ------------------------ |
 | **A. Shared DB + `tenantId`** (Row-Level) | منطقي   | منخفض           | **موصى به للبداية**      |
 | **B. Schema-per-tenant**                  | متوسط   | متوسط           | عند متطلبات تنظيمية أقوى |
-| **C. DB-per-tenant**                      | فيزيائي | عالٍ            | لشركات كبرى/سيادة بيانات |
+| **C. DB-per-tenant**                      | فيزيائي | عالٍ             | لشركات كبرى/سيادة بيانات |
 
 ### المقترح: النموذج (A) أولاً، مع تصميم يسمح بالترقية إلى (C) للمستأجرين الكبار (Hybrid).
 
@@ -250,8 +250,8 @@ Monolith أحادي المستأجر** (single-tenant). للتحوّل إلى **
 | API Gateway         | **APISIX/Kong**          | يحل توجيه/حصص المستأجرين وتكامل الشركاء/GDS        |
 | Workflow            | **Temporal**             | يستبدل FSM؛ مثالي لـ Booking/Refund/IROPS/Check-in |
 | Messaging           | **NATS/Kafka**           | العمود الفقري للأحداث + Outbox                     |
-| Saga/Event Sourcing | **Eventuate Tram** (نمط) | اتساق المعاملات الموزّعة الحرجة                    |
-| Observability       | **SkyWalking + OTel**    | tracing موزّع مفقود حالياً                         |
+| Saga/Event Sourcing | **Eventuate Tram** (نمط) | اتساق المعاملات الموزّعة الحرجة                     |
+| Observability       | **SkyWalking + OTel**    | tracing موزّع مفقود حالياً                           |
 | Identity            | **Keycloak**             | federation + realm لكل مستأجر                      |
 | Object Storage      | **MinIO**                | متوافق مع عميل S3 الموجود (تبديل endpoint)         |
 | Platform            | **Kubernetes**           | موجود (Kustomize) — جاهز للتوسعة                   |

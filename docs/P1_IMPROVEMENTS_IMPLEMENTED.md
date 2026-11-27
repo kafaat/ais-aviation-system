@@ -505,13 +505,13 @@ try {
 
 ## 📊 ملخص التحسينات
 
-| التحسين           | الحالة | الملفات الجديدة           | الملفات المعدلة      |
-| ----------------- | ------ | ------------------------- | -------------------- |
-| Error Contract    | ✅     | errors.ts, correlation.ts | -                    |
+| التحسين          | الحالة | الملفات الجديدة           | الملفات المعدلة      |
+| ---------------- | ------ | ------------------------- | -------------------- |
+| Error Contract   | ✅     | errors.ts, correlation.ts | -                    |
 | Idempotency محسّن | ✅     | idempotency.service.ts    | schema.ts, migration |
-| Redis Caching     | ✅     | cache.service.ts          | -                    |
-| Background Queue  | ✅     | queue.service.ts          | -                    |
-| Correlation ID    | ✅     | correlation.ts            | -                    |
+| Redis Caching    | ✅     | cache.service.ts          | -                    |
+| Background Queue | ✅     | queue.service.ts          | -                    |
+| Correlation ID   | ✅     | correlation.ts            | -                    |
 
 **المجموع:**
 
