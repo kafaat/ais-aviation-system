@@ -75,7 +75,9 @@ const SKIP_LINKS: SkipLink[] = [
 export function SkipNavigation() {
   const { i18n } = useTranslation();
   const [available, setAvailable] = useState<string[]>([]);
-  const isArabic = (i18n.resolvedLanguage ?? i18n.language).startsWith("ar");
+  const isArabic = (i18n.resolvedLanguage ?? i18n.language ?? "").startsWith(
+    "ar"
+  );
 
   useEffect(() => {
     function updateLinks() {
