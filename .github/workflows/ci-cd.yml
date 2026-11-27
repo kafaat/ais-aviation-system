@@ -1106,6 +1106,10 @@ jobs:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
           CSRF_SECRET: ${{ secrets.STAGING_CSRF_SECRET }}
+          AUTH_SERVICE_TOKEN: ${{ secrets.STAGING_AUTH_SERVICE_TOKEN }}
+          METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+          FRONTEND_URL: ${{ vars.STAGING_URL }}
+          TRUSTED_PROXIES: ${{ vars.TRUSTED_PROXIES }}
           AUTH_SERVICE_URL: "http://ais-auth:8000"
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ vars.EMAIL_FROM }}
@@ -1308,6 +1312,10 @@ jobs:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
           JWT_SECRET: ${{ secrets.PRODUCTION_JWT_SECRET }}
           CSRF_SECRET: ${{ secrets.PRODUCTION_CSRF_SECRET }}
+          AUTH_SERVICE_TOKEN: ${{ secrets.PRODUCTION_AUTH_SERVICE_TOKEN }}
+          METRICS_TOKEN: ${{ secrets.PRODUCTION_METRICS_TOKEN }}
+          FRONTEND_URL: ${{ vars.PRODUCTION_URL }}
+          TRUSTED_PROXIES: ${{ vars.TRUSTED_PROXIES }}
           AUTH_SERVICE_URL: "http://ais-auth:8000"
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ vars.EMAIL_FROM }}

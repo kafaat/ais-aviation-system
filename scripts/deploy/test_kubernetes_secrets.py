@@ -23,6 +23,26 @@ class DeploymentSecrets(unittest.TestCase):
             self.assertIn("kubernetes_secrets.py apply --namespace ais-", block)
             self.assertNotIn("--from-literal", block)
 
+    def test_runtime_bindings_use_the_deployment_environment(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / ".github/workflows/ci-cd.yml").read_text()
+        blocks = re.findall(r"      - name: Create/Update secrets\n(.*?)(?=\n      - name:)", workflow, re.S)
+        for block, stage in zip(blocks, ("STAGING", "PRODUCTION"), strict=True):
+            for key in ("AUTH_SERVICE_TOKEN", "METRICS_TOKEN"):
+                self.assertIn(f"{key}: ${{{{ secrets.{stage}_{key} }}}}", block)
+            self.assertIn(f"FRONTEND_URL: ${{{{ vars.{stage}_URL }}}}", block)
+            self.assertIn("TRUSTED_PROXIES: ${{ vars.TRUSTED_PROXIES }}", block)
+
+        web = (root / "k8s/base/deployment.yaml").read_text()
+        worker, auth = (root / "k8s/base/background.yaml").read_text().split("name: ais-auth", 1)
+        web = " ".join(web.split())
+        auth = " ".join(auth.split())
+        self.assertNotIn("ais-api-credentials", worker)
+        for key in ("AUTH_SERVICE_TOKEN", "METRICS_TOKEN"):
+            self.assertIn(f"secretKeyRef: {{ name: ais-api-credentials, key: {key} }}", web)
+        self.assertIn("secretKeyRef: { name: ais-api-credentials, key: AUTH_SERVICE_TOKEN }", auth)
+        self.assertNotIn("key: METRICS_TOKEN", auth)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -49,11 +69,19 @@ class DeploymentSecrets(unittest.TestCase):
 import base64, hashlib, json, os, pathlib, sys
 payload = json.load(sys.stdin)
 expected = json.loads(os.environ['EXPECTED_SHA'])
-assert payload['metadata'] == {'name': 'ais-secrets', 'namespace': 'ais-staging'}
-assert 'annotations' not in payload['metadata']
-assert set(payload['data']) == set(expected)
+assert payload['kind'] == 'List'
+objects = {item['metadata']['name']: item for item in payload['items']}
+assert set(objects) == {'ais-secrets', 'ais-api-credentials'}
+scoped = objects['ais-api-credentials']['data']
+shared = objects['ais-secrets']['data']
+assert set(scoped) == {'AUTH_SERVICE_TOKEN', 'METRICS_TOKEN'}
+assert set(scoped).isdisjoint(shared)
+data = {**scoped, **shared}
+assert set(data) == set(expected)
+for name, item in objects.items():
+    assert item['metadata'] == {'name': name, 'namespace': 'ais-staging'}
 argv = pathlib.Path('/proc/self/cmdline').read_bytes()
-for key, encoded in payload['data'].items():
+for key, encoded in data.items():
     value = base64.b64decode(encoded)
     assert hashlib.sha256(value).hexdigest() == expected[key]
     assert key not in os.environ
@@ -98,6 +126,12 @@ pathlib.Path(os.environ['PROBE_OUTPUT']).write_text('{"verified": true}')
         self.assertEqual(result.returncode, 1)
         self.assertFalse((self.root / "probe.json").exists())
         self.assertNotIn(self.values["JWT_SECRET"].encode(), result.stderr)
+
+    def test_unconfigured_auth_credential_fails_before_apply(self):
+        self.env["AUTH_SERVICE_TOKEN"] = ""
+        self.fake()
+        self.assertEqual(self.invoke().returncode, 1)
+        self.assertFalse((self.root / "probe.json").exists())
 
     def test_kubeconfig_permissions_bytes_and_status(self):
         content = b"synthetic kubeconfig\n"

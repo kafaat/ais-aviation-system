@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-KEYS = (
+SHARED_KEYS = (
     "SELF_SERVICE_CAPABILITY_SECRET", "QUEUE_REDIS_URL", "SMS_PROVIDER",
     "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
     "HOTELBEDS_MODE", "HOTELBEDS_API_KEY", "HOTELBEDS_SECRET",
@@ -18,18 +18,25 @@ KEYS = (
     "OTEL_EXPORTER_OTLP_HEADERS", "OTEL_TRACES_SAMPLER_ARG", "DATABASE_URL",
     "JWT_SECRET", "CSRF_SECRET", "AUTH_SERVICE_URL", "RESEND_API_KEY", "EMAIL_FROM",
     "OUTBOX_PUBLISH_URL", "OUTBOX_PUBLISH_TOKEN", "STRIPE_SECRET_KEY",
-    "STRIPE_WEBHOOK_SECRET", "REDIS_URL",
+    "STRIPE_WEBHOOK_SECRET", "REDIS_URL", "FRONTEND_URL", "TRUSTED_PROXIES",
 )
+API_KEYS = ("AUTH_SERVICE_TOKEN", "METRICS_TOKEN")
+KEYS = SHARED_KEYS + API_KEYS
 
 
 def manifest(namespace, environment):
     # Empty optional settings retain their existing meaning. Missing bindings
     # fail instead of silently dropping a credential from the deployment.
-    data = {key: base64.b64encode(environment[key].encode("utf-8")).decode("ascii")
-            for key in KEYS}
-    return json.dumps({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
-                       "metadata": {"name": "ais-secrets", "namespace": namespace},
-                       "data": data}).encode("utf-8")
+    if not environment["AUTH_SERVICE_TOKEN"].strip():
+        raise ValueError("Missing shared auth-service credential")
+
+    items = []
+    for name, keys in (("ais-secrets", SHARED_KEYS), ("ais-api-credentials", API_KEYS)):
+        data = {key: base64.b64encode(environment[key].encode("utf-8")).decode("ascii")
+                for key in keys}
+        items.append({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+                      "metadata": {"name": name, "namespace": namespace}, "data": data})
+    return json.dumps({"apiVersion": "v1", "kind": "List", "items": items}).encode("utf-8")
 
 
 def apply(namespace):
