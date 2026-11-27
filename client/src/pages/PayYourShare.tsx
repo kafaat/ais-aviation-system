@@ -177,6 +177,8 @@ export function PayYourShare() {
   const {
     data: paymentDetails,
     isLoading,
+    isFetching,
+    refetch,
     error,
   } = trpc.splitPayments.getPayerDetails.useQuery(
     { paymentToken },
@@ -201,9 +203,8 @@ export function PayYourShare() {
 
   const checkoutMutation = trpc.splitPayments.createPayerCheckout.useMutation({
     onSuccess: data => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      if (data.url) window.location.href = data.url;
+      else toast.error(t("checkoutResume.noCheckoutUrl"));
     },
     onError: error => {
       toast.error(error.message || t("splitPayment.checkoutError"));
@@ -218,6 +219,24 @@ export function PayYourShare() {
       setLocation(`/pay/${paymentToken}`, { replace: true });
     }
   }, [wasCancelled, paymentToken, setLocation, t]);
+
+  if (error) {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg p-6 space-y-4">
+          <Alert variant="destructive">
+            <AlertTitle>{t("splitPayment.readError")}</AlertTitle>
+            <AlertDescription>
+              {t("splitPayment.readErrorDescription")}
+            </AlertDescription>
+          </Alert>
+          <Button onClick={() => void refetch()} disabled={isFetching}>
+            {t("common.retry")}
+          </Button>
+        </Card>
+      </main>
+    );
+  }
 
   // Handle successful payment return
   if (paymentDetails?.cancellation) {
@@ -265,7 +284,7 @@ export function PayYourShare() {
     );
   }
 
-  if (error || !paymentDetails) {
+  if (!paymentDetails) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <PaymentNotFound />

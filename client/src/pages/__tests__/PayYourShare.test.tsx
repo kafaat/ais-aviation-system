@@ -284,9 +284,7 @@ it("stops verification polling when the query fails, including a failure after p
   });
   failed = true;
   await elapse(3100);
-  expect(
-    screen.getByRole("heading", { name: i18n.t("splitPayment.notFound") })
-  ).toBeVisible();
+  expect(screen.getByText(i18n.t("splitPayment.readError"))).toBeVisible();
   await elapse(10000);
   expect(requests).toHaveLength(2);
 });
@@ -310,6 +308,24 @@ it("preserves the refund receipt view and never confirms a cancelled share as pa
   ).not.toBeInTheDocument();
   await elapse(10000);
   expect(requests).toHaveLength(1);
+});
+
+it("retries an unavailable receipt without calling checkout or marking the link invalid", async () => {
+  let available = false;
+  const { requests } = await visit(() => {
+    if (!available) throw new Error("Service unavailable");
+    return payerDetails();
+  }, `/pay/${token}`);
+  expect(screen.queryByText(i18n.t("splitPayment.notFound"))).toBeNull();
+  expect(screen.getByRole("alert")).toBeVisible();
+  available = true;
+  fireEvent.click(screen.getByRole("button", { name: i18n.t("common.retry") }));
+  await elapse();
+  expect(screen.getByRole("button", { name: /Pay/ })).toBeEnabled();
+  expect(requests.map(r => r.path)).toEqual([
+    "splitPayments.getPayerDetails",
+    "splitPayments.getPayerDetails",
+  ]);
 });
 
 it("starts checkout with the link's token on request and follows the returned URL", async () => {
@@ -389,7 +405,9 @@ it("blocks duplicate pending checkout requests and allows retry after failure", 
   retry.resolve({ sessionId: "synthetic-retry", url: null });
   await elapse();
   expect(screen.getByRole("button", { name: /Pay/ })).toBeEnabled();
-  expect(errorToast).toHaveBeenCalledTimes(1);
+  expect(errorToast).toHaveBeenLastCalledWith(
+    i18n.t("checkoutResume.noCheckoutUrl")
+  );
 });
 
 it("notifies a cancelled provider return once and replaces its return parameters", async () => {

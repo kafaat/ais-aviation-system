@@ -1713,6 +1713,8 @@
     "paymentExpired": "انتهت صلاحية طلب الدفع",
     "paymentExpiredDescription": "انتهت صلاحية طلب الدفع هذا.",
     "contactOrganizer": "يرجى التواصل مع منظم الحجز لطلب رابط دفع جديد.",
+    "readError": "تعذّر تحميل تفاصيل الدفع",
+    "readErrorDescription": "تعذّر التحقق من طلب الدفع. أعد المحاولة للاطّلاع على حالته الحالية.",
     "notFound": "الدفع غير موجود",
     "notFoundDescription": "رابط الدفع هذا غير صالح أو تم إلغاؤه.",
     "alreadyPaid": "تم الدفع مسبقاً",

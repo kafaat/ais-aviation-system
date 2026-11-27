@@ -1713,6 +1713,8 @@
     "paymentExpired": "Payment Request Expired",
     "paymentExpiredDescription": "This payment request has expired.",
     "contactOrganizer": "Please contact the booking organizer to request a new payment link.",
+    "readError": "Payment details unavailable",
+    "readErrorDescription": "We could not check this payment request. Try again to get its current status.",
     "notFound": "Payment Not Found",
     "notFoundDescription": "This payment link is invalid or has been cancelled.",
     "alreadyPaid": "Already Paid",
