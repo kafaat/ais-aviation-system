@@ -13,11 +13,8 @@ import { bookings } from "../../drizzle/schema";
 import {
   assertBookingOwnership,
   assertSplitOwnership,
+  purchaserScope,
 } from "../services/access-control.service";
-
-// Unassigned purchasers retain owner-only access, matching booking history.
-const purchaserScope = (tenantId: number | null) =>
-  tenantId == null ? undefined : { tenantId };
 
 // Input schemas
 const splitPayerSchema = z.object({

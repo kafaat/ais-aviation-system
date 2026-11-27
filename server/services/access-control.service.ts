@@ -17,7 +17,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
@@ -29,6 +29,20 @@ import {
 import { isAdmin } from "./rbac.service";
 
 import type { SettlementTx } from "./booking-settlement.service";
+
+/** Personal accounts without an assigned airline retain purchaser-only access. */
+export function purchaserBookingCondition(
+  userId: number,
+  tenantId: number | null | undefined
+): SQL {
+  const owner = eq(bookings.userId, userId);
+  return tenantId == null
+    ? owner
+    : and(owner, eq(bookings.tenantId, tenantId))!;
+}
+
+export const purchaserScope = (tenantId: number | null | undefined) =>
+  tenantId == null ? undefined : { tenantId };
 
 /** Called under the booking lock. Serialize reassignment with purchaser and
  * delegated corporate actions. Unassigned customers retain owner-only access. */
@@ -196,13 +210,19 @@ export async function assertPassengerOwnership(
 export async function assertModificationOwnership(
   modificationId: number,
   userId: number,
-  userRole?: string
+  userRole?: string,
+  scope?: { tenantId: number | null }
 ): Promise<void> {
   const db = await getDbOrThrow();
 
   const [modification] = await db
-    .select({ userId: bookingModifications.userId })
+    .select({
+      userId: bookingModifications.userId,
+      ownerId: bookings.userId,
+      tenantId: bookings.tenantId,
+    })
     .from(bookingModifications)
+    .innerJoin(bookings, eq(bookings.id, bookingModifications.bookingId))
     .where(eq(bookingModifications.id, modificationId))
     .limit(1);
 
@@ -213,7 +233,12 @@ export async function assertModificationOwnership(
     });
   }
 
-  if (modification.userId !== userId && !(userRole && isAdmin(userRole))) {
+  if (
+    !(userRole && isAdmin(userRole)) &&
+    (modification.userId !== userId ||
+      modification.ownerId !== userId ||
+      (scope?.tenantId != null && modification.tenantId !== scope.tenantId))
+  ) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Modification request not found",

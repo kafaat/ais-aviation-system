@@ -1,3 +1,4 @@
+import { purchaserBookingCondition } from "./access-control.service";
 import { getDb } from "../db";
 import {
   payments,
@@ -32,13 +33,6 @@ export interface PaymentHistoryFilters {
 /**
  * Get payment history for a user with booking/flight details
  */
-function purchaserCondition(userId: number, tenantId?: number | null) {
-  return and(
-    eq(bookings.userId, userId),
-    tenantId == null ? undefined : eq(bookings.tenantId, tenantId)
-  );
-}
-
 export async function getUserPaymentHistory(
   userId: number,
   filters: PaymentHistoryFilters = {},
@@ -48,7 +42,7 @@ export async function getUserPaymentHistory(
   if (!db) throw new Error("Database not available");
 
   const conditions: Array<SQL | undefined> = [
-    purchaserCondition(userId, tenantId),
+    purchaserBookingCondition(userId, tenantId),
   ];
 
   if (filters.status) {
@@ -123,7 +117,9 @@ async function settledRefundAmount(
       and(
         inArray(financialLedger.type, ["refund", "partial_refund"]),
         eq(financialLedger.currency, "SAR"),
-        userId === undefined ? undefined : purchaserCondition(userId, tenantId)
+        userId === undefined
+          ? undefined
+          : purchaserBookingCondition(userId, tenantId)
       )
     );
   const amount = Number(row.amount);
@@ -151,7 +147,7 @@ export async function getUserPaymentStats(
     })
     .from(payments)
     .innerJoin(bookings, eq(payments.bookingId, bookings.id))
-    .where(purchaserCondition(userId, tenantId));
+    .where(purchaserBookingCondition(userId, tenantId));
 
   return {
     totalPayments: Number(stats.totalPayments) || 0,
