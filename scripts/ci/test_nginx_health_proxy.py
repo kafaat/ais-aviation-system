@@ -110,12 +110,14 @@ class NginxHealthContract(unittest.TestCase):
             with tempfile.TemporaryDirectory(prefix="ais-nginx-probe-") as tmp:
                 directory = Path(tmp)
                 cfg = directory / "nginx.conf"
+                temp_paths = (ROOT / "scripts/ci/nginx-test-temp-paths.conf").read_text()
                 cfg.write_text(
                     "worker_processes 1;\n"
                     f"pid {directory}/nginx.pid;\n"
                     f"error_log {directory}/error.log warn;\n"
                     "events { worker_connections 128; }\n"
                     "http {\n"
+                    f"{temp_paths}\n"
                     "  access_log off;\n"
                     f"  upstream ais_api {{ server 127.0.0.1:{upstream_port}; }}\n"
                     f"  server {{ listen 127.0.0.1:{loopback_port};\n"
