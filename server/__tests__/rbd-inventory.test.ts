@@ -38,6 +38,7 @@ beforeEach(() => {
   boundary.reference = 0;
   fixture = transactionMemory({
     tenants: [{ id: 3, status: "active" }],
+    users: [{ id: 1, tenantId: 3 }],
     flights: [11, 12].map(id => ({
       id,
       tenantId: 3,

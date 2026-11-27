@@ -67,11 +67,10 @@ export async function issuerMustService(
 }
 
 /** Shared lock order: booking -> purchaser -> checkout -> NDC -> segments -> flights. */
-export async function lockEditableInvoice(
+export async function lockInvoiceAuthority(
   tx: SettlementTx,
   bookingId: number,
-  actor: InvoiceActor,
-  action?: NdcAction
+  actor: InvoiceActor
 ) {
   const [booking] = await tx
     .select()
@@ -91,6 +90,16 @@ export async function lockEditableInvoice(
     });
   if (!actor.admin)
     await lockBookingUserTenants(tx, booking.tenantId, [actor.userId]);
+  return booking;
+}
+
+export async function lockEditableInvoice(
+  tx: SettlementTx,
+  bookingId: number,
+  actor: InvoiceActor,
+  action?: NdcAction
+) {
+  const booking = await lockInvoiceAuthority(tx, bookingId, actor);
   await assertTenantOperational(tx, booking.tenantId);
   await assertInvoiceEditable(tx, booking);
   if (action && (await issuerMustService(tx, booking, action)))

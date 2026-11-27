@@ -3,7 +3,12 @@ import { purchaserBookingCondition } from "./access-control.service";
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { requireLocalNdcOrigin } from "./distribution-readiness.service";
 import { LOCAL_NDC_VERSION as NDC_VERSION } from "./ndc-capabilities";
-import { inventoryTransactionConfig } from "./inventory-capacity.service";
+import { withInventoryTransaction } from "./inventory-capacity.service";
+import {
+  lockCreationPurchaser,
+  assertCreationTenant,
+  assertCreatedBookingPurchaser,
+} from "./booking-creation-authority";
 import {
   createRetailOffer,
   lockRetailOffer,
@@ -966,8 +971,37 @@ export async function createOrder(
         "Local NDC shopping currently quotes adults only; request a supported passenger profile",
     });
   const userId = params.userId;
-  return withTransactionalIdempotency({
-    transactionConfig: inventoryTransactionConfig,
+  return withInventoryTransaction(db, async tx => {
+    const purchaserTenantId = await lockCreationPurchaser(tx, userId);
+    const result = await createOrderCommand(
+      params,
+      contactInfo,
+      userId,
+      tx,
+      purchaserTenantId
+    );
+    if (result.bookingId == null)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    await assertCreatedBookingPurchaser(
+      tx,
+      result.bookingId,
+      { userId, tenantId: params.tenantId },
+      purchaserTenantId
+    );
+    return result;
+  });
+}
+
+function createOrderCommand(
+  params: CreateOrderInput,
+  contactInfo: NdcContactInfo,
+  userId: number,
+  transaction: SettlementTx,
+  purchaserTenantId: number | null
+): Promise<NdcOrderResponse> {
+  const atomicCommand: Parameters<
+    typeof withTransactionalIdempotency<NdcOrderResponse>
+  >[0] = {
     scope: "ndc.order.create",
     key: params.offerId,
     userId,
@@ -1091,6 +1125,11 @@ export async function createOrder(
             message:
               "Cross-tenant NDC itinerary requires interline integration",
           });
+        assertCreationTenant(
+          flight.tenantId,
+          purchaserTenantId,
+          params.tenantId
+        );
         await assertTenantOperational(db, flight.tenantId);
         const hold = await createInventoryLock(
           flight.id,
@@ -1260,7 +1299,11 @@ export async function createOrder(
 
       // Resolve airline for the response
       const airlineResults = await db
-        .select({ id: airlines.id, code: airlines.code, name: airlines.name })
+        .select({
+          id: airlines.id,
+          code: airlines.code,
+          name: airlines.name,
+        })
         .from(airlines)
         .where(eq(airlines.id, offer.airlineId))
         .limit(1);
@@ -1292,7 +1335,8 @@ export async function createOrder(
         ndcVersion: NDC_VERSION,
       };
     },
-  });
+  };
+  return withTransactionalIdempotency(atomicCommand, transaction);
 }
 
 /**

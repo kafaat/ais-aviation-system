@@ -78,7 +78,7 @@ export function authorityRelationalFixture(tables: MySqlTable[]) {
   const db = drizzle(async (query, params, method) => {
     queries.push({ sql: query, inTransaction });
     let executable = query
-      .replace(/ for update(?: skip locked)?(?=\s*(?:\)|$))/gi, "")
+      .replace(/ for (?:update|share)(?: skip locked)?(?=\s*(?:\)|$))/gi, "")
       .replaceAll("<=>", "IS");
     // SQLite does not accept DEFAULT inside VALUES. Preserve the corresponding
     // canonical column default explicitly; never substitute a fixture rowset.

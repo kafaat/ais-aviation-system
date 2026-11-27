@@ -224,6 +224,16 @@ describe("unpaid NDC invoice commands", () => {
       },
       { userId: 9 }
     );
+  it("reauthorizes a completed ancillary replay without requiring the invoice to remain unpaid", async () => {
+    fixture.rows("ancillary_services")[0].category = "meal";
+    const first = await addMeal();
+    fixture.rows("bookings")[0].status = "confirmed";
+    fixture.rows("bookings")[0].paymentStatus = "paid";
+    expect(await addMeal()).toEqual(first);
+    fixture.rows("users")[0].tenantId = 4;
+    await expect(addMeal()).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(fixture.rows("booking_ancillaries")).toHaveLength(1);
+  });
   it("binds a post-booking meal to the named passenger and charges only their selected sector", async () => {
     fixture.rows("ancillary_services")[0].category = "meal";
     const added = await addMeal();

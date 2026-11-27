@@ -67,7 +67,7 @@ beforeEach(() => {
           innerJoin: () => query,
           for: () => query,
           orderBy: () => query,
-          limit: () => Promise.resolve(rows),
+          limit: () => query,
           then: (resolve: (value: typeof rows) => unknown) =>
             Promise.resolve(rows).then(resolve),
         };
