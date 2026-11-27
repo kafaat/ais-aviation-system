@@ -24,6 +24,7 @@ import {
 import {
   createSplitCheckout,
   cancelPaymentSplits,
+  lockSplitManagementBooking,
   type SplitActor,
 } from "./split-checkout.service";
 import { assertTenantOperational } from "./tenant.service";
@@ -314,81 +315,85 @@ export async function getSplitPaymentStatus(
 /**
  * Send payment request email to a specific payer
  */
-export async function sendPaymentRequest(splitId: number): Promise<boolean> {
+export async function sendPaymentRequest(
+  splitId: number,
+  actor: SplitActor
+): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Get split with booking and flight details
-  const [split] = await db
-    .select()
-    .from(paymentSplits)
-    .where(eq(paymentSplits.id, splitId))
-    .limit(1);
+  const delivery = await db.transaction(async tx => {
+    const [hint] = await tx
+      .select({ bookingId: paymentSplits.bookingId })
+      .from(paymentSplits)
+      .where(eq(paymentSplits.id, splitId))
+      .limit(1);
+    if (!hint)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Payment split not found",
+      });
+    const booking = await lockSplitManagementBooking(tx, hint.bookingId, actor);
+    const [split] = await tx
+      .select()
+      .from(paymentSplits)
+      .where(
+        and(
+          eq(paymentSplits.id, splitId),
+          eq(paymentSplits.bookingId, booking.id)
+        )
+      )
+      .for("update");
+    if (!split)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Payment split not found",
+      });
+    if (
+      !["pending", "email_sent", "failed"].includes(split.status) ||
+      (split.expiresAt && split.expiresAt.getTime() <= Date.now())
+    ) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Payment request is no longer payable",
+      });
+    }
 
-  if (!split) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Payment split not found",
-    });
-  }
+    const [flight] = await tx
+      .select({
+        flightNumber: flights.flightNumber,
+        departureTime: flights.departureTime,
+        originCode: airports.code,
+        originCity: airports.city,
+        destinationCode: sql<string>`dest.code`,
+        destinationCity: sql<string>`dest.city`,
+      })
+      .from(flights)
+      .innerJoin(airports, eq(flights.originId, airports.id))
+      .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
+      .where(eq(flights.id, booking.flightId))
+      .limit(1);
 
-  if (
-    !["pending", "email_sent", "failed"].includes(split.status) ||
-    (split.expiresAt && split.expiresAt.getTime() <= Date.now())
-  ) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Payment request is no longer payable",
-    });
-  }
+    // Generate payment URL
+    const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const paymentUrl = `${baseUrl}/pay/${split.paymentToken}`;
 
-  // Get booking and flight details for the email
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, split.bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Booking not found",
-    });
-  }
-
-  const [flight] = await db
-    .select({
-      flightNumber: flights.flightNumber,
-      departureTime: flights.departureTime,
-      originCode: airports.code,
-      originCity: airports.city,
-      destinationCode: sql<string>`dest.code`,
-      destinationCity: sql<string>`dest.city`,
-    })
-    .from(flights)
-    .innerJoin(airports, eq(flights.originId, airports.id))
-    .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
-
-  // Generate payment URL
-  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-  const paymentUrl = `${baseUrl}/pay/${split.paymentToken}`;
-
-  // Send email
-  const emailSent = await sendSplitPaymentRequest({
-    payerName: split.payerName,
-    payerEmail: split.payerEmail,
-    bookingReference: booking.bookingReference,
-    flightNumber: flight?.flightNumber || "N/A",
-    route: flight
-      ? `${flight.originCity} (${flight.originCode}) - ${flight.destinationCity} (${flight.destinationCode})`
-      : "N/A",
-    departureTime: flight?.departureTime || new Date(),
-    amount: split.amount,
-    paymentUrl,
-    expiresAt: split.expiresAt || undefined,
+    // Send email
+    return {
+      payerName: split.payerName,
+      payerEmail: split.payerEmail,
+      bookingReference: booking.bookingReference,
+      flightNumber: flight?.flightNumber || "N/A",
+      route: flight
+        ? `${flight.originCity} (${flight.originCode}) - ${flight.destinationCity} (${flight.destinationCode})`
+        : "N/A",
+      departureTime: flight?.departureTime || new Date(),
+      amount: split.amount,
+      paymentUrl,
+      expiresAt: split.expiresAt || undefined,
+    };
   });
+  const emailSent = await sendSplitPaymentRequest(delivery);
 
   if (emailSent) {
     await recordSplitEmailDelivery(splitId);
@@ -569,27 +574,32 @@ export async function getSplitByCheckoutSession(
  * Send payment requests to all pending payers
  */
 export async function sendAllPaymentRequests(
-  bookingId: number
+  bookingId: number,
+  actor: SplitActor
 ): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const pendingSplits = await db
-    .select()
-    .from(paymentSplits)
-    .where(
-      and(
-        eq(paymentSplits.bookingId, bookingId),
-        eq(paymentSplits.status, "pending")
-      )
-    );
+  const pendingSplits = await db.transaction(async tx => {
+    await lockSplitManagementBooking(tx, bookingId, actor);
+    return tx
+      .select({ id: paymentSplits.id })
+      .from(paymentSplits)
+      .where(
+        and(
+          eq(paymentSplits.bookingId, bookingId),
+          eq(paymentSplits.status, "pending")
+        )
+      );
+  });
 
   let sentCount = 0;
   for (const split of pendingSplits) {
     try {
-      const sent = await sendPaymentRequest(split.id);
+      const sent = await sendPaymentRequest(split.id, actor);
       if (sent) sentCount++;
     } catch (error) {
+      if (error instanceof TRPCError && error.code === "NOT_FOUND") throw error;
       console.error(
         `Failed to send payment request for split ${split.id}:`,
         error
@@ -603,6 +613,9 @@ export async function sendAllPaymentRequests(
 /**
  * Resend payment request email
  */
-export async function resendPaymentRequest(splitId: number): Promise<boolean> {
-  return await sendPaymentRequest(splitId);
+export async function resendPaymentRequest(
+  splitId: number,
+  actor: SplitActor
+): Promise<boolean> {
+  return await sendPaymentRequest(splitId, actor);
 }

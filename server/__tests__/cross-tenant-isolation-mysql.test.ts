@@ -800,6 +800,45 @@ nativeDescribe.sequential(
       });
     });
 
+    it("checks the current buyer before each split email delivery snapshot", async () => {
+      const mail = vi
+        .spyOn(
+          await import("../services/email.service"),
+          "sendSplitPaymentRequest"
+        )
+        .mockResolvedValue(true);
+      try {
+        await fixture.db.insert(schema.paymentSplits).values({
+          id: 392,
+          bookingId: 71,
+          payerName: "Synthetic Payer",
+          payerEmail: "synthetic@example.test",
+          amount: 10000,
+          percentage: "50.00",
+          paymentToken: "synthetic-split-delivery-token",
+          status: "pending",
+        });
+        const stale = callerFor({ id: 9, role: "user", tenantId: 3 });
+        await fixture.pool.query("UPDATE users SET tenantId=4 WHERE id=9");
+        const before = await checksums();
+        for (const call of [
+          () => stale.splitPayments.sendRequest({ splitId: 392 }),
+          () => stale.splitPayments.resendRequest({ splitId: 392 }),
+          () => stale.splitPayments.sendAllRequests({ bookingId: 71 }),
+        ])
+          await expect(call()).rejects.toMatchObject({ code: "NOT_FOUND" });
+        expect(mail).not.toHaveBeenCalled();
+        expect(await checksums()).toEqual(before);
+        await fixture.pool.query("UPDATE users SET tenantId=NULL WHERE id=9");
+        expect(await stale.splitPayments.sendRequest({ splitId: 392 })).toEqual(
+          { sent: true }
+        );
+        expect(mail).toHaveBeenCalledTimes(1);
+      } finally {
+        mail.mockRestore();
+      }
+    });
+
     it("still serves the owner of tenant A the same resources", async () => {
       const owner = callerFor({ id: 9, role: "user", tenantId: 3 });
       const passengers = await owner.bookings.getPassengers({

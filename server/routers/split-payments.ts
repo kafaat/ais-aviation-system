@@ -114,7 +114,8 @@ export const splitPaymentsRouter = router({
       // Delivery runs after the plan's transaction has committed; a payer
       // whose request was not accepted stays "pending" and can be resent.
       const sentCount = await splitPaymentService.sendAllPaymentRequests(
-        input.bookingId
+        input.bookingId,
+        { id: ctx.user.id, role: ctx.user.role }
       );
       return { ...plan, requestedCount: plan.splitIds.length, sentCount };
     }),
@@ -195,7 +196,10 @@ export const splitPaymentsRouter = router({
         ctx.user.role,
         purchaserScope(ctx.tenantId)
       );
-      const sent = await splitPaymentService.sendPaymentRequest(input.splitId);
+      const sent = await splitPaymentService.sendPaymentRequest(input.splitId, {
+        id: ctx.user.id,
+        role: ctx.user.role,
+      });
       return { sent };
     }),
 
@@ -225,7 +229,8 @@ export const splitPaymentsRouter = router({
         purchaserScope(ctx.tenantId)
       );
       const sent = await splitPaymentService.resendPaymentRequest(
-        input.splitId
+        input.splitId,
+        { id: ctx.user.id, role: ctx.user.role }
       );
       return { sent };
     }),
@@ -256,7 +261,8 @@ export const splitPaymentsRouter = router({
         purchaserScope(ctx.tenantId)
       );
       const sentCount = await splitPaymentService.sendAllPaymentRequests(
-        input.bookingId
+        input.bookingId,
+        { id: ctx.user.id, role: ctx.user.role }
       );
       return { sentCount };
     }),

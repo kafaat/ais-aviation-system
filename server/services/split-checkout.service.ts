@@ -46,6 +46,19 @@ async function lockBooking(tx: SettlementTx, bookingId: number) {
   if (!booking) throw notFound();
   return booking;
 }
+/** Booking-first management authority shared by cancellation and payer notifications. */
+export async function lockSplitManagementBooking(
+  tx: SettlementTx,
+  bookingId: number,
+  actor: SplitActor
+) {
+  if (!actor) throw notFound();
+  const booking = isAdmin(actor.role)
+    ? await lockBooking(tx, bookingId)
+    : await lockPurchaserBooking(tx, bookingId, actor.id);
+  if (booking.deletedAt) throw notFound();
+  return booking;
+}
 async function lockSplits(tx: SettlementTx, bookingId: number) {
   return await tx
     .select()
@@ -348,10 +361,11 @@ export async function cancelPaymentSplits(
   const db = getDb();
   if (!db) throw unavailable("Database unavailable");
   async function snapshot(tx: SettlementTx) {
-    if (!actor) throw notFound();
-    const booking = isAdmin(actor.role)
-      ? await lockBooking(tx, target.bookingId)
-      : await lockPurchaserBooking(tx, target.bookingId, actor.id);
+    const booking = await lockSplitManagementBooking(
+      tx,
+      target.bookingId,
+      actor
+    );
     await assertNoCollectionReview(tx, booking.id);
     const all = await lockSplits(tx, booking.id);
     if (all.some(s => s.status === "paid" || s.stripePaymentIntentId))

@@ -83,7 +83,7 @@ describe("splitPayments.initiate delivers the payer requests (R1)", () => {
       splits,
       userId: 9,
     });
-    expect(service.sendAll).toHaveBeenCalledWith(700);
+    expect(service.sendAll).toHaveBeenCalledWith(700, { id: 9, role: "user" });
     // Delivery runs after the plan, never inside its transaction.
     expect(service.initiate.mock.invocationCallOrder[0]).toBeLessThan(
       service.sendAll.mock.invocationCallOrder[0]

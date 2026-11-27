@@ -104,7 +104,13 @@ beforeEach(() => {
           if (table === "payment_splits")
             return Promise.resolve(
               bookingExists && splitExists && id === split.id
-                ? [{ bookingId: booking.id, ownerId: booking.userId }]
+                ? [
+                    {
+                      bookingId: booking.id,
+                      ownerId: booking.userId,
+                      tenantId: booking.tenantId,
+                    },
+                  ]
                 : []
             );
           throw new Error(`Unexpected ownership table: ${table}`);
@@ -303,7 +309,10 @@ describe("split-payment API ownership before disclosure or side effects", () => 
       sentCount: 2,
     });
     // Review finding R1 (#355): initiation now delivers the payer requests.
-    expect(state.split.sendAllPaymentRequests).toHaveBeenCalledWith(10);
+    expect(state.split.sendAllPaymentRequests).toHaveBeenCalledWith(10, {
+      id: 101,
+      role: "user",
+    });
     const results = [];
     for (const request of protectedCalls(client)) results.push(await request());
     expect(results).toEqual([
