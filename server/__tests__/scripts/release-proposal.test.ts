@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -84,6 +85,14 @@ function fixture(changelog = baseChangelog) {
   );
   writeFileSync(join(cwd, "CHANGELOG.md"), changelog);
   writeFileSync(join(cwd, "app.js"), "export const generation = 1;\n");
+  // The classifier compares release branch versions with the repository's own
+  // helper; the fixture checkout carries that one file so the literal workflow
+  // block runs unchanged.
+  mkdirSync(join(cwd, "scripts", "ci"), { recursive: true });
+  copyFileSync(
+    join(process.cwd(), "scripts", "ci", "release-version.mjs"),
+    join(cwd, "scripts", "ci", "release-version.mjs")
+  );
   git("add", ".");
   git("commit", "-m", "source fixture");
   git("push", "-u", "origin", "main");
@@ -350,6 +359,40 @@ describe("release workflow trigger classification", () => {
     );
     expect(remoteProposal(f)).toBe(`${manual.head}\trefs/heads/${branch}`);
     expect(f.git("rev-parse", "HEAD")).toBe(advanced);
+  });
+
+  it("does not count a stale unpublished release branch as a proposal to refresh", () => {
+    // After the stale-branch rule in the selector (#395), the classifier must
+    // apply the same rule: a release branch whose version cannot advance the
+    // package version is skipped, alone or beside a live proposal.
+    const f = fixture();
+    f.git("tag", "v1.0.0");
+    f.git("push", "origin", "refs/tags/v1.0.0");
+    f.git("push", "origin", `${f.source}:refs/heads/release/v0.9.9`);
+    advanceDocumentation(f);
+    expect(classifyTrigger(f)).toMatchObject({
+      mode: "none",
+      release_type: "none",
+    });
+    const manual = propose(
+      f,
+      f.git("rev-parse", "HEAD"),
+      "Manual release review"
+    );
+    pushProposal(f, manual.head);
+    // A second documentation-only advance (distinct content, so it commits).
+    f.git("checkout", "main");
+    writeFileSync(
+      join(f.cwd, "README.md"),
+      "Reviewed operator procedure, second pass.\n"
+    );
+    f.git("add", "README.md");
+    f.git("commit", "-m", "docs: second clarification");
+    f.git("push", "origin", "main");
+    expect(classifyTrigger(f)).toMatchObject({
+      mode: "propose",
+      release_type: "existing",
+    });
   });
 
   it("does not create a release for documentation alone without an open proposal", () => {
