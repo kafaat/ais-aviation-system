@@ -337,6 +337,45 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
     expect(await snapshot()).toEqual(before);
   });
 
+  it("rolls back a native fare-class statement failure, then settles the verified collection once", async () => {
+    await db
+      .update(schema.bookings)
+      .set({ fareClassId: 3 })
+      .where(eq(schema.bookings.id, 71));
+    await db
+      .insert(schema.flightFareClassInventory)
+      .values({ flightId: 41, fareClassId: 3, capacity: 2, availableSeats: 2 });
+    const payment = {
+      eventId: "evt_test_rbd",
+      paymentIntentId: "pi_test_rbd",
+      amount: 10000,
+      currency: "SAR",
+      metadata: { bookingId: "71", userId: "9" },
+    };
+    const deliver = () =>
+      db.transaction(tx => settleVerifiedPayment(tx, payment));
+    const before = await snapshot();
+    await pool!.query(
+      "CREATE TRIGGER ais_rbd_statement_fail BEFORE UPDATE ON flight_fare_class_inventory FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Synthetic RBD statement failure'"
+    );
+    try {
+      await expect(deliver()).rejects.toThrow();
+      expect(await snapshot()).toEqual(before);
+    } finally {
+      await pool!.query("DROP TRIGGER ais_rbd_statement_fail");
+    }
+    await deliver();
+    await deliver();
+    const after = await snapshot();
+    expect(after.ledger).toHaveLength(1);
+    expect(after.receipts).toMatchObject([{ settlementStatus: "applied" }]);
+    expect(after.bookings.find(row => row.id === 71)?.status).toBe("confirmed");
+    expect(
+      (await db.select().from(schema.flightFareClassInventory))[0]
+        .availableSeats
+    ).toBe(1);
+  });
+
   it("serializes competing spends and never overdraws the wallet", async () => {
     await db.update(schema.wallets).set({ balance: 10000 });
     const results = await Promise.allSettled([

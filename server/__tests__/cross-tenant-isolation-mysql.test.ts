@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type mysql from "mysql2/promise";
 import {
@@ -431,6 +432,151 @@ nativeDescribe.sequential(
       // that reappears under `distinguishable` is a regression.
       expect(distinguishable).toEqual([]);
       expect(indistinguishable).toEqual(probes.map(probe => probe.path).sort());
+    });
+
+    it("refuses former-tenant ticket and calendar requests with no issuance on native MySQL", async () => {
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 4 })
+        .where(eq(schema.users.id, 9));
+      const caller = callerFor({ id: 9, role: "user", tenantId: 4 });
+      const before = await checksums();
+      const document = {
+        bookingId: TENANT_A.bookingId,
+        passengerId: TENANT_A.passengerId,
+      };
+      await expect(
+        caller.eticket.generateETicket(document)
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        caller.eticket.generateCalendarEvent({ bookingId: document.bookingId })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("refuses every old-tenant buyer rail and both history APIs after reassignment", async () => {
+      await fixture.db
+        .update(schema.bookings)
+        .set({
+          status: "pending",
+          paymentStatus: "pending",
+          seatsReserved: false,
+        })
+        .where(eq(schema.bookings.id, 71));
+      await fixture.db
+        .insert(schema.payments)
+        .values({
+          bookingId: 71,
+          amount: 20000,
+          currency: "SAR",
+          method: "card",
+          status: "completed",
+        });
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 4 })
+        .where(eq(schema.users.id, 9));
+      const c = callerFor({ id: 9, role: "user", tenantId: 4 });
+      const input = { bookingId: 71 };
+      const before = await checksums();
+      const rails = [
+        () => c.payments.getCheckoutState(input),
+        () => c.payments.createCheckoutSession(input),
+        () => c.wallet.pay(input),
+        () =>
+          c.vouchers.applyVoucher({ ...input, code: "TEST", amount: 20000 }),
+        () => c.vouchers.useCredits({ ...input, amount: 20000 }),
+        () =>
+          c.splitPayments.initiate({
+            ...input,
+            splits: [
+              { name: "First", email: "first@example.test", amount: 10000 },
+              { name: "Second", email: "second@example.test", amount: 10000 },
+            ],
+          }),
+      ];
+      for (const rail of rails)
+        await expect(rail()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await c.payments.getHistory({})).toEqual([]);
+      expect(await c.paymentHistory.myPayments({})).toEqual([]);
+      for (const stats of [
+        await c.payments.getStats(),
+        await c.paymentHistory.myStats(),
+      ])
+        expect(stats).toMatchObject({
+          totalPayments: 0,
+          totalAmount: 0,
+          refundedAmount: 0,
+        });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("allows delegated corporate funding only while both buyer and administrator are in scope", async () => {
+      await fixture.db
+        .update(schema.bookings)
+        .set({
+          status: "pending",
+          paymentStatus: "pending",
+          seatsReserved: false,
+        })
+        .where(eq(schema.bookings.id, 71));
+      await fixture.db
+        .insert(schema.corporateAccounts)
+        .values({
+          id: 1,
+          companyName: "Fixture company",
+          taxId: "SYNTH-1",
+          contactName: "Admin",
+          contactEmail: "corp@example.test",
+          creditLimit: 60000,
+          discountPercent: "10",
+          status: "active",
+        });
+      await fixture.db.insert(schema.corporateUsers).values([
+        { userId: 9, corporateAccountId: 1, role: "traveler" },
+        { userId: 10, corporateAccountId: 1, role: "admin" },
+      ]);
+      await fixture.db
+        .insert(schema.corporateBookings)
+        .values({
+          id: 1,
+          bookingId: 71,
+          bookedByUserId: 9,
+          corporateAccountId: 1,
+          approvalStatus: "pending",
+        });
+      const foreign = callerFor({ id: 10, role: "user", tenantId: 4 });
+      const before = await checksums();
+      await expect(
+        foreign.corporate.approveBooking({ id: 1 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        foreign.corporate.payInvoice({ bookingId: 71 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 3 })
+        .where(eq(schema.users.id, 10));
+      const current = callerFor({ id: 10, role: "user", tenantId: 3 });
+      await current.corporate.approveBooking({ id: 1 });
+      const settlement = await current.corporate.payInvoice({ bookingId: 71 });
+      expect(await current.corporate.payInvoice({ bookingId: 71 })).toEqual(
+        settlement
+      );
+      const [company] = await fixture.db
+        .select()
+        .from(schema.corporateAccounts);
+      expect(company.balance).toBe(-18000);
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 4 })
+        .where(eq(schema.users.id, 9));
+      const after = await checksums();
+      await expect(
+        current.corporate.payInvoice({ bookingId: 71 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(after);
     });
 
     it("still serves the owner of tenant A the same resources", async () => {

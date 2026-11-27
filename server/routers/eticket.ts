@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -93,11 +94,18 @@ export const eticketRouter = router({
         .where(
           and(
             eq(bookings.id, input.bookingId),
-            eq(bookings.userId, ctx.user.id)
+            eq(bookings.userId, ctx.user.id),
+            ctx.tenantId == null
+              ? undefined
+              : eq(bookings.tenantId, ctx.tenantId)
           )
         )
         .limit(1);
-      if (!p) throw new Error("Booking passenger not found");
+      if (!p)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       const { legs } = await readTicketDocument(
         input.bookingId,
         p.id,

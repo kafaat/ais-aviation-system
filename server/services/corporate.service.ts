@@ -1,3 +1,4 @@
+import { lockBookingUserTenants } from "./access-control.service";
 import { TRPCError } from "@trpc/server";
 import { eq, desc, and, SQL, sql } from "drizzle-orm";
 import { getDb } from "../db";
@@ -634,6 +635,11 @@ export async function createCorporateBooking(
         code: "NOT_FOUND",
         message: "Owned booking not found",
       });
+    const [owner] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.id, data.bookedByUserId))
+      .for("update");
     const [account] = await tx
       .select()
       .from(corporateAccounts)
@@ -655,10 +661,6 @@ export async function createCorporateBooking(
         )
       )
       .for("update");
-    const [owner] = await tx
-      .select()
-      .from(users)
-      .where(eq(users.id, data.bookedByUserId));
     if (
       !member ||
       !owner ||
@@ -748,6 +750,10 @@ async function decideCorporateBooking(
       .where(eq(corporateBookings.id, linkId))
       .for("update");
     if (!booking || !link) throw new TRPCError({ code: "NOT_FOUND" });
+    await lockBookingUserTenants(tx, booking.tenantId, [
+      booking.userId,
+      actorId,
+    ]);
     const [account] = await tx
       .select()
       .from(corporateAccounts)

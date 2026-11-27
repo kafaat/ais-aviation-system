@@ -1,3 +1,4 @@
+import { lockBookingUserTenants } from "./access-control.service";
 import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
@@ -7,7 +8,6 @@ import { getDb } from "../db";
 import { stripe } from "../stripe";
 import {
   bookings,
-  users,
   bookingCheckoutRequests,
   bookingSegments,
   bookingAncillaries,
@@ -95,16 +95,7 @@ export async function lockPurchaserBooking(
       code: "NOT_FOUND",
       message: "Owned booking not found",
     });
-  const [owner] = await tx
-    .select({ tenantId: users.tenantId })
-    .from(users)
-    .where(eq(users.id, userId))
-    .for("update");
-  if (!owner || (owner.tenantId != null && owner.tenantId !== booking.tenantId))
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Owned booking not found",
-    });
+  await lockBookingUserTenants(tx, booking.tenantId, [userId]);
   return booking;
 }
 async function assertPendingInvoice(tx: SettlementTx, booking: Booking) {

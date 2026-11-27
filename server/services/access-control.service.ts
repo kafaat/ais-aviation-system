@@ -17,15 +17,44 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
+  users,
   paymentSplits,
   passengers,
   bookingModifications,
 } from "../../drizzle/schema";
 import { isAdmin } from "./rbac.service";
+
+import type { SettlementTx } from "./booking-settlement.service";
+
+/** Called under the booking lock. Serialize reassignment with purchaser and
+ * delegated corporate actions. Unassigned customers retain owner-only access. */
+export async function lockBookingUserTenants(
+  tx: SettlementTx,
+  bookingTenantId: number | null,
+  userIds: readonly number[]
+) {
+  const ids = [...new Set(userIds)];
+  const actors = await tx
+    .select({ tenantId: users.tenantId })
+    .from(users)
+    .where(inArray(users.id, ids))
+    .orderBy(asc(users.id))
+    .for("update");
+  if (
+    actors.length !== ids.length ||
+    actors.some(
+      actor => actor.tenantId != null && actor.tenantId !== bookingTenantId
+    )
+  )
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Owned booking not found",
+    });
+}
 
 async function getDbOrThrow() {
   const db = await getDb();

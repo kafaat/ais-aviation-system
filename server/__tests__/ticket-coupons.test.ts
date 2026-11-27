@@ -21,6 +21,7 @@ let couponCreatedAt: Date;
 beforeEach(() => {
   couponCreatedAt = new Date("2026-10-27T09:12:30Z");
   fixture = transactionMemory({
+    users: [{ id: 3, tenantId: 1 }],
     ancillary_services: [],
     booking_ancillaries: [],
     payment_receipts: [],
@@ -107,6 +108,16 @@ beforeEach(() => {
     };
   };
   state.db = fixture.db;
+});
+
+it("refuses a former purchaser tenant before ticket numbers, coupons or issue events are written", async () => {
+  fixture.rows("users")[0].tenantId = 2;
+  await expect(readTicketDocument(2, 5, 3)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  expect(fixture.rows("passengers")[0].ticketNumber).toBeNull();
+  expect(fixture.rows("ticket_coupons")).toHaveLength(0);
+  expect(fixture.rows("outbox")).toHaveLength(0);
 });
 
 it("issues local coupons in itinerary order, supports legacy references and replays without duplicates", async () => {
