@@ -82,12 +82,17 @@ export async function assertBookingOwnership(
 export async function assertSplitOwnership(
   splitId: number,
   userId: number,
-  userRole?: string
+  userRole?: string,
+  scope?: { tenantId: number | null }
 ): Promise<number> {
   const db = await getDbOrThrow();
 
   const [row] = await db
-    .select({ bookingId: paymentSplits.bookingId, ownerId: bookings.userId })
+    .select({
+      bookingId: paymentSplits.bookingId,
+      ownerId: bookings.userId,
+      tenantId: bookings.tenantId,
+    })
     .from(paymentSplits)
     .innerJoin(bookings, eq(paymentSplits.bookingId, bookings.id))
     .where(eq(paymentSplits.id, splitId))
@@ -107,6 +112,7 @@ export async function assertSplitOwnership(
     });
   }
 
+  if (scope) assertTenant(row.tenantId, scope.tenantId, userRole);
   return row.bookingId;
 }
 
@@ -224,13 +230,20 @@ export function assertTenant(
  */
 export async function isBookingOwnedBy(
   bookingId: number,
-  userId: number
+  userId: number,
+  tenantId?: number | null
 ): Promise<boolean> {
   const db = await getDbOrThrow();
   const [booking] = await db
     .select({ id: bookings.id })
     .from(bookings)
-    .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        eq(bookings.userId, userId),
+        tenantId == null ? undefined : eq(bookings.tenantId, tenantId)
+      )
+    )
     .limit(1);
   return !!booking;
 }

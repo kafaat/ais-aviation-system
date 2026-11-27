@@ -570,7 +570,10 @@ export const paymentsRouter = router({
           .where(
             and(
               eq(bookings.stripeCheckoutSessionId, input.sessionId),
-              eq(bookings.userId, ctx.user.id)
+              eq(bookings.userId, ctx.user.id),
+              ctx.tenantId == null
+                ? undefined
+                : eq(bookings.tenantId, ctx.tenantId)
             )
           )
           .limit(1);
@@ -582,7 +585,7 @@ export const paymentsRouter = router({
             .where(eq(paymentSplits.stripeCheckoutSessionId, input.sessionId))
             .limit(1);
           owned = split
-            ? await isBookingOwnedBy(split.bookingId, ctx.user.id)
+            ? await isBookingOwnedBy(split.bookingId, ctx.user.id, ctx.tenantId)
             : false;
         }
         if (!owned)

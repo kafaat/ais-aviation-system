@@ -164,6 +164,16 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("durable split checkout lifecycle", () => {
+  it("denies an old-tenant cancellation before contacting the provider or changing the plan", async () => {
+    const previous = structuredClone(fixture.rows("payment_splits"));
+    fixture.rows("users")[0].tenantId = 4;
+    await expect(
+      cancelPaymentSplits({ bookingId: 7 }, { id: 9, role: "user" })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(fixture.rows("payment_splits")).toEqual(previous);
+    expect(state.expire).not.toHaveBeenCalled();
+  });
+
   it("recovers a lost response with exactly the frozen provider payload and key", async () => {
     const create = state.create.getMockImplementation()!;
     state.create.mockImplementationOnce(async (...args) => {

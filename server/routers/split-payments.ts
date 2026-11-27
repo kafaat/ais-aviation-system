@@ -15,6 +15,10 @@ import {
   assertSplitOwnership,
 } from "../services/access-control.service";
 
+// Unassigned purchasers retain owner-only access, matching booking history.
+const purchaserScope = (tenantId: number | null) =>
+  tenantId == null ? undefined : { tenantId };
+
 // Input schemas
 const splitPayerSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -161,7 +165,12 @@ export const splitPaymentsRouter = router({
     )
     .query(async ({ input, ctx }) => {
       // Ownership check: split status exposes payer emails/amounts (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       return await splitPaymentService.getSplitPaymentStatus(input.bookingId);
     }),
 
@@ -183,7 +192,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ sent: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check: only the booking owner may trigger payer emails (IDOR)
-      await assertSplitOwnership(input.splitId, ctx.user.id, ctx.user.role);
+      await assertSplitOwnership(
+        input.splitId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       const sent = await splitPaymentService.sendPaymentRequest(input.splitId);
       return { sent };
     }),
@@ -207,7 +221,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ sent: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertSplitOwnership(input.splitId, ctx.user.id, ctx.user.role);
+      await assertSplitOwnership(
+        input.splitId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       const sent = await splitPaymentService.resendPaymentRequest(
         input.splitId
       );
@@ -233,7 +252,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ sentCount: z.number() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       const sentCount = await splitPaymentService.sendAllPaymentRequests(
         input.bookingId
       );
@@ -259,7 +283,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ cancelled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertSplitOwnership(input.splitId, ctx.user.id, ctx.user.role);
+      await assertSplitOwnership(
+        input.splitId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       await splitPaymentService.cancelSplit(input.splitId, ctx.user);
       return { cancelled: true };
     }),
@@ -283,7 +312,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ cancelled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       await splitPaymentService.cancelAllSplits(input.bookingId, ctx.user);
       return { cancelled: true };
     }),
@@ -383,7 +417,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ allPaid: z.boolean() }))
     .query(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       const allPaid = await splitPaymentService.checkAllPaid(input.bookingId);
       return { allPaid };
     }),
