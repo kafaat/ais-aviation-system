@@ -1,3 +1,4 @@
+import * as rbd from "../services/rbd-inventory.service";
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { transactionMemory } from "./helpers/transaction-memory";
@@ -30,7 +31,11 @@ vi.mock("../services/flights.service", () => ({
 import { cancelAfterPartialRefund } from "../services/payment-settlement.service";
 import { processStripeEvent } from "../webhooks/stripe";
 import { topUpWallet, payFromWallet } from "../services/wallet.service";
-import { dcsPassengerStates, seatInventory } from "../../drizzle/schema";
+import {
+  dcsPassengerStates,
+  seatInventory,
+  flightFareClassInventory,
+} from "../../drizzle/schema";
 import { createBooking } from "../services/bookings.service";
 import { DepartureReleaseError } from "../services/booking-settlement.service";
 
@@ -96,6 +101,48 @@ beforeEach(() => {
 });
 
 describe("verified payment settlement", () => {
+  it("rolls back a fare-class database failure, then settles the retried event once", async () => {
+    fixture.rows("bookings")[0].fareClassId = 4;
+    await fixture.db
+      .insert(flightFareClassInventory)
+      .values({ id: 8, flightId: 4, fareClassId: 4, availableSeats: 2 });
+    const unavailableDatabase = new Error("transient RBD database failure");
+    const reservation = vi
+      .spyOn(rbd, "reserveRbdSeats")
+      .mockRejectedValueOnce(unavailableDatabase);
+    try {
+      await expect(event("checkout.session.completed", payment())).rejects.toBe(
+        unavailableDatabase
+      );
+      expect(fixture.rows("bookings")[0].status).toBe("pending");
+      expect(fixture.rows("flights")[0].economyAvailable).toBe(5);
+      expect(fixture.rows("financial_ledger")).toHaveLength(0);
+      expect(fixture.rows("payment_receipts")).toHaveLength(0);
+      await event("checkout.session.completed", payment());
+      await event("checkout.session.completed", payment());
+      expect(fixture.rows("bookings")[0].status).toBe("confirmed");
+      expect(fixture.rows("flights")[0].economyAvailable).toBe(4);
+      expect(
+        fixture.rows("flight_fare_class_inventory")[0].availableSeats
+      ).toBe(1);
+      expect(fixture.rows("payment_receipts")).toHaveLength(1);
+      expect(fixture.rows("financial_ledger")).toHaveLength(1);
+    } finally {
+      reservation.mockRestore();
+    }
+  });
+
+  it("records a collected fare-class shortage for review without reserving seats", async () => {
+    fixture.rows("bookings")[0].fareClassId = 4;
+    await event("checkout.session.completed", payment());
+    expect(fixture.rows("bookings")[0].status).toBe("pending");
+    expect(fixture.rows("flights")[0].economyAvailable).toBe(5);
+    expect(fixture.rows("payment_receipts")).toMatchObject([
+      { settlementStatus: "review_required" },
+    ]);
+    expect(fixture.rows("financial_ledger")).toHaveLength(1);
+  });
+
   it("does not take an absent payment-history gap lock for a fresh collection", async () => {
     await event("checkout.session.completed", payment());
     expect(fixture.rows("payments")).toHaveLength(1);
