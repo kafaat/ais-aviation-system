@@ -22,6 +22,7 @@ import {
 } from "../services/inventory/inventory.service";
 
 const tables = [
+  schema.users,
   schema.flights,
   schema.bookings,
   schema.bookingSegments,
@@ -141,6 +142,9 @@ nativeDescribe("inventory promises on isolated native MySQL", () => {
   beforeEach(async () => {
     for (const table of tables)
       await pool!.query(`TRUNCATE TABLE \`${getTableName(table)}\``);
+    await db
+      .insert(schema.users)
+      .values({ id: 9, tenantId: 3, openId: "disposable-inventory-owner" });
     await db.insert(schema.flights).values(
       [41, 42].map(id => ({
         id,

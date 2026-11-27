@@ -589,28 +589,24 @@ nativeDescribe.sequential(
       expect(
         (await beforeMove.compensation.claimTargets({ bookingId })).passengers
       ).toHaveLength(2);
-      await fixture.db
-        .insert(schema.flightDisruptions)
-        .values({
-          flightId,
-          type: "delay",
-          reason: "Synthetic delay",
-          severity: "minor",
-        });
+      await fixture.db.insert(schema.flightDisruptions).values({
+        flightId,
+        type: "delay",
+        reason: "Synthetic delay",
+        severity: "minor",
+      });
       expect(await beforeMove.disruptions.myDisruptions()).toHaveLength(1);
-      await fixture.db
-        .insert(schema.seatInventory)
-        .values(
-          ["A", "B"].map(column => ({
-            flightId,
-            seatMapId: 1,
-            seatNumber: "1" + column,
-            row: 1,
-            column,
-            cabinClass: "economy" as const,
-            seatType: "window" as const,
-          }))
-        );
+      await fixture.db.insert(schema.seatInventory).values(
+        ["A", "B"].map(column => ({
+          flightId,
+          seatMapId: 1,
+          seatNumber: "1" + column,
+          row: 1,
+          column,
+          cabinClass: "economy" as const,
+          seatType: "window" as const,
+        }))
+      );
       await beforeMove.seatMap.selectSeat({
         bookingId,
         passengerId,
@@ -665,6 +661,84 @@ nativeDescribe.sequential(
       ];
       for (const action of refused)
         await expect(action()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("excludes a transferred owner's old seat holds, waitlist and group allocations", async () => {
+      const old = callerFor({ id: 9, role: "user", tenantId: 3 });
+      const funding = {
+        flightId: 41,
+        userId: 9,
+        cabinClass: "economy" as const,
+        sessionId: "synthetic-allocation",
+        expiresAt: new Date(Date.now() + 86400000),
+      };
+      const group = {
+        organizerName: "Synthetic",
+        organizerEmail: "group@example.test",
+        organizerPhone: "5550100",
+        groupSize: 10,
+        flightId: 41,
+      };
+      await fixture.db
+        .insert(schema.inventoryLocks)
+        .values({ ...funding, id: 381, numberOfSeats: 1 });
+      await fixture.db
+        .insert(schema.seatHolds)
+        .values({ ...funding, id: 382, seats: 1, inventoryLockId: 381 });
+      await fixture.db.insert(schema.waitlist).values({
+        id: 383,
+        userId: 9,
+        flightId: 41,
+        cabinClass: "economy",
+        seats: 1,
+        priority: 1,
+        status: "confirmed",
+        inventoryLockId: 381,
+      });
+      await fixture.db.insert(schema.groupBookings).values({
+        ...group,
+        id: 384,
+        organizerUserId: 9,
+        status: "confirmed",
+        totalPrice: 110000,
+        inventoryLockId: 381,
+      });
+      expect(
+        await old.bookings.getAllocation({ groupBookingId: 384 })
+      ).toMatchObject({ totalAmount: 110000 });
+      expect(await old.waitlist.myWaitlist()).toHaveLength(1);
+      await fixture.pool.query("UPDATE users SET tenantId=4 WHERE id=9");
+      const c = callerFor({ id: 9, role: "user", tenantId: 4 });
+      const before = await checksums();
+      expect(await c.waitlist.myWaitlist()).toEqual([]);
+      expect(await c.groupBookings.myAllocations()).toEqual([]);
+      expect(
+        await c.waitlist.getPosition({ flightId: 41, cabinClass: "economy" })
+      ).toMatchObject({ entry: null, position: null });
+      for (const invoke of [
+        () => c.bookings.getAllocation({ waitlistId: 383 }),
+        () => c.bookings.getAllocation({ groupBookingId: 384 }),
+        () => c.inventory.releaseHold({ holdId: 382 }),
+        () => c.inventory.removeFromWaitlist({ waitlistId: 383 }),
+        () =>
+          c.waitlist.join({
+            flightId: 41,
+            passengers: 1,
+            cabinClass: "economy",
+          }),
+        () => c.waitlist.acceptOffer({ waitlistId: 383 }),
+        () => c.waitlist.declineOffer({ waitlistId: 383 }),
+        () => c.waitlist.cancel({ waitlistId: 383 }),
+        () =>
+          c.waitlist.updateNotifications({
+            waitlistId: 383,
+            notifyByEmail: false,
+            notifyBySms: false,
+          }),
+        () => c.groupBookings.submitRequest(group),
+      ])
+        await expect(invoke()).rejects.toMatchObject({ code: "NOT_FOUND" });
       expect(await checksums()).toEqual(before);
     });
 

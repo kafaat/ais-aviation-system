@@ -80,7 +80,8 @@ export const waitlistRouter = router({
       return await waitlistService.getWaitlistPosition(
         ctx.user.id,
         input.flightId,
-        input.cabinClass
+        input.cabinClass,
+        ctx.tenantId
       );
     }),
 
@@ -101,7 +102,7 @@ export const waitlistRouter = router({
     })
     .output(responseContracts["myWaitlist"])
     .query(async ({ ctx }) => {
-      return await waitlistService.getUserWaitlist(ctx.user.id);
+      return await waitlistService.getUserWaitlist(ctx.user.id, ctx.tenantId);
     }),
 
   /**

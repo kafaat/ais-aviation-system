@@ -31,14 +31,22 @@ export const groupBookingsRouter = router({
     )
     .query(async ({ ctx }) => {
       const { getDb } = await import("../db");
-      const { groupBookings } = await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
+      const { groupBookings, flights } = await import("../../drizzle/schema");
+      const { eq, and, getTableColumns } = await import("drizzle-orm");
       const db = getDb();
       if (!db) throw new Error("Database unavailable");
       return await db
-        .select()
+        .select(getTableColumns(groupBookings))
         .from(groupBookings)
-        .where(eq(groupBookings.organizerUserId, ctx.user.id));
+        .innerJoin(flights, eq(groupBookings.flightId, flights.id))
+        .where(
+          and(
+            eq(groupBookings.organizerUserId, ctx.user.id),
+            ctx.tenantId == null
+              ? undefined
+              : eq(flights.tenantId, ctx.tenantId)
+          )
+        );
     }),
   /**
    * Submit a new group booking request (public - no auth required)

@@ -63,6 +63,7 @@ const entry = (overrides: Record<string, unknown>) => ({
 
 beforeEach(() => {
   fixture = transactionMemory({
+    users: [{ id: 101, tenantId: 1 }],
     flights: [flight(OWN_FLIGHT, 1), flight(FOREIGN_FLIGHT, 3)],
     inventory_locks: [],
     seat_holds: [],

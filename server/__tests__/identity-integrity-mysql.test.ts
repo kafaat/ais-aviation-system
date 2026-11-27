@@ -208,6 +208,7 @@ nativeDescribe("identity integrity on disposable MySQL", () => {
     await state.db!.insert(schema.flights).values({
       id: 1,
       flightNumber: "TS001",
+      tenantId: 7,
       airlineId: 1,
       originId: 1,
       destinationId: 2,
