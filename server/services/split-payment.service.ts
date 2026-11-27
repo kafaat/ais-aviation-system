@@ -17,6 +17,7 @@ import {
   InsertPaymentSplit,
 } from "../../drizzle/schema";
 import {
+  lockPurchaserBooking,
   assertNoActiveCheckout,
   assertNoActiveSplitPayment,
 } from "./booking-checkout.service";
@@ -131,19 +132,7 @@ export async function initiateSplitPayment(
 
   return db.transaction(async tx => {
     // All payment rails and invoice editors serialize on the owned booking.
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, bookingId))
-      .limit(1)
-      .for("update");
-
-    if (!booking || booking.userId !== input.userId) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Booking not found",
-      });
-    }
+    const booking = await lockPurchaserBooking(tx, bookingId, input.userId);
 
     if (
       booking.status !== "pending" ||

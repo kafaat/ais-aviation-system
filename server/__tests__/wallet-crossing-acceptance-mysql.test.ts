@@ -306,6 +306,37 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
     }
   );
 
+  it("blocks payment and receipt replay for a reassigned owner on the locked MySQL identity", async () => {
+    await payFromWallet(9, 71);
+    await db.insert(schema.tenants).values({
+      id: 4,
+      slug: "synthetic-other",
+      name: "Other airline",
+      status: "active",
+    });
+    const authority = await pool!.getConnection();
+    const before = await snapshot();
+    let payment: Promise<Awaited<ReturnType<typeof observe>>> | undefined;
+    try {
+      await authority.beginTransaction();
+      await authority.query("UPDATE users SET tenantId=4 WHERE id=9");
+      payment = observe(payFromWallet(9, 72));
+      await waitForBlockedTransactions(1);
+      await authority.commit();
+    } finally {
+      await authority.rollback();
+      authority.release();
+    }
+    expect(await payment).toMatchObject({
+      status: "rejected",
+      reason: { code: "NOT_FOUND" },
+    });
+    await expect(payFromWallet(9, 71)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(await snapshot()).toEqual(before);
+  });
+
   it("serializes competing spends and never overdraws the wallet", async () => {
     await db.update(schema.wallets).set({ balance: 10000 });
     const results = await Promise.allSettled([

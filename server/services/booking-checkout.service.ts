@@ -7,6 +7,7 @@ import { getDb } from "../db";
 import { stripe } from "../stripe";
 import {
   bookings,
+  users,
   bookingCheckoutRequests,
   bookingSegments,
   bookingAncillaries,
@@ -76,7 +77,10 @@ export async function assertNoActiveCheckout(
       "Expire or reconcile the active checkout before another payment workflow"
     );
 }
-async function ownedBooking(
+/** Booking first, then its current purchaser. Reassignment and an invoice
+ * command serialize on the user row, including replays of completed commands.
+ * A purchaser without an airline assignment may buy across airlines. */
+export async function lockPurchaserBooking(
   tx: SettlementTx,
   bookingId: number,
   userId: number
@@ -87,6 +91,16 @@ async function ownedBooking(
     .where(eq(bookings.id, bookingId))
     .for("update");
   if (!booking || booking.userId !== userId || booking.deletedAt)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Owned booking not found",
+    });
+  const [owner] = await tx
+    .select({ tenantId: users.tenantId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .for("update");
+  if (!owner || (owner.tenantId != null && owner.tenantId !== booking.tenantId))
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Owned booking not found",
@@ -108,7 +122,7 @@ async function ownedPending(
   bookingId: number,
   userId: number
 ) {
-  const booking = await ownedBooking(tx, bookingId, userId);
+  const booking = await lockPurchaserBooking(tx, bookingId, userId);
   await assertPendingInvoice(tx, booking);
   return booking;
 }
@@ -258,7 +272,7 @@ export async function getBookingCheckoutState(
   const db = getDb();
   if (!db) throw unavailable("Database unavailable");
   return await db.transaction(async tx => {
-    const booking = await ownedBooking(tx, bookingId, userId);
+    const booking = await lockPurchaserBooking(tx, bookingId, userId);
     const [usage] = await tx
       .select()
       .from(voucherUsage)

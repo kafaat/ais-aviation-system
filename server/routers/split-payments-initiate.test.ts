@@ -20,7 +20,10 @@ vi.mock("../services/cache.service", () => ({
   cacheService: { isConnected: () => false },
 }));
 const booking = vi.hoisted(() => ({
-  row: { id: 700, userId: 9, totalAmount: 10000 } as Record<string, unknown>,
+  row: { id: 700, userId: 9, tenantId: 3, totalAmount: 10000 } as Record<
+    string,
+    unknown
+  >,
 }));
 vi.mock("../db", () => {
   const chain = {
@@ -57,7 +60,7 @@ const splits = [
 ];
 
 beforeEach(() => {
-  booking.row = { id: 700, userId: 9, totalAmount: 10000 };
+  booking.row = { id: 700, userId: 9, tenantId: 3, totalAmount: 10000 };
   service.initiate
     .mockReset()
     .mockResolvedValue({ splitIds: [1, 2], totalAmount: 10000 });
@@ -105,6 +108,17 @@ describe("splitPayments.initiate delivers the payer requests (R1)", () => {
         .createCaller(owner())
         .splitPayments.initiate({ bookingId: 700, splits })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(service.sendAll).not.toHaveBeenCalled();
+  });
+
+  it("conceals the invoice total after tenant reassignment", async () => {
+    booking.row = { id: 700, userId: 9, tenantId: 4, totalAmount: 1 };
+    await expect(
+      app
+        .createCaller(owner())
+        .splitPayments.initiate({ bookingId: 700, splits })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(service.initiate).not.toHaveBeenCalled();
     expect(service.sendAll).not.toHaveBeenCalled();
   });
 

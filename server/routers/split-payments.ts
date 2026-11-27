@@ -82,7 +82,10 @@ export const splitPaymentsRouter = router({
       }
 
       // Validate booking belongs to the initiating user
-      if (booking.userId !== ctx.user.id) {
+      if (
+        booking.userId !== ctx.user.id ||
+        (ctx.tenantId != null && booking.tenantId !== ctx.tenantId)
+      ) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",

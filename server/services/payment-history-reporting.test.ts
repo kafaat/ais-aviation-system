@@ -130,6 +130,54 @@ describe("payment report pagination", () => {
     ]);
   });
 
+  it("filters a reassigned purchaser's history, counts and refund totals before paging", async () => {
+    database.exec("UPDATE bookings SET tenantId = 3 WHERE id = 1");
+    insert(bookings, {
+      id: 3,
+      userId: 701,
+      tenantId: 4,
+      flightId: 1,
+      bookingReference: "NEW",
+      pnr: "NEWPNR",
+    });
+    insert(payments, {
+      id: 107,
+      bookingId: 3,
+      amount: 400,
+      currency: "SAR",
+      status: "completed",
+      method: "wallet",
+      createdAt: "2029-12-31 12:00:00.000",
+    });
+    for (const [bookingId, amount] of [
+      [1, "11.00"],
+      [3, "2.00"],
+    ] as const)
+      insert(financialLedger, {
+        id: bookingId,
+        bookingId,
+        amount,
+        type: "partial_refund",
+        currency: "SAR",
+      });
+    expect(
+      (await getUserPaymentHistory(701, { limit: 1 }, 4)).map(row => row.pnr)
+    ).toEqual(["NEWPNR"]);
+    expect(
+      await getUserPaymentHistory(701, { limit: 1, offset: 1 }, 4)
+    ).toEqual([]);
+    expect(await getUserPaymentStats(701, 4)).toMatchObject({
+      totalPayments: 1,
+      completedAmount: 400,
+      refundedAmount: 200,
+    });
+    expect(await getUserPaymentStats(701, null)).toMatchObject({
+      totalPayments: 106,
+      refundedAmount: 1300,
+    });
+    expect((await getAdminPaymentStats()).totalPayments).toBe(107);
+  });
+
   it("applies date, method and status filters before paging the joined rows", async () => {
     for (const [id, createdAt, method, status, bookingId] of [
       [201, "2030-01-01 00:00:00.000", "card", "refunded", 1],

@@ -84,6 +84,7 @@ beforeEach(() => {
   vi.stubEnv("FRONTEND_URL", "https://app.example.test");
   sessions = new Map();
   fixture = transactionMemory({
+    users: [{ id: 9, tenantId: 3 }],
     bookings: [
       {
         id: 7,

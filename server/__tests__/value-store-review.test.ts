@@ -88,6 +88,7 @@ describe("one voucher per invoice", () => {
       validUntil: new Date(now + 86400000),
     });
     fixture = transactionMemory({
+      users: [{ id: 9, tenantId: null }],
       bookings: [
         {
           id: 7,

@@ -53,6 +53,7 @@ const reviewEvents = () =>
 describe("split booking collected while the corporate account is suspended", () => {
   const splitFixture = () =>
     transactionMemory({
+      users: [{ id: 9, tenantId: 3 }],
       tenants: [{ id: 3, status: "active" }],
       bookings: [
         {

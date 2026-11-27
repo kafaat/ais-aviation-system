@@ -24,9 +24,13 @@ export const paymentHistoryRouter = router({
     )
     .output(responseContracts["myPayments"])
     .query(async ({ ctx, input }) => {
-      return await paymentHistoryService.getUserPaymentHistory(ctx.user.id, {
-        ...input,
-      });
+      return await paymentHistoryService.getUserPaymentHistory(
+        ctx.user.id,
+        {
+          ...input,
+        },
+        ctx.tenantId
+      );
     }),
 
   /**
@@ -35,7 +39,10 @@ export const paymentHistoryRouter = router({
   myStats: protectedProcedure
     .output(responseContracts["myStats"])
     .query(async ({ ctx }) => {
-      return await paymentHistoryService.getUserPaymentStats(ctx.user.id);
+      return await paymentHistoryService.getUserPaymentStats(
+        ctx.user.id,
+        ctx.tenantId
+      );
     }),
 
   /**
