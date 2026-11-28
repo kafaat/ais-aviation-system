@@ -483,7 +483,13 @@ function paid(modificationId: number, amount: number, eventId = "evt_mod") {
     })
   );
 }
-const providerEvent = (event: Record<string, unknown>) =>
+// These controlled fixtures carry a real SDK event discriminator and a minimal
+// handler payload; they do not assert full external-provider schema coverage.
+type SyntheticProviderEvent = Pick<
+  Parameters<typeof processStripeEvent>[1],
+  "id" | "type"
+> & { data: { object: object } };
+const providerEvent = (event: SyntheticProviderEvent) =>
   fixture.db.transaction((tx: any) =>
     processStripeEvent(tx, event as Parameters<typeof processStripeEvent>[1])
   );
