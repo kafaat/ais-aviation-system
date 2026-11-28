@@ -214,6 +214,138 @@ try {
     "PASS: preservation CLI verifies fresh data after 0014 on a no-op upgrade"
   );
 
+  // Exercise the exact pre-turn journal with retained healthy and historically
+  // inconsistent chat rows. Additive DDL must preserve both; it is not a repair.
+  const chatBoundary = history.findIndex(
+    m => m.tag === "0081_chat_pending_turn"
+  );
+  assert.ok(chatBoundary > 0, "chat fencing migration must be journaled");
+  assert.equal(
+    history[chatBoundary - 1].tag,
+    "0080_servicing_refund_resolution"
+  );
+  const chatDatabase = `${database}_chat_turn`;
+  await admin.query(`CREATE DATABASE \`${chatDatabase}\``);
+  scratch.push(chatDatabase);
+  const chatUrl = new URL(testUrl.href);
+  chatUrl.pathname = `/${chatDatabase}`;
+  const chatConnection = await createConnection(chatUrl.href);
+  try {
+    materializePrefix(chatBoundary);
+    await migrate(drizzle(chatConnection), { migrationsFolder: directory });
+    assert.deepEqual(
+      differences(
+        snapshotContract(history[chatBoundary - 1].snapshot),
+        await readDatabaseContract(chatConnection)
+      ),
+      []
+    );
+    await chatConnection.query(
+      "INSERT INTO users(id,openId,name) VALUES (9001,'chat-migration-sentinel','Synthetic migration owner')"
+    );
+    await chatConnection.query(
+      "INSERT INTO airlines(id,code,name) VALUES (9001,'PF','Preflight synthetic airline')"
+    );
+    await chatConnection.query(
+      "INSERT INTO airports(id,code,name,city,country,timezone) VALUES (9001,'PFA','Synthetic origin','Origin','Test','UTC'),(9002,'PFB','Synthetic destination','Destination','Test','UTC')"
+    );
+    await chatConnection.query(
+      "INSERT INTO flights(id,flightNumber,airlineId,originId,destinationId,departureTime,arrivalTime,economySeats,businessSeats,economyPrice,businessPrice,economyAvailable,businessAvailable) VALUES (9001,'PF001',9001,9001,9002,'2030-06-10 09:00:00','2030-06-10 11:00:00',10,4,10000,20000,10,4)"
+    );
+    for (const [id, actualRows, storedCount] of [
+      [1, 3, 3],
+      [2, 102, 100],
+      [3, 99, 98],
+      [4, 1, 1],
+    ]) {
+      await chatConnection.query(
+        "INSERT INTO chat_conversations(id,userId,status,messageCount,context,lastMessageAt) VALUES (?,9001,'active',?,JSON_OBJECT('passengers',2,'cabinClass','business'),'2025-11-27 12:34:56')",
+        [id, storedCount]
+      );
+      for (let index = 0; index < actualRows; index++)
+        await chatConnection.query(
+          "INSERT INTO chat_messages(conversationId,role,content,createdAt) VALUES (?,?,?,'2025-11-27 12:34:56')",
+          [id, index % 2 === 0 ? "assistant" : "user", `رحلة اختبار ${index}`]
+        );
+    }
+    await chatConnection.query(
+      "UPDATE chat_conversations SET status='archived' WHERE id=4"
+    );
+    await chatConnection.query(
+      "INSERT INTO booking_suggestions(id,conversationId,messageId,flightId,cabinClass,pricePerPerson,totalPrice,reason,selected,expiresAt) VALUES (1,1,(SELECT MAX(id) FROM chat_messages WHERE conversationId=1),9001,'business',20000,40000,'اقتراح محفوظ','expired','2025-11-27 13:04:56')"
+    );
+    await chatConnection.query(
+      "UPDATE chat_messages SET metadata=JSON_OBJECT('suggestions',JSON_ARRAY(1),'entities',JSON_OBJECT('passengers',2)) WHERE id=(SELECT messageId FROM booking_suggestions WHERE id=1)"
+    );
+    const chatSnapshot = async (includePending: boolean) => {
+      const [conversations] = await chatConnection.query<RowDataPacket[]>(
+        "SELECT * FROM chat_conversations ORDER BY id"
+      );
+      const [messages] = await chatConnection.query<RowDataPacket[]>(
+        "SELECT * FROM chat_messages ORDER BY id"
+      );
+      const [suggestions] = await chatConnection.query<RowDataPacket[]>(
+        "SELECT * FROM booking_suggestions ORDER BY id"
+      );
+      return JSON.stringify({
+        conversations: conversations.map(row => {
+          if (includePending) return row;
+          const { pendingMessageId: _id, pendingUntil: _until, ...old } = row;
+          return old;
+        }),
+        messages,
+        suggestions,
+      });
+    };
+    const retainedChat = await chatSnapshot(false);
+    const [chatJournalPrefix] = await chatConnection.query<RowDataPacket[]>(
+      "SELECT hash,created_at FROM __drizzle_migrations ORDER BY id"
+    );
+    await runMigration("migrate", chatUrl.href);
+    await runMigration("verify", chatUrl.href);
+    assert.equal(await chatSnapshot(false), retainedChat);
+    const [columns] = await chatConnection.query<RowDataPacket[]>(
+      "SELECT COLUMN_NAME AS name,COLUMN_TYPE AS type,IS_NULLABLE AS nullable,COLUMN_DEFAULT AS defaultValue,DATETIME_PRECISION AS timePrecision FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='chat_conversations' AND column_name IN ('pendingMessageId','pendingUntil') ORDER BY column_name"
+    );
+    assert.deepEqual(columns, [
+      {
+        name: "pendingMessageId",
+        type: "int",
+        nullable: "YES",
+        defaultValue: null,
+        timePrecision: null,
+      },
+      {
+        name: "pendingUntil",
+        type: "timestamp(3)",
+        nullable: "YES",
+        defaultValue: null,
+        timePrecision: 3,
+      },
+    ]);
+    const [pending] = await chatConnection.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS n FROM chat_conversations WHERE pendingMessageId IS NOT NULL OR pendingUntil IS NOT NULL"
+    );
+    assert.equal(Number(pending[0].n), 0);
+    const [journalBefore] = await chatConnection.query<RowDataPacket[]>(
+      "SELECT hash,created_at FROM __drizzle_migrations ORDER BY id"
+    );
+    assert.equal(journalBefore.length, history.length);
+    assert.deepEqual(journalBefore.slice(0, chatBoundary), chatJournalPrefix);
+    const afterChat = await chatSnapshot(true);
+    await runMigration("migrate", chatUrl.href);
+    const [journalAfter] = await chatConnection.query(
+      "SELECT hash,created_at FROM __drizzle_migrations ORDER BY id"
+    );
+    assert.deepEqual(journalAfter, journalBefore);
+    assert.equal(await chatSnapshot(true), afterChat);
+    console.info(
+      "PASS: canonical 0080-to-0081 chat upgrade preserves 205 Unicode transcript rows, archived state, linked suggestion and existing counts, creates nullable millisecond pending fields, and replays without data/journal changes"
+    );
+  } finally {
+    await chatConnection.end();
+  }
+
   // Change only the diagnostic text, preserving the trigger's rejection policy.
   // This tests body drift independently of a missing trigger or journal change.
   const triggerName = "supplier_finance_no_update";

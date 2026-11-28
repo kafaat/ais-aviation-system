@@ -116,6 +116,10 @@ jobs:
           server/__tests__/auth-session-mysql.test.ts
           server/__tests__/identity-integrity-mysql.test.ts
           server/__tests__/runtime-integrity-mysql.test.ts
+          server/__tests__/forensic-financial-integrity-mysql.test.ts
+          server/__tests__/ai-chat-concurrency-mysql.test.ts
+          server/__tests__/ai-chat-turns-mysql.test.ts
+          server/__tests__/chat-turn-preflight-mysql.test.ts
           server/__tests__/operations-review-mysql.test.ts
           server/__tests__/request-identity-oauth-mysql.test.ts
           server/__tests__/flight-consumers-mysql.test.ts
