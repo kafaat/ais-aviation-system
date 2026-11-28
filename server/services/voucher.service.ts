@@ -1,3 +1,4 @@
+import { lockPurchaserBooking } from "./booking-checkout.service";
 import {
   createVoucherInputSchema,
   updateVoucherPatchSchema,
@@ -14,8 +15,6 @@ import {
   userCredits,
   voucherUsage,
   creditUsage,
-  bookings,
-  users,
   financialLedger,
   type InsertVoucher,
 } from "../../drizzle/schema";
@@ -420,16 +419,7 @@ export async function applyVoucher(
   try {
     // Use a transaction to prevent race conditions on voucher usage count
     return await database.transaction(async tx => {
-      const [owned] = await tx
-        .select()
-        .from(bookings)
-        .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
-        .for("update");
-      if (!owned)
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Owned booking not found",
-        });
+      const owned = await lockPurchaserBooking(tx, bookingId, userId);
       const now = new Date();
       const normalizedCode = code.toUpperCase().trim();
 
@@ -769,22 +759,7 @@ export async function useCredit(
       message: "Credit amount must be positive whole minor units",
     });
   return database.transaction(async tx => {
-    const [owned] = await tx
-      .select()
-      .from(bookings)
-      .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
-      .for("update");
-    if (!owned)
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Owned booking not found",
-      });
-    // Account then lots: disjoint bookings cannot spend the same balance.
-    await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.id, userId))
-      .for("update");
+    await lockPurchaserBooking(tx, bookingId, userId);
     const previous = await tx
       .select()
       .from(creditUsage)

@@ -49,6 +49,7 @@ const snapshot = () =>
 beforeEach(() => {
   serial = 0;
   fixture = transactionMemory({
+    users: [{ id: 7, tenantId: 1 }],
     tenants: [{ id: 1, status: "active" }],
     bookings: [
       {
@@ -184,7 +185,7 @@ describe("DCS denial and seat selection", () => {
 
     await expect(
       releaseSeat(11, "1A", {
-        actor: { userId: 7, tenantId: 1 },
+        actor: { userId: 7 },
         expected: { bookingId: 3, passengerId: 4 },
       })
     ).resolves.toMatchObject({

@@ -1,3 +1,7 @@
+import {
+  lockBookingUserTenants,
+  purchaserBookingCondition,
+} from "./access-control.service";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { bookings, bookingSegments } from "../../drizzle/schema";
@@ -8,14 +12,20 @@ export async function resolveClaimFlight(
   bookingId: number,
   userId: number,
   requestedFlightId?: number,
-  tx?: NonNullable<ReturnType<typeof getDb>>
+  tx?: NonNullable<ReturnType<typeof getDb>>,
+  tenantId?: number | null
 ) {
   const db = tx ?? getDb();
   if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
   const ownership = db
     .select()
     .from(bookings)
-    .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)));
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        purchaserBookingCondition(userId, tenantId)
+      )
+    );
   // Claim writers join the purge/booking parent-lock protocol on their own
   // transaction connection. Read-only eligibility enquiries need no lock.
   const [booking] = await (tx ? ownership.for("update") : ownership);
@@ -24,6 +34,7 @@ export async function resolveClaimFlight(
       code: "NOT_FOUND",
       message: "Owned booking not found",
     });
+  if (tx) await lockBookingUserTenants(tx, booking.tenantId, [userId]);
   const segments = await db
     .select({ flightId: bookingSegments.flightId })
     .from(bookingSegments)
@@ -49,13 +60,22 @@ export async function resolveClaimFlight(
   return ids[0];
 }
 
-export async function getClaimTargets(bookingId: number, userId: number) {
+export async function getClaimTargets(
+  bookingId: number,
+  userId: number,
+  tenantId?: number | null
+) {
   const db = getDb();
   if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
   const [booking] = await db
     .select()
     .from(bookings)
-    .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)));
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        purchaserBookingCondition(userId, tenantId)
+      )
+    );
   if (!booking) throw new TRPCError({ code: "NOT_FOUND" });
   const { flights, passengers } = await import("../../drizzle/schema");
   const { inArray } = await import("drizzle-orm");
@@ -72,7 +92,12 @@ export async function getClaimTargets(bookingId: number, userId: number) {
     flights: await db
       .select({ id: flights.id, flightNumber: flights.flightNumber })
       .from(flights)
-      .where(inArray(flights.id, ids)),
+      .where(
+        and(
+          inArray(flights.id, ids),
+          tenantId == null ? undefined : eq(flights.tenantId, tenantId)
+        )
+      ),
     passengers: await db
       .select({
         id: passengers.id,
@@ -80,6 +105,11 @@ export async function getClaimTargets(bookingId: number, userId: number) {
         lastName: passengers.lastName,
       })
       .from(passengers)
-      .where(eq(passengers.bookingId, bookingId)),
+      .where(
+        and(
+          eq(passengers.bookingId, bookingId),
+          tenantId == null ? undefined : eq(passengers.tenantId, tenantId)
+        )
+      ),
   };
 }

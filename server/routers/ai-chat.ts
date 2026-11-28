@@ -181,7 +181,9 @@ export const aiChatRouter = router({
         limits: AI_LIMITS,
         features: {
           suggestedMessages: true,
-          stopGeneration: true,
+          // The browser can stop waiting, but no request cancellation reaches
+          // the provider or prevents the service from persisting its reply.
+          stopGeneration: false,
           piiMasking: true,
           contentFiltering: true,
         },

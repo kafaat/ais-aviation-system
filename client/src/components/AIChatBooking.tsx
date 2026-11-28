@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { chatSendFailure, type ChatSendStatus } from "@/lib/chat-send-failure";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,10 +37,16 @@ import {
 } from "@/lib/flight-time";
 
 interface Message {
+  unsentDraft?: string;
   id: number;
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: Date;
+}
+
+interface ChatOperation {
+  kind: "start" | "send" | "select";
+  epoch: number;
 }
 
 interface FlightSuggestion {
@@ -75,14 +82,27 @@ export default function AIChatBooking({
   const [, navigate] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [conversationId, setConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [suggestions, setSuggestions] = useState<FlightSuggestion[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingOperation, setLoadingOperation] = useState<
+    ChatOperation["kind"] | null
+  >(null);
+  const [sendStatus, setSendStatus] = useState<ChatSendStatus | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
+  const isLoading = loadingOperation !== null;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const conversationIdRef = useRef<number | null>(null);
+  const conversationEpochRef = useRef(0);
+  const localMessageIdRef = useRef(0);
+  const draftRevisionRef = useRef(0);
+  const transcriptRevisionRef = useRef(0);
+  const operationRef = useRef<ChatOperation | null>(null);
+  const historyRequestRef = useRef<object | null>(null);
 
+  const utils = trpc.useUtils();
   const startConversation = trpc.aiChat.startConversation.useMutation();
   const sendMessage = trpc.aiChat.sendMessage.useMutation();
   const selectSuggestion = trpc.aiChat.selectSuggestion.useMutation();
@@ -101,36 +121,139 @@ export default function AIChatBooking({
     }
   }, [isOpen, isMinimized]);
 
+  useEffect(() => {
+    return () => {
+      conversationEpochRef.current += 1;
+      conversationIdRef.current = null;
+      operationRef.current = null;
+      historyRequestRef.current = null;
+    };
+  }, []);
+
+  const isCurrentOperation = (operation: ChatOperation) =>
+    operationRef.current === operation &&
+    conversationEpochRef.current === operation.epoch;
+
+  const finishOperation = (operation: ChatOperation) => {
+    if (isCurrentOperation(operation)) {
+      operationRef.current = null;
+      setLoadingOperation(null);
+    }
+  };
+
+  const invalidateHistoryRead = () => {
+    historyRequestRef.current = null;
+    setIsRefreshing(false);
+    setHistoryError(false);
+  };
+
+  const handleRefreshHistory = async () => {
+    const id = conversationIdRef.current;
+    if (id === null) return;
+    const epoch = conversationEpochRef.current;
+    const revision = transcriptRevisionRef.current;
+    const request = {};
+    historyRequestRef.current = request;
+    setIsRefreshing(true);
+    setHistoryError(false);
+    const isCurrent = () =>
+      historyRequestRef.current === request &&
+      conversationEpochRef.current === epoch &&
+      conversationIdRef.current === id &&
+      transcriptRevisionRef.current === revision;
+    try {
+      // Do not attach a fresh local token to an older in-flight cached read.
+      const history = await utils.client.aiChat.getHistory.query({
+        conversationId: id,
+      });
+      if (!isCurrent()) return;
+      transcriptRevisionRef.current += 1;
+      setMessages(previous => [
+        ...history.map(row => ({
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          createdAt: row.createdAt,
+        })),
+        ...previous.filter(row => row.unsentDraft !== undefined),
+      ]);
+      setSuggestions([]);
+    } catch {
+      if (isCurrent()) setHistoryError(true);
+    } finally {
+      if (historyRequestRef.current === request) {
+        historyRequestRef.current = null;
+        setIsRefreshing(false);
+      }
+    }
+  };
+
+  const handleClose = () => {
+    // Closing changes only this widget. Any accepted server request may finish.
+    conversationEpochRef.current += 1;
+    conversationIdRef.current = null;
+    operationRef.current = null;
+    draftRevisionRef.current += 1;
+    transcriptRevisionRef.current += 1;
+    invalidateHistoryRead();
+    setLoadingOperation(null);
+    setIsOpen(false);
+    setIsMinimized(false);
+  };
+
   // Start a new conversation
   const handleStartConversation = async () => {
+    if (operationRef.current) return;
+    const operation: ChatOperation = {
+      kind: "start",
+      epoch: ++conversationEpochRef.current,
+    };
+    operationRef.current = operation;
+    setLoadingOperation("start");
     try {
-      setIsLoading(true);
       const result = await startConversation.mutateAsync({
         initialContext,
       });
-      setConversationId(result.conversationId);
+      if (!isCurrentOperation(operation)) return;
+      conversationIdRef.current = result.conversationId;
+      transcriptRevisionRef.current += 1;
+      draftRevisionRef.current += 1;
       setMessages([
         {
-          id: 1,
+          id: --localMessageIdRef.current,
           role: "assistant",
           content: result.greeting,
           createdAt: new Date(),
         },
       ]);
+      setSuggestions([]);
+      setInputValue("");
+      setSendStatus(null);
       setIsOpen(true);
     } catch (_error) {
-      toast.error(t("chat.errorStarting"));
+      if (isCurrentOperation(operation)) toast.error(t("chat.errorStarting"));
     } finally {
-      setIsLoading(false);
+      finishOperation(operation);
     }
   };
 
   // Send a message
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || !conversationId || isLoading) return;
+    const id = conversationIdRef.current;
+    if (!inputValue.trim() || id === null || operationRef.current) return;
+
+    const operation: ChatOperation = {
+      kind: "send",
+      epoch: conversationEpochRef.current,
+    };
+    operationRef.current = operation;
+    const draftText = inputValue;
+    const draftRevision = ++draftRevisionRef.current;
+    transcriptRevisionRef.current += 1;
+    invalidateHistoryRead();
 
     const userMessage: Message = {
-      id: messages.length + 1,
+      id: --localMessageIdRef.current,
       role: "user",
       content: inputValue,
       createdAt: new Date(),
@@ -138,40 +261,82 @@ export default function AIChatBooking({
 
     setMessages(prev => [...prev, userMessage]);
     setInputValue("");
-    setIsLoading(true);
+    setLoadingOperation("send");
+    setSendStatus(null);
 
     try {
       const response = await sendMessage.mutateAsync({
-        conversationId,
-        message: inputValue,
+        conversationId: id,
+        message: draftText,
       });
+      if (!isCurrentOperation(operation)) return;
 
       const assistantMessage: Message = {
-        id: messages.length + 2,
+        id: --localMessageIdRef.current,
         role: "assistant",
         content: response.message,
         createdAt: new Date(),
       };
 
+      transcriptRevisionRef.current += 1;
       setMessages(prev => [...prev, assistantMessage]);
 
       if (response.suggestions) {
         setSuggestions(response.suggestions);
       }
-    } catch (_error) {
-      toast.error(t("chat.errorSending"));
+    } catch (error) {
+      if (!isCurrentOperation(operation)) return;
+      const failure = chatSendFailure(error);
+      if (failure.unaccepted) {
+        const restore = draftRevisionRef.current === draftRevision;
+        if (restore) {
+          draftRevisionRef.current += 1;
+          setInputValue(draftText);
+        }
+        setMessages(previous =>
+          previous.flatMap(row =>
+            row.id !== userMessage.id
+              ? [row]
+              : restore
+                ? []
+                : [{ ...row, unsentDraft: draftText }]
+          )
+        );
+      }
+      setSendStatus(failure.status);
+      if (failure.reconcile) void handleRefreshHistory();
     } finally {
-      setIsLoading(false);
+      finishOperation(operation);
     }
+  };
+
+  const handleRestoreDraft = (message: Message) => {
+    if (
+      message.unsentDraft === undefined ||
+      inputValue.length > 0 ||
+      operationRef.current
+    )
+      return;
+    draftRevisionRef.current += 1;
+    setInputValue(message.unsentDraft);
+    setMessages(previous => previous.filter(row => row.id !== message.id));
+    inputRef.current?.focus();
   };
 
   // Handle suggestion selection
   const handleSelectSuggestion = async (suggestion: FlightSuggestion) => {
+    if (operationRef.current) return;
+    const operation: ChatOperation = {
+      kind: "select",
+      epoch: conversationEpochRef.current,
+    };
+    operationRef.current = operation;
+    setLoadingOperation("select");
     try {
-      setIsLoading(true);
       const result = await selectSuggestion.mutateAsync({
         suggestionId: suggestion.id,
       });
+      if (!isCurrentOperation(operation)) return;
 
       if (onBookingSelect) {
         onBookingSelect(result.flightId, result.cabinClass);
@@ -182,9 +347,9 @@ export default function AIChatBooking({
 
       toast.success(t("chat.bookingSelected"));
     } catch (_error) {
-      toast.error(t("chat.errorSelecting"));
+      if (isCurrentOperation(operation)) toast.error(t("chat.errorSelecting"));
     } finally {
-      setIsLoading(false);
+      finishOperation(operation);
     }
   };
 
@@ -229,6 +394,20 @@ export default function AIChatBooking({
           }`}
         >
           <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          {message.unsentDraft !== undefined && (
+            <div className="mt-2 text-xs">
+              <p>{t("aiChat.notSent")}</p>
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto p-0 text-inherit underline"
+                disabled={isLoading || inputValue.length > 0}
+                onClick={() => handleRestoreDraft(message)}
+              >
+                {t("aiChat.restoreDraft")}
+              </Button>
+            </div>
+          )}
           <span className="text-xs opacity-70 mt-1 block">
             {format(message.createdAt, "HH:mm", { locale })}
           </span>
@@ -241,8 +420,17 @@ export default function AIChatBooking({
   const renderSuggestion = (suggestion: FlightSuggestion) => (
     <Card
       key={suggestion.id}
+      role="button"
+      tabIndex={isLoading ? -1 : 0}
+      aria-disabled={isLoading}
       className="cursor-pointer hover:shadow-md transition-shadow"
       onClick={() => handleSelectSuggestion(suggestion)}
+      onKeyDown={event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          void handleSelectSuggestion(suggestion);
+        }
+      }}
     >
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
@@ -328,6 +516,7 @@ export default function AIChatBooking({
     return (
       <Button
         onClick={handleStartConversation}
+        aria-label={t("aiChat.startConversation")}
         disabled={isLoading}
         className="fixed bottom-6 right-6 rounded-full w-14 h-14 shadow-lg z-50"
         size="icon"
@@ -345,8 +534,17 @@ export default function AIChatBooking({
   if (isMinimized) {
     return (
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={t("aiChat.reopenChat")}
         className="fixed bottom-6 right-6 bg-card rounded-lg shadow-lg z-50 cursor-pointer"
         onClick={() => setIsMinimized(false)}
+        onKeyDown={event => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setIsMinimized(false);
+          }
+        }}
       >
         <div className="flex items-center gap-3 p-4">
           <Bot className="w-6 h-6 text-primary" />
@@ -372,6 +570,7 @@ export default function AIChatBooking({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
+              aria-label={t("aiChat.minimizeChat")}
               onClick={() => setIsMinimized(true)}
             >
               <Minimize2 className="w-4 h-4" />
@@ -380,7 +579,8 @@ export default function AIChatBooking({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setIsOpen(false)}
+              aria-label={t("aiChat.closeChat")}
+              onClick={handleClose}
             >
               <X className="w-4 h-4" />
             </Button>
@@ -389,16 +589,23 @@ export default function AIChatBooking({
       </CardHeader>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea
+        className="flex-1 p-4"
+        role="log"
+        aria-label={t("aiChat.conversationLog")}
+      >
         <div className="space-y-4">
           {messages.map(renderMessage)}
 
-          {isLoading && (
+          {loadingOperation === "send" && (
             <div className="flex gap-3">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                 <Bot className="w-4 h-4" />
               </div>
               <div className="space-y-2">
+                <p role="status" className="text-xs text-muted-foreground">
+                  {t("aiChat.waiting")}
+                </p>
                 <Skeleton className="h-4 w-48" />
                 <Skeleton className="h-4 w-32" />
               </div>
@@ -421,24 +628,55 @@ export default function AIChatBooking({
 
       {/* Input */}
       <div className="p-4 border-t flex-shrink-0">
+        {sendStatus && (
+          <p role="status" className="mb-2 text-sm">
+            {t(`aiChat.${sendStatus}`)}
+          </p>
+        )}
+        {historyError && (
+          <p role="alert" className="mb-2 text-sm text-destructive">
+            {t("aiChat.refreshFailed")}
+          </p>
+        )}
+        {loadingOperation === "select" && (
+          <p role="status" className="mb-2 text-sm">
+            {t("aiChat.selectingFlight")}
+          </p>
+        )}
         <div className="flex gap-2">
           <Input
             ref={inputRef}
             value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
+            onChange={e => {
+              draftRevisionRef.current += 1;
+              setInputValue(e.target.value);
+            }}
             onKeyPress={handleKeyPress}
             placeholder={t("chat.placeholder")}
+            aria-label={t("aiChat.messageLabel")}
             disabled={isLoading}
             className="flex-1"
           />
           <Button
             onClick={handleSendMessage}
+            aria-label={t("aiChat.sendMessage")}
             disabled={!inputValue.trim() || isLoading}
             size="icon"
           >
             <Send className="w-4 h-4" />
           </Button>
         </div>
+        <Button
+          type="button"
+          variant="link"
+          className="mt-2 h-auto p-0 text-xs"
+          disabled={isLoading || isRefreshing}
+          onClick={() => void handleRefreshHistory()}
+        >
+          {isRefreshing
+            ? t("aiChat.refreshingHistory")
+            : t("aiChat.refreshHistory")}
+        </Button>
       </div>
     </div>
   );

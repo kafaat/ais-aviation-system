@@ -332,19 +332,21 @@ export function CancelBookingDialog({
                     ))}
                   </RadioGroup>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="notes">
-                    {t("cancelBooking.additionalNotes")}
-                  </Label>
-                  <Textarea
-                    id="notes"
-                    maxLength={500}
-                    placeholder={t("cancelBooking.notesPlaceholder")}
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    rows={3}
-                  />
-                </div>
+                {zeroRefund && (
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">
+                      {t("cancelBooking.additionalNotes")}
+                    </Label>
+                    <Textarea
+                      id="notes"
+                      maxLength={500}
+                      placeholder={t("cancelBooking.notesPlaceholder")}
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                )}
                 <div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
                   <p className="text-xs text-amber-800">

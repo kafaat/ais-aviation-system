@@ -3,7 +3,7 @@ import { getQueryKey } from "@trpc/react-query";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
-import { currentReturnTo } from "@/lib/auth-navigation";
+import { BROWSER_IDENTITY_KEY, currentReturnTo } from "@/lib/auth-navigation";
 import {
   isAuthenticationPath,
   loginPath,
@@ -55,7 +55,7 @@ export function useAuth(options?: UseAuthOptions) {
         predicate: query => query !== identityQuery,
       });
       queryClient.getMutationCache().clear();
-      localStorage.removeItem("manus-runtime-user-info");
+      localStorage.removeItem(BROWSER_IDENTITY_KEY);
       navigator.serviceWorker?.controller?.postMessage({
         type: "CLEAR_PRIVATE_DATA",
       });
@@ -80,10 +80,9 @@ export function useAuth(options?: UseAuthOptions) {
 
   // Move localStorage side effect to useEffect
   useEffect(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    // A loading query has not established a new identity.
+    if (meQuery.data !== undefined)
+      localStorage.setItem(BROWSER_IDENTITY_KEY, JSON.stringify(meQuery.data));
   }, [meQuery.data]);
 
   useEffect(() => {

@@ -1,4 +1,7 @@
-import { withInventoryTransaction } from "./inventory-capacity.service";
+import {
+  lockPurchaserFlight,
+  withInventoryTransaction,
+} from "./inventory-capacity.service";
 import {
   createInventoryLock,
   releaseInventoryLock,
@@ -104,63 +107,61 @@ export async function createGroupBookingRequest(
     });
   }
 
-  // Verify flight exists
-  const flight = await db
-    .select()
-    .from(flights)
-    .where(eq(flights.id, data.flightId))
-    .limit(1);
+  return db.transaction(async tx => {
+    const flightData =
+      data.organizerUserId === undefined
+        ? (
+            await tx
+              .select()
+              .from(flights)
+              .where(eq(flights.id, data.flightId))
+              .for("update")
+          )[0]
+        : await lockPurchaserFlight(tx, data.flightId, data.organizerUserId);
+    if (!flightData)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    const cabinClass = data.cabinClass ?? "economy";
+    const availableSeats =
+      cabinClass === "economy"
+        ? flightData.economyAvailable
+        : flightData.businessAvailable;
+    if (availableSeats < data.groupSize) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Not enough ${cabinClass} seats available. Only ${availableSeats} seats remaining.`,
+      });
+    }
 
-  if (flight.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Flight not found",
+    // Calculate suggested discount
+    const suggestedDiscount = calculateGroupDiscount(data.groupSize);
+
+    // Create the group booking request
+    const result = await tx.insert(groupBookings).values({
+      organizerUserId: data.organizerUserId,
+      organizerName: data.organizerName,
+      organizerEmail: data.organizerEmail,
+      organizerPhone: data.organizerPhone,
+      groupSize: data.groupSize,
+      cabinClass,
+      flightId: data.flightId,
+      notes: data.notes,
+      status: "pending",
     });
-  }
 
-  // Check if flight has enough seats available for the requested cabin class
-  const flightData = flight[0];
-  const cabinClass = data.cabinClass ?? "economy";
-  const availableSeats =
-    cabinClass === "economy"
-      ? flightData.economyAvailable
-      : flightData.businessAvailable;
-  if (availableSeats < data.groupSize) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Not enough ${cabinClass} seats available. Only ${availableSeats} seats remaining.`,
-    });
-  }
+    const insertId = result[0].insertId;
 
-  // Calculate suggested discount
-  const suggestedDiscount = calculateGroupDiscount(data.groupSize);
+    if (!insertId) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to create group booking request",
+      });
+    }
 
-  // Create the group booking request
-  const result = await db.insert(groupBookings).values({
-    organizerUserId: data.organizerUserId,
-    organizerName: data.organizerName,
-    organizerEmail: data.organizerEmail,
-    organizerPhone: data.organizerPhone,
-    groupSize: data.groupSize,
-    cabinClass,
-    flightId: data.flightId,
-    notes: data.notes,
-    status: "pending",
+    return {
+      id: insertId,
+      suggestedDiscount,
+    };
   });
-
-  const insertId = result[0].insertId;
-
-  if (!insertId) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to create group booking request",
-    });
-  }
-
-  return {
-    id: insertId,
-    suggestedDiscount,
-  };
 }
 
 /**

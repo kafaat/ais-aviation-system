@@ -69,6 +69,15 @@ describe("access-control.service — tenant isolation", () => {
       await expect(assertSplitOwnership(5, 42)).resolves.toBe(7);
     });
 
+    it("refuses a reassigned booking owner on a former tenant's split", async () => {
+      vi.mocked(db.getDb).mockResolvedValue(
+        mockDb([{ bookingId: 7, ownerId: 42, tenantId: 3 }])
+      );
+      await expect(
+        assertSplitOwnership(5, 42, "user", { tenantId: 4 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    });
+
     it("rejects a non-owner", async () => {
       vi.mocked(db.getDb).mockResolvedValue(
         mockDb([{ bookingId: 7, ownerId: 99 }])
@@ -106,8 +115,19 @@ describe("access-control.service — tenant isolation", () => {
 
   describe("assertModificationOwnership", () => {
     it("allows the owner", async () => {
-      vi.mocked(db.getDb).mockResolvedValue(mockDb([{ userId: 42 }]));
+      vi.mocked(db.getDb).mockResolvedValue(
+        mockDb([{ userId: 42, ownerId: 42 }])
+      );
       await expect(assertModificationOwnership(2, 42)).resolves.toBeUndefined();
+    });
+
+    it("requires a modification and its booking to belong to the current purchaser and airline", async () => {
+      vi.mocked(db.getDb).mockResolvedValue(
+        mockDb([{ userId: 42, ownerId: 42, tenantId: 3 }])
+      );
+      await expect(
+        assertModificationOwnership(2, 42, "user", { tenantId: 4 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
     });
 
     it("rejects a non-owner", async () => {

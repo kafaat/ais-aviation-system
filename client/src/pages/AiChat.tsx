@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { isCivilDay } from "@shared/ibe-search";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { passengerRightsSource } from "@shared/passenger-policy";
 import { loginPath } from "@shared/return-to";
 import { airlineSupportUrl } from "@/lib/airline-support";
+import { chatSendFailure, type ChatSendStatus } from "@/lib/chat-send-failure";
 import { formatFlightTime } from "@/lib/flight-time";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,6 +28,7 @@ import {
 } from "lucide-react";
 
 interface ChatMessageDisplay {
+  unsentDraft?: string;
   exchangeBookings?: { id: number; bookingReference: string }[];
   policySourceLanguage?: keyof typeof passengerRightsSource;
   id: number;
@@ -44,6 +49,7 @@ interface FlightSuggestion {
   arrivalTime: string;
   price: number;
   cabinClass: string;
+  passengers: number;
   reason?: string;
 }
 
@@ -69,6 +75,16 @@ function ChatDisclosure() {
   );
 }
 
+const emptyRoute = {
+  origin: "",
+  destination: "",
+  departureDate: "",
+  passengers: 1,
+  cabinClass: "economy" as "economy" | "business",
+};
+const selectClass =
+  "block h-9 w-full rounded-md border border-input bg-background px-3 text-sm";
+
 export default function AiChat() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -77,11 +93,43 @@ export default function AiChat() {
   const [messages, setMessages] = useState<ChatMessageDisplay[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [sendStatus, setSendStatus] = useState<ChatSendStatus | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
   const [suggestions, setSuggestions] = useState<FlightSuggestion[]>([]);
+  const [includeRoute, setIncludeRoute] = useState(false);
+  const [route, setRoute] = useState(emptyRoute);
+  const [routeAttempted, setRouteAttempted] = useState(false);
+  const airports = trpc.reference.airports.useQuery(undefined, {
+    enabled: !!user && includeRoute && !conversationId,
+  });
+  const originId = Number(route.origin);
+  const destinationId = Number(route.destination);
+  const airportsUnavailable =
+    airports.isError || (!airports.isLoading && !airports.data?.length);
+  const routeValid =
+    !airportsUnavailable &&
+    originId !== destinationId &&
+    airports.data?.some(airport => airport.id === originId && originId > 0) &&
+    airports.data.some(
+      airport => airport.id === destinationId && destinationId > 0
+    ) &&
+    isCivilDay(route.departureDate) &&
+    Number.isInteger(route.passengers) &&
+    route.passengers >= 1 &&
+    route.passengers <= 9;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const conversationIdRef = useRef<number | null>(null);
+  const conversationEpochRef = useRef(0);
+  const localMessageIdRef = useRef(0);
+  const draftRevisionRef = useRef(0);
+  const transcriptRevisionRef = useRef(0);
+  const historyRequestRef = useRef<object | null>(null);
+  const startRequestRef = useRef<object | null>(null);
 
+  const utils = trpc.useUtils();
   const startConversation = trpc.aiChat.startConversation.useMutation();
   const sendMessageMut = trpc.aiChat.sendMessage.useMutation();
   const quickReplies = trpc.aiChat.getQuickReplies.useQuery(undefined, {
@@ -96,87 +144,231 @@ export default function AiChat() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Auto-resize textarea
+  useEffect(() => {
+    return () => {
+      conversationEpochRef.current += 1;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      historyRequestRef.current = null;
+      startRequestRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height =
+        Math.min(inputRef.current.scrollHeight, 120) + "px";
+    }
+  }, [inputValue]);
+
+  const invalidateHistoryRead = () => {
+    historyRequestRef.current = null;
+    setIsRefreshing(false);
+    setHistoryError(false);
+  };
+
+  const handleRefreshHistory = async () => {
+    const id = conversationIdRef.current;
+    if (id === null) return;
+    const epoch = conversationEpochRef.current;
+    const revision = transcriptRevisionRef.current;
+    const request = {};
+    historyRequestRef.current = request;
+    setIsRefreshing(true);
+    setHistoryError(false);
+    const isCurrent = () =>
+      historyRequestRef.current === request &&
+      conversationEpochRef.current === epoch &&
+      conversationIdRef.current === id &&
+      transcriptRevisionRef.current === revision;
+
+    try {
+      // A cached fetch can reuse a read started before a newer accepted send.
+      // Each reconciliation needs its own request as well as local guards.
+      const history = await utils.client.aiChat.getHistory.query({
+        conversationId: id,
+      });
+      if (!isCurrent()) return;
+      transcriptRevisionRef.current += 1;
+      setMessages(previous => [
+        ...history.map(row => ({
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          createdAt: row.createdAt.toISOString(),
+        })),
+        ...previous.filter(row => row.unsentDraft !== undefined),
+      ]);
+      // Saved history does not contain the transient flight/referral projections.
+      setSuggestions([]);
+    } catch {
+      if (isCurrent()) setHistoryError(true);
+    } finally {
+      if (historyRequestRef.current === request) {
+        historyRequestRef.current = null;
+        setIsRefreshing(false);
+      }
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    draftRevisionRef.current += 1;
     setInputValue(e.target.value);
-    e.target.style.height = "auto";
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
   };
 
   const handleStartConversation = async () => {
+    if (startRequestRef.current) return;
+    if (includeRoute && !routeValid) {
+      setRouteAttempted(true);
+      return;
+    }
+    const request = {};
+    const epoch = conversationEpochRef.current;
+    startRequestRef.current = request;
     try {
-      const result = await startConversation.mutateAsync({});
+      const result = await startConversation.mutateAsync(
+        includeRoute
+          ? {
+              initialContext: {
+                originId,
+                destinationId,
+                departureDate: route.departureDate,
+                passengers: route.passengers,
+                cabinClass: route.cabinClass,
+              },
+            }
+          : {}
+      );
+      if (
+        startRequestRef.current !== request ||
+        conversationEpochRef.current !== epoch
+      )
+        return;
+      conversationIdRef.current = result.conversationId;
       setConversationId(result.conversationId);
+      transcriptRevisionRef.current += 1;
       setMessages([
         {
-          id: Date.now(),
+          id: --localMessageIdRef.current,
           role: "assistant",
           content: result.greeting,
           createdAt: new Date().toISOString(),
         },
       ]);
     } catch {
-      console.error("Failed to start conversation");
+      if (startRequestRef.current === request) {
+        console.error("Failed to start conversation");
+      }
+    } finally {
+      if (startRequestRef.current === request) startRequestRef.current = null;
     }
   };
 
   const handleSendMessage = async (message?: string) => {
-    const msgText = message || inputValue.trim();
-    if (!msgText || !conversationId || isGenerating) return;
+    const msgText = message ?? inputValue.trim();
+    const id = conversationIdRef.current;
+    if (
+      !msgText ||
+      id === null ||
+      (abortControllerRef.current && !abortControllerRef.current.signal.aborted)
+    )
+      return;
 
-    setInputValue("");
-    if (inputRef.current) {
-      inputRef.current.style.height = "auto";
-    }
+    const epoch = conversationEpochRef.current;
+    const draftText = message === undefined ? inputValue : msgText;
+    const restoreRevision =
+      message === undefined || inputValue.length === 0
+        ? draftRevisionRef.current + 1
+        : null;
+    draftRevisionRef.current += 1;
+    // A quick prompt is separate from an existing composer draft.
+    if (message === undefined) setInputValue("");
+    invalidateHistoryRead();
+    const transcriptRevision = ++transcriptRevisionRef.current;
+    const previousSuggestions = suggestions;
 
     // Add user message immediately
     const userMsg: ChatMessageDisplay = {
-      id: Date.now(),
+      id: --localMessageIdRef.current,
       role: "user",
       content: msgText,
       createdAt: new Date().toISOString(),
     };
     setMessages(prev => [...prev, userMsg]);
     setIsGenerating(true);
+    setSendStatus(null);
     setSuggestions([]);
 
-    // Create abort controller for stop generation
+    // Suppress a late reply locally. This does not cancel server processing.
     const request = new AbortController();
     abortControllerRef.current = request;
 
     try {
       const result = await sendMessageMut.mutateAsync({
-        conversationId,
+        conversationId: id,
         message: msgText,
       });
 
       // Check if generation was stopped
-      if (request.signal.aborted) return;
+      if (
+        request.signal.aborted ||
+        abortControllerRef.current !== request ||
+        conversationEpochRef.current !== epoch
+      )
+        return;
 
       const aiMsg: ChatMessageDisplay = {
-        id: Date.now() + 1,
+        id: --localMessageIdRef.current,
         role: "assistant",
         content: result.message,
         policySourceLanguage: result.policySourceLanguage,
         exchangeBookings: result.exchangeBookings,
         createdAt: new Date().toISOString(),
       };
+      transcriptRevisionRef.current += 1;
       setMessages(prev => [...prev, aiMsg]);
 
       if (result.suggestions) {
         setSuggestions(result.suggestions);
       }
     } catch (err) {
-      if (!request.signal.aborted) {
-        const errorMsg: ChatMessageDisplay = {
-          id: Date.now() + 1,
-          role: "assistant",
-          content:
-            (err instanceof Error && err.message) ||
-            "عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.\nSorry, an error occurred. Please try again.",
-          createdAt: new Date().toISOString(),
-        };
-        setMessages(prev => [...prev, errorMsg]);
+      if (conversationEpochRef.current !== epoch) return;
+      const failure = chatSendFailure(err);
+      if (failure.unaccepted) {
+        // Even a locally stopped request must correct a known admission failure.
+        const restore =
+          restoreRevision !== null &&
+          draftRevisionRef.current === restoreRevision;
+        const unchangedTranscript =
+          transcriptRevisionRef.current === transcriptRevision;
+        if (restore) {
+          draftRevisionRef.current += 1;
+          setInputValue(draftText);
+        }
+        setMessages(previous => {
+          const found = previous.some(row => row.id === userMsg.id);
+          const retained = previous.flatMap(row =>
+            row.id !== userMsg.id
+              ? [row]
+              : restore
+                ? []
+                : [{ ...row, unsentDraft: draftText }]
+          );
+          return !found && !restore
+            ? [...retained, { ...userMsg, unsentDraft: draftText }]
+            : retained;
+        });
+        if (abortControllerRef.current === request) {
+          setSendStatus(failure.status);
+          if (unchangedTranscript) setSuggestions(previousSuggestions);
+        }
+      } else if (
+        !request.signal.aborted &&
+        abortControllerRef.current === request
+      ) {
+        setSendStatus(failure.status);
+        if (failure.reconcile) void handleRefreshHistory();
       }
     } finally {
       if (abortControllerRef.current === request) {
@@ -186,11 +378,25 @@ export default function AiChat() {
     }
   };
 
-  const handleStopGeneration = () => {
+  const handleStopWaiting = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setIsGenerating(false);
+      setSendStatus("waitStopped");
     }
+  };
+
+  const handleRestoreDraft = (message: ChatMessageDisplay) => {
+    if (
+      message.unsentDraft === undefined ||
+      inputValue.length > 0 ||
+      (abortControllerRef.current && !abortControllerRef.current.signal.aborted)
+    )
+      return;
+    draftRevisionRef.current += 1;
+    setInputValue(message.unsentDraft);
+    setMessages(previous => previous.filter(row => row.id !== message.id));
+    inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -201,7 +407,18 @@ export default function AiChat() {
   };
 
   const handleNewConversation = () => {
-    handleStopGeneration();
+    conversationEpochRef.current += 1;
+    handleStopWaiting();
+    abortControllerRef.current = null;
+    conversationIdRef.current = null;
+    startRequestRef.current = null;
+    draftRevisionRef.current += 1;
+    transcriptRevisionRef.current += 1;
+    invalidateHistoryRead();
+    setSendStatus(null);
+    setIncludeRoute(false);
+    setRoute(emptyRoute);
+    setRouteAttempted(false);
     setConversationId(null);
     setMessages([]);
     setSuggestions([]);
@@ -274,6 +491,136 @@ export default function AiChat() {
             <div className="mb-4">
               <ChatDisclosure />
             </div>
+            <div className="mb-5 text-start">
+              <label className="flex items-center justify-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={includeRoute}
+                  onChange={event => {
+                    setIncludeRoute(event.target.checked);
+                    setRouteAttempted(false);
+                  }}
+                />
+                {t("aiChat.addRoute")}
+              </label>
+              {includeRoute && (
+                <div className="mt-4 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(["origin", "destination"] as const).map(field => (
+                      <div key={field}>
+                        <Label htmlFor={`chat-${field}`}>
+                          {field === "origin"
+                            ? t("home.search.from")
+                            : t("home.search.to")}
+                        </Label>
+                        <select
+                          id={`chat-${field}`}
+                          className={selectClass}
+                          value={route[field]}
+                          onChange={event =>
+                            setRoute({ ...route, [field]: event.target.value })
+                          }
+                        >
+                          <option value="">
+                            {field === "origin"
+                              ? t("home.search.selectOrigin")
+                              : t("home.search.selectDestination")}
+                          </option>
+                          {airports.data?.map(airport => (
+                            <option key={airport.id} value={airport.id}>
+                              {airport.city} ({airport.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                    <div>
+                      <Label htmlFor="chat-date">
+                        {t("home.search.departureDate")}
+                      </Label>
+                      <Input
+                        id="chat-date"
+                        type="date"
+                        value={route.departureDate}
+                        onChange={event =>
+                          setRoute({
+                            ...route,
+                            departureDate: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="chat-passengers">
+                        {t("booking.passengers")}
+                      </Label>
+                      <select
+                        id="chat-passengers"
+                        className={selectClass}
+                        value={route.passengers}
+                        onChange={event =>
+                          setRoute({
+                            ...route,
+                            passengers: Number(event.target.value),
+                          })
+                        }
+                      >
+                        {Array.from({ length: 9 }, (_, index) => index + 1).map(
+                          count => (
+                            <option key={count} value={count}>
+                              {count}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="chat-cabin">
+                        {t("filters.cabinClass")}
+                      </Label>
+                      <select
+                        id="chat-cabin"
+                        className={selectClass}
+                        value={route.cabinClass}
+                        onChange={event =>
+                          setRoute({
+                            ...route,
+                            cabinClass:
+                              event.target.value === "business"
+                                ? "business"
+                                : "economy",
+                          })
+                        }
+                      >
+                        <option value="economy">{t("search.economy")}</option>
+                        <option value="business">{t("search.business")}</option>
+                      </select>
+                    </div>
+                  </div>
+                  {airports.isLoading ? (
+                    <p role="status">{t("common.loading")}</p>
+                  ) : airportsUnavailable ? (
+                    <div role="alert">
+                      <p>{t("aiChat.airportOptionsUnavailable")}</p>
+                      <Button
+                        variant="outline"
+                        onClick={() => void airports.refetch()}
+                      >
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  ) : (
+                    routeAttempted &&
+                    !routeValid && (
+                      <p role="alert">{t("aiChat.invalidRoute")}</p>
+                    )
+                  )}
+                </div>
+              )}
+              {startConversation.isError && (
+                <p role="alert">{t("aiChat.startError")}</p>
+              )}
+            </div>
             <Button
               size="lg"
               onClick={handleStartConversation}
@@ -296,9 +643,8 @@ export default function AiChat() {
               .map((suggestion, i) => (
                 <button
                   key={i}
-                  onClick={async () => {
-                    await handleStartConversation();
-                  }}
+                  disabled={startConversation.isPending}
+                  onClick={handleStartConversation}
                   className="p-4 rounded-xl border bg-card hover:bg-accent text-start transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -340,7 +686,11 @@ export default function AiChat() {
                   {t("aiChat.assistantName")}
                 </h2>
                 <p className="text-xs text-muted-foreground" role="status">
-                  {isGenerating ? t("aiChat.typing") : t("aiChat.online")}
+                  {isGenerating
+                    ? t("aiChat.waiting")
+                    : isRefreshing
+                      ? t("aiChat.refreshingHistory")
+                      : t("aiChat.ready")}
                 </p>
               </div>
             </div>
@@ -397,6 +747,20 @@ export default function AiChat() {
                 <p className="text-sm whitespace-pre-wrap" dir="auto">
                   {msg.content}
                 </p>
+                {msg.unsentDraft !== undefined && (
+                  <div className="mt-2 text-xs">
+                    <p>{t("aiChat.notSent")}</p>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-inherit underline"
+                      disabled={isGenerating || inputValue.length > 0}
+                      onClick={() => handleRestoreDraft(msg)}
+                    >
+                      {t("aiChat.restoreDraft")}
+                    </Button>
+                  </div>
+                )}
                 {msg.exchangeBookings && (
                   <nav
                     aria-label={t("aiChat.exchangeHelp")}
@@ -466,13 +830,15 @@ export default function AiChat() {
               {suggestions.map(s => (
                 <Link
                   key={s.id}
-                  href={`/booking/${s.flightId}`}
+                  href={`/booking/${s.flightId}?${new URLSearchParams({ class: s.cabinClass, passengers: String(s.passengers) })}`}
                   className="block rounded-xl border bg-card p-4 hover:border-primary/50 focus-visible:outline-2 transition-colors"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-sm">{s.airline}</span>
                     <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                      {s.cabinClass}
+                      {s.cabinClass === "business"
+                        ? t("search.business")
+                        : t("search.economy")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mb-2">
@@ -486,7 +852,8 @@ export default function AiChat() {
                       {formatFlightTime(s.arrivalTime, s.destinationTimezone)}
                     </bdi>
                     <bdi className="font-bold text-base text-foreground">
-                      {(s.price / 100).toFixed(2)} {t("common.currency")}
+                      {(s.price / 100).toFixed(2)} {t("common.currency")}{" "}
+                      {t("priceCalendar.perPerson")}
                     </bdi>
                   </div>
                   {s.reason && (
@@ -508,6 +875,7 @@ export default function AiChat() {
             {quickReplies.data.suggestions.slice(0, 4).map((suggestion, i) => (
               <button
                 key={i}
+                disabled={isGenerating}
                 onClick={() => handleSendMessage(suggestion)}
                 className="px-3 py-1.5 rounded-full border bg-card hover:bg-accent text-xs whitespace-nowrap transition-colors"
               >
@@ -521,6 +889,16 @@ export default function AiChat() {
       {/* Input Area */}
       <div className="border-t bg-background/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          {sendStatus && (
+            <p role="status" className="mb-2 text-sm">
+              {t(`aiChat.${sendStatus}`)}
+            </p>
+          )}
+          {historyError && (
+            <p role="alert" className="mb-2 text-sm text-destructive">
+              {t("aiChat.refreshFailed")}
+            </p>
+          )}
           {!messages.some(message => message.exchangeBookings) && (
             <button
               type="button"
@@ -560,9 +938,10 @@ export default function AiChat() {
               <Button
                 size="icon"
                 variant="destructive"
-                onClick={handleStopGeneration}
+                onClick={handleStopWaiting}
                 className="h-11 w-11 rounded-xl flex-shrink-0"
-                title={t("aiChat.stopGeneration")}
+                title={t("aiChat.stopWaiting")}
+                aria-label={t("aiChat.stopWaiting")}
               >
                 <Square className="w-4 h-4" />
               </Button>
@@ -578,6 +957,22 @@ export default function AiChat() {
               </Button>
             )}
           </div>
+          <Button
+            type="button"
+            variant="link"
+            className="mt-2 h-auto p-0 text-xs"
+            disabled={isGenerating || isRefreshing}
+            onClick={() => void handleRefreshHistory()}
+          >
+            {isRefreshing
+              ? t("aiChat.refreshingHistory")
+              : t("aiChat.refreshHistory")}
+          </Button>
+          {isGenerating && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t("aiChat.stopWaitingNote")}
+            </p>
+          )}
           <div className="text-center mt-2">
             <ChatDisclosure />
           </div>

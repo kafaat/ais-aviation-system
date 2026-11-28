@@ -17,15 +17,62 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
+  users,
   paymentSplits,
   passengers,
   bookingModifications,
 } from "../../drizzle/schema";
 import { isAdmin } from "./rbac.service";
+
+import type { SettlementTx } from "./booking-settlement.service";
+
+/** Personal accounts without an assigned airline retain purchaser-only access. */
+export function purchaserBookingCondition(
+  userId: number,
+  tenantId: number | null | undefined
+): SQL {
+  const owner = eq(bookings.userId, userId);
+  return tenantId == null
+    ? owner
+    : sql`(${owner} and ${eq(bookings.tenantId, tenantId)})`;
+}
+
+export const purchaserScope = (tenantId: number | null | undefined) =>
+  tenantId == null ? undefined : { tenantId };
+
+/** Called under the booking lock. Serialize reassignment with purchaser and
+ * delegated corporate actions. Unassigned customers retain owner-only access. */
+export async function lockBookingUserTenants(
+  tx: SettlementTx,
+  bookingTenantId: number | null,
+  userIds: readonly number[],
+  requestTenantId?: number | null
+) {
+  const ids = [...new Set(userIds)];
+  const actors = await tx
+    .select({ tenantId: users.tenantId })
+    .from(users)
+    .where(inArray(users.id, ids))
+    .orderBy(asc(users.id))
+    .for("update");
+  if (
+    actors.length !== ids.length ||
+    actors.some(
+      actor =>
+        actor.tenantId != null &&
+        (actor.tenantId !== bookingTenantId ||
+          (requestTenantId !== undefined && actor.tenantId !== requestTenantId))
+    )
+  )
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Owned booking not found",
+    });
+}
 
 async function getDbOrThrow() {
   const db = await getDb();
@@ -82,12 +129,17 @@ export async function assertBookingOwnership(
 export async function assertSplitOwnership(
   splitId: number,
   userId: number,
-  userRole?: string
+  userRole?: string,
+  scope?: { tenantId: number | null }
 ): Promise<number> {
   const db = await getDbOrThrow();
 
   const [row] = await db
-    .select({ bookingId: paymentSplits.bookingId, ownerId: bookings.userId })
+    .select({
+      bookingId: paymentSplits.bookingId,
+      ownerId: bookings.userId,
+      tenantId: bookings.tenantId,
+    })
     .from(paymentSplits)
     .innerJoin(bookings, eq(paymentSplits.bookingId, bookings.id))
     .where(eq(paymentSplits.id, splitId))
@@ -107,6 +159,7 @@ export async function assertSplitOwnership(
     });
   }
 
+  if (scope) assertTenant(row.tenantId, scope.tenantId, userRole);
   return row.bookingId;
 }
 
@@ -161,13 +214,19 @@ export async function assertPassengerOwnership(
 export async function assertModificationOwnership(
   modificationId: number,
   userId: number,
-  userRole?: string
+  userRole?: string,
+  scope?: { tenantId: number | null }
 ): Promise<void> {
   const db = await getDbOrThrow();
 
   const [modification] = await db
-    .select({ userId: bookingModifications.userId })
+    .select({
+      userId: bookingModifications.userId,
+      ownerId: bookings.userId,
+      tenantId: bookings.tenantId,
+    })
     .from(bookingModifications)
+    .innerJoin(bookings, eq(bookings.id, bookingModifications.bookingId))
     .where(eq(bookingModifications.id, modificationId))
     .limit(1);
 
@@ -178,7 +237,12 @@ export async function assertModificationOwnership(
     });
   }
 
-  if (modification.userId !== userId && !(userRole && isAdmin(userRole))) {
+  if (
+    !(userRole && isAdmin(userRole)) &&
+    (modification.userId !== userId ||
+      modification.ownerId !== userId ||
+      (scope?.tenantId != null && modification.tenantId !== scope.tenantId))
+  ) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Modification request not found",
@@ -224,13 +288,20 @@ export function assertTenant(
  */
 export async function isBookingOwnedBy(
   bookingId: number,
-  userId: number
+  userId: number,
+  tenantId?: number | null
 ): Promise<boolean> {
   const db = await getDbOrThrow();
   const [booking] = await db
     .select({ id: bookings.id })
     .from(bookings)
-    .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        eq(bookings.userId, userId),
+        tenantId == null ? undefined : eq(bookings.tenantId, tenantId)
+      )
+    )
     .limit(1);
   return !!booking;
 }

@@ -416,6 +416,7 @@ describe("S-27 family 3: self-service capability token (kiosk, bagDrop)", () => 
   function itinerary() {
     const flightIds = [11, 12];
     return use({
+      users: [{ id: 7, tenantId: 1 }],
       bookings: [
         {
           id: 3,

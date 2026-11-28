@@ -60,6 +60,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(now);
   fixture = transactionMemory({
+    users: [{ id: 7, tenantId: 1 }],
     tenants: [
       { id: 1, status: "active" },
       { id: 2, status: "active" },

@@ -1,3 +1,5 @@
+import { lockPurchaserBooking } from "./booking-checkout.service";
+import { purchaserBookingCondition } from "./access-control.service";
 import { TRPCError } from "@trpc/server";
 import {
   and,
@@ -7,6 +9,7 @@ import {
   eq,
   exists,
   getTableColumns,
+  isNull,
   sql,
 } from "drizzle-orm";
 import { getDb } from "../db";
@@ -52,68 +55,57 @@ export async function createReview(params: {
       });
     }
 
-    // Check if user already reviewed this flight
-    const existingReview = await db
-      .select()
-      .from(flightReviews)
-      .where(
-        and(
-          eq(flightReviews.userId, params.userId),
-          eq(flightReviews.flightId, params.flightId)
-        )
-      )
-      .limit(1);
-
-    if (existingReview.length > 0) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "You have already reviewed this flight",
-      });
-    }
-
-    // If bookingId provided, verify it belongs to the user and flight
-    let isVerified = false;
-    if (params.bookingId) {
-      const booking = await db
-        .select()
-        .from(bookings)
+    return await db.transaction(async tx => {
+      const booking =
+        params.bookingId === undefined
+          ? undefined
+          : await lockPurchaserBooking(tx, params.bookingId, params.userId);
+      if (booking && booking.flightId !== params.flightId)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found for this flight",
+        });
+      const existingReview = await tx
+        .select({ id: flightReviews.id })
+        .from(flightReviews)
         .where(
           and(
-            eq(bookings.id, params.bookingId),
-            eq(bookings.userId, params.userId),
-            eq(bookings.flightId, params.flightId),
-            eq(bookings.status, "completed")
+            eq(flightReviews.userId, params.userId),
+            eq(flightReviews.flightId, params.flightId)
           )
         )
         .limit(1);
+      if (existingReview.length)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "You have already reviewed this flight",
+        });
+      const isVerified = booking?.status === "completed";
+      const reviewData: InsertFlightReview = {
+        userId: params.userId,
+        flightId: params.flightId,
+        bookingId: params.bookingId,
+        rating: params.rating,
+        comfortRating: params.comfortRating,
+        serviceRating: params.serviceRating,
+        valueRating: params.valueRating,
+        title: params.title ? stripHtmlTags(params.title) : params.title,
+        comment: params.comment
+          ? stripHtmlTags(params.comment)
+          : params.comment,
+        isVerified,
+        status: "approved", // Auto-approve for now, can add moderation later
+      };
 
-      if (booking.length > 0) {
-        isVerified = true;
-      }
-    }
+      const [result] = await tx.insert(flightReviews).values(reviewData);
 
-    const reviewData: InsertFlightReview = {
-      userId: params.userId,
-      flightId: params.flightId,
-      bookingId: params.bookingId,
-      rating: params.rating,
-      comfortRating: params.comfortRating,
-      serviceRating: params.serviceRating,
-      valueRating: params.valueRating,
-      title: params.title ? stripHtmlTags(params.title) : params.title,
-      comment: params.comment ? stripHtmlTags(params.comment) : params.comment,
-      isVerified,
-      status: "approved", // Auto-approve for now, can add moderation later
-    };
-
-    const [result] = await db.insert(flightReviews).values(reviewData);
-
-    return {
-      id: result.insertId,
-      ...reviewData,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+      return {
+        id: result.insertId,
+        ...reviewData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    });
   } catch (error) {
     if (error instanceof TRPCError) throw error;
     console.error("[Reviews Service] Error creating review:", error);
@@ -150,6 +142,7 @@ export async function getFlightReviews(
     const query = db
       .select({
         ...getTableColumns(flightReviews),
+        bookingId: sql<null>`NULL`,
         hasVoted: viewerId
           ? exists(
               db
@@ -400,6 +393,7 @@ export async function getUserReviews(
   options?: {
     limit?: number;
     offset?: number;
+    tenantId?: number | null;
   }
 ) {
   const db = await getDb();
@@ -415,11 +409,22 @@ export async function getUserReviews(
 
     return await db
       .select({
-        review: flightReviews,
+        review: {
+          ...getTableColumns(flightReviews),
+          bookingId: sql<number | null>`${bookings.id}`,
+        },
         flight: flights,
       })
       .from(flightReviews)
       .innerJoin(flights, eq(flightReviews.flightId, flights.id))
+      .leftJoin(
+        bookings,
+        and(
+          eq(bookings.id, flightReviews.bookingId),
+          purchaserBookingCondition(userId, options?.tenantId),
+          isNull(bookings.deletedAt)
+        )
+      )
       .where(eq(flightReviews.userId, userId))
       .orderBy(desc(flightReviews.createdAt))
       .limit(limit)
@@ -512,7 +517,10 @@ export async function getAirlineReviews(
     // Join flight_reviews with flights to get reviews for flights by this airline
     const reviews = await db
       .select({
-        review: flightReviews,
+        review: {
+          ...getTableColumns(flightReviews),
+          bookingId: sql<null>`NULL`,
+        },
         flight: flights,
       })
       .from(flightReviews)
@@ -624,7 +632,8 @@ export async function getAirlineReviewStats(airlineId: number) {
  */
 export async function canUserReviewFlight(
   userId: number,
-  flightId: number
+  flightId: number,
+  tenantId?: number | null
 ): Promise<{ canReview: boolean; bookingId?: number; reason?: string }> {
   const db = await getDb();
   if (!db)
@@ -656,7 +665,8 @@ export async function canUserReviewFlight(
       .from(bookings)
       .where(
         and(
-          eq(bookings.userId, userId),
+          purchaserBookingCondition(userId, tenantId),
+          isNull(bookings.deletedAt),
           eq(bookings.flightId, flightId),
           eq(bookings.status, "completed")
         )

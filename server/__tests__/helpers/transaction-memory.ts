@@ -57,6 +57,17 @@ export function transactionMemory(seed: Record<string, any[]>) {
         throw e;
       }
     },
+    execute: async (expression: SQL) => {
+      // Deliberately narrow scalar support. Native/SQLite tests independently
+      // prove DB clock behavior; this boundary double uses the test clock.
+      if (
+        !/^SELECT CURRENT_TIMESTAMP\(3\) AS now$/i.test(
+          dialect.sqlToQuery(expression).sql.trim()
+        )
+      )
+        throw new Error("Unsupported scalar projection in transaction fixture");
+      return [[{ now: new Date() }], []];
+    },
     select: (projection?: any) => {
       let table: any;
       let predicate: any;

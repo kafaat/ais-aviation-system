@@ -24,6 +24,7 @@ const hold = (overrides = {}) => ({
 
 beforeEach(() => {
   fixture = transactionMemory({
+    users: [{ id: 9, tenantId: 3 }],
     flights: [
       {
         id: 41,

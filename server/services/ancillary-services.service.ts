@@ -4,6 +4,7 @@ import {
 } from "./seat-exchange.service";
 import {
   lockEditableInvoice,
+  lockInvoiceAuthority,
   insertInvoiceAncillary,
   setInvoiceTotal,
   invoiceBlocked,
@@ -146,20 +147,28 @@ export async function addAncillaryToBooking(
   },
   actor: InvoiceActor
 ) {
-  return await withTransactionalIdempotency({
-    scope: "booking.ancillary.add",
-    key: data.idempotencyKey,
-    userId: actor.userId,
-    request: data,
-    run: async tx => {
-      const booking = await lockEditableInvoice(
-        tx,
-        data.bookingId,
-        actor,
-        "addAncillary"
-      );
-      return insertInvoiceAncillary(tx, booking, data);
-    },
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  return await db.transaction(async tx => {
+    await lockInvoiceAuthority(tx, data.bookingId, actor);
+    return withTransactionalIdempotency(
+      {
+        scope: "booking.ancillary.add",
+        key: data.idempotencyKey,
+        userId: actor.userId,
+        request: data,
+        run: async tx => {
+          const booking = await lockEditableInvoice(
+            tx,
+            data.bookingId,
+            actor,
+            "addAncillary"
+          );
+          return insertInvoiceAncillary(tx, booking, data);
+        },
+      },
+      tx
+    );
   });
 }
 

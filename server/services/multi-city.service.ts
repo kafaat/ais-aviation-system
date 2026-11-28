@@ -6,7 +6,16 @@ import {
   type SelectedAncillary,
 } from "./initial-booking-ancillaries";
 import { persistInitialFareComponents } from "./fare-components.service";
-import { inventoryTransactionConfig } from "./inventory-capacity.service";
+import {
+  inventoryTransactionConfig,
+  withInventoryTransaction,
+} from "./inventory-capacity.service";
+import type { SettlementTx } from "./booking-settlement.service";
+import {
+  lockCreationPurchaser,
+  assertCreationTenant,
+  assertCreatedBookingPurchaser,
+} from "./booking-creation-authority";
 import { assertTenantOperational } from "./tenant.service";
 import {
   DEFAULT_TAX_RATE,
@@ -406,23 +415,61 @@ export async function calculateMultiCityPrice(
 /**
  * Create a multi-city booking with multiple segments
  */
-export async function createMultiCityBooking(
-  input: MultiCityBookingInput
-): Promise<{
+type MultiCityBookingResult = {
   bookingId: number;
   bookingReference: string;
   pnr: string;
   totalAmount: number;
   segments: Array<{ segmentId: number; flightId: number }>;
-}> {
-  const database = await db.getDb();
-  if (!database) {
+};
+
+export async function createMultiCityBooking(
+  input: MultiCityBookingInput
+): Promise<MultiCityBookingResult> {
+  const database = db.getDb();
+  if (!database)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
-  }
+  let created = false;
+  const result = await withInventoryTransaction(database, async tx => {
+    const purchaserTenantId = await lockCreationPurchaser(tx, input.userId);
+    const booking = await createMultiCityCommand(
+      input,
+      tx,
+      purchaserTenantId,
+      () => {
+        created = true;
+      }
+    );
+    await assertCreatedBookingPurchaser(
+      tx,
+      booking.bookingId,
+      input,
+      purchaserTenantId
+    );
+    return booking;
+  });
+  if (created)
+    trackBookingStarted({
+      userId: input.userId,
+      sessionId: input.sessionId,
+      bookingId: result.bookingId,
+      flightId: input.segments[0].flightId,
+      cabinClass: input.cabinClass,
+      passengerCount: input.passengers.length,
+      totalAmount: result.totalAmount,
+    });
+  return result;
+}
 
+async function createMultiCityCommand(
+  input: MultiCityBookingInput,
+  transaction: SettlementTx,
+  purchaserTenantId: number | null,
+  onCreated: () => void
+): Promise<MultiCityBookingResult> {
   const command = {
     scope: "booking.multi-city.atomic",
     key: input.idempotencyKey ?? input.sessionId,
@@ -430,12 +477,12 @@ export async function createMultiCityBooking(
     request: input,
   };
   try {
-    const replay =
-      await findCompletedCommand<
-        Awaited<ReturnType<typeof createMultiCityBooking>>
-      >(command);
+    const replay = await findCompletedCommand<MultiCityBookingResult>(
+      command,
+      transaction
+    );
     if (replay) return replay.response;
-    // Validate and calculate pricing (before transaction to avoid holding locks)
+    // Keep the purchaser assignment stable; no flight inventory lock is held while pricing.
     const priceResult = await calculateMultiCityPrice(
       input.segments.map(s => ({
         flightId: s.flightId,
@@ -473,7 +520,9 @@ export async function createMultiCityBooking(
         code: "BAD_REQUEST",
         message: "Passengers and distinct flight segments are required",
       });
-    const result = await withTransactionalIdempotency({
+    const atomicCommand: Parameters<
+      typeof withTransactionalIdempotency<MultiCityBookingResult>
+    >[0] = {
       transactionConfig: inventoryTransactionConfig,
       scope: "booking.multi-city.atomic",
       key: input.idempotencyKey ?? input.sessionId,
@@ -514,6 +563,11 @@ export async function createMultiCityBooking(
               message:
                 "Cross-tenant itineraries require an interline agreement",
             });
+          assertCreationTenant(
+            flight.tenantId,
+            purchaserTenantId,
+            input.tenantId
+          );
           await assertTenantOperational(tx, flight.tenantId);
           const selectedFareClass = segment.fareClassCode
             ? await resolveFlightFareClass(
@@ -760,6 +814,7 @@ export async function createMultiCityBooking(
           payload: { bookingId, userId: input.userId, channel: "multi-city" },
         });
 
+        onCreated();
         return {
           bookingId,
           bookingReference,
@@ -768,25 +823,18 @@ export async function createMultiCityBooking(
           segments: segmentResults,
         };
       },
-    });
-
-    // Track booking started event (outside transaction - non-critical)
-    trackBookingStarted({
-      userId: input.userId,
-      sessionId: input.sessionId,
-      bookingId: result.bookingId,
-      flightId: input.segments[0].flightId,
-      cabinClass: input.cabinClass,
-      passengerCount: input.passengers.length,
-      totalAmount: result.totalAmount,
-    });
+    };
+    const result = await withTransactionalIdempotency(
+      atomicCommand,
+      transaction
+    );
 
     return result;
   } catch (error) {
-    const replay =
-      await findCompletedCommand<
-        Awaited<ReturnType<typeof createMultiCityBooking>>
-      >(command);
+    const replay = await findCompletedCommand<MultiCityBookingResult>(
+      command,
+      transaction
+    );
     if (replay) return replay.response;
     if (error instanceof TRPCError) {
       throw error;

@@ -7,7 +7,15 @@ import {
   type SelectedAncillary,
 } from "./initial-booking-ancillaries";
 export type { SelectedAncillary } from "./initial-booking-ancillaries";
-import { inventoryTransactionConfig } from "./inventory-capacity.service";
+import {
+  inventoryTransactionConfig,
+  withInventoryTransaction,
+} from "./inventory-capacity.service";
+import {
+  lockCreationPurchaser,
+  assertCreationTenant,
+  assertCreatedBookingPurchaser,
+} from "./booking-creation-authority";
 import { assertCodeshareSale } from "./codeshare-allotment.service";
 import { selectSeat } from "./seat-map.service";
 import { assertTenantOperational } from "./tenant.service";
@@ -98,6 +106,52 @@ export async function createBooking(
   input: CreateBookingInput,
   transaction?: SettlementTx
 ) {
+  const database = transaction ?? getDb();
+  if (!database)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database unavailable",
+    });
+  let created = false;
+  const execute = async (tx: SettlementTx) => {
+    const purchaserTenantId = await lockCreationPurchaser(tx, input.userId);
+    const result = await createBookingCommand(
+      input,
+      tx,
+      purchaserTenantId,
+      () => {
+        created = true;
+      }
+    );
+    await assertCreatedBookingPurchaser(
+      tx,
+      result.bookingId,
+      input,
+      purchaserTenantId
+    );
+    return result;
+  };
+  if (transaction) return execute(transaction);
+  const result = await withInventoryTransaction(database, execute);
+  if (created)
+    trackBookingStarted({
+      userId: input.userId,
+      sessionId: input.sessionId,
+      bookingId: result.bookingId,
+      flightId: input.flightId,
+      cabinClass: input.cabinClass,
+      passengerCount: input.passengers.length,
+      totalAmount: result.totalAmount,
+    });
+  return result;
+}
+
+async function createBookingCommand(
+  input: CreateBookingInput,
+  transaction: SettlementTx,
+  purchaserTenantId: number | null,
+  onCreated: () => void
+) {
   const command = {
     scope: "booking.create.atomic",
     key: input.idempotencyKey ?? input.sessionId,
@@ -113,8 +167,7 @@ export async function createBooking(
   try {
     const replay = await findCompletedCommand<Result>(command, transaction);
     if (replay) return replay.response;
-    const database = transaction ?? (await getDb());
-    if (!database) throw new Error("Database unavailable");
+    const database = transaction;
     const [flightIdentity] = await database
       .select({ tenantId: flights.tenantId, airlineId: flights.airlineId })
       .from(flights)
@@ -123,11 +176,11 @@ export async function createBooking(
     if (!flightIdentity) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
     }
-    if (input.tenantId != null) {
-      if (flightIdentity.tenantId !== input.tenantId) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-      }
-    }
+    assertCreationTenant(
+      flightIdentity.tenantId,
+      purchaserTenantId,
+      input.tenantId
+    );
 
     const flightForValidation = await db.getFlightById(input.flightId);
     if (flightForValidation) {
@@ -259,6 +312,11 @@ export async function createBooking(
               currentFlight.tenantId !== input.tenantId)
           )
             throw new Error("Flight unavailable");
+          assertCreationTenant(
+            currentFlight.tenantId,
+            purchaserTenantId,
+            input.tenantId
+          );
           await assertTenantOperational(tx, currentFlight.tenantId);
           if (input.codeshareAllotmentId !== undefined) {
             await assertCodeshareSale(
@@ -547,26 +605,12 @@ export async function createBooking(
               fareClassCode: selectedFareClass?.fareClass.code,
             },
           });
+          onCreated();
           return { bookingId, bookingReference, pnr, totalAmount };
         },
       },
       transaction
     );
-    if (transaction) return result;
-    const { bookingId, totalAmount } = result;
-
-    trackBookingStarted({
-      userId: input.userId,
-      sessionId: input.sessionId,
-      bookingId,
-      flightId: input.flightId,
-      cabinClass: input.cabinClass,
-      passengerCount: input.passengers.length,
-      totalAmount,
-    });
-
-    // Notification delivery is driven by the durable booking.created event.
-
     return result;
   } catch (error) {
     // Another request may have committed while a mutable preflight check ran.

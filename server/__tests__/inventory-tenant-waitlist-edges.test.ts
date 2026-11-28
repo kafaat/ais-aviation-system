@@ -42,6 +42,7 @@ const flight = (
 });
 beforeEach(() => {
   fx = transactionMemory({
+    users: [{ id: 101, tenantId: null }],
     flights: [flight(41, 1), flight(42, 3), flight(43, null)],
     inventory_locks: [],
     seat_holds: [],

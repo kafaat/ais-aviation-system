@@ -39,6 +39,8 @@ import {
   isCivilDay,
   preferenceParams,
   validTravelerCounts,
+  historyTravelerCounts,
+  type TravelerCounts,
 } from "@shared/ibe-search";
 import {
   Plane,
@@ -174,8 +176,15 @@ export default function Home() {
       originCode: string;
       destinationCode: string;
       departureDate: string;
+      passengers: number;
+      party?: TravelerCounts;
     }) => {
       if (!airports) return;
+      setPreferences(current => ({
+        ...current,
+        ...historyTravelerCounts(search),
+      }));
+      setSearchType("oneWay");
 
       // Find airport IDs from codes
       const originAirport = airports.find(a => a.code === search.originCode);
@@ -204,11 +213,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      {/* Skip to content link for keyboard users */}
-      <a href="#main-content" className="skip-to-content">
-        {t("accessibility.skipToContent")}
-      </a>
-
       <SEO
         title={t("nav.home")}
         description={t("home.hero.subtitle")}
@@ -216,6 +220,7 @@ export default function Home() {
       />
       {/* Header */}
       <motion.header
+        id="navigation"
         initial={reducedMotion ? false : { y: -100 }}
         animate={reducedMotion ? false : { y: 0 }}
         transition={
@@ -372,7 +377,10 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.8 }}
             >
-              <Card className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl">
+              <Card
+                id="search"
+                className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl"
+              >
                 <SearchPreferences
                   value={preferences}
                   onChange={setPreferences}

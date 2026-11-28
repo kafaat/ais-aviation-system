@@ -47,8 +47,7 @@ sudo sh get-docker.sh
 sudo usermod -aG docker $USER
 
 # 3. تثبيت Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+docker compose version
 
 # 4. تثبيت أدوات إضافية
 sudo apt install -y git curl wget htop
@@ -102,8 +101,8 @@ cp .env.production.example .env.production
 nano .env.production
 
 # 3. التحقق من عدم وجود قيم افتراضية
-grep "CHANGE_ME" .env.production
-# يجب ألا يعيد أي نتائج
+if grep -q "CHANGE_ME" .env.production; then echo "توجد قيم تحتاج إلى إعداد"; exit 1; fi
+docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
 
 # 4. تأمين الملف
 chmod 600 .env.production
@@ -111,19 +110,9 @@ chmod 600 .env.production
 
 #### القيم المطلوبة (الحد الأدنى)
 
-```env
-DATABASE_URL=postgresql://ais_user:STRONG_PASSWORD@postgres:5432/ais
-DB_USER=ais_user
-DB_PASSWORD=STRONG_PASSWORD
-REDIS_URL=redis://redis:6379
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-JWT_SECRET=RANDOM_STRING_32_CHARS
-MANUS_OAUTH_CLIENT_ID=...
-MANUS_OAUTH_CLIENT_SECRET=...
-SENTRY_DSN=https://...@sentry.io/...
-EMAIL_SERVICE_API_KEY=...
-```
+يدير ملف Compose الكامل MySQL 8 ويشتق عنوان الاتصال من `DB_NAME` و`DB_USER` و`DB_PASSWORD`. تضبط `DB_ROOT_PASSWORD` كلمة مرور إدارة MySQL عند التهيئة الأولى. استخدم كلمات مرور آمنة لإدراجها في عنوان الاتصال، مثل قيم hex مولّدة عشوائيًا. تدوير سر قاعدة قائمة يحتاج تحديث الحساب داخل MySQL وتنسيق إعادة تشغيل الخدمات.
+
+ولّد قيمًا مستقلة لـ `JWT_SECRET` و`CSRF_SECRET` و`AUTH_SERVICE_TOKEN` و`SELF_SERVICE_CAPABILITY_SECRET` و`MFA_ENCRYPTION_KEY`. اضبط `FRONTEND_URL` على أصل الموقع المنشور، و`STRIPE_SECRET_KEY` و`STRIPE_WEBHOOK_SECRET` لحساب وبيئة الدفع المقصودين. يتطلب البريد `RESEND_API_KEY` و`EMAIL_FROM` المقبول لدى Resend. يحوي القالب أسماء الإعدادات ولا يثبت قبول أي مزود.
 
 #### ✅ Checklist
 
@@ -178,7 +167,7 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 
 ```bash
 # 1. بناء الصور
-docker-compose -f docker-compose.production.yml build
+docker compose --env-file .env.production -f docker-compose.production.yml build
 
 # 2. التحقق من الصور
 docker images | grep ais
@@ -217,13 +206,13 @@ docker images | grep ais
 
 ```bash
 # 1. إطلاق الخدمات
-docker-compose -f docker-compose.production.yml up -d
+docker compose --env-file .env.production -f docker-compose.production.yml up -d
 
 # 2. التحقق من الحالة
-docker-compose -f docker-compose.production.yml ps
+docker compose --env-file .env.production -f docker-compose.production.yml ps
 
 # 3. فحص الـ logs
-docker-compose -f docker-compose.production.yml logs -f
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f
 ```
 
 #### ✅ Checklist
@@ -234,105 +223,27 @@ docker-compose -f docker-compose.production.yml logs -f
 
 ---
 
-### 2.2 تشغيل Database Migrations
+### 2.2 التحقق من ترحيلات MySQL
+
+يشغّل Compose خدمة `migrator` قبل API والعامل وخدمة المصادقة. راجع خروجها ثم طابق بنية القاعدة مع سجل الإصدار عبر الصورة المخصّصة للترحيل.
 
 ```bash
-# 1. الدخول إلى container
-docker exec -it ais_api_1 sh
-
-# 2. تشغيل migrations
-npm run db:migrate
-
-# 3. التحقق من الجداول
-npm run db:studio
-# أو
-psql $DATABASE_URL -c "\dt"
-
-# 4. الخروج
-exit
+docker compose --env-file .env.production -f docker-compose.production.yml ps -a migrator
+docker compose --env-file .env.production -f docker-compose.production.yml run --rm --no-deps migrator node --import tsx scripts/db/migrate.ts verify
 ```
 
-#### ✅ Checklist
+### 2.3 بيانات القبول
 
-- [ ] Migrations نجحت
-- [ ] جميع الجداول موجودة
-- [ ] لا أخطاء في الـ schema
+ينظّف `scripts/seed-data.mjs` سجلات الرحلات والمطارات والتسعير قبل البذر. استخدم قاعدة اختبار مملوكة للتجربة ومعزولة عن بيانات التشغيل. تحتاج اختبارات البحث الإيجابية إلى مطارين مختلفين على الأقل في البيانات المرجعية.
 
----
-
-### 2.3 إنشاء بيانات اختبار
+### 2.4 التحقق من الإصدار
 
 ```bash
-# 1. تشغيل seed script
-docker exec -it ais_api_1 npm run db:seed
-
-# 2. التحقق من البيانات
-docker exec -it ais_api_1 npm run db:studio
+bash scripts/smoke-tests.sh https://staging.ais.example.com
+bash scripts/e2e-critical.sh https://staging.ais.example.com
 ```
 
-#### ✅ Checklist
-
-- [ ] بيانات الاختبار موجودة
-- [ ] يمكن تسجيل الدخول
-- [ ] يمكن البحث عن رحلات
-
----
-
-### 2.4 اختبار E2E Flows
-
-#### Flow 1: البحث والحجز
-
-```bash
-# 1. البحث عن رحلات
-curl -X POST https://staging.ais.example.com/api/flights/search \
-  -H "Content-Type: application/json" \
-  -d '{
-    "from": "RUH",
-    "to": "JED",
-    "date": "2026-02-01"
-  }'
-
-# 2. إنشاء حجز
-curl -X POST https://staging.ais.example.com/api/bookings \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "idempotencyKey": "test-123",
-    "flightId": "...",
-    "passengers": [...]
-  }'
-
-# 3. معالجة الدفع
-curl -X POST https://staging.ais.example.com/api/payments \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "bookingId": "...",
-    "paymentMethodId": "pm_card_visa"
-  }'
-```
-
-#### Flow 2: الإلغاء والاسترداد
-
-```bash
-# 1. إلغاء الحجز
-curl -X POST https://staging.ais.example.com/api/bookings/{id}/cancel \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"reason": "Test cancellation"}'
-
-# 2. معالجة الاسترداد
-curl -X POST https://staging.ais.example.com/api/refunds/{id}/process \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-#### ✅ Checklist
-
-- [ ] البحث يعمل
-- [ ] الحجز يعمل
-- [ ] الدفع يعمل
-- [ ] الإلغاء يعمل
-- [ ] الاسترداد يعمل
-- [ ] Webhooks تعمل
+استبدل العنوان بالهدف المصرّح به. يتحقق الفحصان من HTTP وعقود التطبيق، ويعرضان الفحوص التي تعذّر تنفيذها. لاختبار الحجز والتحصيل والإلغاء والاسترداد استخدم عينات قاعدة الاختبار وفحوص المعاملات في `Production Gates`. يُسجّل قبول مزود الدفع في تجربة sandbox مستقلة موثّقة في [دليل قبول المزود](operations/provider-acceptance.md).
 
 ---
 
@@ -433,7 +344,7 @@ crontab -e
 
 ```bash
 # مراقبة logs في الوقت الفعلي
-docker-compose -f docker-compose.production.yml logs -f
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f
 
 # مراقبة الموارد
 docker stats
@@ -489,57 +400,24 @@ docker exec -it ais_nginx awk '{print $NF, $7}' /var/log/nginx/access.log | sort
 
 ### 4.1 فتح التسجيل
 
-```bash
-# 1. تحديث feature flags
-# في .env.production
-REGISTRATION_ENABLED=true
+اختبر تسجيل حساب اصطناعي في البيئة المعتمدة واختبر الدخول من الواجهة. نسّق طرح التسجيل مع قناة الوصول التي يديرها المشغّل. لا يوجد متغير تطبيق باسم `REGISTRATION_ENABLED` يتحكم في هذه العملية.
 
-# 2. إعادة تشغيل الخدمات
-docker-compose -f docker-compose.production.yml restart api1 api2 api3
-```
+### 4.2 إعداد النسخ الاحتياطي لـ MySQL
 
-#### ✅ Checklist
-
-- [ ] التسجيل مفتوح
-- [ ] الإعلان عن الإطلاق
-- [ ] فريق الدعم جاهز
-
----
-
-### 4.2 إعداد النسخ الاحتياطي التلقائي
+ينشئ نشر Kubernetes نسخة قبل الترحيل عند تفعيل `ENABLE_DB_BACKUP` وتوفير وحدة التخزين وبيانات حساب النسخ. يضبط مشغّل Compose جدوله ووجهة التخزين وصلاحيات الوصول. أوقف تغييرات المخطط أثناء الالتقاط. يبيّن المثال استخدام أمر النسخ نفسه المضمّن في `scripts/k8s-backup-job.py` على الخدمة `mysql`؛ ابدأ من جذر الإصدار، واجعل `./backups` قابلاً للكتابة لحساب نظام التشغيل `mysql` على وحدة التخزين، ووفّر `MYSQL_USER` و`MYSQL_PWD` لحساب النسخ عبر مدير الأسرار.
 
 ```bash
-# 1. إنشاء backup script
-cat > /opt/backup.sh << 'EOF'
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/opt/ais-aviation-system/backups"
-BACKUP_FILE="$BACKUP_DIR/ais_db_$DATE.sql.gz"
-
-# Backup database
-docker exec ais_postgres pg_dump -U $DB_USER ais | gzip > $BACKUP_FILE
-
-# Upload to S3 (optional)
-# aws s3 cp $BACKUP_FILE s3://ais-backups/
-
-# Keep last 30 days
-find $BACKUP_DIR -name "ais_db_*.sql.gz" -mtime +30 -delete
-
-echo "Backup completed: $BACKUP_FILE"
-EOF
-
-chmod +x /opt/backup.sh
-
-# 2. إضافة إلى cron (يومياً في 2 صباحاً)
-crontab -e
-# أضف: 0 2 * * * /opt/backup.sh
+set -euo pipefail
+: "${MYSQL_USER:?}" "${MYSQL_PWD:?}"
+export MYSQL_USER MYSQL_PWD
+export BACKUP_NAME="ais-$(date -u +%Y%m%dT%H%M%SZ)"
+python3 -c 'import runpy; print(runpy.run_path("scripts/k8s-backup-job.py")["BACKUP_COMMAND"])' |
+  docker compose --env-file .env.production -f docker-compose.production.yml exec -T --user mysql \
+    -e MYSQL_USER -e MYSQL_PWD -e BACKUP_NAME -e MYSQL_HOST=127.0.0.1 -e BACKUP_DIR=/backups mysql sh -es
+(cd backups && sha256sum -c "$BACKUP_NAME.sql.sha256")
 ```
 
-#### ✅ Checklist
-
-- [ ] Backup script يعمل
-- [ ] Backup يومي مجدول
-- [ ] Retention policy مطبق
+احفظ ملفي `.sql` و`.sql.sha256` في مخزن النسخ المعتمد، ودوّن وقت الالتقاط ونتيجة تحقق البصمة. لا يُحذف آخر ملف قابل للاستعادة بمجرد نجاح أمر النسخ. راجع [عقد النسخ والاستعادة وشروط اختبار قاعدة منفصلة](BACKUP_RESTORE_ACCEPTANCE.md).
 
 ---
 
@@ -590,30 +468,10 @@ EOF
 
 ### خطوات Rollback
 
-```bash
-# 1. إيقاف التسجيل
-# في .env.production
-REGISTRATION_ENABLED=false
-
-# 2. إيقاف الخدمات
-docker-compose -f docker-compose.production.yml down
-
-# 3. استعادة النسخة الاحتياطية
-gunzip < backups/ais_db_LATEST.sql.gz | \
-  docker exec -i ais_postgres psql -U $DB_USER ais
-
-# 4. العودة إلى commit سابق
-git checkout PREVIOUS_COMMIT
-
-# 5. إعادة البناء
-docker-compose -f docker-compose.production.yml build
-
-# 6. إعادة التشغيل
-docker-compose -f docker-compose.production.yml up -d
-
-# 7. التحقق
-curl https://ais.example.com/health
-```
+1. اعزل الكتابات بالتنسيق مع مسؤول التشغيل، وحدد صور API والعامل والمصادقة والمخطط السابق ومدى توافقها مع ترحيلات الإصدار الحالي. سجّل وقت آخر كتابة ناجحة.
+2. قد يكفي إرجاع صور التطبيق إلى إصدار متوافق. إذا لزمت استعادة البيانات، اختر نسخة محددة بوقت وبصمة، واحتفظ بالحالة الحالية وبسجل المعاملات اللاحقة. قد يؤدي تبديل قاعدة البيانات إلى فقد كتابات تمت بعد النسخة.
+3. استعد إلى مثيل MySQL منفصل بقاعدة فارغة. يصف [دليل قبول الاستعادة](BACKUP_RESTORE_ACCEPTANCE.md) اختبار البصمة، رفض الوجهة غير الفارغة، ومقارنة الجداول والبيانات والإجراءات والأحداث. يعمل برنامج الاختبار المطابق على حاوية تحمل علامة الاختبار حصراً.
+4. بعد مطابقة سجل الترحيل والأرصدة والحجوزات مع نقطة الاستعادة المعتمدة، ينفذ مسؤول التشغيل تبديل الاتصال وخطة المصالحة الموثقتين للبيئة. أعد التحقق من `health.ready` وحالة العامل وافحص الواجهة. يتطلب إعلان التعافي قياسًا على البنية المقصودة، واختبار Compose الموصوف أعلاه لم يُنفّذ على بيئة الإنتاج ضمن هذا الدليل.
 
 #### ✅ Checklist
 

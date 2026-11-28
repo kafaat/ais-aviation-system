@@ -21,6 +21,7 @@ let couponCreatedAt: Date;
 beforeEach(() => {
   couponCreatedAt = new Date("2026-10-27T09:12:30Z");
   fixture = transactionMemory({
+    users: [{ id: 3, tenantId: 1 }],
     ancillary_services: [],
     booking_ancillaries: [],
     payment_receipts: [],
@@ -107,6 +108,30 @@ beforeEach(() => {
     };
   };
   state.db = fixture.db;
+});
+
+it("refuses a former purchaser tenant before ticket numbers, coupons or issue events are written", async () => {
+  fixture.rows("users")[0].tenantId = 2;
+  await expect(readTicketDocument(2, 5, 3)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  expect(fixture.rows("passengers")[0].ticketNumber).toBeNull();
+  expect(fixture.rows("ticket_coupons")).toHaveLength(0);
+  expect(fixture.rows("outbox")).toHaveLength(0);
+});
+
+it("refuses former-tenant seat changes before eligibility or physical seat writes", async () => {
+  const { selectSeat, changeSeat } =
+    await import("../services/seat-map.service");
+  fixture.rows("users")[0].tenantId = 2;
+  const before = structuredClone(fixture.rows("seat_inventory"));
+  await expect(selectSeat(4, "1A", 2, 5, undefined, 3)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  await expect(changeSeat(4, "1A", "1B", 2, 5, 3)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
+  expect(fixture.rows("seat_inventory")).toEqual(before);
 });
 
 it("issues local coupons in itinerary order, supports legacy references and replays without duplicates", async () => {

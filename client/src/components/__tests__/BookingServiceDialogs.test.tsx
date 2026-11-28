@@ -85,6 +85,9 @@ it("keeps the returned refund receipt visible until the passenger closes it", as
     "refunds.create": () => reply.promise,
   });
   expect(screen.getByText(/75\.00/)).toBeVisible();
+  expect(
+    screen.queryByLabelText(i18n.t("cancelBooking.additionalNotes"))
+  ).not.toBeInTheDocument();
   expect(screen.getByText(/-25\.00/)).toBeVisible();
   fireEvent.click(
     screen.getByRole("radio", { name: i18n.t("cancelBooking.reasonDuplicate") })
@@ -921,6 +924,10 @@ it("requires explicit no-refund consent and keeps the truthful cancellation rece
     "refunds.calculateCancellationFee": () => zeroQuote,
     "refunds.cancelWithoutRefund": () => reply.promise,
   });
+  fireEvent.change(
+    screen.getByLabelText(i18n.t("cancelBooking.additionalNotes")),
+    { target: { value: "Traveler note" } }
+  );
   const confirm = screen.getByRole("button", { name: "Confirm Cancellation" });
   expect(confirm).toBeDisabled();
   expect(screen.getByText("Cancellation without a refund")).toBeVisible();
@@ -946,7 +953,7 @@ it("requires explicit no-refund consent and keeps the truthful cancellation rece
         quoteHash: zeroQuote.quoteHash,
         confirmNoRefund: true,
         reason: "requested_by_customer",
-        notes: "",
+        notes: "Traveler note",
       },
     },
   ]);

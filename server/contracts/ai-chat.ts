@@ -54,6 +54,7 @@ export const responseContracts = {
             departureTime: z.string(),
             arrivalTime: z.string(),
             price: outputNumber,
+            passengers: z.number().int().min(1).max(9),
             cabinClass: z.string(),
             reason: z.union([z.undefined(), z.string()]).optional(),
           })
@@ -76,6 +77,7 @@ export const responseContracts = {
       cabinClass: z.enum(["economy", "business"]),
       currency: z.string(),
       totalPrice: outputNumber,
+      passengers: z.number().int().min(1).max(9).nullable(),
       expiresAt: z.union([z.null(), z.date()]),
       conversationId: outputNumber,
       messageId: z.union([z.null(), outputNumber]),
@@ -90,6 +92,7 @@ export const responseContracts = {
     flightId: outputNumber,
     cabinClass: z.string(),
     price: outputNumber,
+    passengers: z.number().int().min(1).max(9).nullable(),
   }),
   myConversations: z.array(
     z.object({

@@ -68,7 +68,12 @@ beforeEach(() => {
   };
   // Keep navigation observable without invoking jsdom's unimplemented browser
   // navigation. The actual auth-navigation helper and real cache events run.
-  vi.stubGlobal("window", { location: { ...location, assign } });
+  vi.stubGlobal(
+    "window",
+    Object.assign(new EventTarget(), {
+      location: { ...location, assign, reload: vi.fn() },
+    })
+  );
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -202,4 +207,52 @@ describe("actual SPA entry wiring", () => {
     expect(assign).not.toHaveBeenCalled();
     expect(state.captureError).not.toHaveBeenCalled();
   });
+});
+
+it.each([
+  [JSON.stringify({ id: 2, role: "user", tenantId: 4 }), null],
+  [
+    JSON.stringify({ id: 2, role: "user", tenantId: 4 }),
+    JSON.stringify({ id: 3, role: "user", tenantId: 4 }),
+  ],
+  [
+    JSON.stringify({ id: 2, role: "admin", tenantId: 4 }),
+    JSON.stringify({ id: 2, role: "user", tenantId: 4 }),
+  ],
+])(
+  "conceals the prior account document and reloads after a sibling tab changes identity",
+  async (oldValue, newValue) => {
+    await boot();
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: "manus-runtime-user-info",
+        oldValue,
+        newValue,
+      })
+    );
+    expect(document.getElementById("root")).not.toBeVisible();
+    expect(window.location.reload).toHaveBeenCalledOnce();
+  }
+);
+it("keeps an existing form open when a sibling refreshes the same identity", async () => {
+  await boot();
+  window.dispatchEvent(
+    new StorageEvent("storage", {
+      key: "manus-runtime-user-info",
+      oldValue: JSON.stringify({
+        id: 2,
+        role: "user",
+        tenantId: 4,
+        name: "old",
+      }),
+      newValue: JSON.stringify({
+        id: 2,
+        role: "user",
+        tenantId: 4,
+        name: "new",
+      }),
+    })
+  );
+  expect(document.getElementById("root")).toBeVisible();
+  expect(window.location.reload).not.toHaveBeenCalled();
 });

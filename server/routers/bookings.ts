@@ -324,20 +324,36 @@ export const bookingsRouter = router({
         throw new Error("Select one allocation");
       const database = db.getDb();
       if (!database) throw new Error("Database unavailable");
-      const { waitlist, groupBookings, inventoryLocks } =
+      const { waitlist, groupBookings, inventoryLocks, flights } =
         await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
+      const { eq, and, getTableColumns } = await import("drizzle-orm");
+      const tenant =
+        ctx.tenantId == null ? undefined : eq(flights.tenantId, ctx.tenantId);
       const [w] = input.waitlistId
         ? await database
-            .select()
+            .select(getTableColumns(waitlist))
             .from(waitlist)
-            .where(eq(waitlist.id, input.waitlistId))
+            .innerJoin(flights, eq(waitlist.flightId, flights.id))
+            .where(
+              and(
+                eq(waitlist.id, input.waitlistId),
+                eq(waitlist.userId, ctx.user.id),
+                tenant
+              )
+            )
         : [];
       const [g] = input.groupBookingId
         ? await database
-            .select()
+            .select(getTableColumns(groupBookings))
             .from(groupBookings)
-            .where(eq(groupBookings.id, input.groupBookingId))
+            .innerJoin(flights, eq(groupBookings.flightId, flights.id))
+            .where(
+              and(
+                eq(groupBookings.id, input.groupBookingId),
+                eq(groupBookings.organizerUserId, ctx.user.id),
+                tenant
+              )
+            )
         : [];
       const row = w ?? g;
       if (

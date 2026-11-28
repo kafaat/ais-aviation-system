@@ -10,7 +10,11 @@ import {
   passengers,
 } from "../../drizzle/schema";
 import { getFlightRbdAvailability } from "./rbd-inventory.service";
-import { eq, and } from "drizzle-orm";
+import { eq, and, getTableColumns } from "drizzle-orm";
+import {
+  lockBookingUserTenants,
+  purchaserBookingCondition,
+} from "./access-control.service";
 import { createRetailOffer } from "./retail-offer.service";
 import { quotePaidOrderService } from "./order-servicing.service";
 import {
@@ -71,6 +75,16 @@ async function requestService(
         code: "NOT_FOUND",
         message: "Booking not found",
       });
+    try {
+      await lockBookingUserTenants(tx, booking.tenantId, [input.userId]);
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === "NOT_FOUND")
+        throw new ForeignBooking({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      throw error;
+    }
     // Preserve the original digest for existing direct-client retries.
     const { tenantId: _tenantId, ...request } = input;
     const key = input.idempotencyKey ?? calculateRequestHash(request);
@@ -215,16 +229,25 @@ export async function getModificationDetails(modificationId: number) {
 /**
  * Get user's modification requests
  */
-export async function getUserModifications(userId: number) {
+export async function getUserModifications(
+  userId: number,
+  tenantId?: number | null
+) {
   try {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
     const modifications = await database
-      .select()
+      .select(getTableColumns(bookingModifications))
       .from(bookingModifications)
-      .where(eq(bookingModifications.userId, userId))
-      .orderBy(bookingModifications.createdAt);
+      .innerJoin(bookings, eq(bookings.id, bookingModifications.bookingId))
+      .where(
+        and(
+          eq(bookingModifications.userId, userId),
+          purchaserBookingCondition(userId, tenantId)
+        )
+      )
+      .orderBy(bookingModifications.createdAt, bookingModifications.id);
 
     return modifications.map(withDocumentReceipt);
   } catch (error) {

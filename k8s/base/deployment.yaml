@@ -64,6 +64,13 @@ spec:
                 name: ais-secrets
 
           env:
+            - name: AUTH_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  { name: ais-api-credentials, key: AUTH_SERVICE_TOKEN }
+            - name: METRICS_TOKEN
+              valueFrom:
+                secretKeyRef: { name: ais-api-credentials, key: METRICS_TOKEN }
             - name: NODE_ENV
               value: "production"
             - name: PORT

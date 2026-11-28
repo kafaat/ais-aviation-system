@@ -74,6 +74,7 @@ type Passenger = {
   lastName: string;
   dateOfBirth?: Date;
   passportNumber?: string;
+  passportExpiry?: Date;
   nationality?: string;
   email?: string;
   phone?: string;
@@ -249,6 +250,7 @@ function BookingForm({
         lastName: p.lastName,
         dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : undefined,
         passportNumber: p.passportNumber ?? undefined,
+        passportExpiry: p.passportExpiry ?? undefined,
         nationality: p.nationality ?? undefined,
       }));
       if (prefilled.length > 0) {
@@ -360,6 +362,7 @@ function BookingForm({
       lastName: data.lastName,
       dateOfBirth: data.dateOfBirth,
       passportNumber: data.passportNumber,
+      passportExpiry: data.passportExpiry,
       nationality: data.nationality,
     };
     setPassengers(updated);
@@ -446,6 +449,7 @@ function BookingForm({
               dateOfBirth: p.dateOfBirth,
               nationality: p.nationality,
               passportNumber: p.passportNumber,
+              passportExpiry: p.passportExpiry,
             });
           } catch {
             // Silently fail - don't block booking for save failure
@@ -518,6 +522,7 @@ function BookingForm({
               dateOfBirth: p.dateOfBirth,
               nationality: p.nationality,
               passportNumber: p.passportNumber,
+              passportExpiry: p.passportExpiry,
             });
           } catch {
             // Silently fail - don't block booking for save failure
@@ -1081,6 +1086,28 @@ function BookingForm({
                             )}
                           </p>
                         )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor={`pax-passport-expiry-${index}`}>
+                          {t("profile.personal.passportExpiry")}
+                        </Label>
+                        <Input
+                          id={`pax-passport-expiry-${index}`}
+                          type="date"
+                          value={
+                            passenger.passportExpiry
+                              ?.toISOString()
+                              .slice(0, 10) ?? ""
+                          }
+                          onChange={e =>
+                            updatePassenger(
+                              index,
+                              "passportExpiry",
+                              e.target.valueAsDate ?? undefined
+                            )
+                          }
+                        />
                       </div>
 
                       <div className="space-y-2">

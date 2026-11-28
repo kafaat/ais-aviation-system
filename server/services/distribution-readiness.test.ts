@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import {
   airlines,
+  users,
   airports,
   flights,
   ndcOffers,
@@ -37,13 +38,16 @@ vi.mock("./idempotency-v2.service", async importOriginal => ({
   ...(await importOriginal<typeof import("./idempotency-v2.service")>()),
   // Exercise the service's real transaction body and SQL predicates; the shared
   // durable idempotency authority is covered by its separate acceptance suite.
-  withTransactionalIdempotency: async <T>(options: {
-    run: (tx: unknown) => Promise<T>;
-  }) => {
+  withTransactionalIdempotency: async <T>(
+    options: {
+      run: (tx: unknown) => Promise<T>;
+    },
+    transaction?: unknown
+  ) => {
     const db = store.getDb() as ReturnType<
       typeof authorityRelationalFixture
     >["db"];
-    return db.transaction(options.run);
+    return transaction ? options.run(transaction) : db.transaction(options.run);
   },
 }));
 let fixture: ReturnType<typeof authorityRelationalFixture>;
@@ -137,6 +141,7 @@ function connection() {
 beforeEach(() => {
   fixture = authorityRelationalFixture([
     airlines,
+    users,
     airports,
     flights,
     ndcOffers,
@@ -149,6 +154,7 @@ beforeEach(() => {
     gdsConnections,
     gdsMessages,
   ]);
+  fixture.insert(users, { id: 7, openId: "distribution-owner", tenantId: 1 });
   store.getDb.mockReset().mockReturnValue(fixture.db);
   store.reference.mockReset().mockReturnValue("FIX123");
   vi.stubEnv("NODE_ENV", "test");

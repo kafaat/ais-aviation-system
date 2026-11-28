@@ -1,3 +1,4 @@
+import { purchaserBookingCondition } from "./access-control.service";
 import { getDb } from "../db";
 import {
   payments,
@@ -34,12 +35,15 @@ export interface PaymentHistoryFilters {
  */
 export async function getUserPaymentHistory(
   userId: number,
-  filters: PaymentHistoryFilters = {}
+  filters: PaymentHistoryFilters = {},
+  tenantId?: number | null
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const conditions: SQL[] = [eq(bookings.userId, userId)];
+  const conditions: Array<SQL | undefined> = [
+    purchaserBookingCondition(userId, tenantId),
+  ];
 
   if (filters.status) {
     conditions.push(
@@ -100,7 +104,8 @@ export async function getUserPaymentHistory(
 // partially refunded payment deliberately remains completed.
 async function settledRefundAmount(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  userId?: number
+  userId?: number,
+  tenantId?: number | null
 ) {
   const [row] = await db
     .select({
@@ -112,7 +117,9 @@ async function settledRefundAmount(
       and(
         inArray(financialLedger.type, ["refund", "partial_refund"]),
         eq(financialLedger.currency, "SAR"),
-        userId === undefined ? undefined : eq(bookings.userId, userId)
+        userId === undefined
+          ? undefined
+          : purchaserBookingCondition(userId, tenantId)
       )
     );
   const amount = Number(row.amount);
@@ -121,7 +128,10 @@ async function settledRefundAmount(
   return amount;
 }
 
-export async function getUserPaymentStats(userId: number) {
+export async function getUserPaymentStats(
+  userId: number,
+  tenantId?: number | null
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -137,7 +147,7 @@ export async function getUserPaymentStats(userId: number) {
     })
     .from(payments)
     .innerJoin(bookings, eq(payments.bookingId, bookings.id))
-    .where(eq(bookings.userId, userId));
+    .where(purchaserBookingCondition(userId, tenantId));
 
   return {
     totalPayments: Number(stats.totalPayments) || 0,
@@ -145,7 +155,7 @@ export async function getUserPaymentStats(userId: number) {
     completedCount: Number(stats.completedCount) || 0,
     completedAmount: Number(stats.completedAmount) || 0,
     refundedCount: Number(stats.refundedCount) || 0,
-    refundedAmount: await settledRefundAmount(db, userId),
+    refundedAmount: await settledRefundAmount(db, userId, tenantId),
     pendingCount: Number(stats.pendingCount) || 0,
     failedCount: Number(stats.failedCount) || 0,
   };

@@ -1,3 +1,4 @@
+import { lockBookingUserTenants } from "./access-control.service";
 import {
   assertCouponTravelable,
   setCouponCheckIn,
@@ -59,7 +60,9 @@ async function ordinaryRefundRequiresDepartureHold(
 export async function lockDepartureContext(
   tx: SettlementTx,
   bookingId: number,
-  requestedFlightId?: number
+  requestedFlightId?: number,
+  purchaserId?: number,
+  requestTenantId?: number | null
 ) {
   const [booking] = await tx
     .select()
@@ -68,6 +71,16 @@ export async function lockDepartureContext(
     .for("update");
   if (!booking)
     throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  if (purchaserId !== undefined) {
+    if (booking.userId !== purchaserId)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    await lockBookingUserTenants(
+      tx,
+      booking.tenantId,
+      [purchaserId],
+      requestTenantId
+    );
+  }
   const ordinaryRefundHold = await ordinaryRefundRequiresDepartureHold(
     tx,
     booking
@@ -263,7 +276,12 @@ export async function checkInPassengersTx(
     owner?: { userId: number; tenantId: number | null };
   }
 ) {
-  const c = await lockDepartureContext(tx, input.bookingId, input.flightId);
+  const c = await lockDepartureContext(
+    tx,
+    input.bookingId,
+    input.flightId,
+    input.owner?.userId
+  );
   if (
     input.owner &&
     (c.booking.userId !== input.owner.userId ||

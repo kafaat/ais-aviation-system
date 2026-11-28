@@ -1,4 +1,4 @@
-import { useCallback, useRef, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 /* ==========================================================================
@@ -74,9 +74,33 @@ const SKIP_LINKS: SkipLink[] = [
  */
 export function SkipNavigation() {
   const { i18n } = useTranslation();
-  const navRef = useRef<HTMLElement>(null);
+  const [available, setAvailable] = useState<string[]>([]);
+  const isArabic = (i18n.resolvedLanguage ?? i18n.language ?? "").startsWith(
+    "ar"
+  );
 
-  const isArabic = i18n.language === "ar";
+  useEffect(() => {
+    function updateLinks() {
+      const main = document.querySelector("main");
+      if (main && !main.id) main.id = "main-content";
+      const ids = SKIP_LINKS.map(link => link.targetId).filter(id =>
+        document.getElementById(id)
+      );
+      setAvailable(previous =>
+        previous.join() === ids.join() ? previous : ids
+      );
+    }
+    updateLinks();
+    // Lazy routes and account dialogs can replace their landmarks after navigation.
+    const observer = new MutationObserver(updateLinks);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["id"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   /**
    * Attempts to focus the target element identified by the given ID.
@@ -102,7 +126,7 @@ export function SkipNavigation() {
     target.focus({ preventScroll: false });
 
     // Scroll the target into view smoothly
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    target.scrollIntoView?.({ block: "start" });
   }, []);
 
   const handleClick = useCallback(
@@ -123,9 +147,9 @@ export function SkipNavigation() {
     [focusTarget]
   );
 
+  if (!available.length) return null;
   return (
     <nav
-      ref={navRef}
       className="skip-nav"
       aria-label={
         isArabic
@@ -133,17 +157,19 @@ export function SkipNavigation() {
           : "Skip links"
       }
     >
-      {SKIP_LINKS.map(link => (
-        <a
-          key={link.targetId}
-          href={`#${link.targetId}`}
-          className="skip-nav__link"
-          onClick={e => handleClick(e, link.targetId)}
-          onKeyDown={e => handleKeyDown(e, link.targetId)}
-        >
-          {isArabic ? link.labelAr : link.labelEn}
-        </a>
-      ))}
+      {SKIP_LINKS.filter(link => available.includes(link.targetId)).map(
+        link => (
+          <a
+            key={link.targetId}
+            href={`#${link.targetId}`}
+            className="skip-nav__link"
+            onClick={e => handleClick(e, link.targetId)}
+            onKeyDown={e => handleKeyDown(e, link.targetId)}
+          >
+            {isArabic ? link.labelAr : link.labelEn}
+          </a>
+        )
+      )}
     </nav>
   );
 }

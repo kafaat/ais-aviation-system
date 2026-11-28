@@ -383,9 +383,34 @@ describe("Loyalty Service", () => {
     fixture.rows("bookings")[0].userId++;
     await expect(
       redeemMiles(testUserId, 100, testBookingId, undefined, "unit-redeem-6")
-    ).rejects.toThrow("Booking not found");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(fixture.rows("user_credits")).toHaveLength(0);
     expect(fixture.rows("loyalty_accounts")[0].currentMilesBalance).toBe(500);
+  });
+
+  it("refuses new and replayed booking-linked redemptions after reassignment", async () => {
+    const { redeemMiles } = await import("./loyalty.service");
+    const fixture = funded(
+      { ...baseBronzeAccount, currentMilesBalance: 500 },
+      testBookingId,
+      1000
+    );
+    fixture.rows("bookings")[0].tenantId = 3;
+    fixture.rows("users")[0].tenantId = 3;
+    const redeem = (key: string) =>
+      redeemMiles(testUserId, 100, testBookingId, undefined, key);
+    await expect(redeem("linked-before")).resolves.toMatchObject({
+      newBalance: 400,
+    });
+    fixture.rows("users")[0].tenantId = 4;
+    for (const key of ["linked-before", "linked-after"])
+      await expect(redeem(key)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(fixture.rows("user_credits")).toHaveLength(1);
+    expect(fixture.rows("loyalty_accounts")[0].currentMilesBalance).toBe(400);
+    fixture.rows("users")[0].tenantId = null;
+    await expect(redeem("linked-before")).resolves.toMatchObject({
+      newBalance: 400,
+    });
   });
 
   it("rejects a missing user without consuming a valid enrolled factor or spending miles", async () => {

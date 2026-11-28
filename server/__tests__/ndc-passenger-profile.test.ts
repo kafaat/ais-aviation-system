@@ -31,6 +31,7 @@ const request = (offerId: string, type: "adult" | "child" | "infant") => ({
 beforeEach(() => {
   boundary.enterTransaction.mockClear();
   fixture = transactionMemory({
+    users: [{ id: 1, tenantId: null }],
     ndc_offers: [
       {
         id: 1,

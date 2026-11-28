@@ -21,6 +21,7 @@ import { TRPCError } from "@trpc/server";
 import {
   assertBookingOwnership,
   assertPassengerOwnership,
+  purchaserScope,
 } from "../services/access-control.service";
 
 // Baggage status enum for validation
@@ -212,7 +213,12 @@ export const baggageRouter = router({
     .output(responseContracts["getBookingBaggage"])
     .query(async ({ input, ctx }) => {
       // Ownership check: prevent reading another user's baggage (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       try {
         const baggage = await baggageService.getBookingBaggage(input.bookingId);
         return baggage;
@@ -243,7 +249,8 @@ export const baggageRouter = router({
       await assertPassengerOwnership(
         input.passengerId,
         ctx.user.id,
-        ctx.user.role
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
       );
       try {
         const baggage = await baggageService.getPassengerBaggage(
@@ -285,17 +292,21 @@ export const baggageRouter = router({
           code: "NOT_FOUND",
           message: "Baggage not found",
         });
-      await assertBookingOwnership(owned.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        owned.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       try {
-        const result = await baggageService.reportLostBaggage({
-          tagNumber: input.tagNumber,
-          description: input.description,
-          contactEmail: input.contactEmail,
-          contactPhone: input.contactPhone,
+        const result = await baggageService.reportLostBaggage(input, {
+          id: ctx.user.id,
+          role: ctx.user.role,
         });
 
         return result;
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         const message =
           error instanceof Error
             ? error.message

@@ -13,6 +13,7 @@ import { bookings } from "../../drizzle/schema";
 import {
   assertBookingOwnership,
   assertSplitOwnership,
+  purchaserScope,
 } from "../services/access-control.service";
 
 // Input schemas
@@ -82,7 +83,10 @@ export const splitPaymentsRouter = router({
       }
 
       // Validate booking belongs to the initiating user
-      if (booking.userId !== ctx.user.id) {
+      if (
+        booking.userId !== ctx.user.id ||
+        (ctx.tenantId != null && booking.tenantId !== ctx.tenantId)
+      ) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",
@@ -110,7 +114,8 @@ export const splitPaymentsRouter = router({
       // Delivery runs after the plan's transaction has committed; a payer
       // whose request was not accepted stays "pending" and can be resent.
       const sentCount = await splitPaymentService.sendAllPaymentRequests(
-        input.bookingId
+        input.bookingId,
+        { id: ctx.user.id, role: ctx.user.role }
       );
       return { ...plan, requestedCount: plan.splitIds.length, sentCount };
     }),
@@ -158,7 +163,12 @@ export const splitPaymentsRouter = router({
     )
     .query(async ({ input, ctx }) => {
       // Ownership check: split status exposes payer emails/amounts (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       return await splitPaymentService.getSplitPaymentStatus(input.bookingId);
     }),
 
@@ -180,8 +190,16 @@ export const splitPaymentsRouter = router({
     .output(z.object({ sent: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check: only the booking owner may trigger payer emails (IDOR)
-      await assertSplitOwnership(input.splitId, ctx.user.id, ctx.user.role);
-      const sent = await splitPaymentService.sendPaymentRequest(input.splitId);
+      await assertSplitOwnership(
+        input.splitId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
+      const sent = await splitPaymentService.sendPaymentRequest(input.splitId, {
+        id: ctx.user.id,
+        role: ctx.user.role,
+      });
       return { sent };
     }),
 
@@ -204,9 +222,15 @@ export const splitPaymentsRouter = router({
     .output(z.object({ sent: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertSplitOwnership(input.splitId, ctx.user.id, ctx.user.role);
+      await assertSplitOwnership(
+        input.splitId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       const sent = await splitPaymentService.resendPaymentRequest(
-        input.splitId
+        input.splitId,
+        { id: ctx.user.id, role: ctx.user.role }
       );
       return { sent };
     }),
@@ -230,9 +254,15 @@ export const splitPaymentsRouter = router({
     .output(z.object({ sentCount: z.number() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       const sentCount = await splitPaymentService.sendAllPaymentRequests(
-        input.bookingId
+        input.bookingId,
+        { id: ctx.user.id, role: ctx.user.role }
       );
       return { sentCount };
     }),
@@ -256,7 +286,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ cancelled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertSplitOwnership(input.splitId, ctx.user.id, ctx.user.role);
+      await assertSplitOwnership(
+        input.splitId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       await splitPaymentService.cancelSplit(input.splitId, ctx.user);
       return { cancelled: true };
     }),
@@ -280,7 +315,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ cancelled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       await splitPaymentService.cancelAllSplits(input.bookingId, ctx.user);
       return { cancelled: true };
     }),
@@ -380,7 +420,12 @@ export const splitPaymentsRouter = router({
     .output(z.object({ allPaid: z.boolean() }))
     .query(async ({ input, ctx }) => {
       // Ownership check (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
       const allPaid = await splitPaymentService.checkAllPaid(input.bookingId);
       return { allPaid };
     }),

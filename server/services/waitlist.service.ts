@@ -4,6 +4,7 @@ import {
   releaseInventoryLock,
 } from "./inventory-lock.service";
 import {
+  lockPurchaserFlight,
   countActiveHolds,
   withInventoryTransaction,
 } from "./inventory-capacity.service";
@@ -19,7 +20,16 @@ import {
   airports,
   airlines,
 } from "../../drizzle/schema";
-import { eq, and, desc, asc, sql, inArray, isNull } from "drizzle-orm";
+import {
+  eq,
+  and,
+  desc,
+  asc,
+  sql,
+  inArray,
+  isNull,
+  getTableColumns,
+} from "drizzle-orm";
 
 /**
  * Waitlist Service
@@ -45,19 +55,7 @@ export async function addToWaitlist(
   if (!database) throw new Error("Database not available");
 
   return withInventoryTransaction(database, async tx => {
-    // Check if flight exists and get details
-    const [flight] = await tx
-      .select()
-      .from(flights)
-      .where(eq(flights.id, flightId))
-      .for("update");
-
-    if (!flight) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Flight not found",
-      });
-    }
+    const flight = await lockPurchaserFlight(tx, flightId, userId);
 
     // Check if user is already on waitlist for this flight and class
     const [existing] = await tx
@@ -136,7 +134,8 @@ export async function addToWaitlist(
 export async function getWaitlistPosition(
   userId: number,
   flightId: number,
-  cabinClass: "economy" | "business"
+  cabinClass: "economy" | "business",
+  tenantId?: number | null
 ): Promise<{
   position: number | null;
   status: string | null;
@@ -146,11 +145,13 @@ export async function getWaitlistPosition(
   if (!database) throw new Error("Database not available");
 
   const [entry] = await database
-    .select()
+    .select(getTableColumns(waitlist))
     .from(waitlist)
+    .innerJoin(flights, eq(flights.id, waitlist.flightId))
     .where(
       and(
         eq(waitlist.userId, userId),
+        tenantId == null ? undefined : eq(flights.tenantId, tenantId),
         eq(waitlist.flightId, flightId),
         eq(waitlist.cabinClass, cabinClass)
       )
@@ -288,17 +289,28 @@ async function lockedEntry(tx: SettlementTx, id: number, userId?: number) {
       code: "NOT_FOUND",
       message: "Waitlist entry not found",
     });
-  await tx
-    .select({ id: flights.id })
-    .from(flights)
-    .where(eq(flights.id, candidate.flightId))
-    .for("update");
+  if (userId !== undefined)
+    await lockPurchaserFlight(tx, candidate.flightId, userId);
+  else
+    await tx
+      .select({ id: flights.id })
+      .from(flights)
+      .where(eq(flights.id, candidate.flightId))
+      .for("update");
   const [entry] = await tx
     .select()
     .from(waitlist)
     .where(eq(waitlist.id, id))
     .for("update");
-  if (!entry) throw new Error("Waitlist entry disappeared");
+  if (
+    !entry ||
+    entry.flightId !== candidate.flightId ||
+    (userId !== undefined && entry.userId !== userId)
+  )
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Waitlist entry not found",
+    });
   return entry;
 }
 export async function offerSeat(waitlistId: number) {
@@ -449,7 +461,10 @@ export async function getFlightWaitlist(flightId: number): Promise<
 /**
  * Get all waitlist entries for a user
  */
-export async function getUserWaitlist(userId: number): Promise<
+export async function getUserWaitlist(
+  userId: number,
+  tenantId?: number | null
+): Promise<
   Array<{
     id: number;
     flightId: number;
@@ -520,7 +535,12 @@ export async function getUserWaitlist(userId: number): Promise<
       destinationAirport,
       eq(flights.destinationId, sql`destinationAirport.id`)
     )
-    .where(eq(waitlist.userId, userId))
+    .where(
+      and(
+        eq(waitlist.userId, userId),
+        tenantId == null ? undefined : eq(flights.tenantId, tenantId)
+      )
+    )
     .orderBy(desc(waitlist.createdAt));
 
   return entries;
@@ -574,25 +594,14 @@ export async function updateNotificationPreferences(
   const database = await getDb();
   if (!database) throw new Error("Database not available");
 
-  const [entry] = await database
-    .select()
-    .from(waitlist)
-    .where(and(eq(waitlist.id, waitlistId), eq(waitlist.userId, userId)))
-    .limit(1);
-
-  if (!entry) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Waitlist entry not found",
-    });
-  }
-
-  await database
-    .update(waitlist)
-    .set({ notifyByEmail, notifyBySms })
-    .where(eq(waitlist.id, waitlistId));
-
-  return { success: true };
+  return database.transaction(async tx => {
+    const entry = await lockedEntry(tx, waitlistId, userId);
+    await tx
+      .update(waitlist)
+      .set({ notifyByEmail, notifyBySms })
+      .where(eq(waitlist.id, entry.id));
+    return { success: true };
+  });
 }
 
 /**

@@ -87,6 +87,7 @@ function allocation(
 ) {
   const expiry = options.expiresAt ?? new Date(Date.now() + 3600000);
   const fixture = transactionMemory({
+    users: [{ id: 1, tenantId: null }],
     flights: [
       {
         id: 10,
@@ -141,6 +142,7 @@ describe("Waitlist Service", () => {
   describe("addToWaitlist", () => {
     it("adds to a full flight after its retained priority history", async () => {
       const fixture = transactionMemory({
+        users: [{ id: 1, tenantId: null }],
         flights: [{ id: 1, economyAvailable: 0, businessAvailable: 5 }],
         waitlist: [
           {

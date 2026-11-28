@@ -52,6 +52,7 @@ export async function runConversationCleanupJob(
 ): Promise<{
   success: boolean;
   archivedCount: number;
+  failedCount: number;
   error?: string;
 }> {
   console.info(
@@ -59,15 +60,18 @@ export async function runConversationCleanupJob(
   );
 
   try {
-    const archivedCount = await archiveOldConversations(olderThanDays);
+    const result = await archiveOldConversations(olderThanDays);
 
     console.info(
-      `[ConversationCleanupJob] Completed: ${archivedCount} conversations archived`
+      `[ConversationCleanupJob] Completed: ${result.archivedCount} conversations archived, ${result.failedCount} failures`
     );
 
     return {
-      success: true,
-      archivedCount,
+      success: result.failedCount === 0,
+      ...result,
+      ...(result.failedCount
+        ? { error: "Some conversations could not be archived" }
+        : {}),
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -76,6 +80,7 @@ export async function runConversationCleanupJob(
     return {
       success: false,
       archivedCount: 0,
+      failedCount: 1,
       error: errorMessage,
     };
   }

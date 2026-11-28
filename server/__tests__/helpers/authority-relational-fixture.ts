@@ -77,25 +77,39 @@ export function authorityRelationalFixture(tables: MySqlTable[]) {
   const queries: Array<{ sql: string; inTransaction: boolean }> = [];
   const db = drizzle(async (query, params, method) => {
     queries.push({ sql: query, inTransaction });
+    // One explicit raw scalar read uses mysql2's [rows, fields] result shape.
+    // SQLite supplies its own millisecond clock, independently of JS Date.
+    if (
+      method === "execute" &&
+      /^SELECT CURRENT_TIMESTAMP\(3\) AS now$/i.test(query.trim())
+    ) {
+      const clock = sqlite
+        .prepare("SELECT strftime('%Y-%m-%d %H:%M:%f', 'now') AS now")
+        .all();
+      return { rows: [clock, []] };
+    }
     let executable = query
-      .replace(/ for update(?: skip locked)?(?=\s*(?:\)|$))/gi, "")
+      .replace(/ for (?:update|share)(?: skip locked)?(?=\s*(?:\)|$))/gi, "")
       .replaceAll("<=>", "IS");
     // SQLite does not accept DEFAULT inside VALUES. Preserve the corresponding
-    // canonical column default explicitly; never substitute a fixture rowset.
+    // canonical column default in every tuple; never substitute a fixture rowset.
     executable = executable.replace(
-      /^insert into `([^`]+)` \(([^)]+)\) values \(([^)]+)\)/i,
+      /^insert into `([^`]+)` \(([^)]+)\) values (\([^)]*\)(?:,\s*\([^)]*\))*)/i,
       (_match, table: string, names: string, values: string) => {
         const columns = names
           .split(",")
           .map(name => name.trim().replaceAll("`", ""));
-        const bound = values
-          .split(",")
-          .map((value, index) =>
-            value.trim().toLowerCase() === "default"
-              ? (defaults.get(table)?.get(columns[index]) ?? "NULL")
-              : value
-          );
-        return `insert into \`${table}\` (${names}) values (${bound.join(",")})`;
+        const bound = values.replace(/\(([^)]*)\)/g, (_tuple, row: string) => {
+          const cells = row
+            .split(",")
+            .map((value, index) =>
+              value.trim().toLowerCase() === "default"
+                ? (defaults.get(table)?.get(columns[index]) ?? "NULL")
+                : value
+            );
+          return `(${cells.join(",")})`;
+        });
+        return `insert into \`${table}\` (${names}) values ${bound}`;
       }
     );
     if (/on duplicate key update/i.test(executable)) {

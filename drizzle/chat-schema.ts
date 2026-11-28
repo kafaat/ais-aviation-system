@@ -48,6 +48,11 @@ export const chatConversations = mysqlTable(
     messageCount: int("messageCount").default(0).notNull(),
     lastMessageAt: timestamp("lastMessageAt"),
 
+    // One accepted user message reserves its assistant slot until completion.
+    // This internal association is a fence, not a public request identity.
+    pendingMessageId: int("pendingMessageId"),
+    pendingUntil: timestamp("pendingUntil", { fsp: 3 }),
+
     // Session tracking for multi-device support
     sessionId: varchar("sessionId", { length: 64 }),
 

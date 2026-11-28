@@ -887,3 +887,50 @@ describe("NDC terminal command boundaries", () => {
     expect(fixture.rows("ndc_orders")[0].emdNumbers).toBeUndefined();
   });
 });
+
+describe("creation with an identity reassigned after authentication", () => {
+  const single = () => createBooking(input);
+  const multiple = () =>
+    createMultiCityBooking({
+      userId: 1,
+      tenantId: 3,
+      sessionId: "stale-multi",
+      cabinClass: "economy",
+      passengers: input.passengers,
+      segments: [11, 12].map(flightId => ({
+        flightId,
+        departureDate: new Date("2030-01-01T10:00:00Z"),
+      })),
+    });
+  it.each([
+    ["direct", single],
+    ["multi-city", multiple],
+  ] as const)(
+    "denies new %s reservations before any business write",
+    async (_name, create) => {
+      fixture.rows("users")[0].tenantId = 4;
+      await expect(create()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      for (const table of [
+        "bookings",
+        "passengers",
+        "booking_segments",
+        "inventory_locks",
+        "outbox",
+        "idempotency_requests",
+      ])
+        expect(fixture.rows(table), table).toHaveLength(0);
+    }
+  );
+  it.each([
+    ["direct", single],
+    ["multi-city", multiple],
+  ] as const)(
+    "does not replay a %s reservation after the stored owner is reassigned",
+    async (_name, create) => {
+      await create();
+      fixture.rows("users")[0].tenantId = 4;
+      await expect(create()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(fixture.rows("bookings")).toHaveLength(1);
+    }
+  );
+});

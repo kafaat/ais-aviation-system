@@ -249,6 +249,7 @@ nativeDescribe.sequential(
           "error_log " + directory + "/error.log warn;",
           "events { worker_connections 128; }",
           "http {",
+          await readFile("scripts/ci/nginx-test-temp-paths.conf", "utf8"),
           "  access_log off;",
           "  upstream ais_api { server 127.0.0.1:" + upstream.port + "; }",
           "  server { listen 127.0.0.1:" + port + ";",

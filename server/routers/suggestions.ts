@@ -27,7 +27,7 @@ export const suggestionsRouter = router({
     .output(responseContracts["forUser"])
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 6;
-      return await getUserSuggestions(ctx.user.id, limit);
+      return await getUserSuggestions(ctx.user.id, limit, ctx.tenantId);
     }),
 
   /**

@@ -5,6 +5,7 @@ import {
   compensationClaims,
   flights,
   passengers,
+  users,
 } from "../../drizzle/schema";
 import { authorityRelationalFixture } from "../__tests__/helpers/authority-relational-fixture";
 
@@ -42,6 +43,7 @@ describe("compensation ownership and review authority on relational rows", () =>
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2030-07-01T00:00:00Z"));
     fixture = authorityRelationalFixture([
+      users,
       bookings,
       bookingSegments,
       passengers,
@@ -49,6 +51,12 @@ describe("compensation ownership and review authority on relational rows", () =>
       flights,
     ]);
     state.db = fixture.db;
+    fixture.insert(users, { id: 7, openId: "claim-owner", tenantId: null });
+    fixture.insert(users, {
+      id: 8,
+      openId: "other-claim-owner",
+      tenantId: null,
+    });
     fixture.insert(bookings, {
       id: 1,
       userId: 7,

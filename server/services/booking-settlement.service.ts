@@ -28,7 +28,11 @@ import {
 } from "../../drizzle/schema";
 import type { getDb } from "../db";
 import { recordEvent } from "./outbox.service";
-import { reserveRbdSeats, restoreRbdSeats } from "./rbd-inventory.service";
+import {
+  reserveRbdSeats,
+  restoreRbdSeats,
+  RbdInventoryUnavailableError,
+} from "./rbd-inventory.service";
 
 export type SettlementTx = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -375,16 +379,14 @@ export async function reserveSeats(
     throw new InventoryUnavailableError(
       `Insufficient ${cabin} inventory for booking`
     );
-  if (fareClassId != null)
-    await reserveRbdSeats(tx, flightId, fareClassId, count, ownLockId).catch(
-      error => {
-        throw new InventoryUnavailableError(
-          error instanceof Error
-            ? error.message
-            : "Requested booking class is unavailable"
-        );
-      }
-    );
+  if (fareClassId != null) {
+    try {
+      await reserveRbdSeats(tx, flightId, fareClassId, count, ownLockId);
+    } catch (error) {
+      if (!(error instanceof RbdInventoryUnavailableError)) throw error;
+      throw new InventoryUnavailableError(error.message);
+    }
+  }
 }
 
 export async function assertBookingDepartureReleasable(

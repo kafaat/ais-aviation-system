@@ -1,3 +1,4 @@
+import { purchaserBookingCondition } from "../services/access-control.service";
 import { responseContracts } from "../contracts/seat-map";
 /**
  * Seat Map & Check-in Router
@@ -39,7 +40,8 @@ import { cabinClassEnum, cabinLayoutSchema } from "../contracts/seat-layout";
 
 async function verifyBookingOwnership(
   bookingId: number,
-  userId: number
+  userId: number,
+  tenantId: number | null
 ): Promise<void> {
   const db = await getDb();
   if (!db) {
@@ -52,7 +54,12 @@ async function verifyBookingOwnership(
   const [booking] = await db
     .select({ userId: bookings.userId })
     .from(bookings)
-    .where(eq(bookings.id, bookingId))
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        purchaserBookingCondition(userId, tenantId)
+      )
+    )
     .limit(1);
 
   if (!booking) {
@@ -73,7 +80,8 @@ async function verifyBookingOwnership(
 async function verifySeatOwnership(
   flightId: number,
   seatNumber: string,
-  userId: number
+  userId: number,
+  tenantId: number | null
 ): Promise<seatMapService.SeatReleaseAuthorization["expected"]> {
   const db = await getDb();
   if (!db) {
@@ -111,7 +119,7 @@ async function verifySeatOwnership(
     });
   }
 
-  await verifyBookingOwnership(seat.bookingId, userId);
+  await verifyBookingOwnership(seat.bookingId, userId, tenantId);
   return { bookingId: seat.bookingId, passengerId: seat.passengerId };
 }
 
@@ -282,13 +290,15 @@ export const seatMapRouter = router({
     .output(responseContracts["selectSeat"])
     .mutation(async ({ input, ctx }) => {
       // Verify the authenticated user owns this booking
-      await verifyBookingOwnership(input.bookingId, ctx.user.id);
+      await verifyBookingOwnership(input.bookingId, ctx.user.id, ctx.tenantId);
 
       return await seatMapService.selectSeat(
         input.flightId,
         input.seatNumber,
         input.bookingId,
-        input.passengerId
+        input.passengerId,
+        undefined,
+        ctx.user.id
       );
     }),
 
@@ -309,14 +319,15 @@ export const seatMapRouter = router({
       const expected = await verifySeatOwnership(
         input.flightId,
         input.seatNumber,
-        ctx.user.id
+        ctx.user.id,
+        ctx.tenantId
       );
 
       return await seatMapService.releaseSeat(
         input.flightId,
         input.seatNumber,
         {
-          actor: { userId: ctx.user.id, tenantId: ctx.tenantId },
+          actor: { userId: ctx.user.id },
           expected,
         }
       );
@@ -340,14 +351,15 @@ export const seatMapRouter = router({
     .output(responseContracts["changeSeat"])
     .mutation(async ({ input, ctx }) => {
       // Verify the authenticated user owns this booking
-      await verifyBookingOwnership(input.bookingId, ctx.user.id);
+      await verifyBookingOwnership(input.bookingId, ctx.user.id, ctx.tenantId);
 
       return await seatMapService.changeSeat(
         input.flightId,
         input.oldSeatNumber,
         input.newSeatNumber,
         input.bookingId,
-        input.passengerId
+        input.passengerId,
+        ctx.user.id
       );
     }),
 
@@ -366,7 +378,7 @@ export const seatMapRouter = router({
     .output(responseContracts["getPassengerSeat"])
     .query(async ({ input, ctx }) => {
       // Verify the authenticated user owns this booking
-      await verifyBookingOwnership(input.bookingId, ctx.user.id);
+      await verifyBookingOwnership(input.bookingId, ctx.user.id, ctx.tenantId);
 
       return await seatMapService.getPassengerSeat(
         input.bookingId,
@@ -440,13 +452,14 @@ export const seatMapRouter = router({
     .output(responseContracts["checkIn"])
     .mutation(async ({ input, ctx }) => {
       // Verify the authenticated user owns this booking
-      await verifyBookingOwnership(input.bookingId, ctx.user.id);
+      await verifyBookingOwnership(input.bookingId, ctx.user.id, ctx.tenantId);
 
       return await seatMapService.checkIn(
         input.flightId,
         input.bookingId,
         input.passengerId,
-        input.seatNumber
+        input.seatNumber,
+        { userId: ctx.user.id, tenantId: ctx.tenantId }
       );
     }),
 
@@ -515,12 +528,12 @@ export const seatMapRouter = router({
         });
       }
 
-      await verifyBookingOwnership(seat.bookingId, ctx.user.id);
+      await verifyBookingOwnership(seat.bookingId, ctx.user.id, ctx.tenantId);
 
       return await seatMapService.generateBoardingPass(
         input.flightId,
         input.passengerId,
-        { userId: ctx.user.id, role: ctx.user.role, tenantId: ctx.tenantId }
+        { userId: ctx.user.id, tenantId: ctx.tenantId }
       );
     }),
 

@@ -6,7 +6,10 @@ import type Stripe from "stripe";
 import { bookings, paymentReceipts, paymentSplits } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { stripe } from "../stripe";
-import { assertNoActiveCheckout } from "./booking-checkout.service";
+import {
+  assertNoActiveCheckout,
+  lockPurchaserBooking,
+} from "./booking-checkout.service";
 import {
   assertNoCollectionReview,
   type SettlementTx,
@@ -43,6 +46,19 @@ async function lockBooking(tx: SettlementTx, bookingId: number) {
   if (!booking) throw notFound();
   return booking;
 }
+/** Booking-first management authority shared by cancellation and payer notifications. */
+export async function lockSplitManagementBooking(
+  tx: SettlementTx,
+  bookingId: number,
+  actor: SplitActor
+) {
+  if (!actor) throw notFound();
+  const booking = isAdmin(actor.role)
+    ? await lockBooking(tx, bookingId)
+    : await lockPurchaserBooking(tx, bookingId, actor.id);
+  if (booking.deletedAt) throw notFound();
+  return booking;
+}
 async function lockSplits(tx: SettlementTx, bookingId: number) {
   return await tx
     .select()
@@ -50,10 +66,6 @@ async function lockSplits(tx: SettlementTx, bookingId: number) {
     .where(eq(paymentSplits.bookingId, bookingId))
     .orderBy(paymentSplits.id)
     .for("update");
-}
-function assertOwner(booking: Booking, actor: SplitActor) {
-  if (!actor || (!isAdmin(actor.role) && actor.id !== booking.userId))
-    throw notFound();
 }
 function claimFor(split: Split): SplitCheckoutClaim {
   if (
@@ -349,8 +361,11 @@ export async function cancelPaymentSplits(
   const db = getDb();
   if (!db) throw unavailable("Database unavailable");
   async function snapshot(tx: SettlementTx) {
-    const booking = await lockBooking(tx, target.bookingId);
-    assertOwner(booking, actor);
+    const booking = await lockSplitManagementBooking(
+      tx,
+      target.bookingId,
+      actor
+    );
     await assertNoCollectionReview(tx, booking.id);
     const all = await lockSplits(tx, booking.id);
     if (all.some(s => s.status === "paid" || s.stripePaymentIntentId))

@@ -1,9 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { and, eq, desc, isNull } from "drizzle-orm";
 import { getDb } from "../db";
+import { lockBookingUserTenants } from "./access-control.service";
+import { isAdmin } from "./rbac.service";
 import {
   baggageItems,
   baggageTracking,
+  bookings,
   passengers,
   type BaggageItem,
   type BaggageTracking,
@@ -295,12 +298,15 @@ export async function getBookingBaggage(
 /**
  * Report baggage as lost
  */
-export async function reportLostBaggage(data: {
-  tagNumber: string;
-  description: string;
-  contactEmail?: string;
-  contactPhone?: string;
-}): Promise<{ success: boolean; baggage: BaggageItem }> {
+export async function reportLostBaggage(
+  data: {
+    tagNumber: string;
+    description: string;
+    contactEmail?: string;
+    contactPhone?: string;
+  },
+  actor: { id: number; role: string }
+): Promise<{ success: boolean; baggage: BaggageItem }> {
   const database = await getDb();
   if (!database)
     throw new TRPCError({
@@ -308,13 +314,35 @@ export async function reportLostBaggage(data: {
       message: "Database not available",
     });
 
+  // Resolve the parent without locking the bag before its booking. All
+  // authorization and state used for the write is re-read in the transaction.
+  const initial = await getBaggageByTag(data.tagNumber);
+  if (!initial)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Baggage not found" });
   return database.transaction(async db => {
-    // Find baggage by tag number
+    const [booking] = await db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, initial.bookingId))
+      .for("update");
+    if (
+      !booking ||
+      (!isAdmin(actor.role) &&
+        (booking.userId !== actor.id || booking.deletedAt))
+    )
+      throw new TRPCError({ code: "NOT_FOUND", message: "Baggage not found" });
+    if (!isAdmin(actor.role))
+      await lockBookingUserTenants(db, booking.tenantId, [actor.id]);
     const [baggage] = await db
       .select()
       .from(baggageItems)
-      .where(eq(baggageItems.tagNumber, data.tagNumber))
-      .limit(1);
+      .where(
+        and(
+          eq(baggageItems.id, initial.id),
+          eq(baggageItems.bookingId, booking.id)
+        )
+      )
+      .for("update");
 
     if (!baggage) {
       throw new TRPCError({

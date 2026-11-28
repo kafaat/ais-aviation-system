@@ -11,9 +11,12 @@ vi.mock("../db", () => ({ getDb: () => fixture.db }));
 
 function seed(status = "checked_in", returned = false) {
   fixture = transactionMemory({
+    users: [{ id: 4, tenantId: 3 }],
+    bookings: [{ id: 1, userId: 4, tenantId: 3 }],
     baggage_items: [
       {
         id: 1,
+        bookingId: 1,
         tagNumber: "0650000001",
         status,
         lastLocation: "Counter",
@@ -45,7 +48,10 @@ describe("tracking state and custody history commit together", () => {
       before: "checked_in",
       after: "lost",
       run: () =>
-        reportLostBaggage({ tagNumber: "0650000001", description: "Missing" }),
+        reportLostBaggage(
+          { tagNumber: "0650000001", description: "Missing" },
+          { id: 4, role: "user" }
+        ),
     },
     {
       name: "found report",

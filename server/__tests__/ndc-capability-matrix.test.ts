@@ -283,6 +283,10 @@ describe("servicing gates", () => {
   beforeEach(() => {
     fixture = transactionMemory({
       tenants: [{ id: 3, status: "active" }],
+      users: [
+        { id: 1, tenantId: 3 },
+        { id: 9, tenantId: 3 },
+      ],
       airlines: [{ id: 2, code: "SV" }],
       flights: [
         {
@@ -387,6 +391,10 @@ describe("servicing gates", () => {
   it("blocks a paid itinerary exchange quote when the matrix withdraws voluntary change", async () => {
     const memory = transactionMemory({
       tenants: [{ id: 3, status: "active" }],
+      users: [
+        { id: 1, tenantId: 3 },
+        { id: 9, tenantId: 3 },
+      ],
       airlines: [{ id: 2, code: "SV" }],
       flights: [],
       bookings: [booking],
@@ -444,6 +452,10 @@ describe("servicing gates", () => {
     ) =>
       transactionMemory({
         tenants: [{ id: 3, status: "active" }],
+        users: [
+          { id: 1, tenantId: 3 },
+          { id: 9, tenantId: 3 },
+        ],
         airlines: [{ id: 2, code: "SV" }],
         flights: [{ id: 11, tenantId: 3, airlineId: 2, departureTime: future }],
         bookings: [pending],

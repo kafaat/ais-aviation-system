@@ -1,6 +1,7 @@
 import { createInventoryLock } from "../inventory-lock.service";
 import type { SettlementTx } from "../booking-settlement.service";
 import {
+  lockPurchaserFlight,
   countActiveHolds,
   withInventoryTransaction,
 } from "../inventory-capacity.service";
@@ -137,27 +138,6 @@ function assertFlightVisible<T extends { tenantId: number | null }>(
   return flight;
 }
 
-/** Writers serialize on the flight row before counting or creating holds. */
-async function lockFlight(
-  tx: SettlementTx,
-  flightId: number,
-  tenantId?: number | null
-) {
-  const [flight] = await tx
-    .select({
-      tenantId: flights.tenantId,
-      status: flights.status,
-      departureTime: flights.departureTime,
-      economyAvailable: flights.economyAvailable,
-      businessAvailable: flights.businessAvailable,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .for("update")
-    .limit(1);
-  return assertFlightVisible(flight, tenantId);
-}
-
 /**
  * Seats one user currently holds on a flight, across cabins: canonical
  * inventory locks (seat holds, checkout locks, waitlist offers) plus legacy
@@ -211,7 +191,10 @@ async function assertCanJoinWaitlist(
   userId: number,
   tenantId?: number | null
 ): Promise<void> {
-  const flight = await lockFlight(tx, flightId, tenantId);
+  const flight = assertFlightVisible(
+    await lockPurchaserFlight(tx, flightId, userId),
+    tenantId
+  );
   if (
     !["scheduled", "delayed"].includes(flight.status) ||
     flight.departureTime <= new Date()
@@ -459,7 +442,7 @@ async function createSeatHold(
   }
 
   const create = async (tx: SettlementTx) => {
-    await lockFlight(tx, flightId);
+    await lockPurchaserFlight(tx, flightId, userId);
     const alreadyHeld = await countUserHeldSeats(tx, flightId, userId);
     if (alreadyHeld + seats > MAX_SEATS_PER_BOOKING) {
       throw new TRPCError({
@@ -516,27 +499,33 @@ export async function releaseSeatHold(
   }
 
   const hold = await database.transaction(async database => {
-    // Get hold details before releasing
+    const [candidate] = await database
+      .select({ flightId: seatHolds.flightId })
+      .from(seatHolds)
+      .where(and(eq(seatHolds.id, holdId), eq(seatHolds.userId, userId)))
+      .limit(1);
+    if (!candidate)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Seat hold not found",
+      });
+    await lockPurchaserFlight(database, candidate.flightId, userId);
     const [hold] = await database
       .select()
       .from(seatHolds)
-      .where(eq(seatHolds.id, holdId))
-      .limit(1)
+      .where(
+        and(
+          eq(seatHolds.id, holdId),
+          eq(seatHolds.userId, userId),
+          eq(seatHolds.flightId, candidate.flightId)
+        )
+      )
       .for("update");
-
-    if (!hold) {
+    if (!hold)
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Seat hold not found",
       });
-    }
-
-    if (hold.userId !== userId) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Seat hold not found",
-      });
-    }
 
     if (hold.status === "released") return hold;
 

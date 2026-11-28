@@ -58,7 +58,10 @@ const seatRow = () =>
 beforeEach(() => {
   serial = 0;
   fixture = transactionMemory({
-    users: [{ id: actor.userId, tenantId: actor.tenantId, role: "ops" }],
+    users: [
+      { id: actor.userId, tenantId: actor.tenantId, role: "ops" },
+      { id: 7, tenantId: 1, role: "user" },
+    ],
     tenants: [
       { id: 1, status: "active" },
       { id: 2, status: "active" },

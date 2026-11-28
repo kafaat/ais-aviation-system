@@ -136,6 +136,7 @@ describe("waitlist admission integrity", () => {
     "rejects a second admission while %s",
     async status => {
       const f = transactionMemory({
+        users: [{ id: 1, tenantId: null }],
         flights: [{ id: 1, economyAvailable: 0 }],
         waitlist: [
           {
@@ -157,6 +158,7 @@ describe("waitlist admission integrity", () => {
   );
   it("allows readmission after cancellation and locks the flight before allocating priority", async () => {
     const f = transactionMemory({
+      users: [{ id: 1, tenantId: null }],
       flights: [{ id: 1, economyAvailable: 0 }],
       waitlist: [
         {
@@ -173,7 +175,7 @@ describe("waitlist admission integrity", () => {
     expect(await addToWaitlist(1, 1, 1, "economy")).toMatchObject({
       position: 4,
     });
-    expect(f.lockedTables[0]).toBe("flights");
+    expect(f.lockedTables.slice(0, 2)).toEqual(["users", "flights"]);
     expect(f.rows("waitlist")).toHaveLength(2);
   });
 });

@@ -116,6 +116,10 @@ jobs:
           server/__tests__/auth-session-mysql.test.ts
           server/__tests__/identity-integrity-mysql.test.ts
           server/__tests__/runtime-integrity-mysql.test.ts
+          server/__tests__/forensic-financial-integrity-mysql.test.ts
+          server/__tests__/ai-chat-concurrency-mysql.test.ts
+          server/__tests__/ai-chat-turns-mysql.test.ts
+          server/__tests__/chat-turn-preflight-mysql.test.ts
           server/__tests__/operations-review-mysql.test.ts
           server/__tests__/request-identity-oauth-mysql.test.ts
           server/__tests__/flight-consumers-mysql.test.ts
@@ -326,6 +330,7 @@ jobs:
             k8s/base/deployment.yaml
             scripts/smoke-tests.sh
             scripts/e2e-critical.sh
+            scripts/ci/deployment-probes.py
             .github/workflows/ci-cd.yml
           )
           for file in "${probe_files[@]}"; do
@@ -342,10 +347,7 @@ jobs:
           test "$(grep -c 'path: /api/trpc/health.ready' k8s/base/deployment.yaml)" -eq 1
           grep -q 'prometheus.io/path: "/api/metrics"' k8s/base/deployment.yaml
 
-          grep -q '/api/trpc/health.live' scripts/smoke-tests.sh
-          grep -q '/api/trpc/health.ready' scripts/smoke-tests.sh
-          grep -q '/api/trpc/health.live' scripts/e2e-critical.sh
-          grep -q '/api/trpc/health.ready' scripts/e2e-critical.sh
+          python3 -m unittest discover -s scripts/ci -p 'test_deployment_probes.py' -v
 
           grep -q '/api/trpc/health.live' .github/workflows/ci-cd.yml
 

@@ -672,6 +672,32 @@ jobs:
           AIS_DISPOSABLE_DATABASE: true
         run: pnpm exec playwright test e2e/ci-smoke.spec.ts e2e/hardening-journeys.spec.ts e2e/agency-owner.spec.ts e2e/vrs-report-exports.spec.ts e2e/standard-reports.spec.ts e2e/vrs-kiosk-tags.spec.ts e2e/extra-seat.spec.ts e2e/agency-commissions.spec.ts e2e/multi-city-fare.spec.ts e2e/vrs-baggage-admission.spec.ts e2e/agency-credit.spec.ts e2e/local-ticket-revalidation.spec.ts e2e/payer-terminal-acceptance.spec.ts e2e/auth-recovery-acceptance.spec.ts e2e/booking-dialog-acceptance.spec.ts e2e/ui-service-connectivity.spec.ts e2e/forensic-consumers.spec.ts --project=chromium
 
+      # Chat acceptance uses the real UI/API/MySQL with no external model key.
+      # Its independent session/Redis/report phase preserves the existing
+      # funded journeys and proves deterministic fallback and admission errors.
+      - name: Run isolated AI chat acceptance
+        env:
+          BAGGAGE_AIRLINE_NUMERIC_CODE: "123"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+          REDIS_URL: redis://127.0.0.1:6379/8
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+          VITE_APP_ID: ais-aviation-system-test
+          OAUTH_SERVER_URL: http://localhost:3000
+          OWNER_OPEN_ID: test-owner-open-id
+          BUILT_IN_FORGE_API_KEY: ""
+          AUTH_SERVICE_URL: http://localhost:8000
+          AUTH_SERVICE_TOKEN: ci-auth-service-token-only-for-tests-not-a-deployment-key
+          CI: true
+          E2E_BASE_URL: http://localhost:3000
+          AIS_DISPOSABLE_DATABASE: true
+          AIS_E2E_SESSION_ACCOUNTS: regular,reporting
+          AIS_E2E_REPORT_DIR: test-results/ai-chat
+          AIS_E2E_HTML_REPORT_DIR: playwright-report/ai-chat
+        run: pnpm exec playwright test e2e/ai-route-acceptance.spec.ts e2e/ai-chat-admission.spec.ts --project=chromium --workers=1 --retries=0
+
       # Logout must revoke a real session without invalidating the shared
       # sessions used by the funded journeys. A fresh app and owned Redis DB
       # retain the production login quota for this independent phase.
@@ -820,14 +846,13 @@ jobs:
         run: |
           echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f test-results/results.json ]; then
-            REPORTS=(test-results/results.json)
-            if [ -f test-results/auth-logout/results.json ]; then
-              REPORTS+=(test-results/auth-logout/results.json)
+          REPORTS=()
+          for report in test-results/results.json test-results/ai-chat/results.json test-results/auth-logout/results.json test-results/auth-login/results.json test-results/auth-register/results.json test-results/ui05/results.json; do
+            if [ -f "$report" ]; then
+              REPORTS+=("$report")
             fi
-            if [ -f test-results/ui05/results.json ]; then
-              REPORTS+=(test-results/ui05/results.json)
-            fi
+          done
+          if [ "${#REPORTS[@]}" -gt 0 ]; then
             TOTAL=$(jq -sr '[.[] | (.stats.expected // 0), (.stats.unexpected // 0), (.stats.flaky // 0), (.stats.skipped // 0)] | add' "${REPORTS[@]}")
             PASSED=$(jq -sr '[.[] | .stats.expected // 0] | add' "${REPORTS[@]}")
             FAILED=$(jq -sr '[.[] | .stats.unexpected // 0] | add' "${REPORTS[@]}")
@@ -1106,6 +1131,10 @@ jobs:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
           CSRF_SECRET: ${{ secrets.STAGING_CSRF_SECRET }}
+          AUTH_SERVICE_TOKEN: ${{ secrets.STAGING_AUTH_SERVICE_TOKEN }}
+          METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+          FRONTEND_URL: ${{ vars.STAGING_URL }}
+          TRUSTED_PROXIES: ${{ vars.TRUSTED_PROXIES }}
           AUTH_SERVICE_URL: "http://ais-auth:8000"
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ vars.EMAIL_FROM }}
@@ -1308,6 +1337,10 @@ jobs:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
           JWT_SECRET: ${{ secrets.PRODUCTION_JWT_SECRET }}
           CSRF_SECRET: ${{ secrets.PRODUCTION_CSRF_SECRET }}
+          AUTH_SERVICE_TOKEN: ${{ secrets.PRODUCTION_AUTH_SERVICE_TOKEN }}
+          METRICS_TOKEN: ${{ secrets.PRODUCTION_METRICS_TOKEN }}
+          FRONTEND_URL: ${{ vars.PRODUCTION_URL }}
+          TRUSTED_PROXIES: ${{ vars.TRUSTED_PROXIES }}
           AUTH_SERVICE_URL: "http://ais-auth:8000"
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ vars.EMAIL_FROM }}

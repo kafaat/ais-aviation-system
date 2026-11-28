@@ -13,11 +13,12 @@ import {
   getEmdsByBooking,
   getEmdStatistics,
 } from "../services/emd.service";
-import { getDb } from "../db";
-import { bookings } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
 import { isAdmin } from "../services/rbac.service";
-import { isBookingOwnedBy } from "../services/access-control.service";
+import {
+  assertBookingOwnership,
+  isBookingOwnedBy,
+  purchaserScope,
+} from "../services/access-control.service";
 
 // ============================================================================
 // Shared Zod Schemas
@@ -121,7 +122,11 @@ export const emdRouter = router({
         !emd ||
         (!isAdmin(ctx.user.role) &&
           (emd.bookingId === null ||
-            !(await isBookingOwnedBy(emd.bookingId, ctx.user.id))))
+            !(await isBookingOwnedBy(
+              emd.bookingId,
+              ctx.user.id,
+              ctx.tenantId
+            ))))
       ) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -271,38 +276,12 @@ export const emdRouter = router({
     )
     .output(responseContracts["getByBooking"])
     .query(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-      }
-
-      // Verify booking ownership
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      if (
-        booking.userId !== ctx.user.id &&
-        ctx.user.role !== "admin" &&
-        ctx.user.role !== "super_admin"
-      ) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
+      await assertBookingOwnership(
+        input.bookingId,
+        ctx.user.id,
+        ctx.user.role,
+        purchaserScope(ctx.tenantId)
+      );
 
       const items = await getEmdsByBooking(input.bookingId);
       return {

@@ -1,3 +1,4 @@
+import { lockBookingUserTenants } from "./access-control.service";
 import { TRPCError } from "@trpc/server";
 import { localDocumentCoupons } from "./ticket-coupons.service";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -50,6 +51,8 @@ export async function readTicketDocument(
     // NOT_FOUND, never a server fault.
     if (!booking || (userId !== undefined && booking.userId !== userId))
       throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    if (userId !== undefined)
+      await lockBookingUserTenants(tx, booking.tenantId, [userId]);
     if (
       !["confirmed", "completed"].includes(booking.status) ||
       booking.paymentStatus !== "paid"

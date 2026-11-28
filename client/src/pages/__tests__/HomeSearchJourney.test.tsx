@@ -7,6 +7,8 @@ const calls = vi.hoisted(() => ({
   navigate: vi.fn(),
   search: "origin=1&destination=2&date=2027-01-15",
   historyDate: "2027-01-15",
+  historyParty: undefined as
+    { adults: number; children: number; infants: number } | undefined,
 }));
 vi.mock("wouter", async original => ({
   ...(await original<typeof import("wouter")>()),
@@ -41,6 +43,8 @@ vi.mock("@/components/SearchHistory", () => ({
       originCode: string;
       destinationCode: string;
       departureDate: string;
+      passengers: number;
+      party?: { adults: number; children: number; infants: number };
     }) => void;
   }) => (
     <button
@@ -50,6 +54,8 @@ vi.mock("@/components/SearchHistory", () => ({
           originCode: "RUH",
           destinationCode: "JED",
           departureDate: calls.historyDate,
+          passengers: 4,
+          party: calls.historyParty,
         })
       }
     >
@@ -85,6 +91,7 @@ beforeEach(() => {
   calls.navigate.mockReset();
   calls.search = "origin=1&destination=2&date=2027-01-15";
   calls.historyDate = "2027-01-15";
+  calls.historyParty = undefined;
 });
 it.each(["2027-01-15", "2027-01-15T12:00:00.000Z"])(
   "replays the saved day %s through the home form without a UTC shift",
@@ -196,3 +203,23 @@ it("does not search with a party larger than the booking contract supports", () 
   expect(screen.getByTestId("home-search-button")).toBeDisabled();
   expect(screen.getByRole("alert")).toHaveTextContent("ibe.passengerLimit");
 });
+
+it.each([
+  {
+    saved: { adults: 2, children: 1, infants: 1 },
+    expected: { adults: "2", children: "1", infants: "1" },
+  },
+  { saved: undefined, expected: { adults: "4", children: "0", infants: "0" } },
+])(
+  "restores the stored party composition or legacy count from history",
+  ({ saved, expected }) => {
+    calls.historyParty = saved;
+    render(<Home />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Replay saved search" })
+    );
+    fireEvent.click(screen.getByTestId("home-search-button"));
+    const url = new URL(calls.navigate.mock.calls[0][0], "https://ais.test");
+    expect(Object.fromEntries(url.searchParams)).toMatchObject(expected);
+  }
+);

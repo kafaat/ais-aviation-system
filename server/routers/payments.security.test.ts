@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   updateBookingStatus: vi.fn(),
   auditPayment: vi.fn(),
   checkout: vi.fn(),
+  retrieve: vi.fn(),
   providerCheckout: vi.fn(),
   limit: vi.fn(),
 }));
@@ -26,7 +27,11 @@ vi.mock("../db", () => ({
   updateBookingStatus: mocks.updateBookingStatus,
 }));
 vi.mock("../stripe", () => ({
-  stripe: { checkout: { sessions: { create: mocks.checkout } } },
+  stripe: {
+    checkout: {
+      sessions: { create: mocks.checkout, retrieve: mocks.retrieve },
+    },
+  },
 }));
 vi.mock("../services/audit.service", () => ({
   auditPayment: mocks.auditPayment,
@@ -79,7 +84,10 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.getBookingByIdWithDetails.mockResolvedValue(booking);
   mocks.createPayment.mockResolvedValue([{ insertId: 99 }]);
-  fixture = transactionMemory({ bookings: [booking] });
+  fixture = transactionMemory({
+    users: [{ id: 1, tenantId: null }],
+    bookings: [booking],
+  });
   mocks.getDb.mockReturnValue(fixture.db);
   mocks.checkout.mockImplementation(async (request: any) => ({
     id: "cs_test_owner",
@@ -139,6 +147,42 @@ describe("payment authority boundary", () => {
     expectNoPaymentSideEffects();
   });
 
+  it.each(["booking", "split"])(
+    "refuses a former-tenant %s session before querying the provider",
+    async rail => {
+      const caller = context();
+      caller.tenantId = 7;
+      caller.user!.tenantId = 7;
+      mocks.retrieve.mockResolvedValue({
+        payment_status: "paid",
+        customer_email: "owner@example.test",
+      });
+      fixture = transactionMemory({
+        bookings: [
+          {
+            ...booking,
+            tenantId: 3,
+            stripeCheckoutSessionId:
+              rail === "booking" ? "cs_test_owner" : null,
+          },
+        ],
+        payment_splits: [
+          {
+            id: 4,
+            bookingId: 10,
+            stripeCheckoutSessionId: rail === "split" ? "cs_test_owner" : null,
+          },
+        ],
+      });
+      mocks.getDb.mockReturnValue(fixture.db);
+      await expect(
+        paymentsRouter
+          .createCaller(caller)
+          .verifySession({ sessionId: "cs_test_owner" })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(mocks.retrieve).not.toHaveBeenCalled();
+    }
+  );
   it("creates Stripe checkout from the stored total without settling the booking", async () => {
     const result = await paymentsRouter
       .createCaller(context())
@@ -160,6 +204,7 @@ describe("payment authority boundary", () => {
   });
   it("blocks another checkout while verified funds await review", async () => {
     fixture = transactionMemory({
+      users: [{ id: 1, tenantId: null }],
       bookings: [booking],
       payment_receipts: [
         {

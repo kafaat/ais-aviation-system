@@ -127,6 +127,17 @@ describe("compensation read authority over stored claim rows", () => {
     fixture.close();
   });
 
+  it("conceals a former airline's claims in detail and list views", async () => {
+    fixture.sqlite.exec(
+      "UPDATE bookings SET tenantId = CASE WHEN id=1 THEN 3 ELSE 4 END"
+    );
+    expect((await getClaimsByUser(7, 4)).map(row => row.id)).toEqual([103]);
+    await expect(getClaimById(101, 7, 4)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(getClaimById(103, 7, 4)).resolves.toMatchObject({ id: 103 });
+  });
+
   it("returns only an owner's claims across their bookings, including historical bookings", async () => {
     expect((await getClaimsByUser(7)).map(claim => claim.id)).toEqual([
       105, 103, 102, 101,

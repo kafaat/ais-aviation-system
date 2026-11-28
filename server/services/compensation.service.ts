@@ -12,7 +12,8 @@ import {
   passengers,
   compensationClaims,
 } from "../../drizzle/schema";
-import { eq, sql, type SQL } from "drizzle-orm";
+import { purchaserBookingCondition } from "./access-control.service";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 
 // ============================================================================
 // API types for the migrated compensation tables
@@ -398,6 +399,7 @@ export async function createClaim(input: {
   claimType: "delay" | "cancellation" | "denied_boarding" | "downgrade";
   reason?: string;
   userId: number;
+  tenantId?: number | null;
 }): Promise<CompensationClaim> {
   const db = await getDb();
   if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
@@ -409,12 +411,20 @@ export async function createClaim(input: {
       input.bookingId,
       input.userId,
       input.flightId,
-      tx
+      tx,
+      input.tenantId
     );
     const travellers = await tx
       .select({ id: passengers.id })
       .from(passengers)
-      .where(eq(passengers.bookingId, input.bookingId));
+      .where(
+        and(
+          eq(passengers.bookingId, input.bookingId),
+          input.tenantId == null
+            ? undefined
+            : eq(passengers.tenantId, input.tenantId)
+        )
+      );
     if (
       input.passengerId !== undefined &&
       !travellers.some(p => p.id === input.passengerId)
@@ -617,7 +627,8 @@ export async function processClaim(input: {
  */
 export async function getClaimsByBooking(
   bookingId: number,
-  userId?: number
+  userId?: number,
+  tenantId?: number | null
 ): Promise<CompensationClaim[]> {
   const db = await getDb();
   if (!db)
@@ -631,7 +642,12 @@ export async function getClaimsByBooking(
     const [booking] = await db
       .select({ id: bookings.id, userId: bookings.userId })
       .from(bookings)
-      .where(eq(bookings.id, bookingId))
+      .where(
+        and(
+          eq(bookings.id, bookingId),
+          purchaserBookingCondition(userId, tenantId)
+        )
+      )
       .limit(1);
 
     if (!booking) {
@@ -682,7 +698,8 @@ export async function getClaimsByFlight(
  */
 export async function getClaimById(
   claimId: number,
-  userId?: number
+  userId?: number,
+  tenantId?: number | null
 ): Promise<CompensationClaim> {
   const db = await getDb();
   if (!db)
@@ -711,7 +728,12 @@ export async function getClaimById(
     const [booking] = await db
       .select({ userId: bookings.userId })
       .from(bookings)
-      .where(eq(bookings.id, claim.bookingId as number))
+      .where(
+        and(
+          eq(bookings.id, claim.bookingId as number),
+          purchaserBookingCondition(userId, tenantId)
+        )
+      )
       .limit(1);
 
     if (!booking || booking.userId !== userId) {
@@ -814,12 +836,15 @@ export async function autoAssessEligibility(
   bookingId: number,
   _disruptionType: "delay" | "cancellation" | "denied_boarding" | "downgrade",
   userId: number,
-  requestedFlightId?: number
+  requestedFlightId?: number,
+  tenantId?: number | null
 ) {
   const flightId = await resolveClaimFlight(
     bookingId,
     userId,
-    requestedFlightId
+    requestedFlightId,
+    undefined,
+    tenantId
   );
   return {
     eligible: null,
@@ -902,7 +927,8 @@ export async function getAllClaims(input: {
  * Get claims filed by a specific user
  */
 export async function getClaimsByUser(
-  userId: number
+  userId: number,
+  tenantId?: number | null
 ): Promise<CompensationClaim[]> {
   const db = await getDb();
   if (!db)
@@ -915,7 +941,7 @@ export async function getClaimsByUser(
   const userBookings = await db
     .select({ id: bookings.id })
     .from(bookings)
-    .where(eq(bookings.userId, userId));
+    .where(purchaserBookingCondition(userId, tenantId));
 
   if (userBookings.length === 0) return [];
 

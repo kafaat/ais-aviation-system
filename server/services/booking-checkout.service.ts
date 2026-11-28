@@ -1,3 +1,4 @@
+import { lockBookingUserTenants } from "./access-control.service";
 import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
@@ -76,7 +77,10 @@ export async function assertNoActiveCheckout(
       "Expire or reconcile the active checkout before another payment workflow"
     );
 }
-async function ownedBooking(
+/** Booking first, then its current purchaser. Reassignment and an invoice
+ * command serialize on the user row, including replays of completed commands.
+ * A purchaser without an airline assignment may buy across airlines. */
+export async function lockPurchaserBooking(
   tx: SettlementTx,
   bookingId: number,
   userId: number
@@ -91,6 +95,7 @@ async function ownedBooking(
       code: "NOT_FOUND",
       message: "Owned booking not found",
     });
+  await lockBookingUserTenants(tx, booking.tenantId, [userId]);
   return booking;
 }
 async function assertPendingInvoice(tx: SettlementTx, booking: Booking) {
@@ -108,7 +113,7 @@ async function ownedPending(
   bookingId: number,
   userId: number
 ) {
-  const booking = await ownedBooking(tx, bookingId, userId);
+  const booking = await lockPurchaserBooking(tx, bookingId, userId);
   await assertPendingInvoice(tx, booking);
   return booking;
 }
@@ -258,7 +263,7 @@ export async function getBookingCheckoutState(
   const db = getDb();
   if (!db) throw unavailable("Database unavailable");
   return await db.transaction(async tx => {
-    const booking = await ownedBooking(tx, bookingId, userId);
+    const booking = await lockPurchaserBooking(tx, bookingId, userId);
     const [usage] = await tx
       .select()
       .from(voucherUsage)

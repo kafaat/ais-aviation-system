@@ -9,12 +9,11 @@ import { getDb } from "../db";
 import {
   wallets,
   walletTransactions,
-  bookings,
   financialLedger,
-  users,
 } from "../../drizzle/schema";
 import { stripe } from "../stripe";
 import {
+  lockPurchaserBooking,
   assertNoActiveCheckout,
   assertNoActiveSplitPayment,
 } from "./booking-checkout.service";
@@ -179,14 +178,7 @@ export async function payFromWallet(
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   return db.transaction(async tx => {
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
-      .limit(1)
-      .for("update");
-    if (!booking)
-      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    const booking = await lockPurchaserBooking(tx, bookingId, userId);
     const [existing] = await tx
       .select()
       .from(walletTransactions)
@@ -220,14 +212,6 @@ export async function payFromWallet(
     const amount = booking.totalAmount;
     if (!Number.isSafeInteger(amount) || amount <= 0)
       throw new Error("Invalid booking amount");
-    // Internal refunds lock the same owner before inventory and then the
-    // wallet. Serialize this owner's funding before taking the wallet so a
-    // refund for another booking cannot invert the wallet/inventory locks.
-    await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.id, userId))
-      .for("update");
     const [wallet] = await tx
       .select()
       .from(wallets)

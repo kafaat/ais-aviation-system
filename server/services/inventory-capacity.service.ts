@@ -1,6 +1,12 @@
 import { and, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
-import { inventoryLocks, seatHolds } from "../../drizzle/schema";
+import { TRPCError } from "@trpc/server";
+import {
+  flights,
+  users,
+  inventoryLocks,
+  seatHolds,
+} from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
 
 /** Range locks on an absent child hold under REPEATABLE READ can cover another
@@ -17,6 +23,31 @@ export function withInventoryTransaction<T>(
   run: (tx: SettlementTx) => Promise<T>
 ): Promise<T> {
   return db.transaction(run, inventoryTransactionConfig);
+}
+
+/** Lock the buyer before the flight so a reassignment and inventory mutation serialize. */
+export async function lockPurchaserFlight(
+  tx: SettlementTx,
+  flightId: number,
+  userId: number
+) {
+  const [actor] = await tx
+    .select({ tenantId: users.tenantId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .for("update");
+  const [flight] = await tx
+    .select()
+    .from(flights)
+    .where(eq(flights.id, flightId))
+    .for("update");
+  if (
+    !actor ||
+    !flight ||
+    (actor.tenantId != null && actor.tenantId !== flight.tenantId)
+  )
+    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+  return flight;
 }
 
 function canonicalHoldCondition(

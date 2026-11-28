@@ -119,6 +119,7 @@ export const reviewsRouter = router({
     .output(responseContracts["getUserReviews"])
     .query(async ({ ctx, input }) => {
       return await reviewsService.getUserReviews(ctx.user.id, {
+        tenantId: ctx.tenantId,
         limit: input.limit,
         offset: input.offset,
       });
@@ -189,7 +190,8 @@ export const reviewsRouter = router({
     .query(async ({ ctx, input }) => {
       return await reviewsService.canUserReviewFlight(
         ctx.user.id,
-        input.flightId
+        input.flightId,
+        ctx.tenantId
       );
     }),
 });

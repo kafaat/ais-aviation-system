@@ -1150,94 +1150,129 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
     }
   });
 
-  it("waits for a competing booking owner transfer and reauthorizes the locked booking", async () => {
-    await adminSeats().initializeFlightSeats({ flightId: 41, seatMapId: 51 });
-    await seats().selectSeat({
-      flightId: 41,
-      seatNumber: "1A",
-      bookingId: 71,
-      passengerId: 81,
-    });
-    const beforeSeats = await db.select().from(schema.seatInventory);
-    const beforePassengers = await db.select().from(schema.passengers);
-    const connection = await pool!.getConnection();
-    const transfer = await pool!.getConnection();
-    const releaserDb = drizzle(connection, { schema, mode: "default" });
-    const gate = holdStatement(
-      connection,
-      /^select .* from `bookings`.* for update$/i
-    );
-    state.db = releaserDb;
-    const releasing = seats().releaseSeat({ flightId: 41, seatNumber: "1A" });
-    let settled = false;
-    const outcome = releasing.then(
-      value => {
-        settled = true;
-        return { value };
-      },
-      error => {
-        settled = true;
-        return { error };
+  it.each([
+    ["bookings", "release"],
+    ["users", "release"],
+    ["users", "issue"],
+    ["bookings", "pdf"],
+    ["bookings", "reader"],
+  ] as const)(
+    "waits for a competing transfer on %s and reauthorizes %s",
+    async (table, action) => {
+      if (action !== "release") await checkedInPassenger();
+      else {
+        await adminSeats().initializeFlightSeats({
+          flightId: 41,
+          seatMapId: 51,
+        });
+        await seats().selectSeat({
+          flightId: 41,
+          seatNumber: "1A",
+          bookingId: 71,
+          passengerId: 81,
+        });
       }
-    );
-    let nativeWait = false;
-    try {
-      await Promise.race([
-        gate.entered,
-        outcome.then(() => {
-          throw new Error(
-            "Seat release did not reach its booking-lock barrier"
-          );
-        }),
-      ]);
-      await transfer.beginTransaction();
-      await transfer.query(
-        "UPDATE bookings SET userId = ? WHERE id = ?",
-        [10, 71]
+      if (action === "pdf" || action === "reader")
+        await db
+          .update(schema.users)
+          .set({ role: "admin" })
+          .where(eq(schema.users.id, 9));
+      const beforeSeats = await db.select().from(schema.seatInventory);
+      const beforePassengers = await db.select().from(schema.passengers);
+      const connection = await pool!.getConnection();
+      const transfer = await pool!.getConnection();
+      const releaserDb = drizzle(connection, { schema, mode: "default" });
+      const gate = holdStatement(
+        connection,
+        table === "bookings"
+          ? /^select .* from `bookings`.* for update$/i
+          : /^select .* from `users`.* for update$/i
       );
-      gate.release();
+      state.db = releaserDb;
+      const key = { bookingId: 71, passengerId: 81, flightId: 41 };
+      const owningAdmin = context(9, 3, "admin");
+      const requests = {
+        pdf: () =>
+          eticketRouter.createCaller(owningAdmin).generateBoardingPass(key),
+        reader: () =>
+          seatMapRouter
+            .createCaller(owningAdmin)
+            .getBoardingPass({ passengerId: 81, flightId: 41 }),
+        issue: () => passes().issue(key),
+        release: () => seats().releaseSeat({ flightId: 41, seatNumber: "1A" }),
+      };
+      const releasing = requests[action]();
+      let settled = false;
+      const outcome = releasing.then(
+        value => {
+          settled = true;
+          return { value };
+        },
+        error => {
+          settled = true;
+          return { error };
+        }
+      );
+      let nativeWait = false;
+      try {
+        await Promise.race([
+          gate.entered,
+          outcome.then(() => {
+            throw new Error(
+              "Seat release did not reach its booking-lock barrier"
+            );
+          }),
+        ]);
+        await transfer.beginTransaction();
+        if (table === "bookings")
+          await transfer.query("UPDATE bookings SET userId=10 WHERE id=71");
+        else await transfer.query("UPDATE users SET tenantId=4 WHERE id=9");
+        gate.release();
 
-      const deadline = performance.now() + 5000;
-      while (!settled && performance.now() < deadline) {
-        const [waits] = await admin!.query<mysql.RowDataPacket[]>(
-          `SELECT COUNT(*) AS count
+        const deadline = performance.now() + 5000;
+        while (!settled && performance.now() < deadline) {
+          const [waits] = await admin!.query<mysql.RowDataPacket[]>(
+            `SELECT COUNT(*) AS count
            FROM performance_schema.data_lock_waits AS waits
            JOIN performance_schema.data_locks AS locks
              ON locks.ENGINE = waits.ENGINE
             AND locks.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID
-           WHERE locks.OBJECT_SCHEMA = ? AND locks.OBJECT_NAME = 'bookings'`,
-          [databaseName]
+           WHERE locks.OBJECT_SCHEMA = ? AND locks.OBJECT_NAME = ?`,
+            [databaseName, table]
+          );
+          nativeWait = Number(waits[0]?.count) > 0;
+          if (nativeWait) break;
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(nativeWait).toBe(true);
+        expect(settled).toBe(false);
+        await transfer.commit();
+        await expect(releasing).rejects.toMatchObject({ code: "NOT_FOUND" });
+        expect(await db.select().from(schema.seatInventory)).toEqual(
+          beforeSeats
         );
-        nativeWait = Number(waits[0]?.count) > 0;
-        if (nativeWait) break;
-        await new Promise(resolve => setTimeout(resolve, 10));
+        expect(await db.select().from(schema.passengers)).toEqual(
+          beforePassengers
+        );
+        expect(
+          (
+            await db
+              .select()
+              .from(schema.bookings)
+              .where(eq(schema.bookings.id, 71))
+          )[0].userId
+        ).toBe(table === "bookings" ? 10 : 9);
+      } finally {
+        gate.release();
+        await transfer.rollback();
+        await outcome;
+        gate.restore();
+        state.db = db;
+        connection.release();
+        transfer.release();
       }
-      expect(nativeWait).toBe(true);
-      expect(settled).toBe(false);
-      await transfer.commit();
-      await expect(releasing).rejects.toMatchObject({ code: "NOT_FOUND" });
-      expect(await db.select().from(schema.seatInventory)).toEqual(beforeSeats);
-      expect(await db.select().from(schema.passengers)).toEqual(
-        beforePassengers
-      );
-      expect(
-        (
-          await db
-            .select()
-            .from(schema.bookings)
-            .where(eq(schema.bookings.id, 71))
-        )[0].userId
-      ).toBe(10);
-    } finally {
-      gate.release();
-      await transfer.rollback();
-      await outcome;
-      gate.restore();
-      state.db = db;
-      connection.release();
-      transfer.release();
     }
-  });
+  );
 
   it("refuses cross-tenant seat release without clearing the native assignment", async () => {
     await adminSeats().initializeFlightSeats({ flightId: 41, seatMapId: 51 });
@@ -1370,6 +1405,31 @@ nativeDescribe("APIS and boarding documents on isolated native MySQL", () => {
       expect((await assignedSeat()).boardingPassIssued).toBe(false);
     }
   );
+
+  it("issues checked-in credentials to the actual unassigned purchaser on an airline booking", async () => {
+    await checkedInPassenger();
+    await db
+      .update(schema.users)
+      .set({ tenantId: null })
+      .where(eq(schema.users.id, 9));
+    const personal = boardingPassRouter.createCaller(context(9, null));
+    expect(
+      await personal.issue({ bookingId: 71, passengerId: 81, flightId: 41 })
+    ).toMatchObject({ token: expect.any(String), bcbp: expect.any(String) });
+    expect((await assignedSeat()).boardingPassIssued).toBe(true);
+  });
+
+  it("checks the current buyer before issuing credentials from an earlier request context", async () => {
+    await checkedInPassenger();
+    await db
+      .update(schema.users)
+      .set({ tenantId: 4 })
+      .where(eq(schema.users.id, 9));
+    await expect(
+      passes().issue({ bookingId: 71, passengerId: 81, flightId: 41 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await assignedSeat()).boardingPassIssued).toBe(false);
+  });
 
   it("rejects an absent airline context on an assigned booking", async () => {
     await checkedInPassenger();

@@ -27,6 +27,8 @@ import {
 import {
   quotePaidOrderService,
   confirmNoChargeService,
+  stationServicingAuthority,
+  stationServicingAcceptance,
 } from "../services/order-servicing.service";
 import {
   createOrderServiceCheckout,
@@ -43,6 +45,7 @@ beforeEach(() => {
     agent_bookings: [],
     corporate_bookings: [],
     tenants: [{ id: 3, status: "active" }],
+    users: [{ id: 1, tenantId: 3 }],
     bookings: [
       {
         id: 7,
@@ -241,6 +244,65 @@ const accepted = (q: { quoteVersion?: string; totalCost: number }) => ({
   currency: "SAR" as const,
 });
 describe("paid order servicing", () => {
+  it("keeps explicit tenant-scoped station authority separate from a reassigned purchaser", async () => {
+    fixture.rows("users")[0].tenantId = 4;
+    const booking = fixture.rows("bookings")[0];
+    const input = {
+      bookingId: 7,
+      idempotencyKey: "station-after-owner-move",
+      ancillaries: [{ ancillaryServiceId: 42, quantity: 1 }],
+    };
+    await expect(quotePaidOrderService(input, 1, 3)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(() =>
+      stationServicingAuthority(booking, {
+        userId: 19,
+        role: "user",
+        tenantId: 3,
+      })
+    ).toThrow("Station servicing authority required");
+    expect(() =>
+      stationServicingAuthority(booking, {
+        userId: 19,
+        role: "ops",
+        tenantId: 4,
+      })
+    ).toThrow("Station servicing authority required");
+    const authority = stationServicingAuthority(booking, {
+      userId: 19,
+      role: "ops",
+      tenantId: 3,
+    });
+    const quote = await fixture.db.transaction((tx: any) =>
+      quotePaidOrderService(input, 1, 3, tx, authority)
+    );
+    expect(quote.totalCost).toBe(0);
+    const change = fixture.rows("booking_modifications")[0];
+    await fixture.db.transaction((tx: any) =>
+      confirmNoChargeService(
+        quote.modificationId,
+        1,
+        3,
+        tx,
+        stationServicingAcceptance(change, {
+          actorId: 19,
+          reason: "Station recovery",
+          reference: "dcs-operation-event:17",
+          expectedRefund: 0,
+        }),
+        authority
+      )
+    );
+    expect(fixture.rows("booking_ancillaries")).toHaveLength(1);
+    expect(fixture.rows("booking_modifications")[0].status).toBe("completed");
+    expect(
+      fixture.rows("booking_modifications")[0].servicingPayload.consent
+        .acceptedBy
+    ).toMatchObject({ kind: "station_agent", actorId: 19 });
+    expect(boundary.checkout).not.toHaveBeenCalled();
+  });
+
   it("funds an explicitly scoped baggage snapshot only after collection", async () => {
     const quote = await quotePaidOrderService(
       {

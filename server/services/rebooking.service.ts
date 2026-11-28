@@ -1,4 +1,8 @@
 import { createBooking } from "./bookings.service";
+import { lockPurchaserBooking } from "./booking-checkout.service";
+import { purchaserBookingCondition } from "./access-control.service";
+import { withInventoryTransaction } from "./inventory-capacity.service";
+import type { SettlementTx } from "./booking-settlement.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -9,7 +13,7 @@ import {
   bookingAncillaries,
   ancillaryServices,
 } from "../../drizzle/schema";
-import { eq, and, gte, sql, inArray } from "drizzle-orm";
+import { eq, and, gte, sql, inArray, isNull } from "drizzle-orm";
 
 /**
  * Rebooking Service
@@ -23,6 +27,7 @@ export interface RebookPassenger {
   lastName: string;
   dateOfBirth: Date | null;
   passportNumber: string | null;
+  passportExpiry: Date | null;
   nationality: string | null;
 }
 
@@ -58,9 +63,11 @@ export interface RebookData {
  */
 export async function getRebookData(
   bookingId: number,
-  userId: number
+  userId: number,
+  tenantId?: number | null,
+  transaction?: SettlementTx
 ): Promise<RebookData> {
-  const database = await getDb();
+  const database = transaction ?? (await getDb());
   if (!database) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -79,7 +86,13 @@ export async function getRebookData(
       status: bookings.status,
     })
     .from(bookings)
-    .where(eq(bookings.id, bookingId))
+    .where(
+      and(
+        eq(bookings.id, bookingId),
+        purchaserBookingCondition(userId, tenantId),
+        isNull(bookings.deletedAt)
+      )
+    )
     .limit(1);
 
   if (bookingResult.length === 0) {
@@ -116,6 +129,7 @@ export async function getRebookData(
       lastName: passengers.lastName,
       dateOfBirth: passengers.dateOfBirth,
       passportNumber: passengers.passportNumber,
+      passportExpiry: passengers.passportExpiry,
       nationality: passengers.nationality,
     })
     .from(passengers)
@@ -180,6 +194,7 @@ export async function getRebookData(
       lastName: p.lastName,
       dateOfBirth: p.dateOfBirth,
       passportNumber: p.passportNumber,
+      passportExpiry: p.passportExpiry,
       nationality: p.nationality,
     })),
     ancillaries: ancillaryResult.map(a => ({
@@ -280,43 +295,51 @@ export async function quickRebook(
     });
   }
 
-  // Get original booking data
-  const rebookData = await getRebookData(bookingId, userId);
+  return withInventoryTransaction(database, async tx => {
+    // Keep authority over the source passenger records until their copy commits.
+    // A tenant reassignment and an idempotent create replay must pass this lock.
+    await lockPurchaserBooking(tx, bookingId, userId);
+    const rebookData = await getRebookData(bookingId, userId, tenantId, tx);
 
-  const result = await createBooking({
-    userId,
-    tenantId,
-    flightId: newFlightId,
-    cabinClass: rebookData.cabinClass,
-    sessionId: `rebook:${bookingId}:${newFlightId}`,
-    passengers: rebookData.passengers.map(p => ({
-      type: p.type,
-      firstName: p.firstName,
-      lastName: p.lastName,
-      title: p.title ?? undefined,
-      dateOfBirth: p.dateOfBirth ?? undefined,
-      passportNumber: p.passportNumber ?? undefined,
-      nationality: p.nationality ?? undefined,
-    })),
-    ancillaries: rebookData.ancillaries.map(a => ({
-      ancillaryServiceId: a.ancillaryServiceId,
-      quantity: a.quantity,
-      unitPrice: a.unitPrice,
-      totalPrice: a.totalPrice,
-    })),
+    const result = await createBooking(
+      {
+        userId,
+        tenantId,
+        flightId: newFlightId,
+        cabinClass: rebookData.cabinClass,
+        sessionId: `rebook:${bookingId}:${newFlightId}`,
+        passengers: rebookData.passengers.map(p => ({
+          type: p.type,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          title: p.title ?? undefined,
+          dateOfBirth: p.dateOfBirth ?? undefined,
+          passportNumber: p.passportNumber ?? undefined,
+          passportExpiry: p.passportExpiry ?? undefined,
+          nationality: p.nationality ?? undefined,
+        })),
+        ancillaries: rebookData.ancillaries.map(a => ({
+          ancillaryServiceId: a.ancillaryServiceId,
+          quantity: a.quantity,
+          unitPrice: a.unitPrice,
+          totalPrice: a.totalPrice,
+        })),
+      },
+      tx
+    );
+    const {
+      bookingId: newBookingId,
+      bookingReference,
+      pnr,
+      totalAmount,
+    } = result;
+
+    return {
+      newBookingId,
+      bookingReference,
+      pnr,
+      totalAmount,
+      passengers: rebookData.passengers.length,
+    };
   });
-  const {
-    bookingId: newBookingId,
-    bookingReference,
-    pnr,
-    totalAmount,
-  } = result;
-
-  return {
-    newBookingId,
-    bookingReference,
-    pnr,
-    totalAmount,
-    passengers: rebookData.passengers.length,
-  };
 }

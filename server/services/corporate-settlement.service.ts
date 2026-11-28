@@ -1,3 +1,4 @@
+import { lockBookingUserTenants } from "./access-control.service";
 import { and, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
@@ -58,6 +59,10 @@ export async function payCorporateInvoice(bookingId: number, actorId: number) {
       .where(eq(bookings.id, bookingId))
       .for("update");
     if (!booking) throw new TRPCError({ code: "NOT_FOUND" });
+    await lockBookingUserTenants(tx, booking.tenantId, [
+      booking.userId,
+      actorId,
+    ]);
     const [link] = await tx
       .select()
       .from(corporateBookings)

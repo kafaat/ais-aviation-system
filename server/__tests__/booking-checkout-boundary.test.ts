@@ -25,8 +25,9 @@ import {
   assertInvoiceEditable,
   getBookingCheckoutState,
 } from "../services/booking-checkout.service";
-import { applyVoucher } from "../services/voucher.service";
+import { applyVoucher, useCredit } from "../services/voucher.service";
 import { initiateSplitPayment } from "../services/split-payment.service";
+import { payCorporateInvoice } from "../services/corporate-settlement.service";
 import { payFromWallet } from "../services/wallet.service";
 let fixture: ReturnType<typeof transactionMemory>;
 const owner = {
@@ -77,6 +78,7 @@ beforeEach(() => {
         seatsReserved: false,
       },
     ],
+    users: [{ id: 9, tenantId: 3 }],
     tenants: [{ id: 3, status: "active" }],
     vouchers: [],
     wallets: [
@@ -97,6 +99,139 @@ beforeEach(() => {
   }));
 });
 describe("durable booking checkout", () => {
+  it("requires the corporate approver's current airline before discounting an invoice", async () => {
+    const { approveCorporateBooking } =
+      await import("../services/corporate.service");
+    const { users, corporateAccounts, corporateUsers, corporateBookings } =
+      await import("../../drizzle/schema");
+    await fixture.db.insert(users).values({ id: 10, tenantId: 4 });
+    await fixture.db
+      .insert(corporateAccounts)
+      .values({ id: 20, status: "active", discountPercent: 10 });
+    await fixture.db.insert(corporateUsers).values({
+      userId: 10,
+      corporateAccountId: 20,
+      role: "admin",
+      isActive: true,
+    });
+    await fixture.db.insert(corporateBookings).values({
+      id: 1,
+      bookingId: 7,
+      corporateAccountId: 20,
+      bookedByUserId: 9,
+      approvalStatus: "pending",
+    });
+    await expect(approveCorporateBooking(1, 10)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(fixture.rows("corporate_bookings")[0].approvalStatus).toBe(
+      "pending"
+    );
+    expect(fixture.rows("bookings")[0].totalAmount).toBe(10000);
+    expect(fixture.rows("notifications")).toHaveLength(0);
+  });
+
+  it.each([9, 10])(
+    "denies a corporate receipt replay when account user %i changes airlines",
+    async changedId => {
+      const {
+        users,
+        corporateAccounts,
+        corporateUsers,
+        corporateBookings,
+        financialLedger,
+      } = await import("../../drizzle/schema");
+      await fixture.db.insert(users).values({ id: 10, tenantId: 3 });
+      await fixture.db.insert(corporateAccounts).values({
+        id: 20,
+        status: "active",
+        balance: -10000,
+        creditLimit: 50000,
+      });
+      await fixture.db.insert(corporateUsers).values({
+        userId: 10,
+        corporateAccountId: 20,
+        role: "admin",
+        isActive: true,
+      });
+      await fixture.db.insert(corporateBookings).values({
+        bookingId: 7,
+        corporateAccountId: 20,
+        bookedByUserId: 9,
+        approvalStatus: "approved",
+      });
+      await fixture.db
+        .insert(financialLedger)
+        .values({ id: 30, stripeEventId: "corporate-credit:7", bookingId: 7 });
+      await expect(payCorporateInvoice(7, 10)).resolves.toEqual({
+        settled: true,
+        receiptId: 30,
+      });
+      fixture.rows("users").find(row => row.id === changedId).tenantId = 4;
+      await expect(payCorporateInvoice(7, 10)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      expect(fixture.rows("financial_ledger")).toHaveLength(1);
+      expect(fixture.rows("corporate_accounts")[0].balance).toBe(-10000);
+    }
+  );
+
+  it("refuses former-tenant invoices on every purchaser payment rail before side effects", async () => {
+    fixture.rows("users")[0].tenantId = 4;
+    const attempts = [
+      () => getBookingCheckoutState(7, 9),
+      () => createBookingCheckout(owner),
+      () => expireBookingCheckout(7, 9),
+      () => initiateSplitPayment(splitInput),
+      () => payFromWallet(9, 7),
+      () => applyVoucher("TEST", 7, 9, 10000),
+      () => useCredit(9, 10000, 7),
+    ];
+    for (const attempt of attempts)
+      await expect(attempt()).rejects.toMatchObject({ code: "NOT_FOUND" });
+    for (const table of [
+      "booking_checkout_requests",
+      "payment_splits",
+      "financial_ledger",
+      "outbox",
+      "credit_usage",
+      "voucher_usage",
+      "wallet_transactions",
+    ])
+      expect(fixture.rows(table)).toHaveLength(0);
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      status: "pending",
+      paymentStatus: "pending",
+      totalAmount: 10000,
+    });
+    expect(fixture.rows("wallets")[0].balance).toBe(20000);
+    expect(state.create).not.toHaveBeenCalled();
+    expect(state.retrieve).not.toHaveBeenCalled();
+    expect(state.expire).not.toHaveBeenCalled();
+  });
+
+  it("refuses a previously authorized checkout replay after tenant reassignment", async () => {
+    await createBookingCheckout(owner);
+    const claims = structuredClone(fixture.rows("booking_checkout_requests"));
+    fixture.rows("users")[0].tenantId = 4;
+    await expect(createBookingCheckout(owner)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(state.create).toHaveBeenCalledOnce();
+    expect(state.retrieve).not.toHaveBeenCalled();
+    expect(fixture.rows("booking_checkout_requests")).toEqual(claims);
+  });
+
+  it("keeps owner-only access for a purchaser without an airline assignment", async () => {
+    fixture.rows("users")[0].tenantId = null;
+    await expect(getBookingCheckoutState(7, 9)).resolves.toMatchObject({
+      state: "pending",
+    });
+    await expect(getBookingCheckoutState(7, 8)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
   it("returns cancelled checkout to the owned booking resume route, not a flight booking form", async () => {
     await createBookingCheckout(owner);
     const request = state.create.mock.calls[0][0];

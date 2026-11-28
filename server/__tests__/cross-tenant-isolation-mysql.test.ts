@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type mysql from "mysql2/promise";
 import {
@@ -431,6 +432,411 @@ nativeDescribe.sequential(
       // that reappears under `distinguishable` is a regression.
       expect(distinguishable).toEqual([]);
       expect(indistinguishable).toEqual(probes.map(probe => probe.path).sort());
+    });
+
+    it("refuses former-tenant ticket and calendar requests with no issuance on native MySQL", async () => {
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 4 })
+        .where(eq(schema.users.id, 9));
+      const caller = callerFor({ id: 9, role: "user", tenantId: 4 });
+      const before = await checksums();
+      const document = {
+        bookingId: TENANT_A.bookingId,
+        passengerId: TENANT_A.passengerId,
+      };
+      await expect(
+        caller.eticket.generateETicket(document)
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        caller.eticket.generateCalendarEvent({ bookingId: document.bookingId })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("refuses every old-tenant buyer rail and both history APIs after reassignment", async () => {
+      await fixture.db
+        .update(schema.bookings)
+        .set({
+          status: "pending",
+          paymentStatus: "pending",
+          seatsReserved: false,
+        })
+        .where(eq(schema.bookings.id, 71));
+      await fixture.db.insert(schema.payments).values({
+        bookingId: 71,
+        amount: 20000,
+        currency: "SAR",
+        method: "card",
+        status: "completed",
+      });
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 4 })
+        .where(eq(schema.users.id, 9));
+      const c = callerFor({ id: 9, role: "user", tenantId: 4 });
+      const input = { bookingId: 71 };
+      const before = await checksums();
+      const rails = [
+        () =>
+          c.loyalty.redeemMiles({
+            bookingId: 71,
+            milesToRedeem: 100,
+            idempotencyKey: "disposable-linked-redemption",
+          }),
+        () => c.payments.getCheckoutState(input),
+        () => c.payments.createCheckoutSession(input),
+        () => c.wallet.pay(input),
+        () =>
+          c.vouchers.applyVoucher({ ...input, code: "TEST", amount: 20000 }),
+        () => c.vouchers.useCredits({ ...input, amount: 20000 }),
+        () =>
+          c.splitPayments.initiate({
+            ...input,
+            splits: [
+              { name: "First", email: "first@example.test", amount: 10000 },
+              { name: "Second", email: "second@example.test", amount: 10000 },
+            ],
+          }),
+      ];
+      for (const rail of rails)
+        await expect(rail()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await c.payments.getHistory({})).toEqual([]);
+      expect(await c.paymentHistory.myPayments({})).toEqual([]);
+      for (const stats of [
+        await c.payments.getStats(),
+        await c.paymentHistory.myStats(),
+      ])
+        expect(stats).toMatchObject({
+          totalPayments: 0,
+          totalAmount: 0,
+          refundedAmount: 0,
+        });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("allows delegated corporate funding only while both buyer and administrator are in scope", async () => {
+      await fixture.db
+        .update(schema.bookings)
+        .set({
+          status: "pending",
+          paymentStatus: "pending",
+          seatsReserved: false,
+        })
+        .where(eq(schema.bookings.id, 71));
+      await fixture.db.insert(schema.corporateAccounts).values({
+        id: 1,
+        companyName: "Fixture company",
+        taxId: "SYNTH-1",
+        contactName: "Admin",
+        contactEmail: "corp@example.test",
+        creditLimit: 60000,
+        discountPercent: "10",
+        status: "active",
+      });
+      await fixture.db.insert(schema.corporateUsers).values([
+        { userId: 9, corporateAccountId: 1, role: "traveler" },
+        { userId: 10, corporateAccountId: 1, role: "admin" },
+      ]);
+      await fixture.db.insert(schema.corporateBookings).values({
+        id: 1,
+        bookingId: 71,
+        bookedByUserId: 9,
+        corporateAccountId: 1,
+        approvalStatus: "pending",
+      });
+      const foreign = callerFor({ id: 10, role: "user", tenantId: 4 });
+      const before = await checksums();
+      await expect(
+        foreign.corporate.approveBooking({ id: 1 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        foreign.corporate.payInvoice({ bookingId: 71 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 3 })
+        .where(eq(schema.users.id, 10));
+      const current = callerFor({ id: 10, role: "user", tenantId: 3 });
+      await current.corporate.approveBooking({ id: 1 });
+      const settlement = await current.corporate.payInvoice({ bookingId: 71 });
+      expect(await current.corporate.payInvoice({ bookingId: 71 })).toEqual(
+        settlement
+      );
+      const [company] = await fixture.db
+        .select()
+        .from(schema.corporateAccounts);
+      expect(company.balance).toBe(-18000);
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 4 })
+        .where(eq(schema.users.id, 9));
+      const after = await checksums();
+      await expect(
+        current.corporate.payInvoice({ bookingId: 71 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(after);
+    });
+
+    it("removes claim, disruption and seat access after the purchaser moves airlines", async () => {
+      const beforeMove = callerFor({ id: 9, role: "user", tenantId: 3 });
+      const bookingId = 71;
+      const passengerId = 81;
+      const flightId = 41;
+      const claim = {
+        bookingId,
+        passengerId,
+        flightId,
+        regulationType: "local" as const,
+        claimType: "delay" as const,
+      };
+      const filed = await beforeMove.compensation.fileClaim(claim);
+      expect(
+        (await beforeMove.compensation.claimTargets({ bookingId })).passengers
+      ).toHaveLength(2);
+      await fixture.db.insert(schema.flightDisruptions).values({
+        flightId,
+        type: "delay",
+        reason: "Synthetic delay",
+        severity: "minor",
+      });
+      expect(await beforeMove.disruptions.myDisruptions()).toHaveLength(1);
+      await fixture.db.insert(schema.seatInventory).values(
+        ["A", "B"].map(column => ({
+          flightId,
+          seatMapId: 1,
+          seatNumber: "1" + column,
+          row: 1,
+          column,
+          cabinClass: "economy" as const,
+          seatType: "window" as const,
+        }))
+      );
+      await beforeMove.seatMap.selectSeat({
+        bookingId,
+        passengerId,
+        flightId,
+        seatNumber: "1A",
+      });
+      const { selectSeat, changeSeat } =
+        await import("../services/seat-map.service");
+      await fixture.db
+        .update(schema.users)
+        .set({ tenantId: 4 })
+        .where(eq(schema.users.id, 9));
+      const c = callerFor({ id: 9, role: "user", tenantId: 4 });
+      const before = await checksums();
+      expect(await c.disruptions.myDisruptions()).toEqual([]);
+      expect(await c.compensation.getMyClaims()).toEqual([]);
+      const refused = [
+        () => c.compensation.claimTargets({ bookingId }),
+        () => c.compensation.fileClaim(claim),
+        () => c.compensation.getClaimDetail({ claimId: filed.id }),
+        () =>
+          c.compensation.checkEligibility({
+            bookingId,
+            flightId,
+            disruptionType: "delay",
+          }),
+        () => c.seatMap.getPassengerSeat({ bookingId, passengerId, flightId }),
+        () =>
+          c.seatMap.selectSeat({
+            bookingId,
+            passengerId,
+            flightId,
+            seatNumber: "1B",
+          }),
+        () =>
+          c.seatMap.changeSeat({
+            bookingId,
+            passengerId,
+            flightId,
+            oldSeatNumber: "1A",
+            newSeatNumber: "1B",
+          }),
+        () =>
+          c.seatMap.checkIn({
+            bookingId,
+            passengerId,
+            flightId,
+            seatNumber: "1A",
+          }),
+        () => selectSeat(flightId, "1B", bookingId, passengerId, undefined, 9),
+        () => changeSeat(flightId, "1A", "1B", bookingId, passengerId, 9),
+      ];
+      for (const action of refused)
+        await expect(action()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("excludes a transferred owner's old seat holds, waitlist and group allocations", async () => {
+      const old = callerFor({ id: 9, role: "user", tenantId: 3 });
+      const funding = {
+        flightId: 41,
+        userId: 9,
+        cabinClass: "economy" as const,
+        sessionId: "synthetic-allocation",
+        expiresAt: new Date(Date.now() + 86400000),
+      };
+      const group = {
+        organizerName: "Synthetic",
+        organizerEmail: "group@example.test",
+        organizerPhone: "5550100",
+        groupSize: 10,
+        flightId: 41,
+      };
+      await fixture.db
+        .insert(schema.inventoryLocks)
+        .values({ ...funding, id: 381, numberOfSeats: 1 });
+      await fixture.db
+        .insert(schema.seatHolds)
+        .values({ ...funding, id: 382, seats: 1, inventoryLockId: 381 });
+      await fixture.db.insert(schema.waitlist).values({
+        id: 383,
+        userId: 9,
+        flightId: 41,
+        cabinClass: "economy",
+        seats: 1,
+        priority: 1,
+        status: "confirmed",
+        inventoryLockId: 381,
+      });
+      await fixture.db.insert(schema.groupBookings).values({
+        ...group,
+        id: 384,
+        organizerUserId: 9,
+        status: "confirmed",
+        totalPrice: 110000,
+        inventoryLockId: 381,
+      });
+      expect(
+        await old.bookings.getAllocation({ groupBookingId: 384 })
+      ).toMatchObject({ totalAmount: 110000 });
+      expect(await old.waitlist.myWaitlist()).toHaveLength(1);
+      await fixture.pool.query("UPDATE users SET tenantId=4 WHERE id=9");
+      const c = callerFor({ id: 9, role: "user", tenantId: 4 });
+      const before = await checksums();
+      expect(await c.waitlist.myWaitlist()).toEqual([]);
+      expect(await c.groupBookings.myAllocations()).toEqual([]);
+      expect(
+        await c.waitlist.getPosition({ flightId: 41, cabinClass: "economy" })
+      ).toMatchObject({ entry: null, position: null });
+      for (const invoke of [
+        () => c.bookings.getAllocation({ waitlistId: 383 }),
+        () => c.bookings.getAllocation({ groupBookingId: 384 }),
+        () => c.inventory.releaseHold({ holdId: 382 }),
+        () => c.inventory.removeFromWaitlist({ waitlistId: 383 }),
+        () =>
+          c.waitlist.join({
+            flightId: 41,
+            passengers: 1,
+            cabinClass: "economy",
+          }),
+        () => c.waitlist.acceptOffer({ waitlistId: 383 }),
+        () => c.waitlist.declineOffer({ waitlistId: 383 }),
+        () => c.waitlist.cancel({ waitlistId: 383 }),
+        () =>
+          c.waitlist.updateNotifications({
+            waitlistId: 383,
+            notifyByEmail: false,
+            notifyBySms: false,
+          }),
+        () => c.groupBookings.submitRequest(group),
+      ])
+        await expect(invoke()).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("withholds a former-airline booking as review proof and personalized history", async () => {
+      const current = callerFor({ id: 9, role: "user", tenantId: 3 });
+      await fixture.pool.query(
+        "UPDATE bookings SET status='completed' WHERE id=71"
+      );
+      expect(await current.reviews.canReview({ flightId: 41 })).toMatchObject({
+        bookingId: 71,
+      });
+      expect(
+        (await current.suggestions.forUser({ limit: 6 })).some(
+          f => f.reason === "history"
+        )
+      ).toBe(true);
+      await fixture.pool.query("UPDATE users SET tenantId=4 WHERE id=9");
+      const moved = callerFor({ id: 9, role: "user", tenantId: 4 });
+      expect(await moved.reviews.canReview({ flightId: 41 })).toEqual({
+        canReview: false,
+        reason: "no_completed_booking",
+      });
+      const suggestions = await moved.suggestions.forUser({ limit: 6 });
+      expect(suggestions.every(f => f.reason !== "history")).toBe(true);
+      const before = await checksums();
+      await expect(
+        moved.reviews.create({ flightId: 41, bookingId: 71, rating: 4 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await checksums()).toEqual(before);
+    });
+
+    it("keeps purchase references private in public reviews and the author's former-airline reviews", async () => {
+      const owner = callerFor({ id: 9, role: "user", tenantId: 3 });
+      await fixture.pool.query(
+        "UPDATE bookings SET status='completed' WHERE id=71"
+      );
+      await owner.reviews.create({ flightId: 41, bookingId: 71, rating: 4 });
+      expect((await owner.reviews.getUserReviews({}))[0].review.bookingId).toBe(
+        71
+      );
+      const flight = await owner.reviews.getFlightReviews({ flightId: 41 });
+      expect(flight[0]).toMatchObject({ bookingId: null, isVerified: true });
+      const airline = await owner.reviews.getAirlineReviews({ airlineId: 3 });
+      expect(airline[0].review).toMatchObject({
+        bookingId: null,
+        isVerified: true,
+      });
+      await fixture.pool.query("UPDATE users SET tenantId=4 WHERE id=9");
+      const moved = callerFor({ id: 9, role: "user", tenantId: 4 });
+      expect((await moved.reviews.getUserReviews({}))[0].review).toMatchObject({
+        bookingId: null,
+        isVerified: true,
+      });
+    });
+
+    it("checks the current buyer before each split email delivery snapshot", async () => {
+      const mail = vi
+        .spyOn(
+          await import("../services/email.service"),
+          "sendSplitPaymentRequest"
+        )
+        .mockResolvedValue(true);
+      try {
+        await fixture.db.insert(schema.paymentSplits).values({
+          id: 392,
+          bookingId: 71,
+          payerName: "Synthetic Payer",
+          payerEmail: "synthetic@example.test",
+          amount: 10000,
+          percentage: "50.00",
+          paymentToken: "synthetic-split-delivery-token",
+          status: "pending",
+        });
+        const stale = callerFor({ id: 9, role: "user", tenantId: 3 });
+        await fixture.pool.query("UPDATE users SET tenantId=4 WHERE id=9");
+        const before = await checksums();
+        for (const call of [
+          () => stale.splitPayments.sendRequest({ splitId: 392 }),
+          () => stale.splitPayments.resendRequest({ splitId: 392 }),
+          () => stale.splitPayments.sendAllRequests({ bookingId: 71 }),
+        ])
+          await expect(call()).rejects.toMatchObject({ code: "NOT_FOUND" });
+        expect(mail).not.toHaveBeenCalled();
+        expect(await checksums()).toEqual(before);
+        await fixture.pool.query("UPDATE users SET tenantId=NULL WHERE id=9");
+        expect(await stale.splitPayments.sendRequest({ splitId: 392 })).toEqual(
+          { sent: true }
+        );
+        expect(mail).toHaveBeenCalledTimes(1);
+      } finally {
+        mail.mockRestore();
+      }
     });
 
     it("still serves the owner of tenant A the same resources", async () => {

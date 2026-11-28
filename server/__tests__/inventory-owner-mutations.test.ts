@@ -23,9 +23,11 @@ const caller = inventoryRouter.createCaller(ctx);
 
 beforeEach(() => {
   fixture = transactionMemory({
+    users: [{ id: 101, tenantId: 1 }],
     flights: [
       {
         id: 900,
+        tenantId: 1,
         economyAvailable: 0,
         businessAvailable: 0,
         status: "scheduled",
@@ -134,6 +136,19 @@ function beforeEntryLock(mutate: () => void) {
   };
 }
 describe("inventory owner mutations through the real router and service", () => {
+  it("refuses releasing a hold and cancelling waitlist inventory after airline reassignment", async () => {
+    fixture.rows("users")[0].tenantId = 2;
+    await expect(caller.releaseHold({ holdId: 1 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(
+      caller.removeFromWaitlist({ waitlistId: 1 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(fixture.rows("seat_holds")[0].status).toBe("active");
+    expect(fixture.rows("waitlist")[0].status).toBe("waiting");
+    expect(fixture.rows("outbox")).toEqual([]);
+  });
+
   it("rejects releasing another user's hold without modifying inventory", async () => {
     await expect(caller.releaseHold({ holdId: 2 })).rejects.toMatchObject({
       code: "NOT_FOUND",

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, getTableName } from "drizzle-orm";
 import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import {
@@ -41,6 +41,40 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
   let databaseName = "";
   let created = false;
   let tableNames: string[] = [];
+  // Include every table these native wallet paths read or write, including
+  // empty tables used by booking eligibility and refund guards. Unrelated
+  // application tables add DDL work to every reset without extending coverage.
+  const fixtureTables = [
+    schema.airlines,
+    schema.airports,
+    schema.bookingAncillaries,
+    schema.bookingCheckoutRequests,
+    schema.bookingModifications,
+    schema.bookingSegments,
+    schema.bookingStatusHistory,
+    schema.bookings,
+    schema.corporateBookings,
+    schema.dcsPassengerStates,
+    schema.financialLedger,
+    schema.flightFareClassInventory,
+    schema.flights,
+    schema.idempotencyRequests,
+    schema.inventoryLocks,
+    schema.ndcOrders,
+    schema.orderServiceRefunds,
+    schema.outbox,
+    schema.passengers,
+    schema.paymentReceipts,
+    schema.paymentSplits,
+    schema.payments,
+    schema.seatHolds,
+    schema.seatInventory,
+    schema.tenants,
+    schema.ticketCoupons,
+    schema.users,
+    schema.walletTransactions,
+    schema.wallets,
+  ];
 
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
@@ -64,12 +98,14 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
       "SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE'",
       [source]
     );
-    tableNames = tables.map(row => String(row.name));
+    const migratedTables = new Set(tables.map(row => String(row.name)));
+    tableNames = fixtureTables.map(getTableName);
     if (
-      !tableNames.length ||
-      tableNames.some(name => !/^[A-Za-z0-9_]+$/.test(name))
+      tableNames.some(
+        name => !/^[A-Za-z0-9_]+$/.test(name) || !migratedTables.has(name)
+      )
     )
-      throw new Error("Invalid migrated fixture table catalog");
+      throw new Error("Migrated wallet fixture is missing a required table");
     databaseName = `ais_wallet_${randomBytes(6).toString("hex")}`;
     await admin.query(`CREATE DATABASE \`${databaseName}\``);
     created = true;
@@ -104,10 +140,8 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
     }
   });
 
-  // Truncating every table and dropping triggers is DDL on a shared CI MySQL;
-  // under load it has exceeded the default 10 s hook budget, failing one case
-  // on the timeout and the next on the fixtures it left behind. Give the hooks
-  // the same budget as setup.
+  // Native table resets and trigger cleanup retain the setup hook budget.
+  // The scoped catalog reduces DDL work while preserving the financial cases.
   afterEach(async () => {
     await pool?.query("DROP TRIGGER IF EXISTS ais_wallet_fail_confirmation");
     await pool?.query("DROP TRIGGER IF EXISTS ais_wallet_fail_topup");
@@ -305,6 +339,76 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
       expect(await snapshot()).toEqual(beforeReplay);
     }
   );
+
+  it("blocks payment and receipt replay for a reassigned owner on the locked MySQL identity", async () => {
+    await payFromWallet(9, 71);
+    await db.insert(schema.tenants).values({
+      id: 4,
+      slug: "synthetic-other",
+      name: "Other airline",
+      status: "active",
+    });
+    const authority = await pool!.getConnection();
+    const before = await snapshot();
+    let payment: Promise<Awaited<ReturnType<typeof observe>>> | undefined;
+    try {
+      await authority.beginTransaction();
+      await authority.query("UPDATE users SET tenantId=4 WHERE id=9");
+      payment = observe(payFromWallet(9, 72));
+      await waitForBlockedTransactions(1);
+      await authority.commit();
+    } finally {
+      await authority.rollback();
+      authority.release();
+    }
+    expect(await payment).toMatchObject({
+      status: "rejected",
+      reason: { code: "NOT_FOUND" },
+    });
+    await expect(payFromWallet(9, 71)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it("rolls back a native fare-class statement failure, then settles the verified collection once", async () => {
+    await db
+      .update(schema.bookings)
+      .set({ fareClassId: 3 })
+      .where(eq(schema.bookings.id, 71));
+    await db
+      .insert(schema.flightFareClassInventory)
+      .values({ flightId: 41, fareClassId: 3, capacity: 2, availableSeats: 2 });
+    const payment = {
+      eventId: "evt_test_rbd",
+      paymentIntentId: "pi_test_rbd",
+      amount: 10000,
+      currency: "SAR",
+      metadata: { bookingId: "71", userId: "9" },
+    };
+    const deliver = () =>
+      db.transaction(tx => settleVerifiedPayment(tx, payment));
+    const before = await snapshot();
+    await pool!.query(
+      "CREATE TRIGGER ais_rbd_statement_fail BEFORE UPDATE ON flight_fare_class_inventory FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Synthetic RBD statement failure'"
+    );
+    try {
+      await expect(deliver()).rejects.toThrow();
+      expect(await snapshot()).toEqual(before);
+    } finally {
+      await pool!.query("DROP TRIGGER ais_rbd_statement_fail");
+    }
+    await deliver();
+    await deliver();
+    const after = await snapshot();
+    expect(after.ledger).toHaveLength(1);
+    expect(after.receipts).toMatchObject([{ settlementStatus: "applied" }]);
+    expect(after.bookings.find(row => row.id === 71)?.status).toBe("confirmed");
+    expect(
+      (await db.select().from(schema.flightFareClassInventory))[0]
+        .availableSeats
+    ).toBe(1);
+  });
 
   it("serializes competing spends and never overdraws the wallet", async () => {
     await db.update(schema.wallets).set({ balance: 10000 });

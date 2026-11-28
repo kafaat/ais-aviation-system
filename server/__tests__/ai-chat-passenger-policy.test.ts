@@ -27,10 +27,20 @@ function caller(id: number | null = 1, tenantId: number | null = null) {
 
 beforeEach(() => {
   fixture = transactionMemory({
+    users: [{ id: 1, tenantId: null, role: "user" }],
     chat_conversations: [
       { id: 7, userId: 1, status: "active", context: {}, messageCount: 1 },
     ],
-    chat_messages: [],
+    chat_messages: [
+      {
+        id: 1,
+        conversationId: 7,
+        role: "assistant",
+        content: "Synthetic greeting",
+        metadata: null,
+        createdAt: new Date(),
+      },
+    ],
     bookings: [],
   });
   state.db = fixture.db;
@@ -60,8 +70,8 @@ it.each([
     });
     expect(followup.policySourceLanguage).toBe("en");
     const history = fixture.rows("chat_messages");
-    expect(history).toHaveLength(4);
-    expect(history[1].metadata.entities.source).toBe(
+    expect(history).toHaveLength(5);
+    expect(history[2].metadata.entities.source).toBe(
       passengerRightsSource[language]
     );
     expect(JSON.stringify(history)).not.toMatch(
@@ -99,7 +109,7 @@ it("enforces sign-in and conversation ownership before giving a policy response"
   await expect(caller(2).sendMessage(input)).rejects.toMatchObject({
     code: "NOT_FOUND",
   });
-  expect(fixture.rows("chat_messages")).toHaveLength(0);
+  expect(fixture.rows("chat_messages")).toHaveLength(1);
   expect(state.invoke).not.toHaveBeenCalled();
 });
 
@@ -180,7 +190,11 @@ it.each([
           message: "Open my booking",
         })
       ).exchangeBookings
-    ).toEqual([{ id: 106, bookingReference: "LEGACY" }]);
+    ).toEqual([
+      { id: 106, bookingReference: "LEGACY" },
+      { id: 102, bookingReference: "TENANT" },
+      { id: 100, bookingReference: "OWN500" },
+    ]);
     for (const name of [
       "booking_modifications",
       "inventory_locks",
