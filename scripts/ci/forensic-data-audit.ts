@@ -35,6 +35,47 @@ export const forensicFindings = [
     sql: "SELECT DISTINCT SHA2(r.paymentIntentId, 256) AS recordId FROM payment_receipts r JOIN financial_ledger l ON l.stripePaymentIntentId = r.paymentIntentId WHERE r.kind = 'wallet_topup' AND l.type = 'adjustment' AND JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(l.metadata) THEN l.metadata ELSE '{}' END, '$.eventType')) IN ('charge.dispute.funds_withdrawn','charge.dispute.funds_reinstated') AND JSON_EXTRACT(CASE WHEN JSON_VALID(l.metadata) THEN l.metadata ELSE '{}' END, '$.walletFunding.version') IS NULL",
   },
   {
+    id: "receipt_booking_identity_mismatch",
+    severity: "error",
+    owner: "payment-settlement",
+    // Current user tenant and amended invoice total are not historical receipt keys.
+    sql: "SELECT SHA2(r.paymentIntentId, 256) AS recordId FROM payment_receipts r LEFT JOIN bookings b ON b.id = r.bookingId WHERE r.kind IN ('booking','split_payment','modification') AND (b.id IS NULL OR r.userId <> b.userId OR (r.kind = 'booking' AND r.targetId <> b.id))",
+  },
+  {
+    id: "receipt_split_target_mismatch",
+    severity: "error",
+    owner: "split-payment",
+    // Distinct provider collections can legitimately share a retained split target.
+    sql: "SELECT SHA2(r.paymentIntentId, 256) AS recordId FROM payment_receipts r LEFT JOIN payment_splits s ON s.id = r.targetId WHERE r.kind = 'split_payment' AND (s.id IS NULL OR NOT (s.bookingId <=> r.bookingId))",
+  },
+  {
+    id: "receipt_modification_target_mismatch",
+    severity: "error",
+    owner: "order-servicing",
+    sql: "SELECT SHA2(r.paymentIntentId, 256) AS recordId FROM payment_receipts r LEFT JOIN booking_modifications m ON m.id = r.targetId WHERE r.kind = 'modification' AND (m.id IS NULL OR NOT (m.bookingId <=> r.bookingId) OR m.userId <> r.userId)",
+  },
+  {
+    id: "receipt_wallet_target_mismatch",
+    severity: "error",
+    owner: "wallet-funding",
+    // Refunds/disputes append separate movements; the original top-up stays completed.
+    sql: "SELECT SHA2(r.paymentIntentId, 256) AS recordId FROM payment_receipts r LEFT JOIN wallet_transactions t ON t.id = r.targetId LEFT JOIN wallets w ON w.id = t.walletId WHERE r.kind = 'wallet_topup' AND (r.bookingId IS NOT NULL OR t.id IS NULL OR w.id IS NULL OR t.type <> 'top_up' OR t.status <> 'completed' OR t.userId <> r.userId OR w.userId <> r.userId OR t.amount <> r.amount OR NOT (t.stripePaymentIntentId <=> r.paymentIntentId))",
+  },
+  {
+    id: "wallet_transaction_owner_mismatch",
+    severity: "error",
+    owner: "wallet-funding",
+    sql: "SELECT t.id AS recordId FROM wallet_transactions t LEFT JOIN wallets w ON w.id = t.walletId WHERE w.id IS NULL OR t.userId <> w.userId",
+  },
+  {
+    id: "payment_history_duplicate_intent",
+    severity: "error",
+    owner: "payment-settlement",
+    // Settlement refuses >1 history rows for an intent. Count duplicate groups,
+    // not rows; NULL references and distinct intents for one purchase are valid.
+    sql: "SELECT SHA2(stripePaymentIntentId, 256) AS recordId FROM payments WHERE stripePaymentIntentId IS NOT NULL GROUP BY stripePaymentIntentId HAVING COUNT(*) > 1",
+  },
+  {
     id: "split_refund_under_review",
     severity: "error",
     owner: "split-refund",
