@@ -30,7 +30,8 @@ import {
 } from "../../drizzle/schema";
 import type { Message } from "../_core/llm";
 import { aiGateway } from "./intelligence/gateway";
-import { searchFlights } from "./flights.service";
+import { searchFlights, type SearchFlightsInput } from "./flights.service";
+import { CIVIL_DATE } from "./civil-day";
 
 // ============================================================================
 // Types
@@ -602,81 +603,72 @@ async function processResponse(
     if (searchIntent.cabinClass)
       updatedContext.cabinClass = searchIntent.cabinClass;
     if (searchIntent.date) updatedContext.departureDate = searchIntent.date;
+  }
 
-    // If we have origin and destination, search for flights
-    if (searchIntent.originId && searchIntent.destinationId) {
-      updatedContext.originId = searchIntent.originId;
-      updatedContext.destinationId = searchIntent.destinationId;
+  // Route identifiers are explicitly supplied context. Neither model output nor
+  // free-text city names establish a route; later turns may supply its date.
+  const searchInput = validatedChatSearch(updatedContext);
+  if (searchInput) {
+    try {
+      const searchResults = await searchFlights(searchInput);
 
-      try {
-        const searchResults = await searchFlights({
-          originId: searchIntent.originId,
-          destinationId: searchIntent.destinationId,
-          departureDate: searchIntent.date
-            ? new Date(searchIntent.date)
-            : new Date(),
+      // Get top 3 flights
+      const topFlights = searchResults.slice(0, 3);
+
+      for (let i = 0; i < topFlights.length; i++) {
+        const flight = topFlights[i];
+        const cabinClass = updatedContext.cabinClass || "economy";
+        const price =
+          cabinClass === "business"
+            ? Number(flight.businessPrice)
+            : Number(flight.economyPrice);
+
+        // Use nested data from flight object (origin, destination, airline are included)
+        const originCity = flight.origin?.city || "Unknown";
+        const destCity = flight.destination?.city || "Unknown";
+        const airlineName = flight.airline?.name || "Unknown";
+
+        // Store suggestion
+        const [suggestionResult] = await db.insert(bookingSuggestions).values({
+          conversationId,
+          flightId: flight.id,
+          cabinClass,
+          pricePerPerson: price,
+          totalPrice: price * (updatedContext.passengers || 1),
+          currency: "SAR",
+          reason:
+            i === 0
+              ? "أفضل سعر متاح"
+              : i === 1
+                ? "وقت مغادرة مناسب"
+                : "خيار بديل",
+          rank: i + 1,
+          score: 100 - i * 15,
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
         });
 
-        // Get top 3 flights
-        const topFlights = searchResults.slice(0, 3);
-
-        for (let i = 0; i < topFlights.length; i++) {
-          const flight = topFlights[i];
-          const cabinClass = updatedContext.cabinClass || "economy";
-          const price =
-            cabinClass === "business"
-              ? Number(flight.businessPrice)
-              : Number(flight.economyPrice);
-
-          // Use nested data from flight object (origin, destination, airline are included)
-          const originCity = flight.origin?.city || "Unknown";
-          const destCity = flight.destination?.city || "Unknown";
-          const airlineName = flight.airline?.name || "Unknown";
-
-          // Store suggestion
-          const [suggestionResult] = await db
-            .insert(bookingSuggestions)
-            .values({
-              conversationId,
-              flightId: flight.id,
-              cabinClass,
-              pricePerPerson: price,
-              totalPrice: price * (updatedContext.passengers || 1),
-              currency: "SAR",
-              reason:
-                i === 0
-                  ? "أفضل سعر متاح"
-                  : i === 1
-                    ? "وقت مغادرة مناسب"
-                    : "خيار بديل",
-              rank: i + 1,
-              score: 100 - i * 15,
-              expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-            });
-
-          suggestions.push({
-            id: suggestionResult.insertId,
-            flightId: flight.id,
-            airline: airlineName,
-            origin: originCity,
-            destination: destCity,
-            originTimezone: flight.origin?.timezone ?? null,
-            destinationTimezone: flight.destination?.timezone ?? null,
-            departureTime: flight.departureTime.toISOString(),
-            arrivalTime: flight.arrivalTime.toISOString(),
-            price,
-            cabinClass,
-            reason:
-              i === 0
-                ? "أفضل سعر متاح"
-                : i === 1
-                  ? "وقت مغادرة مناسب"
-                  : "خيار بديل",
-          });
-        }
-      } catch (error) {
-        console.error("Error searching flights:", error);
+        suggestions.push({
+          id: suggestionResult.insertId,
+          flightId: flight.id,
+          airline: airlineName,
+          origin: originCity,
+          destination: destCity,
+          originTimezone: flight.origin?.timezone ?? null,
+          destinationTimezone: flight.destination?.timezone ?? null,
+          departureTime: flight.departureTime.toISOString(),
+          arrivalTime: flight.arrivalTime.toISOString(),
+          price,
+          cabinClass,
+          reason:
+            i === 0
+              ? "أفضل سعر متاح"
+              : i === 1
+                ? "وقت مغادرة مناسب"
+                : "خيار بديل",
+        });
       }
+    } catch (error) {
+      console.error("Error searching flights:", error);
     }
   }
 
@@ -735,13 +727,34 @@ function extractSearchIntent(message: string): {
 /**
  * Check if context has enough info to proceed with booking
  */
+function validatedChatSearch(context: ChatContext): SearchFlightsInput | null {
+  const { originId, destinationId, departureDate } = context;
+  const passengers = context.passengers ?? 1;
+  if (
+    typeof originId !== "number" ||
+    !Number.isSafeInteger(originId) ||
+    originId <= 0 ||
+    typeof destinationId !== "number" ||
+    !Number.isSafeInteger(destinationId) ||
+    destinationId <= 0 ||
+    destinationId === originId ||
+    typeof departureDate !== "string" ||
+    !CIVIL_DATE.test(departureDate) ||
+    Number.isNaN(Date.parse(departureDate)) ||
+    new Date(departureDate).toISOString().slice(0, 10) !== departureDate ||
+    !Number.isSafeInteger(passengers) ||
+    passengers < 1 ||
+    passengers > 9 ||
+    (context.cabinClass !== undefined &&
+      context.cabinClass !== "economy" &&
+      context.cabinClass !== "business")
+  )
+    return null;
+  return { originId, destinationId, departureDate };
+}
+
 function isBookingReady(context: ChatContext): boolean {
-  return !!(
-    context.originId &&
-    context.destinationId &&
-    context.departureDate &&
-    (context.passengers || 1) > 0
-  );
+  return validatedChatSearch(context) !== null;
 }
 
 /**

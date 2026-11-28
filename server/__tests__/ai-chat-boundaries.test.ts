@@ -159,3 +159,136 @@ describe("assistant response privacy across persistence and reuse", () => {
     expect(boundary.invoke).not.toHaveBeenCalled();
   });
 });
+
+describe("explicit chat route context reaches deterministic flight search", () => {
+  beforeEach(() => {
+    boundary.search.mockResolvedValue([
+      {
+        id: 11,
+        airlineId: 3,
+        originId: 1,
+        destinationId: 2,
+        flightNumber: "TEST11",
+        status: "scheduled",
+        departureTime: new Date("2030-06-10T09:00:00Z"),
+        arrivalTime: new Date("2030-06-10T11:00:00Z"),
+        economyPrice: 10000,
+        businessPrice: 20000,
+        economyAvailable: 10,
+        businessAvailable: 4,
+        airline: { id: 3, name: "Synthetic Airline", code: "TS" },
+        origin: { id: 1, city: "Origin", timezone: "Asia/Riyadh" },
+        destination: { id: 2, city: "Destination", timezone: "Asia/Riyadh" },
+      },
+    ]);
+  });
+
+  it("searches the explicit initial route and stores the independently derived cabin and passenger total", async () => {
+    const chat = caller();
+    const { conversationId } = await chat.startConversation({
+      initialContext: {
+        originId: 1,
+        destinationId: 2,
+        departureDate: "2030-06-10",
+        passengers: 2,
+        cabinClass: "business",
+      },
+    });
+    const response = await chat.sendMessage({
+      conversationId,
+      message: "Show available options.",
+    });
+    expect(boundary.search).toHaveBeenCalledExactlyOnceWith({
+      originId: 1,
+      destinationId: 2,
+      departureDate: "2030-06-10",
+    });
+    expect(response.bookingReady).toBe(true);
+    expect(response.suggestions).toMatchObject([
+      { flightId: 11, cabinClass: "business", price: 20000 },
+    ]);
+    expect(fixture.rows(bookingSuggestions)).toMatchObject([
+      {
+        conversationId,
+        flightId: 11,
+        pricePerPerson: 20000,
+        totalPrice: 40000,
+        currency: "SAR",
+      },
+    ]);
+  });
+
+  it("accumulates a date and passenger count on a later turn without losing the explicit route or cabin", async () => {
+    const chat = caller();
+    const { conversationId } = await chat.startConversation({
+      initialContext: { originId: 1, destinationId: 2 },
+    });
+    const incomplete = await chat.sendMessage({
+      conversationId,
+      message: "Business class, please.",
+    });
+    expect(incomplete.bookingReady).toBe(false);
+    expect(boundary.search).not.toHaveBeenCalled();
+    const response = await chat.sendMessage({
+      conversationId,
+      message: "2 passengers on 2030-06-10",
+    });
+    expect(boundary.search).toHaveBeenCalledExactlyOnceWith({
+      originId: 1,
+      destinationId: 2,
+      departureDate: "2030-06-10",
+    });
+    expect(response.bookingReady).toBe(true);
+    expect(response.suggestions).toMatchObject([
+      { flightId: 11, cabinClass: "business", price: 20000 },
+    ]);
+    expect(fixture.rows(bookingSuggestions)).toMatchObject([
+      { totalPrice: 40000 },
+    ]);
+  });
+
+  it("does not invent route identifiers from city names or provider-produced JSON", async () => {
+    boundary.invoke.mockResolvedValue(
+      providerResponse(
+        '{"intent":"search_flights","originId":1,"destinationId":2,"date":"2030-06-10"}'
+      )
+    );
+    const response = await caller().sendMessage({
+      conversationId: 7,
+      message: "Riyadh to Jeddah, 2 passengers on 2030-06-10",
+    });
+    expect(response.bookingReady).toBe(false);
+    expect(response.suggestions).toBeUndefined();
+    expect(boundary.search).not.toHaveBeenCalled();
+    expect(fixture.rows(bookingSuggestions)).toEqual([]);
+  });
+
+  it.each([
+    { originId: -1 },
+    { originId: 1.5 },
+    { destinationId: 0 },
+    { destinationId: 1 },
+    { departureDate: "not-a-date" },
+    { departureDate: "2030-02-30" },
+    { passengers: 1.5 },
+  ])("refuses to mark or search invalid supplied context %j", async invalid => {
+    const chat = caller();
+    const { conversationId } = await chat.startConversation({
+      initialContext: {
+        originId: 1,
+        destinationId: 2,
+        departureDate: "2030-06-10",
+        passengers: 2,
+        ...invalid,
+      },
+    });
+    const response = await chat.sendMessage({
+      conversationId,
+      message: "Show available options.",
+    });
+    expect(response.bookingReady).toBe(false);
+    expect(response.suggestions).toBeUndefined();
+    expect(boundary.search).not.toHaveBeenCalled();
+    expect(fixture.rows(bookingSuggestions)).toEqual([]);
+  });
+});
