@@ -2503,6 +2503,10 @@
     "noDeleted": "No deleted bookings found"
   },
   "aiChat": {
+    "addRoute": "Add flight search details",
+    "invalidRoute": "Choose two different airports and a valid departure date.",
+    "airportOptionsUnavailable": "Airport options are unavailable. Retry or turn off flight search details to continue with a general conversation.",
+    "startError": "Could not start this conversation. Please try again.",
     "title": "AI Booking Assistant",
     "subtitle": "Book flights with natural conversation",
     "loginRequired": "Login Required",

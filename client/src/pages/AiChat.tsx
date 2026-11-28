@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { isCivilDay } from "@shared/ibe-search";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { passengerRightsSource } from "@shared/passenger-policy";
 import { loginPath } from "@shared/return-to";
 import { airlineSupportUrl } from "@/lib/airline-support";
@@ -69,6 +72,16 @@ function ChatDisclosure() {
   );
 }
 
+const emptyRoute = {
+  origin: "",
+  destination: "",
+  departureDate: "",
+  passengers: 1,
+  cabinClass: "economy" as "economy" | "business",
+};
+const selectClass =
+  "block h-9 w-full rounded-md border border-input bg-background px-3 text-sm";
+
 export default function AiChat() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -78,6 +91,27 @@ export default function AiChat() {
   const [inputValue, setInputValue] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [suggestions, setSuggestions] = useState<FlightSuggestion[]>([]);
+  const [includeRoute, setIncludeRoute] = useState(false);
+  const [route, setRoute] = useState(emptyRoute);
+  const [routeAttempted, setRouteAttempted] = useState(false);
+  const airports = trpc.reference.airports.useQuery(undefined, {
+    enabled: !!user && includeRoute && !conversationId,
+  });
+  const originId = Number(route.origin);
+  const destinationId = Number(route.destination);
+  const airportsUnavailable =
+    airports.isError || (!airports.isLoading && !airports.data?.length);
+  const routeValid =
+    !airportsUnavailable &&
+    originId !== destinationId &&
+    airports.data?.some(airport => airport.id === originId && originId > 0) &&
+    airports.data.some(
+      airport => airport.id === destinationId && destinationId > 0
+    ) &&
+    isCivilDay(route.departureDate) &&
+    Number.isInteger(route.passengers) &&
+    route.passengers >= 1 &&
+    route.passengers <= 9;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -104,8 +138,24 @@ export default function AiChat() {
   };
 
   const handleStartConversation = async () => {
+    if (includeRoute && !routeValid) {
+      setRouteAttempted(true);
+      return;
+    }
     try {
-      const result = await startConversation.mutateAsync({});
+      const result = await startConversation.mutateAsync(
+        includeRoute
+          ? {
+              initialContext: {
+                originId,
+                destinationId,
+                departureDate: route.departureDate,
+                passengers: route.passengers,
+                cabinClass: route.cabinClass,
+              },
+            }
+          : {}
+      );
       setConversationId(result.conversationId);
       setMessages([
         {
@@ -202,6 +252,9 @@ export default function AiChat() {
 
   const handleNewConversation = () => {
     handleStopWaiting();
+    setIncludeRoute(false);
+    setRoute(emptyRoute);
+    setRouteAttempted(false);
     setConversationId(null);
     setMessages([]);
     setSuggestions([]);
@@ -274,6 +327,136 @@ export default function AiChat() {
             <div className="mb-4">
               <ChatDisclosure />
             </div>
+            <div className="mb-5 text-start">
+              <label className="flex items-center justify-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={includeRoute}
+                  onChange={event => {
+                    setIncludeRoute(event.target.checked);
+                    setRouteAttempted(false);
+                  }}
+                />
+                {t("aiChat.addRoute")}
+              </label>
+              {includeRoute && (
+                <div className="mt-4 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(["origin", "destination"] as const).map(field => (
+                      <div key={field}>
+                        <Label htmlFor={`chat-${field}`}>
+                          {field === "origin"
+                            ? t("home.search.from")
+                            : t("home.search.to")}
+                        </Label>
+                        <select
+                          id={`chat-${field}`}
+                          className={selectClass}
+                          value={route[field]}
+                          onChange={event =>
+                            setRoute({ ...route, [field]: event.target.value })
+                          }
+                        >
+                          <option value="">
+                            {field === "origin"
+                              ? t("home.search.selectOrigin")
+                              : t("home.search.selectDestination")}
+                          </option>
+                          {airports.data?.map(airport => (
+                            <option key={airport.id} value={airport.id}>
+                              {airport.city} ({airport.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                    <div>
+                      <Label htmlFor="chat-date">
+                        {t("home.search.departureDate")}
+                      </Label>
+                      <Input
+                        id="chat-date"
+                        type="date"
+                        value={route.departureDate}
+                        onChange={event =>
+                          setRoute({
+                            ...route,
+                            departureDate: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="chat-passengers">
+                        {t("booking.passengers")}
+                      </Label>
+                      <select
+                        id="chat-passengers"
+                        className={selectClass}
+                        value={route.passengers}
+                        onChange={event =>
+                          setRoute({
+                            ...route,
+                            passengers: Number(event.target.value),
+                          })
+                        }
+                      >
+                        {Array.from({ length: 9 }, (_, index) => index + 1).map(
+                          count => (
+                            <option key={count} value={count}>
+                              {count}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="chat-cabin">
+                        {t("filters.cabinClass")}
+                      </Label>
+                      <select
+                        id="chat-cabin"
+                        className={selectClass}
+                        value={route.cabinClass}
+                        onChange={event =>
+                          setRoute({
+                            ...route,
+                            cabinClass:
+                              event.target.value === "business"
+                                ? "business"
+                                : "economy",
+                          })
+                        }
+                      >
+                        <option value="economy">{t("search.economy")}</option>
+                        <option value="business">{t("search.business")}</option>
+                      </select>
+                    </div>
+                  </div>
+                  {airports.isLoading ? (
+                    <p role="status">{t("common.loading")}</p>
+                  ) : airportsUnavailable ? (
+                    <div role="alert">
+                      <p>{t("aiChat.airportOptionsUnavailable")}</p>
+                      <Button
+                        variant="outline"
+                        onClick={() => void airports.refetch()}
+                      >
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  ) : (
+                    routeAttempted &&
+                    !routeValid && (
+                      <p role="alert">{t("aiChat.invalidRoute")}</p>
+                    )
+                  )}
+                </div>
+              )}
+              {startConversation.isError && (
+                <p role="alert">{t("aiChat.startError")}</p>
+              )}
+            </div>
             <Button
               size="lg"
               onClick={handleStartConversation}
@@ -296,9 +479,8 @@ export default function AiChat() {
               .map((suggestion, i) => (
                 <button
                   key={i}
-                  onClick={async () => {
-                    await handleStartConversation();
-                  }}
+                  disabled={startConversation.isPending}
+                  onClick={handleStartConversation}
                   className="p-4 rounded-xl border bg-card hover:bg-accent text-start transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -466,13 +648,15 @@ export default function AiChat() {
               {suggestions.map(s => (
                 <Link
                   key={s.id}
-                  href={`/booking/${s.flightId}`}
+                  href={`/booking/${s.flightId}${s.cabinClass === "business" ? "?class=business" : ""}`}
                   className="block rounded-xl border bg-card p-4 hover:border-primary/50 focus-visible:outline-2 transition-colors"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-sm">{s.airline}</span>
                     <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                      {s.cabinClass}
+                      {s.cabinClass === "business"
+                        ? t("search.business")
+                        : t("search.economy")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mb-2">
@@ -486,7 +670,8 @@ export default function AiChat() {
                       {formatFlightTime(s.arrivalTime, s.destinationTimezone)}
                     </bdi>
                     <bdi className="font-bold text-base text-foreground">
-                      {(s.price / 100).toFixed(2)} {t("common.currency")}
+                      {(s.price / 100).toFixed(2)} {t("common.currency")}{" "}
+                      {t("priceCalendar.perPerson")}
                     </bdi>
                   </div>
                   {s.reason && (

@@ -11,6 +11,10 @@ afterEach(() => vi.unstubAllEnvs());
 
 const current = vi.hoisted(() => ({
   language: "en",
+  start: vi.fn(),
+  suggestedCabin: "economy",
+  airportsUnavailable: false,
+  retryAirports: vi.fn(),
   authenticated: true,
   pending: null as Promise<{
     message: string;
@@ -22,10 +26,12 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => {
       const locale = current.language === "en" ? en : ar;
-      const [, field] = key.split(".");
-      return key.startsWith("aiChat.")
-        ? locale.aiChat[field as keyof typeof locale.aiChat]
-        : key;
+      let value: unknown = locale;
+      for (const path of key.split(".")) {
+        if (typeof value !== "object" || value === null) return key;
+        value = (value as Record<string, unknown>)[path];
+      }
+      return typeof value === "string" ? value : key;
     },
   }),
 }));
@@ -34,11 +40,25 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    reference: {
+      airports: {
+        useQuery: () => ({
+          data: current.airportsUnavailable
+            ? undefined
+            : [
+                { id: 11, code: "RUH", city: "Riyadh" },
+                { id: 22, code: "JED", city: "Jeddah" },
+              ],
+          isError: current.airportsUnavailable,
+          refetch: current.retryAirports,
+        }),
+      },
+    },
     aiChat: {
       getQuickReplies: { useQuery: () => ({}) },
       startConversation: {
         useMutation: () => ({
-          mutateAsync: async () => ({ conversationId: 1, greeting: "Hello" }),
+          mutateAsync: current.start,
         }),
       },
       sendMessage: {
@@ -56,7 +76,7 @@ vi.mock("@/lib/trpc", () => ({
                   price: 10049,
                   originTimezone: "Asia/Riyadh",
                   destinationTimezone: "Asia/Riyadh",
-                  cabinClass: "economy",
+                  cabinClass: current.suggestedCabin,
                   departureTime: "2026-11-04T09:00:00Z",
                   arrivalTime: "2026-11-04T11:00:00Z",
                 },
@@ -70,6 +90,13 @@ vi.mock("@/lib/trpc", () => ({
 
 beforeEach(() => {
   current.authenticated = true;
+  current.language = "en";
+  current.airportsUnavailable = false;
+  current.retryAirports.mockClear();
+  current.suggestedCabin = "economy";
+  current.start
+    .mockReset()
+    .mockResolvedValue({ conversationId: 1, greeting: "Hello" });
 });
 
 it("takes a guest to sign-in and preserves the AI chat return destination", async () => {
@@ -85,7 +112,7 @@ it("takes a guest to sign-in and preserves the AI chat return destination", asyn
       </Route>
     </Router>
   );
-  fireEvent.click(screen.getByRole("link", { name: "common.login" }));
+  fireEvent.click(screen.getByRole("link", { name: en.common.login }));
   expect(
     await screen.findByRole("heading", { name: "Sign in to continue" })
   ).toBeVisible();
@@ -274,10 +301,121 @@ it.each([
         await screen.findByRole("link", { name: new RegExp("MYBOOK") })
       ).toHaveAttribute("href", "/my-bookings?exchange=17");
       expect(
-        screen.getByRole("link", { name: "myBookings.title" })
+        screen.getByRole("link", {
+          name: (language === "ar" ? ar : en).myBookings.title,
+        })
       ).toHaveAttribute("href", "/my-bookings");
     } finally {
       current.pending = null;
     }
+  }
+);
+
+it.each([
+  ["ar", ar],
+  ["en", en],
+] as const)(
+  "submits only a complete explicit flight search in %s",
+  async (language, locale) => {
+    current.language = language;
+    Element.prototype.scrollIntoView = vi.fn();
+    render(<AiChat />);
+    const start = screen.getByRole("button", {
+      name: locale.aiChat.startConversation,
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: locale.aiChat.addRoute })
+    );
+    const origin = screen.getByLabelText(locale.home.search.from);
+    const destination = screen.getByLabelText(locale.home.search.to);
+    fireEvent.change(origin, { target: { value: "11" } });
+    fireEvent.click(start);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      locale.aiChat.invalidRoute
+    );
+    expect(current.start).not.toHaveBeenCalled();
+    fireEvent.change(destination, { target: { value: "22" } });
+    fireEvent.click(start);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      locale.aiChat.invalidRoute
+    );
+    expect(current.start).not.toHaveBeenCalled();
+    fireEvent.change(destination, { target: { value: "11" } });
+    fireEvent.change(screen.getByLabelText(locale.home.search.departureDate), {
+      target: { value: "2031-09-12" },
+    });
+    fireEvent.click(start);
+    expect(current.start).not.toHaveBeenCalled();
+    fireEvent.change(destination, { target: { value: "22" } });
+    fireEvent.change(screen.getByLabelText(locale.booking.passengers), {
+      target: { value: "2" },
+    });
+    fireEvent.change(screen.getByLabelText(locale.filters.cabinClass), {
+      target: { value: "business" },
+    });
+    fireEvent.click(start);
+    await screen.findByRole("log");
+    expect(current.start).toHaveBeenCalledExactlyOnceWith({
+      initialContext: {
+        originId: 11,
+        destinationId: 22,
+        departureDate: "2031-09-12",
+        passengers: 2,
+        cabinClass: "business",
+      },
+    });
+    current.suggestedCabin = "business";
+    fireEvent.change(
+      screen.getByRole("textbox", { name: locale.aiChat.messageLabel }),
+      { target: { value: "Show flights" } }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: locale.aiChat.sendMessage })
+    );
+    const link = await screen.findByRole("link", { name: /Test airline/ });
+    expect(link).toHaveAttribute("href", "/booking/99?class=business");
+    expect(link).toHaveTextContent(locale.search.business);
+    expect(link).toHaveTextContent(locale.priceCalendar.perPerson);
+    fireEvent.click(
+      screen.getByRole("button", { name: locale.aiChat.newChat })
+    );
+    expect(
+      screen.getByRole("checkbox", { name: locale.aiChat.addRoute })
+    ).not.toBeChecked();
+    fireEvent.click(
+      screen.getByRole("button", { name: locale.aiChat.startConversation })
+    );
+    await screen.findByRole("log");
+    expect(current.start).toHaveBeenLastCalledWith({});
+  }
+);
+it.each([
+  ["ar", ar],
+  ["en", en],
+] as const)(
+  "keeps general chat available when airports cannot be loaded in %s",
+  async (language, locale) => {
+    current.language = language;
+    current.airportsUnavailable = true;
+    Element.prototype.scrollIntoView = vi.fn();
+    render(<AiChat />);
+    const toggle = screen.getByRole("checkbox", {
+      name: locale.aiChat.addRoute,
+    });
+    fireEvent.click(toggle);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      locale.aiChat.airportOptionsUnavailable
+    );
+    fireEvent.click(screen.getByRole("button", { name: locale.common.retry }));
+    expect(current.retryAirports).toHaveBeenCalledOnce();
+    const start = screen.getByRole("button", {
+      name: locale.aiChat.startConversation,
+    });
+    fireEvent.click(start);
+    expect(current.start).not.toHaveBeenCalled();
+    fireEvent.click(toggle);
+    fireEvent.click(start);
+    await screen.findByRole("log");
+    expect(current.start).toHaveBeenCalledExactlyOnceWith({});
   }
 );
