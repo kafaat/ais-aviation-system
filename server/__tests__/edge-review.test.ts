@@ -66,6 +66,7 @@ describe("error responses", () => {
 describe("AI chat limits are enforced", () => {
   beforeEach(() => {
     state.db = transactionMemory({
+      users: [{ id: 9, openId: "edge-review-ai-owner", role: "user" }],
       chat_conversations: Array.from(
         { length: AI_LIMITS.maxConversationsPerUser },
         (_, i) => ({

@@ -139,55 +139,70 @@ export async function startConversation(
       message: "Database not available",
     });
 
-  // The declared per-user cap was never enforced.
-  const [open] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(chatConversations)
-    .where(
-      and(
-        eq(chatConversations.userId, input.userId),
-        eq(chatConversations.status, "active")
-      )
-    );
-  if (Number(open?.count ?? 0) >= AI_LIMITS.maxConversationsPerUser)
-    throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message: "Too many open conversations; close one before starting another",
+  return db.transaction(async tx => {
+    // Serialize admission for this owner, including when no conversations
+    // exist yet. The count and complete greeting commit under the same lock.
+    const [owner] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, input.userId))
+      .limit(1)
+      .for("update");
+    if (!owner)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "User not found",
+      });
+
+    const [open] = await tx
+      .select({ count: sql<number>`count(*)` })
+      .from(chatConversations)
+      .where(
+        and(
+          eq(chatConversations.userId, input.userId),
+          eq(chatConversations.status, "active")
+        )
+      );
+    if (Number(open?.count ?? 0) >= AI_LIMITS.maxConversationsPerUser)
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message:
+          "Too many open conversations; close one before starting another",
+      });
+
+    // Create conversation record
+    const [result] = await tx.insert(chatConversations).values({
+      userId: input.userId,
+      status: "active",
+      context: input.initialContext || {},
+      sessionId: input.sessionId || `session_${Date.now()}`,
+      messageCount: 0,
     });
 
-  // Create conversation record
-  const [result] = await db.insert(chatConversations).values({
-    userId: input.userId,
-    status: "active",
-    context: input.initialContext || {},
-    sessionId: input.sessionId || `session_${Date.now()}`,
-    messageCount: 0,
+    const conversationId = result.insertId;
+
+    // Generate greeting based on context
+    let greeting =
+      "مرحباً! أنا مساعد الحجز الذكي. كيف يمكنني مساعدتك اليوم؟\n\nHello! I'm your smart booking assistant. How can I help you today?";
+
+    if (input.initialContext?.originId || input.initialContext?.destinationId) {
+      greeting =
+        "مرحباً! أرى أنك تبحث عن رحلة. دعني أساعدك في إيجاد أفضل الخيارات.\n\nHi! I see you're looking for a flight. Let me help you find the best options.";
+    }
+
+    await tx.insert(chatMessages).values({
+      conversationId,
+      role: "assistant",
+      content: greeting,
+    });
+
+    await tx
+      .update(chatConversations)
+      .set({ messageCount: 1, lastMessageAt: new Date() })
+      .where(eq(chatConversations.id, conversationId));
+
+    return { conversationId, greeting };
   });
-
-  const conversationId = result.insertId;
-
-  // Generate greeting based on context
-  let greeting =
-    "مرحباً! أنا مساعد الحجز الذكي. كيف يمكنني مساعدتك اليوم؟\n\nHello! I'm your smart booking assistant. How can I help you today?";
-
-  if (input.initialContext?.originId || input.initialContext?.destinationId) {
-    greeting =
-      "مرحباً! أرى أنك تبحث عن رحلة. دعني أساعدك في إيجاد أفضل الخيارات.\n\nHi! I see you're looking for a flight. Let me help you find the best options.";
-  }
-
-  // Store greeting as system message
-  await db.insert(chatMessages).values({
-    conversationId,
-    role: "assistant",
-    content: greeting,
-  });
-
-  await db
-    .update(chatConversations)
-    .set({ messageCount: 1, lastMessageAt: new Date() })
-    .where(eq(chatConversations.id, conversationId));
-
-  return { conversationId, greeting };
 }
 
 /**
@@ -228,9 +243,9 @@ export async function sendMessage(
     });
   }
 
-  // The declared per-conversation cap was never enforced; every turn also
-  // re-sent the entire history, so cost grew with the square of its length.
-  if (conversation.messageCount >= AI_LIMITS.maxMessagesPerConversation)
+  // Every accepted turn stores a user/assistant pair. The greeting also counts
+  // toward the persisted-message limit, so both new rows must fit.
+  if (conversation.messageCount + 2 > AI_LIMITS.maxMessagesPerConversation)
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
       message: "This conversation has reached its limit; start a new one",
