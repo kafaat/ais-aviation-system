@@ -47,6 +47,7 @@ interface FlightSuggestion {
   arrivalTime: string;
   price: number;
   cabinClass: string;
+  passengers: number;
   reason?: string;
 }
 
@@ -648,7 +649,7 @@ export default function AiChat() {
               {suggestions.map(s => (
                 <Link
                   key={s.id}
-                  href={`/booking/${s.flightId}${s.cabinClass === "business" ? "?class=business" : ""}`}
+                  href={`/booking/${s.flightId}?${new URLSearchParams({ class: s.cabinClass, passengers: String(s.passengers) })}`}
                   className="block rounded-xl border bg-card p-4 hover:border-primary/50 focus-visible:outline-2 transition-colors"
                 >
                   <div className="flex items-center justify-between mb-2">

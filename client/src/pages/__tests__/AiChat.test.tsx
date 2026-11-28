@@ -13,6 +13,7 @@ const current = vi.hoisted(() => ({
   language: "en",
   start: vi.fn(),
   suggestedCabin: "economy",
+  suggestedPassengers: 1,
   airportsUnavailable: false,
   retryAirports: vi.fn(),
   authenticated: true,
@@ -77,6 +78,7 @@ vi.mock("@/lib/trpc", () => ({
                   originTimezone: "Asia/Riyadh",
                   destinationTimezone: "Asia/Riyadh",
                   cabinClass: current.suggestedCabin,
+                  passengers: current.suggestedPassengers,
                   departureTime: "2026-11-04T09:00:00Z",
                   arrivalTime: "2026-11-04T11:00:00Z",
                 },
@@ -94,6 +96,7 @@ beforeEach(() => {
   current.airportsUnavailable = false;
   current.retryAirports.mockClear();
   current.suggestedCabin = "economy";
+  current.suggestedPassengers = 1;
   current.start
     .mockReset()
     .mockResolvedValue({ conversationId: 1, greeting: "Hello" });
@@ -146,7 +149,7 @@ it.each([
     fireEvent.click(screen.getByRole("button", { name: labels.sendMessage }));
     expect(
       await screen.findByRole("link", { name: /Test airline/ })
-    ).toHaveAttribute("href", "/booking/99");
+    ).toHaveAttribute("href", "/booking/99?class=economy&passengers=1");
     expect(log).toHaveTextContent("Flight found");
     expect(log).toHaveTextContent("12:00 – 14:00");
     expect(log).toHaveTextContent("100.49");
@@ -365,15 +368,26 @@ it.each([
       },
     });
     current.suggestedCabin = "business";
+    current.suggestedPassengers = 3;
     fireEvent.change(
       screen.getByRole("textbox", { name: locale.aiChat.messageLabel }),
-      { target: { value: "Show flights" } }
+      {
+        target: {
+          value:
+            language === "ar"
+              ? "اعرض الرحلات لـ 3 مسافرين"
+              : "Show flights for 3 passengers",
+        },
+      }
     );
     fireEvent.click(
       screen.getByRole("button", { name: locale.aiChat.sendMessage })
     );
     const link = await screen.findByRole("link", { name: /Test airline/ });
-    expect(link).toHaveAttribute("href", "/booking/99?class=business");
+    expect(link).toHaveAttribute(
+      "href",
+      "/booking/99?class=business&passengers=3"
+    );
     expect(link).toHaveTextContent(locale.search.business);
     expect(link).toHaveTextContent(locale.priceCalendar.perPerson);
     fireEvent.click(

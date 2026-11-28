@@ -48,7 +48,7 @@ test("uses the passenger's explicit route to suggest an available flight without
     .fill(flight.departureDate);
   await page
     .getByLabel(en.booking.passengers, { exact: true })
-    .selectOption("2");
+    .selectOption("1");
   await page.getByLabel(en.filters.cabinClass).selectOption("business");
   await page.getByRole("button", { name: en.aiChat.startConversation }).click();
   const log = page.getByRole("log", { name: en.aiChat.conversationLog });
@@ -63,16 +63,16 @@ test("uses the passenger's explicit route to suggest an available flight without
     originId: flight.originId,
     destinationId: flight.destinationId,
     departureDate: flight.departureDate,
-    passengers: 2,
+    passengers: 1,
     cabinClass: "business",
   });
 
   await page
     .getByRole("textbox", { name: en.aiChat.messageLabel })
-    .fill("Please show available flights.");
+    .fill("Please show available flights for 2 passengers.");
   await page.getByRole("button", { name: en.aiChat.sendMessage }).click();
   const suggestion = log.locator(
-    `a[href="/booking/${flightId}?class=business"]`
+    `a[href="/booking/${flightId}?class=business&passengers=2"]`
   );
   await expect(suggestion).toBeVisible();
   await expect(suggestion).toContainText(en.search.business);
@@ -90,6 +90,17 @@ test("uses the passenger's explicit route to suggest an available flight without
       bookingId: null,
     },
   ]);
+  await suggestion.click();
+  const bookingSummary = page.getByTestId("booking-summary");
+  await expect(
+    bookingSummary.getByText(en.search.business, { exact: true })
+  ).toBeVisible();
+  const passengerForms = page
+    .getByTestId("passenger-form")
+    .getByRole("heading", {
+      name: new RegExp(`^${en.booking.passenger} \\d+$`),
+    });
+  await expect(passengerForms).toHaveCount(2);
   const [effects] = await sqlRows(
     "SELECT COUNT(DISTINCT b.id) AS bookings, COUNT(p.id) AS payments FROM bookings b LEFT JOIN payments p ON p.bookingId = b.id WHERE b.flightId = ?",
     [flightId]
