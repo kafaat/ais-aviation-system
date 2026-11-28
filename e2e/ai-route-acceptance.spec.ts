@@ -6,7 +6,7 @@ import {
   rpc,
   sqlRows,
 } from "./fixtures/hardening";
-import en from "../client/src/i18n/locales/en.json";
+import en from "../client/src/i18n/locales/en.json" with { type: "json" };
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
 
