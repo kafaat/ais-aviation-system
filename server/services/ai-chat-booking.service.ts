@@ -13,7 +13,7 @@ import {
   referralLabels,
 } from "./chat-passenger-policy";
 import { passengerRightsSource } from "@shared/passenger-policy";
-import { AI_LIMITS } from "./ai-guardrails.service";
+import { AI_LIMITS, sanitizeResponse } from "./ai-guardrails.service";
 
 /** Messages sent to the model per turn; older turns stay in the transcript. */
 const CHAT_HISTORY_WINDOW = 20;
@@ -238,7 +238,9 @@ export async function sendMessage(
       .where(eq(chatMessages.conversationId, input.conversationId))
       .orderBy(desc(chatMessages.id))
       .limit(CHAT_HISTORY_WINDOW - 1)
-  ).reverse();
+  )
+    .reverse()
+    .map(sanitizeAssistantMessage);
   const lastReply = history.at(-1);
   const referral = chatReferral(
     input.message,
@@ -360,6 +362,9 @@ export async function sendMessage(
     // responseContent already set to the friendly error message above
   }
 
+  // Keep stored replies and future prompts consistent with the public response.
+  responseContent = sanitizeResponse(responseContent);
+
   // Parse intent and search if needed
   const { updatedContext, suggestions } = await processResponse(
     db,
@@ -432,11 +437,23 @@ export async function getConversationHistory(
     });
   }
 
-  return db
-    .select()
-    .from(chatMessages)
-    .where(eq(chatMessages.conversationId, conversationId))
-    .orderBy(chatMessages.createdAt);
+  return (
+    await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, conversationId))
+      .orderBy(chatMessages.createdAt)
+  ).map(sanitizeAssistantMessage);
+}
+
+/** Legacy assistant rows remain unchanged at rest. Mask their projections before
+ * returning history or composing a later model prompt, preserving metadata. */
+function sanitizeAssistantMessage<
+  T extends Pick<ChatMessage, "role" | "content">,
+>(message: T): T {
+  return message.role === "assistant"
+    ? { ...message, content: sanitizeResponse(message.content) }
+    : message;
 }
 
 /**
