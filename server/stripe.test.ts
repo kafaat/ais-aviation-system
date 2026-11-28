@@ -39,6 +39,10 @@ function caller(userId = 1) {
 beforeEach(() => {
   vi.resetAllMocks();
   fixture = transactionMemory({
+    users: [
+      { id: 1, tenantId: null },
+      { id: 999, tenantId: null },
+    ],
     bookings: [
       {
         id: 7,
