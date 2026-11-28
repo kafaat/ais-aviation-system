@@ -108,23 +108,19 @@ describe("durable booking checkout", () => {
     await fixture.db
       .insert(corporateAccounts)
       .values({ id: 20, status: "active", discountPercent: 10 });
-    await fixture.db
-      .insert(corporateUsers)
-      .values({
-        userId: 10,
-        corporateAccountId: 20,
-        role: "admin",
-        isActive: true,
-      });
-    await fixture.db
-      .insert(corporateBookings)
-      .values({
-        id: 1,
-        bookingId: 7,
-        corporateAccountId: 20,
-        bookedByUserId: 9,
-        approvalStatus: "pending",
-      });
+    await fixture.db.insert(corporateUsers).values({
+      userId: 10,
+      corporateAccountId: 20,
+      role: "admin",
+      isActive: true,
+    });
+    await fixture.db.insert(corporateBookings).values({
+      id: 1,
+      bookingId: 7,
+      corporateAccountId: 20,
+      bookedByUserId: 9,
+      approvalStatus: "pending",
+    });
     await expect(approveCorporateBooking(1, 10)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -146,30 +142,24 @@ describe("durable booking checkout", () => {
         financialLedger,
       } = await import("../../drizzle/schema");
       await fixture.db.insert(users).values({ id: 10, tenantId: 3 });
-      await fixture.db
-        .insert(corporateAccounts)
-        .values({
-          id: 20,
-          status: "active",
-          balance: -10000,
-          creditLimit: 50000,
-        });
-      await fixture.db
-        .insert(corporateUsers)
-        .values({
-          userId: 10,
-          corporateAccountId: 20,
-          role: "admin",
-          isActive: true,
-        });
-      await fixture.db
-        .insert(corporateBookings)
-        .values({
-          bookingId: 7,
-          corporateAccountId: 20,
-          bookedByUserId: 9,
-          approvalStatus: "approved",
-        });
+      await fixture.db.insert(corporateAccounts).values({
+        id: 20,
+        status: "active",
+        balance: -10000,
+        creditLimit: 50000,
+      });
+      await fixture.db.insert(corporateUsers).values({
+        userId: 10,
+        corporateAccountId: 20,
+        role: "admin",
+        isActive: true,
+      });
+      await fixture.db.insert(corporateBookings).values({
+        bookingId: 7,
+        corporateAccountId: 20,
+        bookedByUserId: 9,
+        approvalStatus: "approved",
+      });
       await fixture.db
         .insert(financialLedger)
         .values({ id: 30, stripeEventId: "corporate-credit:7", bookingId: 7 });
