@@ -1,6 +1,11 @@
 import { expect, test } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
-import { fixtureFlight, rpc, sqlRows } from "./fixtures/hardening";
+import {
+  fixtureFlight,
+  ownedBooking,
+  rpc,
+  sqlRows,
+} from "./fixtures/hardening";
 import en from "../client/src/i18n/locales/en.json";
 
 test.use({ trace: "off", video: "off", screenshot: "off" });
@@ -107,4 +112,61 @@ test("uses the passenger's explicit route to suggest an available flight without
   );
   expect(Number(effects.bookings)).toBe(0);
   expect(Number(effects.payments)).toBe(0);
+});
+
+test("a personal purchaser can review an owned airline booking without another financial effect", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
+  // Setup uses real booking and internal-credit commands with synthetic funds,
+  // then a test-only assignment change. It is not a payment-provider journey.
+  const own = await ownedBooking(page, true, undefined, "reporting");
+  const foreign = await ownedBooking(page, true);
+  const [original] = await sqlRows("SELECT tenantId FROM users WHERE id = ?", [
+    own.userId,
+  ]);
+  const effects = () =>
+    sqlRows(
+      "SELECT b.id, b.status, b.paymentStatus, b.totalAmount, b.tenantId, (SELECT COUNT(*) FROM booking_modifications m WHERE m.bookingId = b.id) AS modifications, (SELECT COUNT(*) FROM payments p WHERE p.bookingId = b.id) AS payments, (SELECT COUNT(*) FROM financial_ledger l WHERE l.bookingId = b.id) AS postings FROM bookings b WHERE b.id IN (?, ?) ORDER BY b.id",
+      [own.booking.bookingId, foreign.booking.bookingId]
+    );
+  const before = await effects();
+  expect(before).toHaveLength(2);
+  expect(before.every(booking => booking.paymentStatus === "paid")).toBe(true);
+  expect(Number(original.tenantId)).toBeGreaterThan(0);
+  expect(
+    before.find(booking => booking.id === own.booking.bookingId)?.tenantId
+  ).toBe(original.tenantId);
+
+  try {
+    await sqlRows("UPDATE users SET tenantId = NULL WHERE id = ?", [
+      own.userId,
+    ]);
+    await useBrowserSession(page, "reporting");
+    const principal = await rpc(page).auth.me.query();
+    expect(principal?.id).toBe(own.userId);
+    expect(principal?.tenantId).toBeNull();
+    await page.goto("/ai-chat");
+    await page
+      .getByRole("button", { name: en.aiChat.startConversation })
+      .click();
+    await page.getByRole("button", { name: en.aiChat.exchangeHelp }).click();
+    const log = page.getByRole("log", { name: en.aiChat.conversationLog });
+    const owned = log.locator(
+      `a[href="/my-bookings?exchange=${own.booking.bookingId}"]`
+    );
+    await expect(owned).toBeVisible();
+    await expect(owned).toContainText(own.booking.bookingReference);
+    await expect(
+      log.locator(
+        `a[href="/my-bookings?exchange=${foreign.booking.bookingId}"]`
+      )
+    ).toHaveCount(0);
+    expect(await effects()).toEqual(before);
+  } finally {
+    await sqlRows("UPDATE users SET tenantId = ? WHERE id = ?", [
+      original.tenantId,
+      own.userId,
+    ]);
+  }
 });
