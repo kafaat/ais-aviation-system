@@ -205,7 +205,7 @@ describe("explicit chat route context reaches deterministic flight search", () =
     });
     expect(response.bookingReady).toBe(true);
     expect(response.suggestions).toMatchObject([
-      { flightId: 11, cabinClass: "business", price: 20000 },
+      { flightId: 11, cabinClass: "business", price: 20000, passengers: 2 },
     ]);
     expect(fixture.rows(bookingSuggestions)).toMatchObject([
       {
@@ -240,11 +240,68 @@ describe("explicit chat route context reaches deterministic flight search", () =
     });
     expect(response.bookingReady).toBe(true);
     expect(response.suggestions).toMatchObject([
-      { flightId: 11, cabinClass: "business", price: 20000 },
+      { flightId: 11, cabinClass: "business", price: 20000, passengers: 2 },
     ]);
     expect(fixture.rows(bookingSuggestions)).toMatchObject([
       { totalPrice: 40000 },
     ]);
+  });
+
+  it("retains each suggestion's immutable party count after later context changes, independently of prices", async () => {
+    const chat = caller();
+    const { conversationId } = await chat.startConversation({
+      initialContext: {
+        originId: 1,
+        destinationId: 2,
+        departureDate: "2030-06-10",
+        passengers: 2,
+        cabinClass: "business",
+      },
+    });
+    const first = await chat.sendMessage({
+      conversationId,
+      message: "Show options.",
+    });
+    const originalId = first.suggestions![0].id;
+    const later = await chat.sendMessage({
+      conversationId,
+      message: "3 passengers",
+    });
+    expect(later.suggestions![0]).toMatchObject({ passengers: 3 });
+    const original = fixture
+      .rows(bookingSuggestions)
+      .find(row => row.id === originalId)!;
+    expect(original.messageId).toBeTypeOf("number");
+    const turn = (await chat.getHistory({ conversationId })).find(
+      row => row.id === original.messageId
+    )!;
+    expect(turn.role).toBe("assistant");
+    expect(turn.metadata).toMatchObject({
+      suggestions: [originalId],
+      entities: { passengers: 2 },
+    });
+    fixture.sqlite
+      .prepare(
+        "UPDATE booking_suggestions SET pricePerPerson=0,totalPrice=0 WHERE id=?"
+      )
+      .run(originalId);
+    const stored = await chat.getSuggestions({ conversationId });
+    expect(stored.find(row => row.id === originalId)).toMatchObject({
+      passengers: 2,
+      pricePerPerson: 0,
+      totalPrice: 0,
+    });
+    expect(
+      stored.find(row => row.id === later.suggestions![0].id)
+    ).toMatchObject({ passengers: 3 });
+    await expect(
+      chat.selectSuggestion({ suggestionId: originalId })
+    ).resolves.toMatchObject({
+      flightId: 11,
+      cabinClass: "business",
+      price: 0,
+      passengers: 2,
+    });
   });
 
   it("does not invent route identifiers from city names or provider-produced JSON", async () => {
@@ -291,4 +348,84 @@ describe("explicit chat route context reaches deterministic flight search", () =
     expect(boundary.search).not.toHaveBeenCalled();
     expect(fixture.rows(bookingSuggestions)).toEqual([]);
   });
+});
+
+describe("stored suggestion party count compatibility", () => {
+  it.each([
+    { name: "missing legacy snapshot", message: null },
+    {
+      name: "another conversation",
+      message: {
+        conversationId: 8,
+        role: "assistant",
+        passengers: 2,
+        suggestions: [40],
+      },
+    },
+    {
+      name: "a user message",
+      message: {
+        conversationId: 7,
+        role: "user",
+        passengers: 2,
+        suggestions: [40],
+      },
+    },
+    {
+      name: "an invalid count",
+      message: {
+        conversationId: 7,
+        role: "assistant",
+        passengers: 10,
+        suggestions: [40],
+      },
+    },
+    {
+      name: "an unrelated assistant turn",
+      message: {
+        conversationId: 7,
+        role: "assistant",
+        passengers: 2,
+        suggestions: [41],
+      },
+    },
+  ])(
+    "reports unknown count for $name without inferring it from money",
+    async ({ message }) => {
+      if (message)
+        fixture.insert(chatMessages, {
+          id: 50,
+          conversationId: message.conversationId,
+          role: message.role,
+          content: "Synthetic",
+          metadata: JSON.stringify({
+            suggestions: message.suggestions,
+            entities: { passengers: message.passengers },
+          }),
+        });
+      fixture.insert(bookingSuggestions, {
+        id: 40,
+        conversationId: 7,
+        messageId: message ? 50 : null,
+        flightId: 11,
+        cabinClass: "economy",
+        pricePerPerson: 10000,
+        totalPrice: 90000,
+      });
+      const before = fixture.rows(bookingSuggestions);
+      await expect(
+        caller(2).getSuggestions({ conversationId: 7 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        caller(2).selectSuggestion({ suggestionId: 40 })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(fixture.rows(bookingSuggestions)).toEqual(before);
+      expect(
+        (await caller().getSuggestions({ conversationId: 7 }))[0]
+      ).toMatchObject({ passengers: null });
+      await expect(
+        caller().selectSuggestion({ suggestionId: 40 })
+      ).resolves.toMatchObject({ passengers: null });
+    }
+  );
 });

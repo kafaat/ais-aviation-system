@@ -5,7 +5,7 @@
  * Supports natural language flight search, recommendations, and booking
  */
 
-import { eq, and, desc, isNull, lt, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull, lt, sql } from "drizzle-orm";
 import {
   passengerPolicyGuidance,
   chatReferral,
@@ -62,6 +62,7 @@ export interface ChatResponse {
     departureTime: string;
     arrivalTime: string;
     price: number;
+    passengers: number;
     cabinClass: string;
     reason?: string;
   }>;
@@ -376,16 +377,32 @@ export async function sendMessage(
   );
 
   // Store assistant message
-  await db.insert(chatMessages).values({
+  const [assistantMessage] = await db.insert(chatMessages).values({
     conversationId: input.conversationId,
     role: "assistant",
     content: responseContent,
     processingTimeMs: processingTime,
     metadata:
       suggestions.length > 0
-        ? { suggestions: suggestions.map(s => s.id) }
+        ? {
+            suggestions: suggestions.map(s => s.id),
+            entities: { passengers: updatedContext.passengers ?? 1 },
+          }
         : undefined,
   });
+  if (suggestions.length)
+    await db
+      .update(bookingSuggestions)
+      .set({ messageId: assistantMessage.insertId })
+      .where(
+        and(
+          eq(bookingSuggestions.conversationId, input.conversationId),
+          inArray(
+            bookingSuggestions.id,
+            suggestions.map(s => s.id)
+          )
+        )
+      );
 
   // Update conversation
   await db
@@ -463,7 +480,7 @@ function sanitizeAssistantMessage<
 export async function getConversationSuggestions(
   conversationId: number,
   userId: number
-): Promise<BookingSuggestion[]> {
+): Promise<Array<BookingSuggestion & { passengers: number | null }>> {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -489,11 +506,56 @@ export async function getConversationSuggestions(
     });
   }
 
-  return db
+  const suggestions = await db
     .select()
     .from(bookingSuggestions)
     .where(eq(bookingSuggestions.conversationId, conversationId))
     .orderBy(desc(bookingSuggestions.createdAt));
+  return withSuggestionPassengers(db, conversationId, suggestions);
+}
+
+/** A count belongs to the assistant turn that produced the suggestion, not to
+ * mutable conversation context or an inferred ratio of monetary amounts. */
+async function withSuggestionPassengers(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  conversationId: number,
+  suggestions: BookingSuggestion[]
+): Promise<Array<BookingSuggestion & { passengers: number | null }>> {
+  const messageIds = [
+    ...new Set(
+      suggestions.flatMap(s => (s.messageId == null ? [] : [s.messageId]))
+    ),
+  ];
+  const messages = messageIds.length
+    ? await db
+        .select({ id: chatMessages.id, metadata: chatMessages.metadata })
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.conversationId, conversationId),
+            eq(chatMessages.role, "assistant"),
+            inArray(chatMessages.id, messageIds)
+          )
+        )
+    : [];
+  const turns = new Map(
+    messages.map(message => [message.id, message.metadata])
+  );
+  return suggestions.map(suggestion => {
+    const metadata =
+      suggestion.messageId == null ? null : turns.get(suggestion.messageId);
+    const count = metadata?.entities?.passengers;
+    const passengers =
+      typeof count === "number" &&
+      Number.isSafeInteger(count) &&
+      count >= 1 &&
+      count <= 9 &&
+      Array.isArray(metadata?.suggestions) &&
+      metadata.suggestions.includes(suggestion.id)
+        ? count
+        : null;
+    return { ...suggestion, passengers };
+  });
 }
 
 /**
@@ -502,7 +564,12 @@ export async function getConversationSuggestions(
 export async function selectSuggestion(
   suggestionId: number,
   userId: number
-): Promise<{ flightId: number; cabinClass: string; price: number }> {
+): Promise<{
+  flightId: number;
+  cabinClass: string;
+  price: number;
+  passengers: number | null;
+}> {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -521,7 +588,12 @@ export async function selectSuggestion(
       chatConversations,
       eq(bookingSuggestions.conversationId, chatConversations.id)
     )
-    .where(eq(bookingSuggestions.id, suggestionId));
+    .where(
+      and(
+        eq(bookingSuggestions.id, suggestionId),
+        eq(chatConversations.userId, userId)
+      )
+    );
 
   if (!suggestion || suggestion.conversation.userId !== userId) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Suggestion not found" });
@@ -534,6 +606,12 @@ export async function selectSuggestion(
     });
   }
 
+  const [snapshot] = await withSuggestionPassengers(
+    db,
+    suggestion.conversation.id,
+    [suggestion.suggestion]
+  );
+
   // Mark as selected
   await db
     .update(bookingSuggestions)
@@ -544,6 +622,7 @@ export async function selectSuggestion(
     flightId: suggestion.suggestion.flightId,
     cabinClass: suggestion.suggestion.cabinClass,
     price: suggestion.suggestion.totalPrice,
+    passengers: snapshot.passengers,
   };
 }
 
@@ -573,6 +652,7 @@ async function processResponse(
     departureTime: string;
     arrivalTime: string;
     price: number;
+    passengers: number;
     cabinClass: string;
     reason?: string;
   }>;
@@ -589,6 +669,7 @@ async function processResponse(
     departureTime: string;
     arrivalTime: string;
     price: number;
+    passengers: number;
     cabinClass: string;
     reason?: string;
   }> = [];
@@ -634,7 +715,7 @@ async function processResponse(
           flightId: flight.id,
           cabinClass,
           pricePerPerson: price,
-          totalPrice: price * (updatedContext.passengers || 1),
+          totalPrice: price * (updatedContext.passengers ?? 1),
           currency: "SAR",
           reason:
             i === 0
@@ -658,6 +739,7 @@ async function processResponse(
           departureTime: flight.departureTime.toISOString(),
           arrivalTime: flight.arrivalTime.toISOString(),
           price,
+          passengers: updatedContext.passengers ?? 1,
           cabinClass,
           reason:
             i === 0

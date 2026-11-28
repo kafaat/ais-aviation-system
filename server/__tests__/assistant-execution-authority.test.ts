@@ -151,6 +151,7 @@ describe("assistant fetches alternatives without execution authority", () => {
       flightId: 11,
       cabinClass: "economy",
       price: 50000,
+      passengers: null,
     });
     expect(fixture.rows("booking_suggestions")[0].selected).toBe("selected");
     for (const name of moneyTables) expect(fixture.rows(name)).toEqual([]);
