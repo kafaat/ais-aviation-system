@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import threading
+import time
 import unittest
 from urllib.parse import parse_qs, urlsplit
 
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @contextmanager
-def fixture(fault=None):
+def fixture(fault=None, quota_overrides=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -54,10 +55,17 @@ def fixture(fault=None):
                                   {"error": {"json": {"data": {"code": code}}}})
             self.send_response(status)
             self.send_header("Content-Type", mime)
-            self.send_header("X-RateLimit-Limit", "0" if fault == "no quota" else "100")
+            if route == "auth.me":
+                quota = {
+                    "X-RateLimit-Limit": "60", "X-RateLimit-Remaining": "59",
+                    "X-RateLimit-Reset": str(int(time.time()) + 60), "X-RateLimit-Tier": "anonymous",
+                    **(quota_overrides or {}),
+                }
+                for name, value in quota.items():
+                    if value is not None:
+                        self.send_header(name, value)
             if fault == "cors":
                 self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("X-RateLimit-Remaining", "99")
             self.end_headers()
             self.wfile.write(body.encode())
 
@@ -86,11 +94,24 @@ class DeploymentProbes(unittest.TestCase):
                     self.assertIn("PASS", result.stdout)
 
     def test_critical_entry_point_rejects_failures(self):
-        for fault in ("dependency", "missing asset", "wrong input", "authorization", "cors", "no quota"):
+        for fault in ("dependency", "missing asset", "wrong input", "authorization", "cors"):
             with self.subTest(fault=fault), fixture(fault) as origin:
                 result = self.run_probe("e2e-critical.sh", origin)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("FAIL", result.stdout + result.stderr)
+
+    def test_quota_headers_match_anonymous_production_middleware(self):
+        # The current successful response may consume the last available request.
+        with fixture(quota_overrides={"X-RateLimit-Remaining": "0"}) as origin:
+            self.assertEqual(self.run_probe("e2e-critical.sh", origin).returncode, 0)
+        for key, value in (("Limit", None), ("Remaining", None), ("Reset", None),
+                           ("Tier", None), ("Limit", "0"), ("Remaining", "61"),
+                           ("Remaining", "invalid"), ("Reset", "0"), ("Tier", "admin")):
+            with self.subTest(header=key, value=value), fixture(
+                    quota_overrides={"X-RateLimit-" + key: value}) as origin:
+                result = self.run_probe("e2e-critical.sh", origin)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("quota", result.stderr.lower())
 
     def test_search_is_reported_skipped_when_airport_catalog_is_empty(self):
         with fixture("empty airport catalog") as origin:

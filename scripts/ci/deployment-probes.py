@@ -141,10 +141,18 @@ def check_site(site, mode):
         require(user is None, "Anonymous auth.me returned an identity")
         require(headers.get("Access-Control-Allow-Origin") not in ("*", "https://probe.invalid"),
                 "Unrelated origin allowed on identity response")
-        limit = headers.get("X-RateLimit-Limit", "")
-        remaining = headers.get("X-RateLimit-Remaining", "")
-        require(limit.isdigit() and remaining.isdigit() and 0 <= int(remaining) <= int(limit)
-                and int(limit) > 0, "Invalid or absent rate-limit response headers")
+        # Express emits these on production requests. Non-production loopback
+        # deliberately bypasses the middleware and cannot prove this contract.
+        numbers = {}
+        for field in ("Limit", "Remaining", "Reset"):
+            name = f"X-RateLimit-{field}"
+            raw = headers.get(name, "")
+            require(raw.isascii() and raw.isdecimal(), f"Invalid or missing quota header {name}")
+            numbers[field] = int(raw)
+        require(numbers["Limit"] > 0 and numbers["Remaining"] <= numbers["Limit"]
+                and numbers["Reset"] > 0, "Inconsistent production quota values")
+        require(headers.get("X-RateLimit-Tier") == "anonymous",
+                "Anonymous response lacks the anonymous quota tier")
         print("PASS anonymous identity, cross-origin restrictions and quota headers")
         site.query("invalid.endpoint", status=404, error="NOT_FOUND")
         print("PASS unknown procedure returns a tRPC 404")
