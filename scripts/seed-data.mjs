@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import {
@@ -10,7 +11,15 @@ import {
   pricingRules,
   seasonalPricing,
   aircraftTypes,
+  bookings,
+  payments,
+  paymentReceipts,
+  financialLedger,
 } from "../drizzle/schema.js";
+
+if (process.env.NODE_ENV === "production") {
+  throw new Error("Refusing to seed in production");
+}
 
 // Create MySQL connection pool
 const connectionString = process.env.DATABASE_URL;
@@ -29,12 +38,29 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 
-const db = drizzle(pool);
-
-async function seedData() {
+async function seedData(db) {
   console.log("🌱 Starting database seeding...");
 
   try {
+    // The locking reads also hold the empty InnoDB index ranges until commit.
+    for (const table of [
+      bookings,
+      payments,
+      paymentReceipts,
+      financialLedger,
+    ]) {
+      const [history] = await db
+        .select({ present: sql`1` })
+        .from(table)
+        .limit(1)
+        .for("update");
+      if (history) {
+        throw new Error(
+          `Refusing to seed: ${getTableName(table)} contains history`
+        );
+      }
+    }
+
     // Clear existing data (in reverse order of dependencies)
     console.log("🧹 Clearing existing data...");
     await db.delete(seasonalPricing);
@@ -162,6 +188,19 @@ async function seedData() {
       },
     ]);
 
+    const airlineRows = await db
+      .select({ code: airlines.code, id: airlines.id })
+      .from(airlines);
+    const airportRows = await db
+      .select({ code: airports.code, id: airports.id })
+      .from(airports);
+    const airlineIds = Object.fromEntries(
+      airlineRows.map(({ code, id }) => [code, id])
+    );
+    const airportIds = Object.fromEntries(
+      airportRows.map(({ code, id }) => [code, id])
+    );
+
     // Seed Flights
     console.log("Adding flights...");
     const today = new Date();
@@ -172,9 +211,9 @@ async function seedData() {
       // RUH to JED
       {
         flightNumber: "SV1234",
-        airlineId: 1,
-        originId: 1,
-        destinationId: 2,
+        airlineId: airlineIds.SV,
+        originId: airportIds.RUH,
+        destinationId: airportIds.JED,
         departureTime: new Date(tomorrow.setHours(8, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(10, 30, 0, 0)),
         aircraftType: "Boeing 777",
@@ -189,9 +228,9 @@ async function seedData() {
       // JED to CAI
       {
         flightNumber: "MS456",
-        airlineId: 2,
-        originId: 2,
-        destinationId: 4,
+        airlineId: airlineIds.MS,
+        originId: airportIds.JED,
+        destinationId: airportIds.CAI,
         departureTime: new Date(tomorrow.setHours(14, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(16, 30, 0, 0)),
         aircraftType: "Airbus A320",
@@ -206,9 +245,9 @@ async function seedData() {
       // RUH to DXB
       {
         flightNumber: "EK789",
-        airlineId: 3,
-        originId: 1,
-        destinationId: 3,
+        airlineId: airlineIds.EK,
+        originId: airportIds.RUH,
+        destinationId: airportIds.DXB,
         departureTime: new Date(tomorrow.setHours(18, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(20, 30, 0, 0)),
         aircraftType: "Boeing 787",
@@ -223,9 +262,9 @@ async function seedData() {
       // JED to DOH
       {
         flightNumber: "QR321",
-        airlineId: 4,
-        originId: 2,
-        destinationId: 5,
+        airlineId: airlineIds.QR,
+        originId: airportIds.JED,
+        destinationId: airportIds.DOH,
         departureTime: new Date(tomorrow.setHours(10, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(12, 0, 0, 0)),
         aircraftType: "Airbus A350",
@@ -240,9 +279,9 @@ async function seedData() {
       // DMM to RUH
       {
         flightNumber: "SV567",
-        airlineId: 1,
-        originId: 6,
-        destinationId: 1,
+        airlineId: airlineIds.SV,
+        originId: airportIds.DMM,
+        destinationId: airportIds.RUH,
         departureTime: new Date(tomorrow.setHours(16, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(17, 30, 0, 0)),
         aircraftType: "Boeing 737",
@@ -257,9 +296,9 @@ async function seedData() {
       // JED to SAH (Jeddah to Sanaa)
       {
         flightNumber: "IY601",
-        airlineId: 5,
-        originId: 2,
-        destinationId: 7,
+        airlineId: airlineIds.IY,
+        originId: airportIds.JED,
+        destinationId: airportIds.SAH,
         departureTime: new Date(tomorrow.setHours(9, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(11, 30, 0, 0)),
         aircraftType: "Airbus A320",
@@ -274,9 +313,9 @@ async function seedData() {
       // SAH to JED (Sanaa to Jeddah)
       {
         flightNumber: "IY602",
-        airlineId: 5,
-        originId: 7,
-        destinationId: 2,
+        airlineId: airlineIds.IY,
+        originId: airportIds.SAH,
+        destinationId: airportIds.JED,
         departureTime: new Date(tomorrow.setHours(13, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(15, 30, 0, 0)),
         aircraftType: "Airbus A320",
@@ -291,9 +330,9 @@ async function seedData() {
       // JED to ADE (Jeddah to Aden)
       {
         flightNumber: "IY603",
-        airlineId: 5,
-        originId: 2,
-        destinationId: 8,
+        airlineId: airlineIds.IY,
+        originId: airportIds.JED,
+        destinationId: airportIds.ADE,
         departureTime: new Date(tomorrow.setHours(7, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(9, 30, 0, 0)),
         aircraftType: "Boeing 737",
@@ -308,9 +347,9 @@ async function seedData() {
       // ADE to JED (Aden to Jeddah)
       {
         flightNumber: "IY604",
-        airlineId: 5,
-        originId: 8,
-        destinationId: 2,
+        airlineId: airlineIds.IY,
+        originId: airportIds.ADE,
+        destinationId: airportIds.JED,
         departureTime: new Date(tomorrow.setHours(11, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(13, 30, 0, 0)),
         aircraftType: "Boeing 737",
@@ -325,9 +364,9 @@ async function seedData() {
       // SAH to ADE (Sanaa to Aden - domestic Yemen)
       {
         flightNumber: "IY210",
-        airlineId: 5,
-        originId: 7,
-        destinationId: 8,
+        airlineId: airlineIds.IY,
+        originId: airportIds.SAH,
+        destinationId: airportIds.ADE,
         departureTime: new Date(tomorrow.setHours(6, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(7, 15, 0, 0)),
         aircraftType: "Boeing 737",
@@ -342,9 +381,9 @@ async function seedData() {
       // RUH to MCT (Riyadh to Muscat)
       {
         flightNumber: "WY812",
-        airlineId: 6,
-        originId: 1,
-        destinationId: 9,
+        airlineId: airlineIds.WY,
+        originId: airportIds.RUH,
+        destinationId: airportIds.MCT,
         departureTime: new Date(tomorrow.setHours(10, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(12, 30, 0, 0)),
         aircraftType: "Boeing 787",
@@ -359,9 +398,9 @@ async function seedData() {
       // MCT to RUH (Muscat to Riyadh)
       {
         flightNumber: "WY813",
-        airlineId: 6,
-        originId: 9,
-        destinationId: 1,
+        airlineId: airlineIds.WY,
+        originId: airportIds.MCT,
+        destinationId: airportIds.RUH,
         departureTime: new Date(tomorrow.setHours(15, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(17, 0, 0, 0)),
         aircraftType: "Boeing 787",
@@ -376,9 +415,9 @@ async function seedData() {
       // JED to MCT (Jeddah to Muscat)
       {
         flightNumber: "WY814",
-        airlineId: 6,
-        originId: 2,
-        destinationId: 9,
+        airlineId: airlineIds.WY,
+        originId: airportIds.JED,
+        destinationId: airportIds.MCT,
         departureTime: new Date(tomorrow.setHours(12, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(15, 30, 0, 0)),
         aircraftType: "Airbus A330",
@@ -393,9 +432,9 @@ async function seedData() {
       // MCT to DXB (Muscat to Dubai)
       {
         flightNumber: "WY607",
-        airlineId: 6,
-        originId: 9,
-        destinationId: 3,
+        airlineId: airlineIds.WY,
+        originId: airportIds.MCT,
+        destinationId: airportIds.DXB,
         departureTime: new Date(tomorrow.setHours(8, 0, 0, 0)),
         arrivalTime: new Date(tomorrow.setHours(9, 0, 0, 0)),
         aircraftType: "Boeing 737",
@@ -863,16 +902,16 @@ async function seedData() {
         active: true,
       },
     ]);
-
-    console.log("✅ Database seeding completed successfully!");
   } catch (error) {
     console.error("❌ Error seeding database:", error);
     throw error;
   }
 }
 
-seedData()
+drizzle(pool)
+  .transaction(seedData, { isolationLevel: "repeatable read" })
   .then(async () => {
+    console.log("✅ Database seeding completed successfully!");
     await pool.end();
     process.exit(0);
   })
