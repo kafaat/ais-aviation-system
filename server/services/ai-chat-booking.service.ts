@@ -32,6 +32,7 @@ import type { Message } from "../_core/llm";
 import { aiGateway } from "./intelligence/gateway";
 import { searchFlights, type SearchFlightsInput } from "./flights.service";
 import { CIVIL_DATE } from "./civil-day";
+import { readCabinHoldTotals } from "./inventory-capacity.service";
 
 // ============================================================================
 // Types
@@ -693,12 +694,31 @@ async function processResponse(
     try {
       const searchResults = await searchFlights(searchInput);
 
-      // Get top 3 flights
-      const topFlights = searchResults.slice(0, 3);
+      const cabinClass = updatedContext.cabinClass ?? "economy";
+      const passengerCount = updatedContext.passengers ?? 1;
+      const holds = await readCabinHoldTotals(
+        db,
+        searchResults.map(flight => flight.id),
+        new Date()
+      );
+      // Search returns live cabin counters, before unreserved holds. Apply the
+      // shared canonical/legacy hold accounting before limiting the shortlist.
+      // This is an availability observation, not an inventory reservation.
+      const topFlights = searchResults
+        .filter(flight => {
+          const recorded =
+            cabinClass === "business"
+              ? flight.businessAvailable
+              : flight.economyAvailable;
+          return (
+            Math.max(0, recorded - (holds.get(flight.id)?.[cabinClass] ?? 0)) >=
+            passengerCount
+          );
+        })
+        .slice(0, 3);
 
       for (let i = 0; i < topFlights.length; i++) {
         const flight = topFlights[i];
-        const cabinClass = updatedContext.cabinClass || "economy";
         const price =
           cabinClass === "business"
             ? Number(flight.businessPrice)
@@ -715,7 +735,7 @@ async function processResponse(
           flightId: flight.id,
           cabinClass,
           pricePerPerson: price,
-          totalPrice: price * (updatedContext.passengers ?? 1),
+          totalPrice: price * passengerCount,
           currency: "SAR",
           reason:
             i === 0
@@ -739,7 +759,7 @@ async function processResponse(
           departureTime: flight.departureTime.toISOString(),
           arrivalTime: flight.arrivalTime.toISOString(),
           price,
-          passengers: updatedContext.passengers ?? 1,
+          passengers: passengerCount,
           cabinClass,
           reason:
             i === 0

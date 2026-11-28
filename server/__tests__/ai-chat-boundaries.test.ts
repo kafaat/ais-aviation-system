@@ -3,6 +3,8 @@ import {
   chatConversations,
   chatMessages,
   bookingSuggestions,
+  inventoryLocks,
+  seatHolds,
 } from "../../drizzle/schema";
 import type { TrpcContext } from "../_core/context";
 import { authorityRelationalFixture } from "./helpers/authority-relational-fixture";
@@ -58,6 +60,8 @@ beforeEach(() => {
     chatConversations,
     chatMessages,
     bookingSuggestions,
+    inventoryLocks,
+    seatHolds,
   ]);
   fixture.insert(chatConversations, {
     id: 7,
@@ -428,4 +432,159 @@ describe("stored suggestion party count compatibility", () => {
       ).resolves.toMatchObject({ passengers: null });
     }
   );
+});
+
+describe("chat suggestion capacity before shortlist selection", () => {
+  const flight = (
+    id: number,
+    economyAvailable: number,
+    businessAvailable: number
+  ) => ({
+    id,
+    departureTime: new Date("2030-06-10T09:00:00Z"),
+    arrivalTime: new Date("2030-06-10T11:00:00Z"),
+    economyPrice: 10000,
+    businessPrice: 20000,
+    economyAvailable,
+    businessAvailable,
+    airline: { name: "Synthetic Airline" },
+    origin: { city: "Origin", timezone: "UTC" },
+    destination: { city: "Destination", timezone: "UTC" },
+  });
+  async function request(cabinClass: "economy" | "business", passengers = 2) {
+    const chat = caller();
+    const { conversationId } = await chat.startConversation({
+      initialContext: {
+        originId: 1,
+        destinationId: 2,
+        departureDate: "2030-06-10",
+        cabinClass,
+        passengers,
+      },
+    });
+    return chat.sendMessage({ conversationId, message: "Show options." });
+  }
+
+  it("filters a sold-out cabin and insufficient party capacity before taking the first three flights", async () => {
+    boundary.search.mockResolvedValue([
+      flight(11, 20, 0),
+      flight(12, 20, 1),
+      flight(13, 20, 2),
+      flight(14, 0, 3),
+      flight(15, 0, 5),
+      flight(16, 0, 4),
+      flight(17, 0, 4),
+    ]);
+    const result = await request("business", 3);
+    expect(result.suggestions?.map(suggestion => suggestion.flightId)).toEqual([
+      14, 15, 16,
+    ]);
+    expect(
+      fixture.rows(bookingSuggestions).map(suggestion => suggestion.flightId)
+    ).toEqual([14, 15, 16]);
+  });
+
+  it.each([
+    ["economy", [12]],
+    ["business", [11]],
+  ] as const)(
+    "uses %s capacity rather than the other cabin",
+    async (cabin, expected) => {
+      boundary.search.mockResolvedValue([flight(11, 0, 5), flight(12, 3, 1)]);
+      const result = await request(cabin);
+      expect(
+        result.suggestions?.map(suggestion => suggestion.flightId)
+      ).toEqual(expected);
+    }
+  );
+
+  it("subtracts active canonical and unlinked legacy holds once, ignoring aliases, expired holds and other cabins", async () => {
+    boundary.search.mockResolvedValue([
+      flight(11, 20, 5),
+      flight(12, 20, 4),
+      flight(13, 20, 2),
+      flight(14, 20, 2),
+      flight(15, 20, 2),
+    ]);
+    const active = {
+      cabinClass: "business",
+      status: "active",
+      sessionId: "synthetic-hold",
+      expiresAt: "2035-01-01 00:00:00",
+    };
+    fixture.insert(inventoryLocks, {
+      ...active,
+      id: 1,
+      flightId: 11,
+      numberOfSeats: 2,
+    });
+    fixture.insert(seatHolds, {
+      ...active,
+      id: 1,
+      flightId: 11,
+      seats: 2,
+      inventoryLockId: null,
+    });
+    fixture.insert(inventoryLocks, {
+      ...active,
+      id: 2,
+      flightId: 12,
+      numberOfSeats: 2,
+    });
+    fixture.insert(seatHolds, {
+      ...active,
+      id: 2,
+      flightId: 12,
+      seats: 2,
+      inventoryLockId: 2,
+    });
+    fixture.insert(inventoryLocks, {
+      ...active,
+      id: 3,
+      flightId: 13,
+      numberOfSeats: 100,
+      expiresAt: "2000-01-01 00:00:00",
+    });
+    fixture.insert(inventoryLocks, {
+      ...active,
+      id: 4,
+      flightId: 13,
+      numberOfSeats: 100,
+      status: "converted",
+    });
+    fixture.insert(seatHolds, {
+      ...active,
+      id: 3,
+      flightId: 13,
+      seats: 100,
+      inventoryLockId: null,
+      status: "released",
+    });
+    fixture.insert(inventoryLocks, {
+      ...active,
+      id: 5,
+      flightId: 14,
+      numberOfSeats: 100,
+      cabinClass: "economy",
+    });
+    fixture.insert(seatHolds, {
+      ...active,
+      id: 4,
+      flightId: 15,
+      seats: 1,
+      inventoryLockId: null,
+    });
+    const before = {
+      canonical: fixture.rows(inventoryLocks),
+      legacy: fixture.rows(seatHolds),
+    };
+    const result = await request("business");
+    expect(result.suggestions?.map(suggestion => suggestion.flightId)).toEqual([
+      12, 13, 14,
+    ]);
+    expect({
+      canonical: fixture.rows(inventoryLocks),
+      legacy: fixture.rows(seatHolds),
+    }).toEqual(before);
+  });
 });
