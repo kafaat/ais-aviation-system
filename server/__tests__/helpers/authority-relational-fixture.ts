@@ -81,21 +81,24 @@ export function authorityRelationalFixture(tables: MySqlTable[]) {
       .replace(/ for (?:update|share)(?: skip locked)?(?=\s*(?:\)|$))/gi, "")
       .replaceAll("<=>", "IS");
     // SQLite does not accept DEFAULT inside VALUES. Preserve the corresponding
-    // canonical column default explicitly; never substitute a fixture rowset.
+    // canonical column default in every tuple; never substitute a fixture rowset.
     executable = executable.replace(
-      /^insert into `([^`]+)` \(([^)]+)\) values \(([^)]+)\)/i,
+      /^insert into `([^`]+)` \(([^)]+)\) values (\([^)]*\)(?:,\s*\([^)]*\))*)/i,
       (_match, table: string, names: string, values: string) => {
         const columns = names
           .split(",")
           .map(name => name.trim().replaceAll("`", ""));
-        const bound = values
-          .split(",")
-          .map((value, index) =>
-            value.trim().toLowerCase() === "default"
-              ? (defaults.get(table)?.get(columns[index]) ?? "NULL")
-              : value
-          );
-        return `insert into \`${table}\` (${names}) values (${bound.join(",")})`;
+        const bound = values.replace(/\(([^)]*)\)/g, (_tuple, row: string) => {
+          const cells = row
+            .split(",")
+            .map((value, index) =>
+              value.trim().toLowerCase() === "default"
+                ? (defaults.get(table)?.get(columns[index]) ?? "NULL")
+                : value
+            );
+          return `(${cells.join(",")})`;
+        });
+        return `insert into \`${table}\` (${names}) values ${bound}`;
       }
     );
     if (/on duplicate key update/i.test(executable)) {
