@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, getTableName } from "drizzle-orm";
 import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import {
@@ -41,6 +41,40 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
   let databaseName = "";
   let created = false;
   let tableNames: string[] = [];
+  // Include every table these native wallet paths read or write, including
+  // empty tables used by booking eligibility and refund guards. Unrelated
+  // application tables add DDL work to every reset without extending coverage.
+  const fixtureTables = [
+    schema.airlines,
+    schema.airports,
+    schema.bookingAncillaries,
+    schema.bookingCheckoutRequests,
+    schema.bookingModifications,
+    schema.bookingSegments,
+    schema.bookingStatusHistory,
+    schema.bookings,
+    schema.corporateBookings,
+    schema.dcsPassengerStates,
+    schema.financialLedger,
+    schema.flightFareClassInventory,
+    schema.flights,
+    schema.idempotencyRequests,
+    schema.inventoryLocks,
+    schema.ndcOrders,
+    schema.orderServiceRefunds,
+    schema.outbox,
+    schema.passengers,
+    schema.paymentReceipts,
+    schema.paymentSplits,
+    schema.payments,
+    schema.seatHolds,
+    schema.seatInventory,
+    schema.tenants,
+    schema.ticketCoupons,
+    schema.users,
+    schema.walletTransactions,
+    schema.wallets,
+  ];
 
   beforeAll(async () => {
     const url = new URL(process.env.DATABASE_URL!);
@@ -64,12 +98,14 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
       "SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE'",
       [source]
     );
-    tableNames = tables.map(row => String(row.name));
+    const migratedTables = new Set(tables.map(row => String(row.name)));
+    tableNames = fixtureTables.map(getTableName);
     if (
-      !tableNames.length ||
-      tableNames.some(name => !/^[A-Za-z0-9_]+$/.test(name))
+      tableNames.some(
+        name => !/^[A-Za-z0-9_]+$/.test(name) || !migratedTables.has(name)
+      )
     )
-      throw new Error("Invalid migrated fixture table catalog");
+      throw new Error("Migrated wallet fixture is missing a required table");
     databaseName = `ais_wallet_${randomBytes(6).toString("hex")}`;
     await admin.query(`CREATE DATABASE \`${databaseName}\``);
     created = true;
@@ -104,10 +140,8 @@ nativeDescribe("wallet funding crosses real native MySQL transactions", () => {
     }
   });
 
-  // Truncating every table and dropping triggers is DDL on a shared CI MySQL;
-  // under load it has exceeded the default 10 s hook budget, failing one case
-  // on the timeout and the next on the fixtures it left behind. Give the hooks
-  // the same budget as setup.
+  // Native table resets and trigger cleanup retain the setup hook budget.
+  // The scoped catalog reduces DDL work while preserving the financial cases.
   afterEach(async () => {
     await pool?.query("DROP TRIGGER IF EXISTS ais_wallet_fail_confirmation");
     await pool?.query("DROP TRIGGER IF EXISTS ais_wallet_fail_topup");
