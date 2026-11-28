@@ -34,10 +34,10 @@
 
 - [x] Fetch current main and open requests; preserve current code in a new audit branch.
 - [x] Read repository guidance and architecture/capability acceptance boundaries.
-- [ ] Install the exact locked package manager/dependencies without changing the lock.
-- [ ] Record baseline build, types, regression and runtime outcomes; preserve original failures.
-- [ ] Extract file, module, route, field, configuration and test inventories with stable identifiers.
-- [ ] Build requirements, traceability, compatibility, journey, defect and readiness registers with explicit review status.
+- [x] Install the exact locked package manager/dependencies without changing the lock.
+- [x] Record baseline build, types, regression and runtime outcomes; preserve original failures.
+- [x] Extract file, module, route, field, configuration and test inventories with stable identifiers.
+- [x] Build requirements, traceability, compatibility, journey, defect and readiness registers with explicit review status.
 
 ## Task 2: tenant isolation in financial reads and writes (security worker)
 
@@ -45,11 +45,11 @@
 
 **Interfaces:** Consume the authenticated user's current tenant through the existing tRPC context and invoice/booking authority. Preserve the public response contract and intentional legacy-null policy; return only authorized rows and reject unauthorized writes before replay or settlement.
 
-- [ ] Reproduce former-tenant payment-history exposure and voucher/credit write access using distinct tenant fixtures.
-- [ ] Add failing regression tests covering positive access, moved-user rejection, pagination/statistics consistency and zero-write negative cases.
-- [ ] Apply the smallest tenant predicate/parameter propagation correction across affected callers.
-- [ ] Run focused and actual MySQL tests, record baseline red and corrected green results.
-- [ ] Independently review source, compatibility, legacy behavior and financial side effects.
+- [x] Reproduce former-tenant payment-history exposure and voucher/credit write access using distinct tenant fixtures.
+- [x] Add failing regression tests covering positive access, moved-user rejection, pagination/statistics consistency and zero-write negative cases.
+- [x] Apply the smallest tenant predicate/parameter propagation correction across affected callers.
+- [x] Run focused and actual MySQL tests, record baseline red and corrected green results.
+- [x] Independently review source, compatibility, legacy behavior and financial side effects.
 
 ## Task 3: passenger field integrity and payer recovery (frontend worker)
 
@@ -57,11 +57,11 @@
 
 **Interfaces:** Preserve `passportExpiry` through saved passenger -> form -> booking request and saved-passenger mutation. Preserve server-side validation authority. Distinguish query error from a successfully returned missing/cancelled payment invitation and allow retry.
 
-- [ ] Prove expiry loss and transport-error misclassification with failing behavioral component tests.
-- [ ] Correct mappings and recovery UI without weakening date or payment validation.
-- [ ] Verify empty/expired/future document semantics and both languages; record input/output field links.
-- [ ] Run component checks and real rendered UI journey when local runtime is available.
-- [ ] Independently review all consumers and error paths.
+- [x] Prove expiry loss and transport-error misclassification with failing behavioral component tests.
+- [x] Correct mappings and recovery UI without weakening date or payment validation.
+- [x] Verify empty/expired/future document semantics and both languages; record input/output field links.
+- [x] Run component checks and real rendered UI journey when local runtime is available.
+- [x] Independently review all consumers and error paths.
 
 ## Task 4: deployment configuration and worker compatibility (operations worker)
 
@@ -69,18 +69,18 @@
 
 **Interfaces:** Production-lite queue Redis must provide `maxmemory-policy noeviction`, as enforced in `server/worker.ts` and already configured in the full production manifest.
 
-- [ ] Preserve evidence showing that documented lite settings cause the worker's startup guard to reject Redis.
-- [ ] Add meaningful configuration regression against both production manifests and worker invariant.
-- [ ] Align the lite policy without relaxing the worker guard.
-- [ ] Verify config syntax and targeted tests; disclose whether Docker/runtime behavior was executed.
-- [ ] Independently review backlog durability and adjacent deployment controls.
+- [x] Preserve evidence showing that documented lite settings cause the worker's startup guard to reject Redis.
+- [x] Add meaningful configuration regression against both production manifests and worker invariant.
+- [x] Align the lite policy without relaxing the worker guard.
+- [x] Verify config syntax and targeted tests; disclose whether Docker/runtime behavior was executed.
+- [x] Independently review backlog durability and adjacent deployment controls.
 
 ## Task 5: reconcile, review, verify and deliver (root plus independent reviewer)
 
-- [ ] Integrate reviewed task commits into the audit branch, without rewriting unrelated work.
+- [x] Integrate reviewed task commits into the audit branch, without rewriting unrelated work.
 - [ ] Rerun required checks against the combined state; native DB, real UI, external integration and deployment remain separate labels.
 - [ ] Produce all 21 requested register categories, index, reproducible commands, raw-result hashes and precise blockers.
-- [ ] Prepare a reviewable pull request with source-bound evidence, remaining risks and no unsupported readiness claim.
+- [x] Prepare a reviewable pull request with source-bound evidence, remaining risks and no unsupported readiness claim.
 - [ ] Re-read remote main and CI before final status; preserve a durable checkpoint if any gate is blocked.
 
 ## Preflight conflict scan and decisions
@@ -103,3 +103,70 @@
 - Ruling: use the user's explicit parallel-execution authorization with separate ownership rather than request another plan/worktree approval.
 - Ruling: keep publication/deployment and business-owned multi-currency/carrier/device acceptance outside this corrective branch; record their existing acceptance requirements.
 - The full audit is an evidence program. Unreviewed inventory rows remain unreviewed; counts and closure gates will use explicit denominators.
+
+## Execution checkpoint and expanded scope
+
+The initial task scopes expanded after source tracing found the same purchaser
+boundary in creation, replay, split delivery, ticket and boarding issuance,
+corporate credit, NDC, rebooking, paid servicing, seats, check-in, queues, holds,
+groups, compensation, loyalty, passenger services, baggage and itinerary reads.
+Each worker used a separate worktree. An independent review produced five
+additional correction requests; their fixes were reviewed at local commit
+`d1af7867d944ba4afcfa5f9587d3ab425a421bf9`.
+
+The public draft is [PR #407](https://github.com/kafaat/ais-aviation-system/pull/407).
+It preserves the individual changes. GitHub App publication recreates each
+commit with the exact same tree; every remote commit records its original local
+commit and verified tree. Commit identifiers therefore differ, while the
+recorded content equality is checked before the branch advances.
+
+### Completed verification at the recorded checkpoint
+
+- At local `d1af786`, nine static gates passed, including all three TypeScript
+  projects, zero-warning ESLint and catalog/contract consistency checks. The
+  build passed. The client regression passed 1,062 cases across 90 files.
+- The same source passed 94 Chromium cases with actual local MySQL 8.0.46,
+  Redis 8.0.2 and the FastAPI identity service, plus a separate three-case logout
+  run. Browser accounts were registered through the test setup, staff roles
+  were assigned by SQL, and UI login preceded session reuse. These setup
+  shortcuts do not prove registration or administrative role-assignment UI.
+- The saved-passport journey used visible fields and actual booking submission,
+  then compared the persisted expiry and pending invoice in MySQL. Broader
+  provider scenarios used explicitly synthetic fixtures.
+- Migration replay and correct/incorrect Node-to-FastAPI service credentials
+  passed. Production-mode HTTP probes passed with a loopback balance-response
+  fixture. This is not live payment-provider acceptance.
+- Independent native worker batches are retained separately: security 165
+  cases followed by 63 overlapping final wrapper cases; servicing 10 and 11
+  cases; passenger services 20 native plus 59 component cases in its combined
+  batch. These counts must not be summed as unique coverage.
+
+### Followup verification in progress
+
+- The full server regression runs on frozen local `d991ce7`; its outcome must
+  be read from the completed receipt, not inferred from progress logs.
+- CI run `46085278511`, job `140793326048`, failed because locked Prettier
+  changed only `server/__tests__/booking-checkout-boundary.test.ts`. Local
+  `2055ba5` / published `91dc2a5` repairs formatting without changing assertions.
+  The next CI run is a separate result; skipped downstream jobs in the original
+  run are not passes.
+- Explicit-route AI search, assistant-history masking, and the UI-to-booking
+  passenger/cabin handoff receive focused regression and integrated browser
+  verification before stronger claims. No live-model quality claim is made.
+- Final inventory regeneration, final source/CI reconciliation, the searchable
+  deliverable index, and final evidence manifest remain root-owned closure
+  tasks. Earlier worker receipts retain their original commits and limitations.
+
+### Remaining business and environment boundaries
+
+- Chat concurrency quota, ordering and partial-failure policy are unresolved.
+  A controlled provider probe reproduced 102 transcript rows with stored count
+  100 after two calls starting at count 98, and a lost context update. This is
+  an open defect, not a closed audit observation.
+- The migrated native schema has no foreign keys or CHECK constraints. That
+  catalog fact does not establish existing corruption. Production data and
+  deletion/history semantics are needed before targeted constraints.
+- Broad manual semantic review of every discovered field/API, all browsers and
+  physical devices, live carriers/payment/mail providers, deployed identities,
+  production load, operator RPO/RTO and disaster recovery remain separate
+  acceptance boundaries. No blanket readiness percentage is assigned.
