@@ -23,6 +23,7 @@
         "server/routers/seat-map.ts",
         "server/routers/special-services.ts",
         "server/routers/split-payments.ts",
+        "server/services/ai-chat-booking.service.ts",
         "server/services/baggage.service.ts",
         "server/services/biometric.service.ts",
         "server/services/boarding-pass.service.ts",
@@ -243,10 +244,13 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/access-control.service.ts",
         "server/services/ai-guardrails.service.ts",
         "server/services/chat-passenger-policy.ts",
+        "server/services/civil-day.ts",
         "server/services/flights.service.ts",
         "server/services/intelligence/gateway.ts",
+        "server/services/inventory-capacity.service.ts",
         "shared/passenger-policy.ts"
       ],
       "tableExpressions": {
@@ -254,7 +258,8 @@
           "bookingSuggestions",
           "bookings",
           "chatConversations",
-          "chatMessages"
+          "chatMessages",
+          "users"
         ],
         "writes": ["bookingSuggestions", "chatConversations", "chatMessages"]
       },
@@ -1727,6 +1732,7 @@
       "consumers": [
         "server/db.ts",
         "server/services/agent-portal.service.ts",
+        "server/services/ai-chat-booking.service.ts",
         "server/services/apis-paxlst.ts",
         "server/services/apis-pnrgov.ts",
         "server/services/apis.service.ts",
@@ -3830,6 +3836,7 @@
       "consumers": [
         "server/services/agency-credit.service.ts",
         "server/services/agent-portal.service.ts",
+        "server/services/ai-chat-booking.service.ts",
         "server/services/booking-modification.service.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/bookings.service.ts",
