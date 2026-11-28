@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  users,
+  bookings,
   chatConversations,
   chatMessages,
   bookingSuggestions,
@@ -27,10 +29,10 @@ vi.mock("../_core/middleware/procedure-rate-limit", () => ({
 import { aiChatRouter } from "../routers/ai-chat";
 
 let fixture: ReturnType<typeof authorityRelationalFixture>;
-const caller = (userId = 1) =>
+const caller = (userId = 1, tenantId: number | null = 3) =>
   aiChatRouter.createCaller({
     user: { id: userId, role: "user" },
-    tenantId: 3,
+    tenantId,
     authMethod: "cookie",
   } as TrpcContext);
 function providerResponse(content: string) {
@@ -57,12 +59,20 @@ function providerResponse(content: string) {
 }
 beforeEach(() => {
   fixture = authorityRelationalFixture([
+    users,
+    bookings,
     chatConversations,
     chatMessages,
     bookingSuggestions,
     inventoryLocks,
     seatHolds,
   ]);
+  fixture.insert(users, {
+    id: 1,
+    openId: "synthetic-ai-owner",
+    tenantId: 3,
+    role: "user",
+  });
   fixture.insert(chatConversations, {
     id: 7,
     userId: 1,
@@ -160,6 +170,107 @@ describe("assistant response privacy across persistence and reuse", () => {
       caller(2).sendMessage({ conversationId: 7, message: "Hello" })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(fixture.rows(chatMessages)).toEqual(before);
+    expect(boundary.invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("exchange referral uses current purchaser authority", () => {
+  beforeEach(() => {
+    const eligible = {
+      userId: 1,
+      tenantId: 3,
+      status: "confirmed",
+      paymentStatus: "paid",
+      deletedAt: null,
+    };
+    for (const booking of [
+      { id: 100, bookingReference: "OWN003" },
+      { id: 101, bookingReference: "OWN004", tenantId: 4 },
+      { id: 102, bookingReference: "PERSON", tenantId: null },
+      { id: 103, bookingReference: "OTHUSR", userId: 2 },
+      { id: 104, bookingReference: "UNPAID", paymentStatus: "pending" },
+      { id: 105, bookingReference: "CANCEL", status: "cancelled" },
+      {
+        id: 106,
+        bookingReference: "ERASED",
+        deletedAt: "2026-11-28 12:00:00",
+      },
+    ])
+      fixture.insert(bookings, { ...eligible, ...booking });
+  });
+
+  async function requestExchange(tenantId: number | null) {
+    const before = fixture.rows(bookings);
+    const response = await caller(1, tenantId).sendMessage({
+      conversationId: 7,
+      message: "Change my booking PNR OWN003",
+    });
+    expect(fixture.rows(bookings)).toEqual(before);
+    expect(fixture.rows(inventoryLocks)).toEqual([]);
+    expect(fixture.rows(seatHolds)).toEqual([]);
+    expect(fixture.rows(bookingSuggestions)).toEqual([]);
+    expect(JSON.stringify(fixture.rows(chatMessages))).not.toMatch(
+      /OWN003|OWN004|PERSON|OTHUSR|UNPAID|CANCEL|ERASED/
+    );
+    expect(boundary.invoke).not.toHaveBeenCalled();
+    expect(boundary.search).not.toHaveBeenCalled();
+    return response;
+  }
+
+  it("lists a genuinely unassigned buyer's own eligible airline bookings", async () => {
+    fixture.sqlite.prepare("UPDATE users SET tenantId=NULL WHERE id=1").run();
+    const response = await requestExchange(null);
+    expect(response.exchangeBookings).toEqual([
+      { id: 102, bookingReference: "PERSON" },
+      { id: 101, bookingReference: "OWN004" },
+      { id: 100, bookingReference: "OWN003" },
+    ]);
+    expect(fixture.rows(chatMessages)).toHaveLength(2);
+    expect(fixture.rows(chatConversations)[0].messageCount).toBe(3);
+  });
+
+  it.each([3, null])(
+    "restricts an assigned buyer to the actual tenant with request scope %s",
+    async requestTenant => {
+      const response = await requestExchange(requestTenant);
+      expect(response.exchangeBookings).toEqual([
+        { id: 100, bookingReference: "OWN003" },
+      ]);
+      const userRead = fixture.queries.findIndex(query =>
+        /from `users` .*for share$/i.test(query.sql)
+      );
+      const bookingRead = fixture.queries.findIndex(query =>
+        /from `bookings` /i.test(query.sql)
+      );
+      expect(userRead).toBeGreaterThanOrEqual(0);
+      expect(bookingRead).toBeGreaterThan(userRead);
+      expect(fixture.queries[userRead].inTransaction).toBe(true);
+      expect(fixture.queries[bookingRead].inTransaction).toBe(true);
+      // SQLite records lock clauses but does not simulate MySQL locking.
+      expect(fixture.queries[bookingRead].sql).not.toMatch(
+        /for (update|share)/i
+      );
+    }
+  );
+
+  it("does not disclose a former tenant's bookings through a stale assigned context", async () => {
+    fixture.sqlite.prepare("UPDATE users SET tenantId=4 WHERE id=1").run();
+    const response = await requestExchange(3);
+    expect(response.exchangeBookings).toEqual([]);
+  });
+
+  it("rejects a missing current user before recording a referral or returning references", async () => {
+    fixture.sqlite.prepare("DELETE FROM users WHERE id=1").run();
+    const before = fixture.rows(bookings);
+    await expect(
+      caller(1, null).sendMessage({
+        conversationId: 7,
+        message: "Change my booking",
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(fixture.rows(bookings)).toEqual(before);
+    expect(fixture.rows(chatMessages)).toEqual([]);
+    expect(fixture.rows(chatConversations)[0].messageCount).toBe(1);
     expect(boundary.invoke).not.toHaveBeenCalled();
   });
 });

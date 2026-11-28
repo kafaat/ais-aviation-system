@@ -21,6 +21,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   bookings,
+  users,
   chatConversations,
   chatMessages,
   bookingSuggestions,
@@ -33,6 +34,7 @@ import { aiGateway } from "./intelligence/gateway";
 import { searchFlights, type SearchFlightsInput } from "./flights.service";
 import { CIVIL_DATE } from "./civil-day";
 import { readCabinHoldTotals } from "./inventory-capacity.service";
+import { purchaserBookingCondition } from "./access-control.service";
 
 // ============================================================================
 // Types
@@ -268,25 +270,39 @@ export async function sendMessage(
     // This projection stays in the authenticated response. Neither the
     // passenger references nor the selection enter the model or transcript.
     const exchangeBookings = isExchange
-      ? await db
-          .select({
-            id: bookings.id,
-            bookingReference: bookings.bookingReference,
-          })
-          .from(bookings)
-          .where(
-            and(
-              eq(bookings.userId, input.userId),
-              input.tenantId == null
-                ? isNull(bookings.tenantId)
-                : eq(bookings.tenantId, input.tenantId),
-              eq(bookings.status, "confirmed"),
-              eq(bookings.paymentStatus, "paid"),
-              isNull(bookings.deletedAt)
+      ? await db.transaction(async tx => {
+          // Keep current assignment stable while reading. The booking
+          // projection takes no row locks, avoiding booking/user lock inversion.
+          const [buyer] = await tx
+            .select({ tenantId: users.tenantId })
+            .from(users)
+            .where(eq(users.id, input.userId))
+            .limit(1)
+            .for("share");
+          if (!buyer)
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Purchaser not found",
+            });
+
+          return tx
+            .select({
+              id: bookings.id,
+              bookingReference: bookings.bookingReference,
+            })
+            .from(bookings)
+            .where(
+              and(
+                purchaserBookingCondition(input.userId, buyer.tenantId),
+                purchaserBookingCondition(input.userId, input.tenantId),
+                eq(bookings.status, "confirmed"),
+                eq(bookings.paymentStatus, "paid"),
+                isNull(bookings.deletedAt)
+              )
             )
-          )
-          .orderBy(desc(bookings.id))
-          .limit(10)
+            .orderBy(desc(bookings.id))
+            .limit(10);
+        })
       : undefined;
     // Record the referral without retaining passenger-supplied claims or identifiers.
     await db.transaction(async tx => {

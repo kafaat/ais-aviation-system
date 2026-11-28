@@ -27,6 +27,7 @@ function caller(id: number | null = 1, tenantId: number | null = null) {
 
 beforeEach(() => {
   fixture = transactionMemory({
+    users: [{ id: 1, tenantId: null, role: "user" }],
     chat_conversations: [
       { id: 7, userId: 1, status: "active", context: {}, messageCount: 1 },
     ],
@@ -180,7 +181,11 @@ it.each([
           message: "Open my booking",
         })
       ).exchangeBookings
-    ).toEqual([{ id: 106, bookingReference: "LEGACY" }]);
+    ).toEqual([
+      { id: 106, bookingReference: "LEGACY" },
+      { id: 102, bookingReference: "TENANT" },
+      { id: 100, bookingReference: "OWN500" },
+    ]);
     for (const name of [
       "booking_modifications",
       "inventory_locks",
