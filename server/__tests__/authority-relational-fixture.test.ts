@@ -1,6 +1,23 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+import { sql } from "drizzle-orm";
 import { chatConversations } from "../../drizzle/schema";
 import { authorityRelationalFixture } from "./helpers/authority-relational-fixture";
+
+it("executes the millisecond DB clock independently of worker time with the native result shape", async () => {
+  const fixture = authorityRelationalFixture([]);
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2000-01-01T00:00:00Z"));
+  try {
+    const [[clock]] = (await fixture.db.execute(
+      sql`SELECT CURRENT_TIMESTAMP(3) AS now`
+    )) as unknown as [[{ now: string }], unknown];
+    expect(clock.now).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/);
+    expect(clock.now.startsWith("2000-")).toBe(false);
+  } finally {
+    vi.useRealTimers();
+    fixture.close();
+  }
+});
 
 it("preserves each tuple's defaults and distinct bound values in a multirow insert", async () => {
   const fixture = authorityRelationalFixture([chatConversations]);

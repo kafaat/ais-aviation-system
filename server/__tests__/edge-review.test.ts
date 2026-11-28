@@ -77,7 +77,22 @@ describe("AI chat limits are enforced", () => {
           context: {},
         })
       ),
-      chat_messages: [],
+      chat_messages: Array.from(
+        { length: AI_LIMITS.maxConversationsPerUser },
+        (_, index) =>
+          Array.from(
+            { length: index === 0 ? AI_LIMITS.maxMessagesPerConversation : 1 },
+            (_, turn) => ({
+              id:
+                index === 0
+                  ? turn + 1
+                  : AI_LIMITS.maxMessagesPerConversation + index,
+              conversationId: index + 1,
+              role: "assistant",
+              content: "Synthetic previous message",
+            })
+          )
+      ).flat(),
     }).db;
   });
 

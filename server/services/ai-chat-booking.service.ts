@@ -5,7 +5,8 @@
  * Supports natural language flight search, recommendations, and booking
  */
 
-import { eq, and, desc, inArray, isNull, lt, sql } from "drizzle-orm";
+import { eq, and, desc, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { performance } from "node:perf_hooks";
 import {
   passengerPolicyGuidance,
   chatReferral,
@@ -29,7 +30,6 @@ import {
   type ChatMessage,
   type BookingSuggestion,
 } from "../../drizzle/schema";
-import type { Message } from "../_core/llm";
 import { aiGateway } from "./intelligence/gateway";
 import { searchFlights, type SearchFlightsInput } from "./flights.service";
 import { CIVIL_DATE } from "./civil-day";
@@ -198,109 +198,286 @@ export async function startConversation(
 
     await tx
       .update(chatConversations)
-      .set({ messageCount: 1, lastMessageAt: new Date() })
+      .set({ messageCount: 1, lastMessageAt: await chatDatabaseTime(tx) })
       .where(eq(chatConversations.id, conversationId));
 
     return { conversationId, greeting };
   });
 }
 
-/**
- * Send a message in an existing conversation
- */
-export async function sendMessage(
-  input: SendMessageInput
-): Promise<ChatResponse> {
-  const db = await getDb();
-  if (!db)
+type ChatDatabase = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+type ChatTransaction = Parameters<
+  Parameters<ChatDatabase["transaction"]>[0]
+>[0];
+type PreparedSuggestion = Omit<
+  NonNullable<ChatResponse["suggestions"]>[number],
+  "id"
+> & {
+  cabinClass: "economy" | "business";
+  rank: number;
+  score: number;
+};
+const CHAT_PREPARATION_MS = 120_000;
+const CHAT_LEASE_MS = 150_000;
+const CHAT_FAILURE_REPLY =
+  "عذراً، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.\n\nSorry, an error occurred while processing your request. Please try again.";
+
+/** The database session is UTC. Lease and activity decisions never use a
+ * worker's wall clock. Read the clock afresh after obtaining the row lock. */
+async function chatDatabaseTime(
+  db: Pick<ChatDatabase, "execute">
+): Promise<Date> {
+  const [rows] = await db.execute(sql`SELECT CURRENT_TIMESTAMP(3) AS now`);
+  const value = (rows as unknown as Array<{ now: string | Date }>)[0]?.now;
+  const now =
+    value instanceof Date
+      ? new Date(value.getTime())
+      : new Date(
+          typeof value === "string" ? value.replace(" ", "T") + "Z" : NaN
+        );
+  if (!Number.isFinite(now.getTime()))
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      message: "Database clock unavailable",
     });
+  return now;
+}
 
-  // Get conversation
-  const [conversation] = await db
-    .select()
-    .from(chatConversations)
-    .where(
-      and(
-        eq(chatConversations.id, input.conversationId),
-        eq(chatConversations.userId, input.userId)
-      )
-    );
-
-  if (!conversation) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Conversation not found",
-    });
-  }
-
-  if (conversation.status !== "active") {
+function assertPendingShape(conversation: ChatConversation) {
+  if (
+    (conversation.pendingMessageId == null) !==
+    (conversation.pendingUntil == null)
+  )
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Conversation is no longer active",
+      message: "Conversation history needs repair; start a new one",
     });
-  }
+}
 
-  // Every accepted turn stores a user/assistant pair. The greeting also counts
-  // toward the persisted-message limit, so both new rows must fit.
-  if (conversation.messageCount + 2 > AI_LIMITS.maxMessagesPerConversation)
+async function assertTranscriptCount(
+  tx: ChatTransaction,
+  conversation: ChatConversation,
+  code: "BAD_REQUEST" | "PRECONDITION_FAILED" = "BAD_REQUEST"
+) {
+  const [stored] = await tx
+    .select({ count: sql<number>`count(*)` })
+    .from(chatMessages)
+    .where(eq(chatMessages.conversationId, conversation.id));
+  if (Number(stored.count) !== conversation.messageCount)
     throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message: "This conversation has reached its limit; start a new one",
+      code,
+      message: "Conversation history needs repair; start a new one",
     });
+}
 
-  const history = (
-    await db
-      .select()
-      .from(chatMessages)
-      .where(eq(chatMessages.conversationId, input.conversationId))
-      .orderBy(desc(chatMessages.id))
-      .limit(CHAT_HISTORY_WINDOW - 1)
+async function pendingUser(
+  tx: ChatTransaction,
+  conversation: ChatConversation,
+  code: "BAD_REQUEST" | "PRECONDITION_FAILED" = "BAD_REQUEST"
+) {
+  const [message] = await tx
+    .select()
+    .from(chatMessages)
+    .where(eq(chatMessages.conversationId, conversation.id))
+    .orderBy(desc(chatMessages.id))
+    .limit(1);
+  if (
+    !message ||
+    message.id !== conversation.pendingMessageId ||
+    message.role !== "user" ||
+    conversation.messageCount + 1 > AI_LIMITS.maxMessagesPerConversation
   )
-    .reverse()
-    .map(sanitizeAssistantMessage);
-  const lastReply = history.at(-1);
-  const referral = chatReferral(
-    input.message,
-    lastReply?.role === "assistant" && lastReply.metadata?.trigger === "keyword"
-      ? lastReply.metadata.intent
-      : undefined
-  );
-  if (referral) {
-    const { intent, language, trigger } = referral;
-    const isExchange = intent === "exchange_review";
-    const message = (isExchange ? exchangeGuidance : passengerPolicyGuidance)[
-      language
-    ];
-    const metadata = isExchange
-      ? { intent, trigger }
-      : {
-          intent,
-          trigger,
-          entities: { source: passengerRightsSource[language], article: 5 },
-        };
+    throw new TRPCError({
+      code,
+      message: "Conversation pending turn needs repair",
+    });
+  return message;
+}
 
-    // This projection stays in the authenticated response. Neither the
-    // passenger references nor the selection enter the model or transcript.
-    const exchangeBookings = isExchange
-      ? await db.transaction(async tx => {
-          // Keep current assignment stable while reading. The booking
-          // projection takes no row locks, avoiding booking/user lock inversion.
-          const [buyer] = await tx
-            .select({ tenantId: users.tenantId })
-            .from(users)
-            .where(eq(users.id, input.userId))
-            .limit(1)
-            .for("share");
-          if (!buyer)
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Purchaser not found",
-            });
+function deriveContext(
+  current: ChatContext | null,
+  message: string
+): ChatContext {
+  const updated = { ...(current ?? {}) };
+  const intent = extractSearchIntent(message);
+  if (intent?.passengers) updated.passengers = intent.passengers;
+  if (intent?.cabinClass) updated.cabinClass = intent.cabinClass;
+  if (intent?.date) updated.departureDate = intent.date;
+  return updated;
+}
 
-          return tx
+/** Called under the conversation lock by lazy recovery or explicit archive.
+ * It does not repeat external work. Its caller commits before a later refusal. */
+async function finishInterruptedTurn(
+  tx: ChatTransaction,
+  conversation: ChatConversation,
+  now: Date
+): Promise<ChatConversation> {
+  const message = await pendingUser(tx, conversation);
+  const context = deriveContext(conversation.context, message.content);
+  await tx.insert(chatMessages).values({
+    conversationId: conversation.id,
+    role: "assistant",
+    content: CHAT_FAILURE_REPLY,
+  });
+  const update = {
+    messageCount: conversation.messageCount + 1,
+    context,
+    lastMessageAt: now,
+    pendingMessageId: null,
+    pendingUntil: null,
+  };
+  await tx
+    .update(chatConversations)
+    .set(update)
+    .where(eq(chatConversations.id, conversation.id));
+  return { ...conversation, ...update };
+}
+
+function preparationRemaining(started: number) {
+  return Math.max(0, CHAT_PREPARATION_MS - (performance.now() - started));
+}
+
+/** Bounds awaited preparation. Already issued SQL cannot be cancelled by
+ * these readers; late values/rejections are observed and cannot write chat. */
+function beforeDeadline<T>(
+  operation: () => Promise<T>,
+  signal: AbortSignal
+): Promise<T> {
+  signal.throwIfAborted();
+  return new Promise<T>((resolve, reject) => {
+    const aborted = () => reject(signal.reason);
+    signal.addEventListener("abort", aborted, { once: true });
+    Promise.resolve()
+      .then(() => {
+        signal.throwIfAborted();
+        return operation();
+      })
+      .then(
+        value => {
+          signal.removeEventListener("abort", aborted);
+          if (signal.aborted) reject(signal.reason);
+          else resolve(value);
+        },
+        error => {
+          signal.removeEventListener("abort", aborted);
+          reject(error);
+        }
+      );
+  });
+}
+
+type Admission =
+  | { kind: "reply"; response: ChatResponse }
+  | { kind: "refused"; code: "TOO_MANY_REQUESTS" | "TIMEOUT"; message: string }
+  | {
+      kind: "pending";
+      messageId: number;
+      conversation: ChatConversation;
+      history: ChatMessage[];
+    };
+
+function admitChatTurn(
+  db: ChatDatabase,
+  input: SendMessageInput,
+  started: number
+): Promise<Admission> {
+  return db.transaction(async tx => {
+    // Consistent user -> conversation order; different conversations can share
+    // the user lock. Exchange projection reuses these locks and this handle.
+    const [buyer] = await tx
+      .select({ id: users.id, tenantId: users.tenantId })
+      .from(users)
+      .where(eq(users.id, input.userId))
+      .limit(1)
+      .for("share");
+    if (!buyer)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Purchaser not found",
+      });
+    const [found] = await tx
+      .select()
+      .from(chatConversations)
+      .where(
+        and(
+          eq(chatConversations.id, input.conversationId),
+          eq(chatConversations.userId, input.userId)
+        )
+      )
+      .limit(1)
+      .for("update");
+    if (!found)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Conversation not found",
+      });
+    if (found.status !== "active")
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Conversation is no longer active",
+      });
+    let conversation = found;
+    assertPendingShape(conversation);
+    await assertTranscriptCount(tx, conversation);
+    let now = await chatDatabaseTime(tx);
+    if (conversation.pendingMessageId != null) {
+      if (conversation.pendingUntil && conversation.pendingUntil > now)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "A reply is still being processed. Wait before sending another message.",
+        });
+      conversation = await finishInterruptedTurn(tx, conversation, now);
+    }
+    // Return refusals after recovery so throwing outside the transaction cannot
+    // roll back the recovered assistant when it uses the final available slot.
+    if (conversation.messageCount + 2 > AI_LIMITS.maxMessagesPerConversation)
+      return {
+        kind: "refused",
+        code: "TOO_MANY_REQUESTS",
+        message: "This conversation has reached its limit; start a new one",
+      };
+    if (!preparationRemaining(started))
+      return {
+        kind: "refused",
+        code: "TIMEOUT",
+        message:
+          "The request expired before its message was accepted. Please send it again.",
+      };
+    const history = (
+      await tx
+        .select()
+        .from(chatMessages)
+        .where(eq(chatMessages.conversationId, input.conversationId))
+        .orderBy(desc(chatMessages.id))
+        .limit(CHAT_HISTORY_WINDOW - 1)
+    )
+      .reverse()
+      .map(sanitizeAssistantMessage);
+    const lastReply = history.at(-1);
+    const referral = chatReferral(
+      input.message,
+      lastReply?.role === "assistant" &&
+        lastReply.metadata?.trigger === "keyword"
+        ? lastReply.metadata.intent
+        : undefined
+    );
+    if (referral) {
+      const { intent, language, trigger } = referral;
+      const isExchange = intent === "exchange_review";
+      const message = (isExchange ? exchangeGuidance : passengerPolicyGuidance)[
+        language
+      ];
+      const metadata = isExchange
+        ? { intent, trigger }
+        : {
+            intent,
+            trigger,
+            entities: { source: passengerRightsSource[language], article: 5 },
+          };
+      const exchangeBookings = isExchange
+        ? await tx
             .select({
               id: bookings.id,
               bookingReference: bookings.bookingReference,
@@ -316,11 +493,23 @@ export async function sendMessage(
               )
             )
             .orderBy(desc(bookings.id))
-            .limit(10);
-        })
-      : undefined;
-    // Record the referral without retaining passenger-supplied claims or identifiers.
-    await db.transaction(async tx => {
+            .limit(10)
+        : undefined;
+      if (!preparationRemaining(started))
+        return {
+          kind: "refused",
+          code: "TIMEOUT",
+          message:
+            "The request expired before its message was accepted. Please send it again.",
+        };
+      now = await chatDatabaseTime(tx);
+      if (!preparationRemaining(started))
+        return {
+          kind: "refused",
+          code: "TIMEOUT",
+          message:
+            "The request expired before its message was accepted. Please send it again.",
+        };
       await tx.insert(chatMessages).values([
         {
           conversationId: input.conversationId,
@@ -338,121 +527,233 @@ export async function sendMessage(
       await tx
         .update(chatConversations)
         .set({
-          messageCount: sql`${chatConversations.messageCount} + 2`,
-          lastMessageAt: new Date(),
+          messageCount: conversation.messageCount + 2,
+          lastMessageAt: now,
         })
         .where(eq(chatConversations.id, input.conversationId));
-    });
-    return isExchange
-      ? { message, exchangeBookings }
-      : { message, policySourceLanguage: language };
-  }
-
-  await db.insert(chatMessages).values({
-    conversationId: input.conversationId,
-    role: "user",
-    content: input.message,
-  });
-
-  const llmMessages: Message[] = [
-    { role: "system", content: BOOKING_SYSTEM_PROMPT },
-    ...history.map(m => ({ role: m.role, content: m.content })),
-    { role: "user", content: input.message },
-  ];
-
-  // Call LLM
-  const startTime = Date.now();
-  let responseContent =
-    "عذراً، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.\n\nSorry, an error occurred while processing your request. Please try again.";
-  let processingTime = 0;
-
-  try {
-    const { result: llmResponse } = await aiGateway.invoke({
-      agentId: "booking-chat",
-      taskType: "generation",
-      feature: "ai-chat",
-      userId: input.userId,
-      tenantId: input.tenantId ?? undefined,
-      messages: llmMessages,
-      maxTokens: 1024,
-    });
-    processingTime = Date.now() - startTime;
-
-    // Extract response content from LLM result
-    if (llmResponse.choices && llmResponse.choices.length > 0) {
-      const choice = llmResponse.choices[0];
-      if (typeof choice.message.content === "string") {
-        responseContent = choice.message.content;
-      } else if (Array.isArray(choice.message.content)) {
-        const textContent = choice.message.content.find(c => c.type === "text");
-        if (textContent && "text" in textContent) {
-          responseContent = textContent.text;
-        }
-      }
+      return {
+        kind: "reply",
+        response: isExchange
+          ? { message, exchangeBookings }
+          : { message, policySourceLanguage: language },
+      };
     }
-  } catch (error) {
-    processingTime = Date.now() - startTime;
-    console.error("LLM invocation failed:", error);
-    // responseContent already set to the friendly error message above
-  }
-
-  // Keep stored replies and future prompts consistent with the public response.
-  responseContent = sanitizeResponse(responseContent);
-
-  // Parse intent and search if needed
-  const { updatedContext, suggestions } = await processResponse(
-    db,
-    input.conversationId,
-    conversation.context as ChatContext,
-    input.message,
-    responseContent
-  );
-
-  // Store assistant message
-  const [assistantMessage] = await db.insert(chatMessages).values({
-    conversationId: input.conversationId,
-    role: "assistant",
-    content: responseContent,
-    processingTimeMs: processingTime,
-    metadata:
-      suggestions.length > 0
-        ? {
-            suggestions: suggestions.map(s => s.id),
-            entities: { passengers: updatedContext.passengers ?? 1 },
-          }
-        : undefined,
+    now = await chatDatabaseTime(tx);
+    if (!preparationRemaining(started))
+      return {
+        kind: "refused",
+        code: "TIMEOUT",
+        message:
+          "The request expired before its message was accepted. Please send it again.",
+      };
+    const [userMessage] = await tx.insert(chatMessages).values({
+      conversationId: input.conversationId,
+      role: "user",
+      content: input.message,
+    });
+    await tx
+      .update(chatConversations)
+      .set({
+        messageCount: conversation.messageCount + 1,
+        lastMessageAt: now,
+        pendingMessageId: userMessage.insertId,
+        pendingUntil: new Date(now.getTime() + CHAT_LEASE_MS),
+      })
+      .where(eq(chatConversations.id, input.conversationId));
+    return {
+      kind: "pending",
+      messageId: userMessage.insertId,
+      conversation,
+      history,
+    };
   });
-  if (suggestions.length)
-    await db
-      .update(bookingSuggestions)
-      .set({ messageId: assistantMessage.insertId })
+}
+
+function finalizeChatTurn(
+  db: ChatDatabase,
+  input: SendMessageInput,
+  messageId: number,
+  content: string,
+  processingTime: number,
+  context: ChatContext,
+  prepared: PreparedSuggestion[]
+) {
+  return db.transaction(async tx => {
+    const [conversation] = await tx
+      .select()
+      .from(chatConversations)
       .where(
         and(
-          eq(bookingSuggestions.conversationId, input.conversationId),
-          inArray(
-            bookingSuggestions.id,
-            suggestions.map(s => s.id)
-          )
+          eq(chatConversations.id, input.conversationId),
+          eq(chatConversations.userId, input.userId)
         )
+      )
+      .limit(1)
+      .for("update");
+    const now = await chatDatabaseTime(tx);
+    if (
+      !conversation ||
+      conversation.status !== "active" ||
+      conversation.pendingMessageId !== messageId ||
+      !conversation.pendingUntil ||
+      conversation.pendingUntil <= now
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "This reply expired or its conversation changed. Refresh the conversation history.",
+      });
+    await assertTranscriptCount(tx, conversation, "PRECONDITION_FAILED");
+    await pendingUser(tx, conversation, "PRECONDITION_FAILED");
+    const suggestions: NonNullable<ChatResponse["suggestions"]> = [];
+    for (const suggestion of prepared) {
+      const [saved] = await tx.insert(bookingSuggestions).values({
+        conversationId: input.conversationId,
+        flightId: suggestion.flightId,
+        cabinClass: suggestion.cabinClass,
+        pricePerPerson: suggestion.price,
+        totalPrice: suggestion.price * suggestion.passengers,
+        currency: "SAR",
+        reason: suggestion.reason,
+        rank: suggestion.rank,
+        score: suggestion.score,
+        expiresAt: new Date(now.getTime() + 30 * 60_000),
+      });
+      const { rank: _rank, score: _score, ...display } = suggestion;
+      suggestions.push({ ...display, id: saved.insertId });
+    }
+    const [assistant] = await tx.insert(chatMessages).values({
+      conversationId: input.conversationId,
+      role: "assistant",
+      content,
+      processingTimeMs: processingTime,
+      metadata: suggestions.length
+        ? {
+            suggestions: suggestions.map(suggestion => suggestion.id),
+            entities: { passengers: context.passengers ?? 1 },
+          }
+        : undefined,
+    });
+    if (suggestions.length)
+      await tx
+        .update(bookingSuggestions)
+        .set({ messageId: assistant.insertId })
+        .where(
+          and(
+            eq(bookingSuggestions.conversationId, input.conversationId),
+            inArray(
+              bookingSuggestions.id,
+              suggestions.map(suggestion => suggestion.id)
+            )
+          )
+        );
+    await tx
+      .update(chatConversations)
+      .set({
+        messageCount: conversation.messageCount + 1,
+        lastMessageAt: now,
+        context,
+        pendingMessageId: null,
+        pendingUntil: null,
+      })
+      .where(eq(chatConversations.id, input.conversationId));
+    return suggestions;
+  });
+}
+
+/** One durable pending user row fences preparation and atomic completion. */
+export async function sendMessage(
+  input: SendMessageInput
+): Promise<ChatResponse> {
+  const started = performance.now();
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  const admitted = await admitChatTurn(db, input, started);
+  if (admitted.kind === "refused")
+    throw new TRPCError({ code: admitted.code, message: admitted.message });
+  if (admitted.kind === "reply") return admitted.response;
+  const controller = new AbortController();
+  const remaining = preparationRemaining(started);
+  const timeout = () =>
+    controller.abort(
+      new DOMException("Chat preparation deadline exceeded", "TimeoutError")
+    );
+  const timer = remaining ? setTimeout(timeout, remaining) : undefined;
+  timer?.unref();
+  if (!remaining) timeout();
+  let content = CHAT_FAILURE_REPLY;
+  let processingTime = 0;
+  try {
+    const invocationStarted = performance.now();
+    try {
+      const { result } = await beforeDeadline(
+        () =>
+          aiGateway.invoke({
+            agentId: "booking-chat",
+            taskType: "generation",
+            feature: "ai-chat",
+            userId: input.userId,
+            tenantId: input.tenantId ?? undefined,
+            messages: [
+              { role: "system", content: BOOKING_SYSTEM_PROMPT },
+              ...admitted.history.map(message => ({
+                role: message.role,
+                content: message.content,
+              })),
+              { role: "user", content: input.message },
+            ],
+            maxTokens: 1024,
+            signal: controller.signal,
+          }),
+        controller.signal
       );
-
-  // Update conversation
-  await db
-    .update(chatConversations)
-    .set({
-      messageCount: conversation.messageCount + 2,
-      lastMessageAt: new Date(),
-      context: updatedContext,
-    })
-    .where(eq(chatConversations.id, input.conversationId));
-
-  return {
-    message: responseContent,
-    suggestions: suggestions.length > 0 ? suggestions : undefined,
-    contextUpdated:
-      JSON.stringify(updatedContext) !== JSON.stringify(conversation.context),
-    bookingReady: isBookingReady(updatedContext),
-  };
+      const response = result.choices?.[0]?.message.content;
+      if (typeof response === "string") content = response;
+      else if (Array.isArray(response)) {
+        const text = response.find(part => part.type === "text");
+        if (text && "text" in text) content = text.text;
+      }
+    } catch (error) {
+      console.error("LLM invocation failed:", error);
+    } finally {
+      processingTime = Math.max(
+        0,
+        Math.round(performance.now() - invocationStarted)
+      );
+    }
+    content = sanitizeResponse(content);
+    const { updatedContext, suggestions: prepared } = await prepareResponse(
+      db,
+      admitted.conversation.context,
+      input.message,
+      controller.signal
+    );
+    const suggestions = await finalizeChatTurn(
+      db,
+      input,
+      admitted.messageId,
+      content,
+      processingTime,
+      updatedContext,
+      prepared
+    );
+    return {
+      message: content,
+      suggestions: suggestions.length ? suggestions : undefined,
+      contextUpdated:
+        JSON.stringify(updatedContext) !==
+        JSON.stringify(admitted.conversation.context),
+      bookingReady: isBookingReady(updatedContext),
+    };
+  } finally {
+    clearTimeout(timer);
+    // Never release a pending token here: rollback and lost acknowledgements
+    // remain recoverable, and a late caller must not clear a newer claim.
+  }
 }
 
 /**
@@ -492,7 +793,7 @@ export async function getConversationHistory(
       .select()
       .from(chatMessages)
       .where(eq(chatMessages.conversationId, conversationId))
-      .orderBy(chatMessages.createdAt)
+      .orderBy(chatMessages.createdAt, chatMessages.id)
   ).map(sanitizeAssistantMessage);
 }
 
@@ -662,79 +963,37 @@ export async function selectSuggestion(
 // Helper Functions
 // ============================================================================
 
-/**
- * Process LLM response and search for flights if needed
- */
-async function processResponse(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  conversationId: number,
-  currentContext: ChatContext,
+/** Prepare only read-derived suggestions. Every write belongs to finalization.
+ * A timed-out reader may finish in the pool later; it cannot persist chat data. */
+async function prepareResponse(
+  db: ChatDatabase,
+  currentContext: ChatContext | null,
   userMessage: string,
-  _aiResponse: string
-): Promise<{
-  updatedContext: ChatContext;
-  suggestions: Array<{
-    id: number;
-    flightId: number;
-    airline: string;
-    origin: string;
-    destination: string;
-    originTimezone: string | null;
-    destinationTimezone: string | null;
-    departureTime: string;
-    arrivalTime: string;
-    price: number;
-    passengers: number;
-    cabinClass: string;
-    reason?: string;
-  }>;
-}> {
-  const updatedContext = { ...currentContext };
-  const suggestions: Array<{
-    id: number;
-    flightId: number;
-    airline: string;
-    origin: string;
-    destination: string;
-    originTimezone: string | null;
-    destinationTimezone: string | null;
-    departureTime: string;
-    arrivalTime: string;
-    price: number;
-    passengers: number;
-    cabinClass: string;
-    reason?: string;
-  }> = [];
-
-  // Try to extract search intent from user message
-  const searchIntent = extractSearchIntent(userMessage);
-
-  if (searchIntent) {
-    // Update context with extracted info
-    if (searchIntent.passengers)
-      updatedContext.passengers = searchIntent.passengers;
-    if (searchIntent.cabinClass)
-      updatedContext.cabinClass = searchIntent.cabinClass;
-    if (searchIntent.date) updatedContext.departureDate = searchIntent.date;
-  }
-
-  // Route identifiers are explicitly supplied context. Neither model output nor
-  // free-text city names establish a route; later turns may supply its date.
+  signal: AbortSignal
+): Promise<{ updatedContext: ChatContext; suggestions: PreparedSuggestion[] }> {
+  const updatedContext = deriveContext(currentContext, userMessage);
+  const suggestions: PreparedSuggestion[] = [];
+  // Route identifiers come from explicit context, never model output or free text.
   const searchInput = validatedChatSearch(updatedContext);
-  if (searchInput) {
+  if (searchInput && !signal.aborted) {
     try {
-      const searchResults = await searchFlights(searchInput);
-
+      const searchResults = await beforeDeadline(
+        () => searchFlights(searchInput),
+        signal
+      );
       const cabinClass = updatedContext.cabinClass ?? "economy";
       const passengerCount = updatedContext.passengers ?? 1;
-      const holds = await readCabinHoldTotals(
-        db,
-        searchResults.map(flight => flight.id),
-        new Date()
+      const now = await beforeDeadline(() => chatDatabaseTime(db), signal);
+      const holds = await beforeDeadline(
+        () =>
+          readCabinHoldTotals(
+            db,
+            searchResults.map(flight => flight.id),
+            now
+          ),
+        signal
       );
-      // Search returns live cabin counters, before unreserved holds. Apply the
-      // shared canonical/legacy hold accounting before limiting the shortlist.
-      // This is an availability observation, not an inventory reservation.
+      // The shared hold accounting observes availability; it does not reserve it.
       const topFlights = searchResults
         .filter(flight => {
           const recorded =
@@ -747,64 +1006,38 @@ async function processResponse(
           );
         })
         .slice(0, 3);
-
-      for (let i = 0; i < topFlights.length; i++) {
-        const flight = topFlights[i];
-        const price =
-          cabinClass === "business"
-            ? Number(flight.businessPrice)
-            : Number(flight.economyPrice);
-
-        // Use nested data from flight object (origin, destination, airline are included)
-        const originCity = flight.origin?.city || "Unknown";
-        const destCity = flight.destination?.city || "Unknown";
-        const airlineName = flight.airline?.name || "Unknown";
-
-        // Store suggestion
-        const [suggestionResult] = await db.insert(bookingSuggestions).values({
-          conversationId,
-          flightId: flight.id,
-          cabinClass,
-          pricePerPerson: price,
-          totalPrice: price * passengerCount,
-          currency: "SAR",
-          reason:
-            i === 0
-              ? "أفضل سعر متاح"
-              : i === 1
-                ? "وقت مغادرة مناسب"
-                : "خيار بديل",
-          rank: i + 1,
-          score: 100 - i * 15,
-          expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-        });
-
+      for (const [index, flight] of topFlights.entries()) {
         suggestions.push({
-          id: suggestionResult.insertId,
           flightId: flight.id,
-          airline: airlineName,
-          origin: originCity,
-          destination: destCity,
+          airline: flight.airline?.name || "Unknown",
+          origin: flight.origin?.city || "Unknown",
+          destination: flight.destination?.city || "Unknown",
           originTimezone: flight.origin?.timezone ?? null,
           destinationTimezone: flight.destination?.timezone ?? null,
           departureTime: flight.departureTime.toISOString(),
           arrivalTime: flight.arrivalTime.toISOString(),
-          price,
+          price:
+            cabinClass === "business"
+              ? Number(flight.businessPrice)
+              : Number(flight.economyPrice),
           passengers: passengerCount,
           cabinClass,
           reason:
-            i === 0
+            index === 0
               ? "أفضل سعر متاح"
-              : i === 1
+              : index === 1
                 ? "وقت مغادرة مناسب"
                 : "خيار بديل",
+          rank: index + 1,
+          score: 100 - index * 15,
         });
       }
     } catch (error) {
-      console.error("Error searching flights:", error);
+      // Optional search failure still permits the answer/context to complete.
+      // Persistence failures are never handled here or converted into success.
+      console.error("Error preparing chat suggestions:", error);
     }
   }
-
   return { updatedContext, suggestions };
 }
 
@@ -895,7 +1128,7 @@ function isBookingReady(context: ChatContext): boolean {
  */
 export async function getUserConversations(
   userId: number
-): Promise<ChatConversation[]> {
+): Promise<Array<Omit<ChatConversation, "pendingMessageId" | "pendingUntil">>> {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -904,7 +1137,18 @@ export async function getUserConversations(
     });
 
   return db
-    .select()
+    .select({
+      id: chatConversations.id,
+      userId: chatConversations.userId,
+      status: chatConversations.status,
+      context: chatConversations.context,
+      bookingId: chatConversations.bookingId,
+      messageCount: chatConversations.messageCount,
+      lastMessageAt: chatConversations.lastMessageAt,
+      sessionId: chatConversations.sessionId,
+      createdAt: chatConversations.createdAt,
+      updatedAt: chatConversations.updatedAt,
+    })
     .from(chatConversations)
     .where(
       and(
@@ -915,40 +1159,87 @@ export async function getUserConversations(
     .orderBy(desc(chatConversations.lastMessageAt));
 }
 
-/**
- * Archive old conversations (for cleanup job)
- */
+/** Explicit cleanup is a lazy-recovery trigger; no scheduler is registered here.
+ * The high-water mark and keyset cursor bound work even if a corrupt row cannot
+ * be archived. Committed progress survives a later row or scan failure. */
 export async function archiveOldConversations(
   olderThanDays: number = 7
-): Promise<number> {
-  const db = await getDb();
-  if (!db) return 0;
-
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
-
-  // Count conversations to archive first
-  const toArchive = await db
-    .select({ id: chatConversations.id })
-    .from(chatConversations)
-    .where(
-      and(
-        eq(chatConversations.status, "active"),
-        lt(chatConversations.lastMessageAt, cutoffDate)
-      )
-    );
-
-  if (toArchive.length === 0) return 0;
-
-  await db
-    .update(chatConversations)
-    .set({ status: "archived" })
-    .where(
-      and(
-        eq(chatConversations.status, "active"),
-        lt(chatConversations.lastMessageAt, cutoffDate)
-      )
-    );
-
-  return toArchive.length;
+): Promise<{ archivedCount: number; failedCount: number }> {
+  const result = { archivedCount: 0, failedCount: 0 };
+  try {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    if (!Number.isFinite(olderThanDays) || olderThanDays < 0)
+      throw new Error("Invalid conversation archive age");
+    const now = await chatDatabaseTime(db);
+    const cutoff = new Date(now.getTime() - olderThanDays * 86_400_000);
+    const [last] = await db
+      .select({ id: chatConversations.id })
+      .from(chatConversations)
+      .orderBy(desc(chatConversations.id))
+      .limit(1);
+    if (!last) return result;
+    let cursor = 0;
+    while (cursor < last.id) {
+      const candidates = await db
+        .select({ id: chatConversations.id })
+        .from(chatConversations)
+        .where(
+          and(
+            gt(chatConversations.id, cursor),
+            lte(chatConversations.id, last.id),
+            eq(chatConversations.status, "active"),
+            lt(chatConversations.lastMessageAt, cutoff)
+          )
+        )
+        .orderBy(chatConversations.id)
+        .limit(100);
+      if (!candidates.length) break;
+      for (const candidate of candidates) {
+        cursor = candidate.id;
+        try {
+          const archived = await db.transaction(async tx => {
+            const [conversation] = await tx
+              .select()
+              .from(chatConversations)
+              .where(eq(chatConversations.id, candidate.id))
+              .limit(1)
+              .for("update");
+            if (
+              !conversation ||
+              conversation.status !== "active" ||
+              !conversation.lastMessageAt ||
+              conversation.lastMessageAt >= cutoff
+            )
+              return false;
+            assertPendingShape(conversation);
+            await assertTranscriptCount(tx, conversation);
+            if (conversation.pendingMessageId != null)
+              await finishInterruptedTurn(
+                tx,
+                conversation,
+                await chatDatabaseTime(tx)
+              );
+            await tx
+              .update(chatConversations)
+              .set({
+                status: "archived",
+                pendingMessageId: null,
+                pendingUntil: null,
+              })
+              .where(eq(chatConversations.id, candidate.id));
+            return true;
+          });
+          if (archived) result.archivedCount++;
+        } catch (error) {
+          result.failedCount++;
+          console.error("Conversation archive failed:", candidate.id, error);
+        }
+      }
+    }
+  } catch (error) {
+    result.failedCount++;
+    console.error("Conversation archive scan failed:", error);
+  }
+  return result;
 }

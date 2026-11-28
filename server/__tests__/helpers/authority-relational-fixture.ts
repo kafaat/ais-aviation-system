@@ -77,6 +77,17 @@ export function authorityRelationalFixture(tables: MySqlTable[]) {
   const queries: Array<{ sql: string; inTransaction: boolean }> = [];
   const db = drizzle(async (query, params, method) => {
     queries.push({ sql: query, inTransaction });
+    // One explicit raw scalar read uses mysql2's [rows, fields] result shape.
+    // SQLite supplies its own millisecond clock, independently of JS Date.
+    if (
+      method === "execute" &&
+      /^SELECT CURRENT_TIMESTAMP\(3\) AS now$/i.test(query.trim())
+    ) {
+      const clock = sqlite
+        .prepare("SELECT strftime('%Y-%m-%d %H:%M:%f', 'now') AS now")
+        .all();
+      return { rows: [clock, []] };
+    }
     let executable = query
       .replace(/ for (?:update|share)(?: skip locked)?(?=\s*(?:\)|$))/gi, "")
       .replaceAll("<=>", "IS");

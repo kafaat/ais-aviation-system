@@ -59,6 +59,7 @@ export type ToolChoice =
   ToolChoicePrimitive | ToolChoiceByName | ToolChoiceExplicit;
 
 export type InvokeParams = {
+  signal?: AbortSignal;
   model?: string;
   provider?: "forge";
   messages: Message[];
@@ -274,6 +275,7 @@ const normalizeResponseFormat = ({
 const LLM_TIMEOUT_MS = 120_000;
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  params.signal?.throwIfAborted();
   if (params.provider && params.provider !== "forge")
     throw new Error("Unsupported LLM transport provider");
   assertApiKey();
@@ -336,7 +338,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       authorization: `Bearer ${ENV.forgeApiKey}`,
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    signal: params.signal
+      ? AbortSignal.any([params.signal, AbortSignal.timeout(LLM_TIMEOUT_MS)])
+      : AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
 
   if (!response.ok) {

@@ -60,6 +60,8 @@ export interface GatewayRequest {
   tenantId?: number;
   /** Product feature the call belongs to, e.g. "ai-chat", "ai-pricing". */
   feature?: string;
+  /** Caller budget shared by every eligible model attempt. */
+  signal?: AbortSignal;
 }
 
 export interface GatewayResponse {
@@ -144,6 +146,7 @@ export class AIGateway {
     request: GatewayRequest,
     attempted: string[] = []
   ): Promise<GatewayResponse> {
+    request.signal?.throwIfAborted();
     const startTime = Date.now();
     const requestId = `gw-${randomUUID()}`;
     const cacheKey = `ai_gateway:${request.tenantId ?? "platform"}:${request.userId ?? "service"}:${createHash(
@@ -164,6 +167,7 @@ export class AIGateway {
     // Check cache first
     if (request.cacheKey) {
       const cached = await cacheService.get<GatewayResponse>(cacheKey);
+      request.signal?.throwIfAborted();
       if (cached) {
         this.cacheHits++;
         log.info(
@@ -205,6 +209,7 @@ export class AIGateway {
           request.maxTokens ?? model.maxTokens,
           model.maxTokens
         ),
+        ...(request.signal ? { signal: request.signal } : {}),
       });
 
       if (result.model !== model.id)
@@ -269,6 +274,9 @@ export class AIGateway {
 
       return response;
     } catch (error) {
+      // A caller deadline applies to the whole gateway invocation. Never
+      // restart its budget by entering another model attempt after abort.
+      request.signal?.throwIfAborted();
       log.error(
         {
           requestId,

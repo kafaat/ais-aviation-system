@@ -80,6 +80,12 @@ beforeEach(() => {
     context: "{}",
     messageCount: 1,
   });
+  fixture.insert(chatMessages, {
+    id: 1,
+    conversationId: 7,
+    role: "assistant",
+    content: "Synthetic greeting",
+  });
   boundary.db = fixture.db;
   boundary.invoke
     .mockReset()
@@ -103,11 +109,11 @@ describe("assistant response privacy across persistence and reuse", () => {
     expect(
       fixture
         .rows(chatMessages)
-        .filter(row => row.role === "assistant")
+        .filter(row => row.role === "assistant" && row.id !== 1)
         .map(row => row.content)
     ).toEqual(["Contact [EMAIL]."]);
     const history = await caller().getHistory({ conversationId: 7 });
-    expect(history.find(row => row.role === "assistant")?.content).toBe(
+    expect(history.findLast(row => row.role === "assistant")?.content).toBe(
       "Contact [EMAIL]."
     );
     await caller().sendMessage({
@@ -128,13 +134,9 @@ describe("assistant response privacy across persistence and reuse", () => {
       suggestions: [5],
       entities: { source: "https://example.test/policy", article: 5 },
     };
-    fixture.insert(chatMessages, {
-      id: 1,
-      conversationId: 7,
-      role: "assistant",
-      content: "Contact legacy@example.test.",
-      metadata: JSON.stringify(metadata),
-    });
+    fixture.sqlite
+      .prepare("UPDATE chat_messages SET content=?, metadata=? WHERE id=1")
+      .run("Contact legacy@example.test.", JSON.stringify(metadata));
     const storedBefore = fixture.rows(chatMessages);
     const history = await caller().getHistory({ conversationId: 7 });
     expect(history[0].content).toBe("Contact [EMAIL].");
@@ -156,12 +158,9 @@ describe("assistant response privacy across persistence and reuse", () => {
   });
 
   it("keeps both history and message submission unavailable to another owner", async () => {
-    fixture.insert(chatMessages, {
-      id: 1,
-      conversationId: 7,
-      role: "assistant",
-      content: "Contact legacy@example.test.",
-    });
+    fixture.sqlite
+      .prepare("UPDATE chat_messages SET content=? WHERE id=1")
+      .run("Contact legacy@example.test.");
     const before = fixture.rows(chatMessages);
     await expect(
       caller(2).getHistory({ conversationId: 7 })
@@ -225,7 +224,7 @@ describe("exchange referral uses current purchaser authority", () => {
       { id: 101, bookingReference: "OWN004" },
       { id: 100, bookingReference: "OWN003" },
     ]);
-    expect(fixture.rows(chatMessages)).toHaveLength(2);
+    expect(fixture.rows(chatMessages)).toHaveLength(3);
     expect(fixture.rows(chatConversations)[0].messageCount).toBe(3);
   });
 
@@ -269,7 +268,9 @@ describe("exchange referral uses current purchaser authority", () => {
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(fixture.rows(bookings)).toEqual(before);
-    expect(fixture.rows(chatMessages)).toEqual([]);
+    expect(fixture.rows(chatMessages)).toMatchObject([
+      { id: 1, content: "Synthetic greeting" },
+    ]);
     expect(fixture.rows(chatConversations)[0].messageCount).toBe(1);
     expect(boundary.invoke).not.toHaveBeenCalled();
   });

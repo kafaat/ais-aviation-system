@@ -126,7 +126,16 @@ function seed(extraAncillaries: any[] = []) {
         messageCount: 1,
       },
     ],
-    chat_messages: [],
+    chat_messages: [
+      {
+        id: 1,
+        conversationId: 70,
+        role: "assistant",
+        content: "Synthetic greeting",
+        metadata: null,
+        createdAt: new Date(),
+      },
+    ],
     loyalty_accounts: [],
     booking_loyalty_accruals: [],
     miles_transactions: [],
